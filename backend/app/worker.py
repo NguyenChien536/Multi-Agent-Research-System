@@ -3,7 +3,7 @@ from app.core.config import settings
 
 # Khởi tạo Celery Application
 celery_app = Celery(
-    "ati_research_worker",
+    "research_worker",
     broker=settings.REDIS_URL,
     backend=settings.REDIS_URL,
 )

@@ -1,4 +1,4 @@
-# MultiAgent Research System (ATI)
+# Multi-Agent Research System
 
 > Nền tảng Nghiên cứu Tự động Chuyên sâu sử dụng Kiến trúc Đa Tác tử (Multi-Agent System) phối hợp với Vector Database (RAG) và Quy trình Phản biện Độc lập (Critic Loop).
 

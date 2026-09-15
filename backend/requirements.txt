@@ -1,5 +1,5 @@
 # ==============================================================================
-# MultiAgent Research System (ATI) - Backend Requirements
+# Multi-Agent Research System - Backend Requirements
 # ==============================================================================
 
 # Core Web Framework

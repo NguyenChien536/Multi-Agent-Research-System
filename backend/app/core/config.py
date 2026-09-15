@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "MultiAgent Research System (ATI)"
+    PROJECT_NAME: str = "Multi-Agent Research System"
     VERSION: str = "2.2.0"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
@@ -20,8 +20,8 @@ class Settings(BaseSettings):
     BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000"]
 
     # Database & Vector Store
-    DATABASE_URL: str = "postgresql+asyncpg://ati_user:ati_secure_password@localhost:5432/ati_research_db"
-    POSTGRES_SYNC_URL: str = "postgresql://ati_user:ati_secure_password@localhost:5432/ati_research_db"
+    DATABASE_URL: str = "postgresql+asyncpg://research_user:research_secure_password@localhost:5432/research_db"
+    POSTGRES_SYNC_URL: str = "postgresql://research_user:research_secure_password@localhost:5432/research_db"
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     LANGSMITH_TRACING: bool = False
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
     LANGSMITH_API_KEY: str = ""
-    LANGSMITH_PROJECT: str = "ati-multiagent-research"
+    LANGSMITH_PROJECT: str = "multi-agent-research-system"
 
     # Quotas & Guardrails
     MAX_CONCURRENT_TASKS_PER_USER: int = 2
