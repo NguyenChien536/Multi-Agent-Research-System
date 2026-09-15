@@ -1,0 +1,145 @@
+# ==============================================================================
+# MultiAgent Research System (ATI) - .gitignore
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Tài liệu nội bộ & Đặc tả nghiệp vụ (SRS & Proprietary Design)
+# ------------------------------------------------------------------------------
+SRS ATI.md
+*.srs.md
+/docs/private/
+/design_specs/
+
+# ------------------------------------------------------------------------------
+# 2. Môi trường & Khóa bảo mật (Secrets, API Keys, Credentials)
+# ------------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+id_rsa
+id_rsa.pub
+credentials.json
+secrets/
+*.secret
+
+# ------------------------------------------------------------------------------
+# 3. Python & Celery Worker
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# Celery & LangGraph Checkpoints
+celerybeat-schedule
+celerybeat.pid
+*.pid
+
+# ------------------------------------------------------------------------------
+# 4. Node.js & Frontend (Next.js)
+# ------------------------------------------------------------------------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Next.js build output
+.next/
+out/
+.nuxt/
+.cache/
+
+# TypeScript cache
+*.tsbuildinfo
+next-env.d.ts
+
+# ------------------------------------------------------------------------------
+# 5. Cơ sở dữ liệu, Vector Cache & File Storage
+# ------------------------------------------------------------------------------
+*.sqlite
+*.sqlite3
+*.db
+pgdata/
+redisdata/
+qdrant_storage/
+vector_store/
+data/
+storage/
+
+# File PDF xuất bản và tệp tạm
+exports/
+*.pdf
+scratch/
+temp/
+tmp/
+
+# ------------------------------------------------------------------------------
+# 6. Nhật ký hệ thống & Quan sát (Logs & Tracing)
+# ------------------------------------------------------------------------------
+logs/
+*.log
+*.log.*
+otel/
+langfuse_cache/
+
+# ------------------------------------------------------------------------------
+# 7. IDE & Hệ điều hành (OS & Editor files)
+# ------------------------------------------------------------------------------
+.vscode/
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.sublime-project
+*.sublime-workspace
+.project
+.settings/
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini

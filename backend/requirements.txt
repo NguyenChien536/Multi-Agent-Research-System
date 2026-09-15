@@ -1,0 +1,53 @@
+# ==============================================================================
+# MultiAgent Research System (ATI) - Backend Requirements
+# ==============================================================================
+
+# Core Web Framework
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+
+# Database & ORM
+SQLAlchemy>=2.0.30
+asyncpg>=0.29.0
+psycopg2-binary>=2.9.9
+alembic>=1.13.1
+pgvector>=0.2.5
+
+# Task Queue & Broker
+celery>=5.4.0
+redis>=5.0.4
+
+# Realtime Streaming
+sse-starlette>=2.1.0
+
+# AI Agents & Orchestration
+langchain>=0.2.0
+langgraph>=0.1.0
+langchain-core>=0.2.0
+langchain-openai>=0.1.7
+langchain-anthropic>=0.1.13
+tavily-python>=0.3.3
+
+# Web Scraping & Content Cleaning
+beautifulsoup4>=4.12.3
+trafilatura>=1.9.0
+httpx>=0.27.0
+
+# Security & Authentication
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+bcrypt>=4.0.1
+python-multipart>=0.0.9
+
+# Observability & Metrics
+prometheus-fastapi-instrumentator>=7.0.0
+opentelemetry-api>=1.25.0
+opentelemetry-sdk>=1.25.0
+opentelemetry-instrumentation-fastapi>=0.46b0
+
+# Utilities
+python-dateutil>=2.9.0
+pytest>=8.2.0
+pytest-asyncio>=0.23.7

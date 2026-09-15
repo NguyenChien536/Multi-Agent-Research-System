@@ -1,0 +1,101 @@
+services:
+  # ==============================================================================
+  # 1. Cơ sở dữ liệu quan hệ & Vector Database (PostgreSQL 16 + pgvector)
+  # ==============================================================================
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ati_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ati_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ati_secure_password}
+      POSTGRES_DB: ${POSTGRES_DB:-ati_research_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ati_user} -d ${POSTGRES_DB:-ati_research_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ==============================================================================
+  # 2. In-Memory Broker & SSE Pub/Sub (Redis 7)
+  # ==============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: ati_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ==============================================================================
+  # 3. API Gateway & Web Application Backend (FastAPI)
+  # ==============================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ati_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=True
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-ati_user}:${POSTGRES_PASSWORD:-ati_secure_password}@postgres:5432/${POSTGRES_DB:-ati_research_db}
+      - REDIS_URL=redis://redis:6379/0
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ==============================================================================
+  # 4. Asynchronous Task Queue & LangGraph Worker (Celery)
+  # ==============================================================================
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ati_worker
+    restart: unless-stopped
+    command: celery -A app.worker.celery_app worker --loglevel=info -E --concurrency=4
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=True
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-ati_user}:${POSTGRES_PASSWORD:-ati_secure_password}@postgres:5432/${POSTGRES_DB:-ati_research_db}
+      - REDIS_URL=redis://redis:6379/0
+      - TAVILY_API_KEY=${TAVILY_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:
