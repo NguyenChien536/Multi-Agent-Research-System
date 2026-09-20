@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, Integer, Numeric, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, Integer, Numeric, DateTime, ForeignKey, Boolean
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
@@ -17,7 +17,8 @@ class ResearchTask(Base):
     description = Column(Text, nullable=True)
     research_depth = Column(String(20), default="STANDARD", nullable=False)  # SHALLOW | STANDARD | DEEP
     language = Column(String(10), default="vi", nullable=False)
-    status = Column(String(30), default="PENDING", nullable=False, index=True)  # PENDING, QUEUED, PLANNING, RESEARCHING, INDEXING, ANALYZING, WRITING, REVIEWING, FINALIZING, COMPLETED, RETRYING, FAILED, CANCELLED
+    status = Column(String(30), default="PENDING", nullable=False, index=True)  # PENDING, QUEUED, PLANNING, WAITING_APPROVAL, RESEARCHING, INDEXING, ANALYZING, WRITING, REVIEWING, FINALIZING, COMPLETED, RETRYING, FAILED, CANCELLED
+    require_plan_approval = Column(Boolean, default=False, nullable=False)  # Human-in-the-Loop flag
     
     # Resource Limits & Accrual
     max_sources = Column(Integer, default=10, nullable=False)

@@ -18,6 +18,7 @@ class ResearchTaskCreate(BaseModel):
     description: Optional[str] = None
     research_depth: str = Field(default="STANDARD", pattern="^(SHALLOW|STANDARD|DEEP)$")
     language: str = Field(default="vi", max_length=10)
+    require_plan_approval: bool = Field(default=False, description="Enable Human-in-the-Loop plan review")
     max_sources: int = Field(default=10, ge=3, le=30)
     max_iterations: int = Field(default=2, ge=1, le=3)
     report_length: str = Field(default="MEDIUM", pattern="^(SHORT|MEDIUM|LONG)$")
@@ -33,6 +34,7 @@ class ResearchTaskResponse(BaseModel):
     research_depth: str
     language: str
     status: str
+    require_plan_approval: bool
     max_sources: int
     max_iterations: int
     current_iteration: int

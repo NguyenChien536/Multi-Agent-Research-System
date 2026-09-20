@@ -41,6 +41,7 @@ async def create_research_task(
         report_length=task_in.report_length,
         citation_style=task_in.citation_style,
         budget_config=budget_dict,
+        require_plan_approval=task_in.require_plan_approval,
         status="PENDING",
     )
     db.add(task)

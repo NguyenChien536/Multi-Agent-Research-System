@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Union, Optional
 from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -26,10 +26,14 @@ class Settings(BaseSettings):
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
+    #Celetry
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+
     # AI Model Providers & Keys
-    TAVILY_API_KEY: str = ""
-    ANTHROPIC_API_KEY: str = ""
-    OPENAI_API_KEY: str = ""
+    TAVILY_API_KEY: str | None = None
+    ANTHROPIC_API_KEY: str | None = None
+    OPENAI_API_KEY: str | None = None
 
     # Embeddings
     EMBEDDING_MODEL: str = "text-embedding-3-small"
@@ -38,7 +42,7 @@ class Settings(BaseSettings):
     # LLM Observability (LangSmith)
     LANGSMITH_TRACING: bool = False
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
-    LANGSMITH_API_KEY: str = ""
+    LANGSMITH_API_KEY: str | None = None
     LANGSMITH_PROJECT: str = "multi-agent-research-system"
 
     # Quotas & Guardrails
