@@ -20,6 +20,17 @@ async def create_research_task(
     """Tạo mới một Research Task."""
     # Tạm thời dùng mock user_id cho MVP Scaffolding
     dummy_user_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    from app.models.user import User
+    user_result = await db.execute(select(User).where(User.id == dummy_user_id))
+    if not user_result.scalar_one_or_none():
+        dummy_user = User(
+            id=dummy_user_id,
+            username="testuser",
+            email="test@example.com",
+            password_hash="fakehash"
+        )
+        db.add(dummy_user)
+        await db.flush()
     
     budget_dict = task_in.budget.model_dump() if task_in.budget else {
         "max_cost_usd": 2.0,
@@ -92,3 +103,18 @@ async def start_research_task(
     execute_research_workflow.delay(str(task_id))
     
     return {"status": "PLANNING", "message": "Workflow started successfully", "task_id": str(task_id)}
+
+from app.schemas.report import ResearchReportResponse
+
+@router.get("/{task_id}/report", response_model=ResearchReportResponse)
+async def get_research_report(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Lấy báo cáo kết quả của Research Task."""
+    from app.models.report import ResearchReport
+    result = await db.execute(select(ResearchReport).where(ResearchReport.research_task_id == task_id))
+    report = result.scalar_one_or_none()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found for this task")
+    return report

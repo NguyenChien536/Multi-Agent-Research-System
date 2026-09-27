@@ -7,8 +7,17 @@
 # ------------------------------------------------------------------------------
 SRS ATI.md
 *.srs.md
-/docs/private/
+docs/
 /design_specs/
+
+# ------------------------------------------------------------------------------
+# 1b. AI Coding Assistant Rules (Quy tắc nội bộ cho AI hỗ trợ code)
+# ------------------------------------------------------------------------------
+GEMINI.md
+CLAUDE.md
+.cursorrules
+.cursor/
+.github/copilot-instructions.md
 
 # ------------------------------------------------------------------------------
 # 2. Môi trường & Khóa bảo mật (Secrets, API Keys, Credentials)
