@@ -33,7 +33,7 @@ class ResearchBudget(TypedDict):
     elapsed_seconds: float
 
 
-class ResearchState(TypedDict):
+class ResearchState(TypedDict, total=False):
     """Trạng thái dùng chung (Shared Graph State) trong LangGraph với Annotated Reducers."""
     # === Cấu hình Task ===
     task_id: str
@@ -47,10 +47,14 @@ class ResearchState(TypedDict):
     current_iteration: int
     current_micro_revision: int       # Đếm số lần Writer chỉnh sửa trong vòng hiện tại
     attempt_number: int               # Số lần retry (cho Worker crash recovery)
+    max_iterations: int               # Giới hạn macro-loop, lấy từ budget nếu không truyền riêng
+    current_agent: str                # Node gần nhất cập nhật trạng thái
+    status: str                       # Trạng thái workflow hiện tại
     
     # === Kế hoạch & Truy vấn (Có Reducer) ===
     plan: Dict[str, Any]              # Đề cương & danh sách câu hỏi con
     current_queries: Annotated[List[str], operator.add]   # Tích lũy queries qua các vòng
+    delta_queries: List[str]          # Truy vấn của vòng hiện tại; được thay thế khi lập kế hoạch bổ sung
     visited_urls: Annotated[Set[str], merge_sets]         # URLs đã crawl — tránh lặp ở vòng sau (Seen URL Cache)
     
     # === Dữ liệu thu thập (Có Reducer) ===

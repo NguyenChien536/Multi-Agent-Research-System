@@ -15,22 +15,21 @@
 
 <p align="center">
   <a href="#-tổng-quan-kiến-trúc">Kiến trúc</a> •
-  <a href="#-tính-năng-nổi-bật">Tính năng</a> •
+  <a href="#-năng-lực-và-trạng-thái">Năng lực và trạng thái</a> •
   <a href="#-khởi-chạy-nhanh">Khởi chạy nhanh</a> •
   <a href="#-cấu-hình-môi-trường">Cấu hình</a> •
   <a href="#-hướng-dẫn-sử-dụng--api">API & Sử dụng</a> •
-  <a href="#-so-sánh--benchmark">Benchmark</a> •
+  <a href="#-kế-hoạch-đánh-giá-chưa-có-benchmark-được-xác-minh">Kế hoạch đánh giá</a> •
   <a href="#-đóng-góp">Đóng góp</a>
 </p>
 
 </div>
-
 ---
 
 ## 📖 Mục lục
 
 - [💡 Đặt vấn đề & Giải pháp](#-đặt-vấn-đề--giải-pháp)
-- [✨ Tính năng nổi bật](#-tính-năng-nổi-bật)
+- [✨ Năng lực và trạng thái](#-năng-lực-và-trạng-thái)
 - [🏗️ Tổng quan Kiến trúc](#️-tổng-quan-kiến-trúc)
 - [📁 Cấu trúc Thư mục Dự án](#-cấu-trúc-thư-mục-dự-án)
 - [🚀 Khởi chạy Nhanh (Quick Start)](#-khởi-chạy-nhanh-quick-start)
@@ -38,7 +37,7 @@
   - [Cách 2: Cài đặt cho Môi trường Phát triển (Local Dev)](#cách-2-cài-đặt-cho-môi-trường-phát-triển-local-dev)
 - [⚙️ Cấu hình Biến Môi trường (.env)](#️-cấu-hình-biến-môi-trường-env)
 - [📡 Hướng dẫn Sử dụng & API Endpoints](#-hướng-dẫn-sử-dụng--api-endpoints)
-- [📊 So sánh & Benchmark](#-so-sánh--benchmark)
+- [📊 Kế hoạch đánh giá](#-kế-hoạch-đánh-giá-chưa-có-benchmark-được-xác-minh)
 - [🗺️ Lộ trình Phát triển (Roadmap)](#️-lộ-trình-phát-triển-roadmap)
 - [🤝 Hướng dẫn Đóng góp (Contributing)](#-hướng-dẫn-đóng-góp-contributing)
 - [📄 Giấy phép (License)](#-giấy-phép-license)
@@ -53,7 +52,11 @@ Trong kỷ nguyên bùng nổ thông tin, việc sử dụng các mô hình ngô
 * ❌ **Nông cạn & Thiếu cấu trúc:** Câu trả lời ngắn, không đào sâu vào các khía cạnh ngách của vấn đề.
 * ❌ **Thiếu cơ chế tự sửa sai:** Khi gặp thông tin sai hoặc mâu thuẫn, LLM đơn lẻ không có quy trình phản biện để kiểm chứng chéo.
 
-**Multi-Agent Research System** giải quyết triệt để bài toán này bằng cách mô phỏng một **Tổ chức Nghiên cứu Chuyên nghiệp**:
+**Multi-Agent Research System** hướng tới hỗ trợ bước khảo sát ban đầu một chủ đề từ nguồn web công khai: lập kế hoạch, tổng hợp nguồn, trình bày claim/evidence và tạo bản báo cáo có thể kiểm tra. Hệ thống không loại bỏ hoàn toàn hallucination, không thay thế chuyên gia và không tự được xem là công cụ systematic review đạt chuẩn xuất bản.
+
+MVP ưu tiên **sinh viên và nhà nghiên cứu** cần tổng quan ban đầu và muốn kiểm tra nguồn. Các use case phân tích thị trường/kỹ thuật là hướng mở rộng sau khi chất lượng, chi phí và độ tin cậy được đánh giá.
+
+Kiến trúc đích dự kiến gồm các vai trò phối hợp sau. Đây là mục tiêu thiết kế, không phải cam kết mọi thành phần đã hoạt động:
 
 | Vai trò Agent | Chức năng tương ứng | Công nghệ áp dụng |
 | :--- | :--- | :--- |
@@ -61,29 +64,30 @@ Trong kỷ nguyên bùng nổ thông tin, việc sử dụng các mô hình ngô
 | 🕵️ **Researcher Agent** | Tìm kiếm mở rộng, cào dữ liệu web song song | Tavily Search API, Trafilatura, SSRF Guard |
 | 🗄️ **Curator & VectorDB** | Khử trùng URL, chia đoạn ngữ nghĩa và vector hóa | pgvector (PostgreSQL 16), Cosine Similarity |
 | 🧠 **Analyst Agent** | Khai phóng insight, tổng hợp luận điểm (`Claims`) kèm bằng chứng (`Evidence`) | Semantic RAG, Multi-query Retrieval |
-| ⚖️ **Critic Agent** | Giám sát chất lượng độc lập, phát hiện lỗ hổng tri thức | Micro-loop (Writer ⟷ Critic) & Macro-loop |
+| ⚖️ **Critic** | Lớp kiểm tra draft, nêu điểm thiếu bằng chứng/mâu thuẫn | Vai trò trong kiến trúc đích; cần evaluation để kiểm chứng chất lượng |
 | ✍️ **Writer & Citation Validator** | Biên soạn báo cáo, đánh số trích dẫn chuẩn hóa | Regex Deterministic Citation `[1]`, `[2]` |
 
 ---
 
-## ✨ Tính năng nổi bật
+## ✨ Năng lực và trạng thái
 
-- 🤖 **Điều phối Đa Tác tử (Multi-Agent Orchestration):** Xây dựng trên nền tảng **LangGraph**, quản lý trạng thái (`ResearchState`) bất biến và hỗ trợ phục hồi điểm kiểm tra (Postgres Checkpointer).
-- 🔄 **Cơ chế Vòng lặp Kép (Dual-Loop Mechanism):**
-  - **Micro-loop (Writer ⟷ Critic):** Tối đa 2 chu kỳ chỉnh sửa hành văn, cấu trúc và logic mà không lãng phí tài nguyên tìm kiếm lại.
-  - **Macro-loop (Supervisor ⟷ Researcher):** Tự động sinh truy vấn ngách (Delta Queries) đào sâu khi phát hiện thiếu hụt dữ liệu thực sự.
-- 🛡️ **Chống Ảo giác 100% (Zero-Hallucination Citation):** Toàn bộ trích dẫn được neo giữ (Grounding) từ `DocumentChunk` → `Evidence` → `ResearchClaim`. Module đánh số trích dẫn bằng code Python thuần, nói KHÔNG với việc để LLM tự tạo link giả.
-- ⚡ **Thu thập Dữ liệu Song song & An toàn:** Tích hợp **Tavily Search API** chạy bất đồng bộ (`asyncio.gather`), tích hợp bộ lọc **SSRF Guard** ngăn chặn truy cập tài nguyên mạng nội bộ.
-- 📊 **Cơ sở dữ liệu Vector tích hợp (RAG):** Sử dụng **PostgreSQL + pgvector** lưu trữ chunks và embedding đa chiều, hỗ trợ tìm kiếm ngữ nghĩa tương đồng cao.
-- 💰 **Kiểm soát Ngân sách & Hạn mức (Research Budget Guardrails):** Cấu hình giới hạn chi phí tối đa (`max_cost_usd`), số lượt gọi LLM (`max_llm_calls`) và thời gian timeout cho từng tác vụ.
-- 📡 **Truyền dữ liệu Thời gian thực (SSE Streaming):** Theo dõi trực tiếp từng suy nghĩ (thoughts), tiến độ cào web và trạng thái chuyển giao giữa các Agent qua giao thức Server-Sent Events.
-- 📄 **Xuất bản Chuẩn Học thuật:** Hỗ trợ render định dạng **Markdown** và **PDF chuyên nghiệp** (gồm trang bìa, mục lục, bảng biểu, trích dẫn chuẩn APA/IEEE).
+Repository hiện là **prototype/scaffold đang phát triển**. Bảng này phân biệt mã/thiết kế hiện có với tính năng cần hoàn thiện; “có mã nguồn” không đồng nghĩa đã chạy hoặc được kiểm thử.
+
+| Năng lực | Trạng thái theo lần rà mã nguồn | Ghi chú |
+|---|---|---|
+| FastAPI, schema/model và API quản lý task cơ bản | Có mã nguồn | Cần hoàn thiện xác thực và ownership; endpoint hiện dùng `dummy_user_id`. |
+| LangGraph state và node | Có implementation prototype | Graph compile và routing mẫu đã smoke-test; workflow end-to-end và citation/evidence flow chưa xác minh. |
+| Tavily search, scraping, embedding và pgvector retrieval | Có implementation trong source | Chưa xác minh provider thật hoặc ingestion/retrieval end-to-end. |
+| Next.js frontend | Có starter UI | Chưa kiểm tra UX/API integration end-to-end; frontend dùng polling; SSE, HITL và PDF export chưa hoàn tất. |
+| PostgreSQL/pgvector, Redis, Celery và Docker Compose | Đã chạy baseline trong môi trường phát triển 27/09/2026 | Health/OpenAPI, POST/GET task, worker ping và graph routing smoke-check đạt; không đồng nghĩa MVP/E2E đã nghiệm thu. |
+
+Không gọi hệ thống là “zero hallucination”. Citation tag trỏ tới nguồn/chunk là kiểm tra tính toàn vẹn tham chiếu; mức độ nguồn hỗ trợ nội dung claim phải đánh giá riêng bằng test set và/hoặc người thẩm định.
 
 ---
 
 ## 🏗️ Tổng quan Kiến trúc
 
-Hệ thống tuân thủ nghiêm ngặt mô hình **Clean Layered Architecture**, phân tách rành mạch giữa Tầng Giao tiếp (API), Tầng Điều phối Nghiên cứu (LangGraph Multi-Agent), Tầng Dữ liệu (PostgreSQL + Redis) và Hàng đợi tác vụ bất đồng bộ (Celery Worker).
+Sơ đồ bên dưới là **kiến trúc đích đề xuất**, chưa đại diện cho trạng thái triển khai đầy đủ. Dùng SRS/HLD làm nguồn chuẩn; cập nhật sơ đồ khi mã nguồn thay đổi và ghi trạng thái từng thành phần trong bảng phía trên.
 
 ```mermaid
 flowchart TD
@@ -138,17 +142,17 @@ MultiAgent Research System/
 ├── backend/
 │   ├── app/
 │   │   ├── agents/          # Định nghĩa LangGraph State, Nodes và Multi-Agent Graph
-│   │   ├── api/v1/          # FastAPI REST endpoints (Tasks, Health, Stream)
+│   │   ├── api/v1/          # FastAPI REST endpoints (Task CRUD cơ bản, Health)
 │   │   ├── core/            # App Configuration, Database async engine, Security
 │   │   ├── db/              # Session maker và Database base models
 │   │   ├── models/          # 12 Entities SQLAlchemy (Task, Source, Claim, Evidence, Chunk...)
 │   │   ├── schemas/         # Pydantic v2 schemas phục vụ Request/Response validation
-│   │   ├── tools/           # Custom Search Tools, Web Scrapers, SSRF Guards
+│   │   ├── tools/           # Tavily, async scraper, embedder và vector retrieval prototype
 │   │   ├── worker.py        # Celery Application & Task Workers
 │   │   └── main.py          # FastAPI application factory & Middlewares
 │   ├── Dockerfile           # Docker image đa giai đoạn cho Backend & Celery Worker
 │   └── requirements.txt     # Danh sách thư viện Python & Agent dependencies
-├── frontend/                # Giao diện người dùng Next.js 14 App Router (Đang phát triển)
+├── frontend/                # Next.js starter UI; cần hoàn thiện trải nghiệm và tích hợp API/SSE
 ├── docker/
 │   └── init-db.sql          # SQL Script kích hoạt PostgreSQL extensions (pgvector & uuid-ossp)
 ├── .env.example             # Bản mẫu biến môi trường chuẩn
@@ -159,7 +163,9 @@ MultiAgent Research System/
 
 ---
 
-## 🚀 Khởi chạy Nhanh (Quick Start)
+## 🚀 Khởi chạy (chưa xác minh trên mọi môi trường)
+
+> **Prototype notice:** Baseline Docker đã chạy ngày 27/09/2026: bốn service lên, PostgreSQL/Redis healthy, Alembic hiện ở `5ee074153cf3 (head)`, health/OpenAPI và POST/GET task đạt smoke-check, worker ping và graph routing mẫu đạt. Chưa kiểm tra migration trên DB sạch hoặc chạy research workflow end-to-end; SSE chưa được tích hợp vào API và frontend hiện polling. Đây là bằng chứng môi trường phát triển, không phải nghiệm thu production.
 
 ### Yêu cầu Tiên quyết
 * [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/) (khuyên dùng v2.20+)
@@ -204,7 +210,7 @@ docker compose ps
 Khi khởi chạy thành công, bạn có thể truy cập ngay:
 * 📘 **FastAPI Swagger Docs (Kiểm thử API):** [http://localhost:8000/api/v1/docs](http://localhost:8000/api/v1/docs)
 * 🩺 **Health Check Endpoint:** [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
-* 🗄️ **PostgreSQL + pgvector:** Cổng `5432`
+* 🗄️ **PostgreSQL + pgvector:** Cổng host `5433` (container `5432`)
 * ⚡ **Redis Broker:** Cổng `6379`
 
 Dừng hệ thống khi không sử dụng:
@@ -315,7 +321,7 @@ Sau khi tạo task, gọi endpoint `/start` để đưa tác vụ vào hàng đ�
 curl -X POST "http://localhost:8000/api/v1/research/67b8a1c9-3e2b-4fa8-9e6b-7cb85a123456/start"
 ```
 
-Hệ thống sẽ chuyển trạng thái sang `PLANNING`, Supervisor Agent sẽ tiến hành lập đề cương và kích hoạt toàn bộ chu trình.
+API hiện chuyển trạng thái task và enqueue Celery scaffold. Worker trong code hiện trả placeholder; chưa thực hiện luồng Supervisor → Researcher → report.
 
 ---
 
@@ -325,7 +331,7 @@ Hệ thống sẽ chuyển trạng thái sang `PLANNING`, Supervisor Agent sẽ 
 curl -X GET "http://localhost:8000/api/v1/research/67b8a1c9-3e2b-4fa8-9e6b-7cb85a123456"
 ```
 
-Báo cáo trả về có định dạng chuẩn khoa học kèm danh mục trích dẫn đã được xác minh:
+Ví dụ dưới đây chỉ minh họa định dạng báo cáo dự kiến, không phải kết quả đã được hệ thống tạo hoặc citation đã xác minh:
 ```markdown
 # Báo cáo Nghiên cứu: Chuyển Dịch Thị Trường Xe Điện Việt Nam 2026
 
@@ -343,37 +349,45 @@ Thị trường xe điện tại Việt Nam ghi nhận tốc độ tăng trưở
 
 ---
 
-## 📊 So sánh & Benchmark
+## 📊 Kế hoạch đánh giá (chưa có benchmark được xác minh)
 
-| Tiêu chí Đánh giá | Prompting Truyền thống (ChatGPT / Claude) | RAG Cơ bản (Basic Naive RAG) | **Multi-Agent Research System** |
-| :--- | :---: | :---: | :---: |
-| **Độ sâu Báo cáo** | Ngắn, khái quát | Phụ thuộc dữ liệu có sẵn | **Chuyên sâu, cấu trúc đa tầng** |
-| **Tìm kiếm Web Đa chiều** | ❌ (Chỉ tìm đơn lẻ 1 câu) | ❌ (Chỉ đọc nội bộ) | **✅ Phân rã đa truy vấn song song** |
-| **Khử trùng lặp Dữ liệu** | ❌ Không có | ⚠️ Thủ công | **✅ Tự động hash & lọc URL** |
-| **Kiểm tra Ảo giác (Critic)** | ❌ Hoàn toàn không | ❌ Không | **✅ Vòng lặp phản biện khép kín** |
-| **Độ tin cậy của Trích dẫn** | ⚠️ Dễ bịa link ảo | ⚠️ Tham chiếu mập mờ | **✅ Neo giữ bằng chứng (Grounding 100%)** |
-| **Báo cáo Xuất bản (PDF)** | ❌ Chỉ có văn bản chat | ❌ Văn bản thô | **✅ Định dạng học thuật / Doanh nghiệp** |
+| Chỉ số cần đo | Cách đánh giá |
+|---|---|
+| Citation integrity | Tỷ lệ citation trỏ tới source/chunk tồn tại và thuộc đúng task. |
+| Claim support | Người đánh giá gán nhãn claim/evidence; báo cáo precision/recall hoặc tỷ lệ hỗ trợ trên test set versioned. |
+| Coverage/diversity | Mức bao phủ câu hỏi con, loại nguồn, thời gian và quan điểm đối lập. |
+| Hiệu năng/chi phí | p50/p95 latency, lỗi, token/cost trên bộ câu hỏi và cấu hình đã ghi. |
+
+Chỉ so sánh với prompting/RAG cơ bản sau khi chạy cùng bộ câu hỏi, nguồn đầu vào, model/budget và rubric đánh giá; không dùng bảng tính năng chủ quan như benchmark.
 
 ---
 
 ## 🗺️ Lộ trình Phát triển (Roadmap)
 
-- [x] **Giai đoạn 1 (Core Foundations):**
-  - [x] Kiến trúc Clean Architecture với FastAPI & SQLAlchemy Async.
-  - [x] Tích hợp PostgreSQL 16 + `pgvector` và Redis Message Broker.
-  - [x] Thiết lập Celery Background Worker và Docker Compose toàn diện.
-- [x] **Giai đoạn 2 (Multi-Agent Engine):**
-  - [x] Xây dựng LangGraph State Machine với cơ chế Micro-loop và Macro-loop.
-  - [x] Tích hợp Tavily Search API song song với bảo vệ SSRF.
-  - [x] Curator module lọc dedup và Post-processor đánh số citation chuẩn xác.
+Lộ trình sản phẩm mở rộng người dùng theo mức độ năng lực: **MVP** phục vụ sinh viên/nhà nghiên cứu cá nhân; **giai đoạn 2** hướng tới chuyên gia phân tích công nghệ/thị trường và nhà nghiên cứu nâng cao; **giai đoạn 3** có thể phục vụ nhóm nghiên cứu/phòng ban/tổ chức khi đã có cộng tác, phân quyền và bảo vệ tài liệu riêng. Đây là đối tượng mục tiêu dự kiến, không phải cam kết phát hành.
+
+Các giai đoạn kỹ thuật bên dưới là work packages; chúng không đồng nhất số thứ tự với các product phases trong SRS. Image discovery/charts bắt đầu sau khi MVP research core đạt gate; enterprise capability yêu cầu riêng privacy/access-control gate.
+
+- [ ] **Giai đoạn 1 (Core Foundations — cần xác minh bằng chạy/test):**
+  - [ ] FastAPI, async persistence và task lifecycle.
+  - [ ] PostgreSQL + pgvector, Redis, Celery và Compose chạy end-to-end.
+- [ ] **Giai đoạn 2 (Research Workflow — phần lớn đang ở mức prototype):**
+  - [ ] Tavily search thực, scraping an toàn, curator/indexing thật.
+  - [ ] Analyst dùng retrieval và tạo claim/evidence có chunk IDs.
+  - [ ] Critic kiểm chứng draft với evidence; citation validator và post-processor thật.
+  - [ ] Retry, budget, state transitions và integration tests.
+  - [ ] Source & Evidence Explorer: xem claim, chunk, nguồn, metadata và mâu thuẫn.
 - [ ] **Giai đoạn 3 (Frontend & User Experience):**
   - [ ] Hoàn thiện giao diện Next.js 14 App Router với TailwindCSS & Shadcn UI.
   - [ ] Hiển thị SSE Live Streaming trực quan hóa biểu đồ Agent.
   - [ ] Module Human-in-the-Loop: Cho phép người dùng duyệt đề cương trước khi chạy.
+  - [ ] (Sau khi MVP core đạt gate) Image discovery có preview/attribution; người dùng chọn trước khi chèn báo cáo.
+  - [ ] (Sau khi MVP core đạt gate) Biểu đồ tái tạo từ số liệu evidence; ảnh AI nếu thêm có nhãn và không phải evidence.
 - [ ] **Giai đoạn 4 (Enterprise Extensions):**
   - [ ] Hỗ trợ mô hình mã nguồn mở Local LLM qua Ollama / vLLM.
   - [ ] Bộ xuất bản báo cáo PDF tùy chỉnh theo template trường học/doanh nghiệp.
   - [ ] Đánh giá tự động chất lượng bằng Ragas Framework.
+  - [ ] Hỗ trợ ảnh AI minh họa có nhãn rõ ràng (tùy chọn), không dùng làm evidence.
 
 ---
 

@@ -40,7 +40,7 @@ class DocumentChunk(Base):
     chunk_index = Column(Integer, nullable=False)
     content = Column(Text, nullable=False)
     vector_id = Column(String(100), nullable=True)  # Qdrant or internal vector ID
-    embedding = Column(Vector(1536), nullable=True)  # text-embedding-3-small dimension
+    embedding = Column(Vector(), nullable=True)  # Số chiều lấy theo EMBEDDING_DIMENSION trong cấu hình.
     token_count = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
