@@ -84,6 +84,8 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             }
         except Exception as e:
             task.status = "FAILED"
+            error_msg = f"ERROR: {str(e)}"
+            task.description = f"{task.description}\n\n{error_msg}" if task.description else error_msg
             await session.commit()
             raise RuntimeError(f"Research workflow failed for task {task_id}: {e}") from e
 

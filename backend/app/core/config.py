@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
+    MOCK_PROVIDERS: bool = False  # If True, bypass real LLM/Search API calls for tests
 
     # Security
     APP_SECRET_KEY: str = "development-secret-key-replace-in-production-32-chars-min"

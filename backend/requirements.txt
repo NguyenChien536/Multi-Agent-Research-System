@@ -51,3 +51,7 @@ opentelemetry-instrumentation-fastapi>=0.46b0
 python-dateutil>=2.9.0
 pytest>=8.2.0
 pytest-asyncio>=0.23.7
+
+langchain-google-genai
+langchain-groq
+

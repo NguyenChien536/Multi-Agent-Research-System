@@ -23,15 +23,25 @@ class EmbedderTool:
         self.embeddings = None
 
         # 1. Ưu tiên OpenAI Embeddings
-        if settings.OPENAI_API_KEY:
+        if getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
             self.model_name = settings.EMBEDDING_MODEL or "text-embedding-3-small"
             self.embeddings = AsyncOpenAIEmbeddings(
                 api_key=settings.OPENAI_API_KEY,
                 model=self.model_name,
                 dimensions=self.dimension
             )
+        # 2. Dự phòng Gemini Embeddings
+        elif getattr(settings, "GEMINI_API_KEY", None) and "your_" not in settings.GEMINI_API_KEY:
+            from langchain_google_genai import GoogleGenerativeAIEmbeddings
+            self.model_name = "models/text-embedding-004"
+            self.embeddings = GoogleGenerativeAIEmbeddings(
+                model=self.model_name,
+                google_api_key=settings.GEMINI_API_KEY,
+                task_type="RETRIEVAL_DOCUMENT"
+            )
+            self.dimension = 768
         else:
-            logger.warning("Không tìm thấy OPENAI_API_KEY. Embedder sẽ không hoạt động.")
+            logger.warning("Không tìm thấy API KEY hợp lệ. Embedder sẽ không hoạt động.")
 
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
