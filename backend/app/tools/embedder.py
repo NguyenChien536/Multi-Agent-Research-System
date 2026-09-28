@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Tuple
 import uuid
 import asyncio
 
-from langchain_openai import AsyncOpenAIEmbeddings
+from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from sqlalchemy import select, text
@@ -25,7 +25,7 @@ class EmbedderTool:
         # 1. Ưu tiên OpenAI Embeddings
         if getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
             self.model_name = settings.EMBEDDING_MODEL or "text-embedding-3-small"
-            self.embeddings = AsyncOpenAIEmbeddings(
+            self.embeddings = OpenAIEmbeddings(
                 api_key=settings.OPENAI_API_KEY,
                 model=self.model_name,
                 dimensions=self.dimension
@@ -64,7 +64,7 @@ class EmbedderTool:
     ) -> int:
         """Cắt chuỗi, tạo embedding và lưu vào pgvector thông qua SQLAlchemy."""
         if not self.embeddings:
-            raise ValueError("Chưa cấu hình OPENAI_API_KEY cho EmbedderTool.")
+            raise ValueError("Chưa cấu hình API Key cho EmbedderTool.")
 
         # 1. Chunking
         docs = self.chunk_text(text_content)
@@ -111,7 +111,7 @@ class EmbedderTool:
         Khoảng cách càng nhỏ càng giống nhau.
         """
         if not self.embeddings:
-            raise ValueError("Chưa cấu hình OpenAI API Key cho EmbedderTool.")
+            raise ValueError("Chưa cấu hình API Key cho EmbedderTool.")
 
         # 1. Tạo embedding cho câu truy vấn
         query_vector = await self.embeddings.aembed_query(query)
