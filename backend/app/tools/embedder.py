@@ -22,16 +22,8 @@ class EmbedderTool:
         self.dimension = settings.EMBEDDING_DIMENSION  # Default: 1536
         self.embeddings = None
 
-        # 1. Ưu tiên OpenAI Embeddings
-        if getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
-            self.model_name = settings.EMBEDDING_MODEL or "text-embedding-3-small"
-            self.embeddings = OpenAIEmbeddings(
-                api_key=settings.OPENAI_API_KEY,
-                model=self.model_name,
-                dimensions=self.dimension
-            )
-        # 2. Dự phòng Gemini Embeddings
-        elif getattr(settings, "GEMINI_API_KEY", None) and "your_" not in settings.GEMINI_API_KEY:
+        # 1. Ưu tiên Gemini Embeddings (vì API OpenAI của user hết tiền)
+        if getattr(settings, "GEMINI_API_KEY", None) and "your_" not in settings.GEMINI_API_KEY:
             from langchain_google_genai import GoogleGenerativeAIEmbeddings
             self.model_name = "models/gemini-embedding-2"
             self.embeddings = GoogleGenerativeAIEmbeddings(
@@ -40,6 +32,14 @@ class EmbedderTool:
                 task_type="RETRIEVAL_DOCUMENT"
             )
             self.dimension = 768
+        # 2. Dự phòng OpenAI Embeddings
+        elif getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
+            self.model_name = settings.EMBEDDING_MODEL or "text-embedding-3-small"
+            self.embeddings = OpenAIEmbeddings(
+                api_key=settings.OPENAI_API_KEY,
+                model=self.model_name,
+                dimensions=self.dimension
+            )
         else:
             logger.warning("Không tìm thấy API KEY hợp lệ. Embedder sẽ không hoạt động.")
 
