@@ -1,0 +1,39 @@
+name: Feature request
+description: Đề xuất một tính năng hoặc cải tiến có phạm vi rõ ràng
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Vấn đề cần giải quyết
+      description: Ai gặp vấn đề gì và trong hoàn cảnh nào?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Kết quả mong muốn
+      description: Mô tả hành vi quan sát được sau khi hoàn thành.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Tiêu chí nghiệm thu
+      description: Viết các điều kiện có thể kiểm tra để xác định task hoàn tất.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Phạm vi và ngoài phạm vi
+      description: Nêu các phần cần làm và các phần cố ý chưa làm.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Ghi chú kỹ thuật / tài liệu tham khảo
+      description: API, schema, SRS hoặc ràng buộc liên quan nếu đã biết.
