@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     TAVILY_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
+    GEMINI_API_KEY: str | None = None
+    GROQ_API_KEY: str | None = None
     # Embeddings
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     EMBEDDING_DIMENSION: int = 1536
