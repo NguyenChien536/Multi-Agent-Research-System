@@ -76,7 +76,7 @@ class EmbedderTool:
 
         texts = [doc.page_content for doc in docs]
 
-        # 2. Embedding (Gộp batch & Retry khi bị Rate Limit)
+        # 2. Embedding (Gộp batch & Retry)
         from tenacity import retry, stop_after_attempt, wait_exponential
         import asyncio
         
@@ -85,15 +85,23 @@ class EmbedderTool:
             return await self.embeddings.aembed_documents(texts_batch)
             
         vectors = []
-        batch_size = 20  # Gọi mỗi lần 20 chunks để tránh giới hạn 100 RPM của Google Free Tier
         
+        # Nếu là Google Gemini (Free Tier), áp dụng Rate Limit (batch_size=20, sleep=2s)
+        # Nếu là OpenAI (Trả phí), bơm thẳng 1 lần để tối ưu tốc độ 100%
+        if "gemini" in self.model_name.lower() or "google" in str(type(self.embeddings)).lower():
+            batch_size = 20
+            sleep_time = 2
+        else:
+            batch_size = len(texts) if texts else 1  # Không chia mẻ
+            sleep_time = 0
+            
         try:
             for i in range(0, len(texts), batch_size):
                 batch_texts = texts[i:i+batch_size]
                 batch_vectors = await _embed_with_retry(batch_texts)
                 vectors.extend(batch_vectors)
-                if i + batch_size < len(texts):
-                    await asyncio.sleep(2)  # Nghỉ 2s giữa các batch
+                if sleep_time > 0 and i + batch_size < len(texts):
+                    await asyncio.sleep(sleep_time)
         except Exception as e:
             logger.error(f"Lỗi khi gọi Embedding API (đã thử lại nhiều lần): {str(e)}")
             raise
