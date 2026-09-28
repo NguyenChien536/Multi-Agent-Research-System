@@ -14,12 +14,12 @@ from app.core.config import settings
 # Mô hình nhỏ siêu tốc cho logic, trích xuất (Supervisor, Analyst, Critic)
 def get_fast_llm():
     # Ưu tiên API miễn phí nếu có
-    if getattr(settings, "GROQ_API_KEY", None) and "your_" not in settings.GROQ_API_KEY:
-        from langchain_groq import ChatGroq
-        return ChatGroq(model="llama-3.1-8b-instant", temperature=0.2, api_key=settings.GROQ_API_KEY)
+    # if getattr(settings, "GROQ_API_KEY", None) and "your_" not in settings.GROQ_API_KEY:
+    #     from langchain_groq import ChatGroq
+    #     return ChatGroq(model="llama-3.1-8b-instant", temperature=0.2, api_key=settings.GROQ_API_KEY)
     if getattr(settings, "GEMINI_API_KEY", None) and "your_" not in settings.GEMINI_API_KEY:
         from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(model="gemini-1.5-flash", temperature=0.2, google_api_key=settings.GEMINI_API_KEY)
+        return ChatGoogleGenerativeAI(model="gemini-3.8-flash", temperature=0.2, google_api_key=settings.GEMINI_API_KEY)
     if getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
         return ChatOpenAI(model="gpt-4o-mini", temperature=0.2, api_key=settings.OPENAI_API_KEY)
     if getattr(settings, "ANTHROPIC_API_KEY", None) and "your_" not in settings.ANTHROPIC_API_KEY:
@@ -32,7 +32,7 @@ def get_smart_llm():
         return ChatAnthropic(model="claude-3-5-sonnet-20240620", temperature=0.7, api_key=settings.ANTHROPIC_API_KEY)
     if getattr(settings, "GEMINI_API_KEY", None) and "your_" not in settings.GEMINI_API_KEY:
         from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(model="gemini-1.5-pro", temperature=0.7, google_api_key=settings.GEMINI_API_KEY)
+        return ChatGoogleGenerativeAI(model="gemini-3.8-flash", temperature=0.7, google_api_key=settings.GEMINI_API_KEY)
     if getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
         return ChatOpenAI(model="gpt-4o", temperature=0.7, api_key=settings.OPENAI_API_KEY)
     raise ValueError("Cần cấu hình API KEY cho smart LLM")

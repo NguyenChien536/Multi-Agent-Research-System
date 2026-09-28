@@ -33,7 +33,7 @@ class EmbedderTool:
         # 2. Dự phòng Gemini Embeddings
         elif getattr(settings, "GEMINI_API_KEY", None) and "your_" not in settings.GEMINI_API_KEY:
             from langchain_google_genai import GoogleGenerativeAIEmbeddings
-            self.model_name = "models/text-embedding-004"
+            self.model_name = "models/gemini-embedding-2"
             self.embeddings = GoogleGenerativeAIEmbeddings(
                 model=self.model_name,
                 google_api_key=settings.GEMINI_API_KEY,

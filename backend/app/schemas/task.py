@@ -30,6 +30,7 @@ class ResearchTaskResponse(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
     title: str
+    description: Optional[str] = None
     research_question: str
     research_depth: str
     language: str
