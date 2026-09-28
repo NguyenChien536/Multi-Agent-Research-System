@@ -76,11 +76,26 @@ class EmbedderTool:
 
         texts = [doc.page_content for doc in docs]
 
-        # 2. Embedding (Gộp batch để gọi API 1 lần)
+        # 2. Embedding (Gộp batch & Retry khi bị Rate Limit)
+        from tenacity import retry, stop_after_attempt, wait_exponential
+        import asyncio
+        
+        @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=2, min=5, max=30))
+        async def _embed_with_retry(texts_batch):
+            return await self.embeddings.aembed_documents(texts_batch)
+            
+        vectors = []
+        batch_size = 20  # Gọi mỗi lần 20 chunks để tránh giới hạn 100 RPM của Google Free Tier
+        
         try:
-            vectors = await self.embeddings.aembed_documents(texts)
+            for i in range(0, len(texts), batch_size):
+                batch_texts = texts[i:i+batch_size]
+                batch_vectors = await _embed_with_retry(batch_texts)
+                vectors.extend(batch_vectors)
+                if i + batch_size < len(texts):
+                    await asyncio.sleep(2)  # Nghỉ 2s giữa các batch
         except Exception as e:
-            logger.error(f"Lỗi khi gọi OpenAI Embedding API: {str(e)}")
+            logger.error(f"Lỗi khi gọi Embedding API (đã thử lại nhiều lần): {str(e)}")
             raise
 
         # 3. Lưu vào Database
