@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None
     GROQ_API_KEY: str | None = None
+    
+    # Priority Config (Comma-separated)
+    LLM_PROVIDER_PRIORITY: str = "gemini,openai,anthropic,groq"
+    EMBEDDING_PROVIDER_PRIORITY: str = "gemini,openai"
+
     # Embeddings
     EMBEDDING_MODEL: str = "text-embedding-3-small"
     EMBEDDING_DIMENSION: int = 1536

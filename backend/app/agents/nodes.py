@@ -12,30 +12,54 @@ from app.core.config import settings
 # ---------------------------------------------------------------------------
 
 # Mô hình nhỏ siêu tốc cho logic, trích xuất (Supervisor, Analyst, Critic)
-def get_fast_llm():
-    # Ưu tiên API miễn phí nếu có
-    # if getattr(settings, "GROQ_API_KEY", None) and "your_" not in settings.GROQ_API_KEY:
-    #     from langchain_groq import ChatGroq
-    #     return ChatGroq(model="llama-3.1-8b-instant", temperature=0.2, api_key=settings.GROQ_API_KEY)
-    if getattr(settings, "GEMINI_API_KEY", None) and "your_" not in settings.GEMINI_API_KEY:
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(model="gemini-3.8-flash", temperature=0.2, google_api_key=settings.GEMINI_API_KEY)
-    if getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
-        return ChatOpenAI(model="gpt-4o-mini", temperature=0.2, api_key=settings.OPENAI_API_KEY)
-    if getattr(settings, "ANTHROPIC_API_KEY", None) and "your_" not in settings.ANTHROPIC_API_KEY:
-        return ChatAnthropic(model="claude-3-5-haiku-20241022", temperature=0.2, api_key=settings.ANTHROPIC_API_KEY)
-    raise ValueError("Cần cấu hình API KEY (Groq, Gemini, OpenAI, Anthropic) cho fast LLM")
+def build_llm_chain(is_smart: bool = False):
+    providers = [p.strip().lower() for p in settings.LLM_PROVIDER_PRIORITY.split(",")]
+    models = []
+    
+    for provider in providers:
+        if provider == "gemini" and getattr(settings, "GEMINI_API_KEY", None) and "your_" not in settings.GEMINI_API_KEY:
+            from langchain_google_genai import ChatGoogleGenerativeAI
+            models.append(ChatGoogleGenerativeAI(
+                model="gemini-3.8-flash", 
+                temperature=0.7 if is_smart else 0.2, 
+                google_api_key=settings.GEMINI_API_KEY
+            ))
+        elif provider == "openai" and getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
+            from langchain_openai import ChatOpenAI
+            models.append(ChatOpenAI(
+                model="gpt-4o" if is_smart else "gpt-4o-mini", 
+                temperature=0.7 if is_smart else 0.2, 
+                api_key=settings.OPENAI_API_KEY
+            ))
+        elif provider == "anthropic" and getattr(settings, "ANTHROPIC_API_KEY", None) and "your_" not in settings.ANTHROPIC_API_KEY:
+            from langchain_anthropic import ChatAnthropic
+            models.append(ChatAnthropic(
+                model="claude-3-5-sonnet-20240620" if is_smart else "claude-3-5-haiku-20241022", 
+                temperature=0.7 if is_smart else 0.2, 
+                api_key=settings.ANTHROPIC_API_KEY
+            ))
+        elif provider == "groq" and getattr(settings, "GROQ_API_KEY", None) and "your_" not in settings.GROQ_API_KEY:
+            from langchain_groq import ChatGroq
+            models.append(ChatGroq(
+                model="llama-3.1-8b-instant", 
+                temperature=0.7 if is_smart else 0.2, 
+                api_key=settings.GROQ_API_KEY
+            ))
+            
+    if not models:
+        raise ValueError("Cần cấu hình ít nhất 1 API KEY hợp lệ trong LLM_PROVIDER_PRIORITY")
+        
+    primary_llm = models[0]
+    if len(models) > 1:
+        # Fallback chain: Primary -> Fallback 1 -> Fallback 2
+        return primary_llm.with_fallbacks(models[1:])
+    return primary_llm
 
-# Mô hình cao cấp cho viết lách (Writer)
+def get_fast_llm():
+    return build_llm_chain(is_smart=False)
+
 def get_smart_llm():
-    if getattr(settings, "ANTHROPIC_API_KEY", None) and "your_" not in settings.ANTHROPIC_API_KEY:
-        return ChatAnthropic(model="claude-3-5-sonnet-20240620", temperature=0.7, api_key=settings.ANTHROPIC_API_KEY)
-    if getattr(settings, "GEMINI_API_KEY", None) and "your_" not in settings.GEMINI_API_KEY:
-        from langchain_google_genai import ChatGoogleGenerativeAI
-        return ChatGoogleGenerativeAI(model="gemini-3.8-flash", temperature=0.7, google_api_key=settings.GEMINI_API_KEY)
-    if getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
-        return ChatOpenAI(model="gpt-4o", temperature=0.7, api_key=settings.OPENAI_API_KEY)
-    raise ValueError("Cần cấu hình API KEY cho smart LLM")
+    return build_llm_chain(is_smart=True)
 
 # ---------------------------------------------------------------------------
 # 2. SCHEMAS (Pydantic v2) CHO CÁC AGENT

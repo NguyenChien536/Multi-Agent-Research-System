@@ -19,29 +19,32 @@ class EmbedderTool:
     """Công cụ băm nhỏ văn bản (Chunking) và Vector Embedding."""
 
     def __init__(self, api_key: str | None = None):
-        self.dimension = settings.EMBEDDING_DIMENSION  # Default: 1536
+        self.dimension = settings.EMBEDDING_DIMENSION
         self.embeddings = None
-
-        # 1. Ưu tiên Gemini Embeddings (vì API OpenAI của user hết tiền)
-        if getattr(settings, "GEMINI_API_KEY", None) and "your_" not in settings.GEMINI_API_KEY:
-            from langchain_google_genai import GoogleGenerativeAIEmbeddings
-            self.model_name = "models/gemini-embedding-2"
-            self.embeddings = GoogleGenerativeAIEmbeddings(
-                model=self.model_name,
-                google_api_key=settings.GEMINI_API_KEY,
-                task_type="RETRIEVAL_DOCUMENT"
-            )
-            self.dimension = 768
-        # 2. Dự phòng OpenAI Embeddings
-        elif getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
-            self.model_name = settings.EMBEDDING_MODEL or "text-embedding-3-small"
-            self.embeddings = OpenAIEmbeddings(
-                api_key=settings.OPENAI_API_KEY,
-                model=self.model_name,
-                dimensions=self.dimension
-            )
-        else:
-            logger.warning("Không tìm thấy API KEY hợp lệ. Embedder sẽ không hoạt động.")
+        providers = [p.strip().lower() for p in settings.EMBEDDING_PROVIDER_PRIORITY.split(",")]
+        
+        for provider in providers:
+            if provider == "gemini" and getattr(settings, "GEMINI_API_KEY", None) and "your_" not in settings.GEMINI_API_KEY:
+                from langchain_google_genai import GoogleGenerativeAIEmbeddings
+                self.model_name = "models/gemini-embedding-2"
+                self.embeddings = GoogleGenerativeAIEmbeddings(
+                    model=self.model_name,
+                    google_api_key=settings.GEMINI_API_KEY,
+                    task_type="RETRIEVAL_DOCUMENT"
+                )
+                self.dimension = 768
+                break
+            elif provider == "openai" and getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
+                self.model_name = settings.EMBEDDING_MODEL or "text-embedding-3-small"
+                self.embeddings = OpenAIEmbeddings(
+                    api_key=settings.OPENAI_API_KEY,
+                    model=self.model_name,
+                    dimensions=self.dimension
+                )
+                break
+                
+        if not self.embeddings:
+            logger.warning("Không tìm thấy API KEY hợp lệ trong EMBEDDING_PROVIDER_PRIORITY. Embedder sẽ không hoạt động.")
 
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=1000,
