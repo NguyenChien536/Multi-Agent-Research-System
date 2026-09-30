@@ -58,3 +58,4 @@ langchain-groq
 
 langchain-text-splitters
 
+langchain-community>=0.2.0

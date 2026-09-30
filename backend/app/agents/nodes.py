@@ -8,6 +8,18 @@ from app.agents.state import ResearchState
 from app.core.config import settings
 
 # ---------------------------------------------------------------------------
+# Caching Configuration
+# ---------------------------------------------------------------------------
+from langchain.globals import set_llm_cache
+from langchain_community.cache import RedisCache
+from redis import Redis
+
+try:
+    redis_client = Redis.from_url(settings.REDIS_URL)
+    set_llm_cache(RedisCache(redis_=redis_client))
+    print("LLM Redis Cache enabled successfully!")
+except Exception as e:
+    print(f"Warning: Could not connect to Redis for LLM Cache: {e}")
 # 1. TIERED LLM CONFIGURATION (Theo Kiến trúc Tối ưu Hiệu năng)
 # ---------------------------------------------------------------------------
 
