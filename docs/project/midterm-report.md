@@ -543,7 +543,7 @@ Chi tiết tại [baseline-verification.md](baseline-verification.md). Có sourc
 | Công cụ | Hỗ trợ được ghi nhận | Con người kiểm tra |
 |---|---|---|
 | Google Gemini | Chủ dự án cho biết đã tạo planning-document drafts | Nhóm rà soát/chỉnh; model/version, prompt và phần được giữ cần xác nhận |
-| OpenAI Codex | Rà repo/docs, hỗ trợ baseline; history ghi patch dependency và worker State keys; đồng bộ SRS, system design và README/docs | Chiến review code; baseline log là evidence; lượt docs có rà link/nội dung tĩnh, không chạy test/provider |
+| OpenAI Codex | Rà repo/docs, hỗ trợ baseline; history ghi patch dependency và worker State keys; đồng bộ SRS/system design/README; lượt này rà model, migration và registration route | Chiến review code; baseline log là evidence; lượt docs rà link tĩnh, lượt code rà tĩnh, không chạy test/provider |
 | Antigravity | Dự kiến dùng coding theo quy trình Codex review; chưa có artifact được xác nhận trong snapshot | Bổ sung branch/commit/model thực tế nếu đã dùng |
 
 AI của sản phẩm ATI (plan/synthesis/writing/critique) tách biệt với AI hỗ trợ nhóm. Không khai báo tỷ lệ % AI/con người nếu không đo được. Nhóm chịu trách nhiệm nội dung, code, nguồn, privacy và kết luận; trước khi nộp điền model/version/reviewer/date/policy môn học.

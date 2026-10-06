@@ -1,6 +1,6 @@
 # Data Model và API — source inventory và target
 
-**Cập nhật:** 06/10/2026. Runtime evidence gần nhất được thu 27/09/2026, ghi tại [baseline-verification.md](../project/baseline-verification.md). Bảng phân biệt source hiện trong working tree với database/API đã chạy xác minh. Không chạy migration hoặc E2E trong lượt cập nhật docs.
+**Cập nhật:** 07/10/2026. Runtime evidence gần nhất được thu 27/09/2026, ghi tại [baseline-verification.md](../project/baseline-verification.md). Bảng phân biệt source hiện trong working tree với database/API đã chạy xác minh; migration và E2E mới chưa được chạy/xác minh.
 
 ## 1. Model/source hiện có
 
@@ -13,7 +13,7 @@
 | DocumentChunk | source/task, text, pgvector embedding, vector ID | Model có; pgvector có trong DB baseline; clean DB/retrieval chưa xác minh |
 | Evidence | task/source/chunk FK, quote/content, type | Model có; grounding chưa E2E |
 | ResearchClaim / ClaimEvidence | Source đã có ClaimEvidence junction table; ORM bỏ UUID array cũ | Migration mới có trong working tree, chưa chứng minh apply thành công/runtime |
-| Citation | report/source, nullable chunk_id FK, claim ID; deprecated chunk_reference vẫn tồn tại | Chuyển đổi schema chưa hoàn tất; cùng-task consistency cần migration/validation |
+| Citation | required task/report/source FKs, nullable chunk_id FK, claim ID; deprecated chunk_reference still exists | Chuyển đổi schema chưa hoàn tất; cùng-task consistency cần migration/validation |
 | ResearchReport | Markdown, summary/count; unique report per task | Model/route có; report versioning theo target chưa đầy đủ |
 | ExportArtifact | task, type, file path/size/URL | Metadata model có; object storage/PDF flow chưa xác minh |
 | AgentRun / Evaluation | Audit/evaluation entities | Model có; log privacy và evaluation pipeline chưa nghiệm thu |

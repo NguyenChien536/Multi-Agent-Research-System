@@ -16,13 +16,19 @@ class ResearchSource(Base):
     source_tag = Column(String(20), nullable=False)  # src_01, src_02...
     title = Column(String(500), nullable=True)
     url = Column(Text, nullable=False)
-    source_type = Column(String(50), default="WEBSITE", nullable=False)  # ARTICLE, PAPER, NEWS, OFFICIAL, WEBSITE
+    source_type = Column(String(50), default="WEBSITE", nullable=False)  # ARTICLE, PAPER, NEWS, OFFICIAL, WEBSITE, IMAGE
     author = Column(String(255), nullable=True)
     publication_date = Column(String(50), nullable=True)
     content_snippet = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
     relevance_score = Column(Float, default=0.0, nullable=False)
+    # Image & attribution fields (migration a1b2c3d4e5f6 / ADR-001)
+    attribution = Column(String(500), nullable=True)     # Photographer / creator name
+    provider_name = Column(String(100), nullable=True)   # e.g. "Serper / Google Images"
+    license_name = Column(String(200), nullable=True)    # e.g. "Unsplash License" or "Unknown — verify at source"
+    source_page_url = Column(Text, nullable=True)        # Page where image was found (for attribution link)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+
 
     # Relationships
     task = relationship("ResearchTask", back_populates="sources")
