@@ -4,7 +4,6 @@
 
 ### *Nền tảng Nghiên cứu Chuyên sâu Tự động hóa bằng Kiến trúc Đa Tác tử (Multi-Agent System)*
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python: 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-FF4F00.svg?logo=langchain&logoColor=white)](https://langchain-ai.github.io/langgraph/)
@@ -30,6 +29,7 @@
 
 - [💡 Đặt vấn đề & Giải pháp](#-đặt-vấn-đề--giải-pháp)
 - [✨ Năng lực và trạng thái](#-năng-lực-và-trạng-thái)
+- [📚 Tài liệu Dự án](#-tài-liệu-dự-án)
 - [🏗️ Tổng quan Kiến trúc](#️-tổng-quan-kiến-trúc)
 - [📁 Cấu trúc Thư mục Dự án](#-cấu-trúc-thư-mục-dự-án)
 - [🚀 Khởi chạy Nhanh (Quick Start)](#-khởi-chạy-nhanh-quick-start)
@@ -54,7 +54,7 @@ Trong kỷ nguyên bùng nổ thông tin, việc sử dụng các mô hình ngô
 
 **Multi-Agent Research System** hướng tới hỗ trợ bước khảo sát ban đầu một chủ đề từ nguồn web công khai: lập kế hoạch, tổng hợp nguồn, trình bày claim/evidence và tạo bản báo cáo có thể kiểm tra. Hệ thống không loại bỏ hoàn toàn hallucination, không thay thế chuyên gia và không tự được xem là công cụ systematic review đạt chuẩn xuất bản.
 
-MVP ưu tiên **sinh viên và nhà nghiên cứu** cần tổng quan ban đầu và muốn kiểm tra nguồn. Các use case phân tích thị trường/kỹ thuật là hướng mở rộng sau khi chất lượng, chi phí và độ tin cậy được đánh giá.
+ATI hướng tới hỗ trợ nhiều phương pháp nghiên cứu có giám sát, từ tìm và tổng hợp tài liệu đến protocol và phân tích dữ liệu có provenance. Demo/MVP trước 10/11/2026 ưu tiên một luồng literature review đầu-cuối; các phương pháp khác chỉ được tuyên bố hỗ trợ khi có implementation và evaluation evidence phù hợp.
 
 Kiến trúc đích dự kiến gồm các vai trò phối hợp sau. Đây là mục tiêu thiết kế, không phải cam kết mọi thành phần đã hoạt động:
 
@@ -73,9 +73,9 @@ Kiến trúc đích dự kiến gồm các vai trò phối hợp sau. Đây là 
 
 Repository hiện là **prototype/scaffold đang phát triển**. Bảng này phân biệt mã/thiết kế hiện có với tính năng cần hoàn thiện; “có mã nguồn” không đồng nghĩa đã chạy hoặc được kiểm thử.
 
-| Năng lực | Trạng thái theo lần rà mã nguồn | Ghi chú |
+| Năng lực | Trạng thái theo baseline 27/09/2026 | Ghi chú |
 |---|---|---|
-| FastAPI, schema/model và API quản lý task cơ bản | Có mã nguồn | Cần hoàn thiện xác thực và ownership; endpoint hiện dùng `dummy_user_id`. |
+| FastAPI, schema/model và API quản lý task cơ bản | Có mã nguồn tại baseline | Route mẫu khi đó dùng `dummy_user_id`; code thay đổi sau baseline chưa được xác minh runtime. |
 | LangGraph state và node | Có implementation prototype | Graph compile và routing mẫu đã smoke-test; workflow end-to-end và citation/evidence flow chưa xác minh. |
 | Tavily search, scraping, embedding và pgvector retrieval | Có implementation trong source | Chưa xác minh provider thật hoặc ingestion/retrieval end-to-end. |
 | Next.js frontend | Có starter UI | Chưa kiểm tra UX/API integration end-to-end; frontend dùng polling; SSE, HITL và PDF export chưa hoàn tất. |
@@ -83,55 +83,25 @@ Repository hiện là **prototype/scaffold đang phát triển**. Bảng này ph
 
 Không gọi hệ thống là “zero hallucination”. Citation tag trỏ tới nguồn/chunk là kiểm tra tính toàn vẹn tham chiếu; mức độ nguồn hỗ trợ nội dung claim phải đánh giá riêng bằng test set và/hoặc người thẩm định.
 
+## 📚 Tài liệu Dự án
+
+- [SRS hiện hành](docs/requirements/SRS.md) — yêu cầu, tiêu chí nghiệm thu, demo boundary và security gates.
+- [Báo cáo giữa kỳ](docs/project/midterm-report.md) — overview, problems/objectives, technical approach, system design, plan, progress và AI disclosure.
+- [System Design](docs/architecture/system-design.md) — nguồn chuẩn cho C4 Container, DFD, inference flow, async sequence, ERD, physical DFD và class diagram.
+- [High-Level Architecture](docs/architecture/system-architecture.md) — container responsibilities, trade-offs, reliability và release boundary.
+- [Roadmap và tiến độ](docs/project/roadmap-and-progress.md) — mốc thực hiện, phân công và progress theo evidence.
+- [Baseline Verification](docs/project/baseline-verification.md) — lệnh và kết quả chạy gần nhất.
+- [Toàn bộ docs](docs/README.md) — mục lục tài liệu theo đối tượng đọc.
+
 ---
 
 ## 🏗️ Tổng quan Kiến trúc
 
-Sơ đồ bên dưới là **kiến trúc đích đề xuất**, chưa đại diện cho trạng thái triển khai đầy đủ. Dùng SRS/HLD làm nguồn chuẩn; cập nhật sơ đồ khi mã nguồn thay đổi và ghi trạng thái từng thành phần trong bảng phía trên.
+Để tránh sơ đồ trong README lệch với thiết kế hiện hành, các diagram được quản lý tập trung. Chúng mô tả **target design**, không khẳng định prototype đã triển khai đầy đủ.
 
-```mermaid
-flowchart TD
-    subgraph ClientLayer ["Client & Interface"]
-        UI["Web Frontend (Next.js 14)"]
-        API_Client["REST / SSE Consumer"]
-    end
-
-    subgraph APILayer ["API Gateway (FastAPI)"]
-        Router["/api/v1/research"]
-        SSEHub["SSE Event Hub (Redis Pub/Sub)"]
-    end
-
-    subgraph QueueLayer ["Message Broker & State Store"]
-        RedisQueue["Redis 7 (Celery Broker & Cache)"]
-        DB[(PostgreSQL 16 + pgvector)]
-    end
-
-    subgraph AgentSystem ["LangGraph Multi-Agent Engine (Celery Worker)"]
-        Supervisor["🧑‍💼 Supervisor Agent\n(Decompose & Plan)"]
-        Researcher["🕵️ Researcher Agent\n(Tavily Parallel Crawl)"]
-        Curator["🗄️ Curator Module\n(Dedup & Chunking)"]
-        Analyst["🧠 Analyst Agent\n(RAG Semantic Search)"]
-        Writer["✍️ Writer Agent\n(Draft Report)"]
-        Critic["⚖️ Critic Agent\n(Fact & Quality Check)"]
-        PostProc["📑 Citation Post-Processor\n(Regex Indexing)"]
-
-        Supervisor -->|"Search Queries"| Researcher
-        Researcher -->|"Raw Web Content"| Curator
-        Curator -->|"Vector Embeddings"| DB
-        DB -.->|"Hybrid Retrieval"| Analyst
-        Analyst -->|"Claims & Evidence"| Writer
-        Writer <-->|"Micro-loop (Max 2)"| Critic
-        Critic -.->|"Macro-loop (Delta Queries)"| Supervisor
-        Writer -->|"Validated Report"| PostProc
-    end
-
-    UI -->|"HTTP Request"| Router
-    Router -->|"Enqueue Job"| RedisQueue
-    RedisQueue -->|"Execute"| AgentSystem
-    AgentSystem -->|"Save State / Artifacts"| DB
-    AgentSystem -->|"Publish Progress"| SSEHub
-    SSEHub -->|"Live Stream"| UI
-```
+- [C4 Container, Logical DFD, inference flow, async sequence và target ERD](docs/architecture/system-design.md)
+- [HLD: boundary, trách nhiệm container và trade-offs](docs/architecture/system-architecture.md)
+- [Agent roles, state và research loops](docs/technical/agent-workflow.md)
 
 ---
 
@@ -321,7 +291,7 @@ Sau khi tạo task, gọi endpoint `/start` để đưa tác vụ vào hàng đ�
 curl -X POST "http://localhost:8000/api/v1/research/67b8a1c9-3e2b-4fa8-9e6b-7cb85a123456/start"
 ```
 
-API hiện chuyển trạng thái task và enqueue Celery scaffold. Worker trong code hiện trả placeholder; chưa thực hiện luồng Supervisor → Researcher → report.
+Endpoint đưa job vào Celery và worker có gọi LangGraph workflow trong source hiện tại. Tuy nhiên, baseline được ghi nhận chưa chạy workflow end-to-end với provider thật; chưa xác minh report/citation output, lỗi/retry và UI integration.
 
 ---
 
@@ -364,30 +334,9 @@ Chỉ so sánh với prompting/RAG cơ bản sau khi chạy cùng bộ câu hỏ
 
 ## 🗺️ Lộ trình Phát triển (Roadmap)
 
-Lộ trình sản phẩm mở rộng người dùng theo mức độ năng lực: **MVP** phục vụ sinh viên/nhà nghiên cứu cá nhân; **giai đoạn 2** hướng tới chuyên gia phân tích công nghệ/thị trường và nhà nghiên cứu nâng cao; **giai đoạn 3** có thể phục vụ nhóm nghiên cứu/phòng ban/tổ chức khi đã có cộng tác, phân quyền và bảo vệ tài liệu riêng. Đây là đối tượng mục tiêu dự kiến, không phải cam kết phát hành.
+Lộ trình chi tiết, thời hạn, phụ trách và trạng thái theo evidence nằm tại [roadmap-and-progress.md](docs/project/roadmap-and-progress.md). Định hướng mở rộng người dùng theo release gates: cá nhân/nhà nghiên cứu trước; chuyên gia và nhiều loại phương pháp sau khi chất lượng được đánh giá; nhóm/tổ chức chỉ sau khi có collaboration, tenant isolation, privacy và operational controls. Đây là định hướng, không phải cam kết phát hành.
 
-Các giai đoạn kỹ thuật bên dưới là work packages; chúng không đồng nhất số thứ tự với các product phases trong SRS. Image discovery/charts bắt đầu sau khi MVP research core đạt gate; enterprise capability yêu cầu riêng privacy/access-control gate.
-
-- [ ] **Giai đoạn 1 (Core Foundations — cần xác minh bằng chạy/test):**
-  - [ ] FastAPI, async persistence và task lifecycle.
-  - [ ] PostgreSQL + pgvector, Redis, Celery và Compose chạy end-to-end.
-- [ ] **Giai đoạn 2 (Research Workflow — phần lớn đang ở mức prototype):**
-  - [ ] Tavily search thực, scraping an toàn, curator/indexing thật.
-  - [ ] Analyst dùng retrieval và tạo claim/evidence có chunk IDs.
-  - [ ] Critic kiểm chứng draft với evidence; citation validator và post-processor thật.
-  - [ ] Retry, budget, state transitions và integration tests.
-  - [ ] Source & Evidence Explorer: xem claim, chunk, nguồn, metadata và mâu thuẫn.
-- [ ] **Giai đoạn 3 (Frontend & User Experience):**
-  - [ ] Hoàn thiện giao diện Next.js 14 App Router với TailwindCSS & Shadcn UI.
-  - [ ] Hiển thị SSE Live Streaming trực quan hóa biểu đồ Agent.
-  - [ ] Module Human-in-the-Loop: Cho phép người dùng duyệt đề cương trước khi chạy.
-  - [ ] (Sau khi MVP core đạt gate) Image discovery có preview/attribution; người dùng chọn trước khi chèn báo cáo.
-  - [ ] (Sau khi MVP core đạt gate) Biểu đồ tái tạo từ số liệu evidence; ảnh AI nếu thêm có nhãn và không phải evidence.
-- [ ] **Giai đoạn 4 (Enterprise Extensions):**
-  - [ ] Hỗ trợ mô hình mã nguồn mở Local LLM qua Ollama / vLLM.
-  - [ ] Bộ xuất bản báo cáo PDF tùy chỉnh theo template trường học/doanh nghiệp.
-  - [ ] Đánh giá tự động chất lượng bằng Ragas Framework.
-  - [ ] Hỗ trợ ảnh AI minh họa có nhãn rõ ràng (tùy chọn), không dùng làm evidence.
+Mốc demo 10/11/2026 tập trung một đường literature-review đầu-cuối. Runner chỉ được đưa vào demo nếu routine/dataset hẹp đạt kiểm tra an toàn và tái lập; các research path ngoài hệ thống dừng ở protocol và chờ người dùng. Không mở rộng scope nếu làm giảm thời gian kiểm chứng core path.
 
 ---
 
@@ -407,7 +356,7 @@ Chúng tôi luôn chào đón mọi đóng góp từ cộng đồng mã nguồn 
 
 ## 📄 Giấy phép (License)
 
-Dự án được phân phối dưới giấy phép **MIT License**. Xem chi tiết tại file [LICENSE](LICENSE).
+Repository hiện chưa có file `LICENSE`; README không tuyên bố dự án dùng MIT. Hãy thêm giấy phép sau khi chủ dự án chốt điều khoản phát hành.
 
 ---
 

@@ -1,36 +1,27 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# ATI Frontend
 
-## Getting Started
+Frontend prototype for the Multi-Agent Research System. It uses Next.js 14, React 18 and Tailwind CSS. The current UI supports a basic task creation/detail flow; target product flows, API expectations and implementation gaps are documented in the [SRS](../docs/requirements/SRS.md) and [System Design](../docs/architecture/system-design.md).
 
-First, run the development server:
+## Run locally
+
+From this directory:
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Run the backend separately from the repository root as described in the [main README](../README.md). The UI/backend integration is still a development prototype; verify each flow end-to-end before treating it as complete.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Available scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Start the Next.js development server |
+| `npm run build` | Build the frontend |
+| `npm run start` | Serve a production build |
+| `npm run lint` | Run the configured Next.js lint command |
 
-## Learn More
+## Project documentation
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+Start at the [project documentation index](../docs/README.md). The root README describes the verified baseline and quick-start setup; the SRS and architecture docs describe target requirements and design.
