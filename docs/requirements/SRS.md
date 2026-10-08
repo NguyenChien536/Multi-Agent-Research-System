@@ -1,7 +1,7 @@
 # SRS — Multi-Agent Research System (ATI)
 
 > **Phiên bản:** 4.1 · **Cập nhật định hướng:** 09/10/2026 · **Kỳ hạn:** 10/09–10/11/2026.
-> Yêu cầu mục tiêu, không phải danh sách tính năng đã nghiệm thu. Thay v3.0; `SRS ATI.md` v2.5 là bản lịch sử. Sơ đồ chuẩn: [System Design](../architecture/system-design.md). Review: [Product Assessment](../project/product-assessment.md).
+> Yêu cầu mục tiêu, không phải danh sách tính năng đã nghiệm thu. Đây là nguồn SRS chuẩn; `SRS ATI.md` ở root là bản đồng bộ để đọc/nộp. Lịch sử v2.5 còn trong Git. Sơ đồ chuẩn: [System Design](../architecture/system-design.md). Review: [Product Assessment](../project/product-assessment.md).
 
 ## 1. Mục đích và giá trị
 

@@ -2,6 +2,8 @@
 
 **Bản chốt planning: 09/10/2026 — SRS v4.1.** ATI là hệ thống đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập; mỗi task hướng tới một bài báo hoàn chỉnh. Tài liệu mục tiêu tách riêng source inventory và runtime evidence.
 
+Phạm vi/gate G0–G7 và ba sơ đồ giữa kỳ đã được chốt làm baseline để triển khai P0. Thay đổi phạm vi sau mốc này cần nêu lý do trong ADR, sửa SRS và kế hoạch/evaluation tương ứng; trạng thái chỉ chuyển sang Verified khi có bằng chứng chạy trên revision cụ thể.
+
 ## Đọc để bắt đầu triển khai
 
 1. [Product Assessment](project/product-assessment.md) — kết luận hướng đi, findings và những quyết định đã sửa.
@@ -31,7 +33,7 @@
 
 ## Quy tắc đồng bộ
 
-SRS hiện hành là v4.1; root `SRS ATI.md` giữ làm lịch sử. Mermaid trong midterm phải trùng 5 hình chính trong System Design; không chỉnh hai bản độc lập. Timeline chi tiết theo Implementation Plan; roadmap/midterm chỉ tóm tắt.
+SRS hiện hành là v4.1 tại `docs/requirements/SRS.md`; root `SRS ATI.md` là bản đồng bộ cùng nội dung, với liên kết tính từ thư mục gốc. Bản v2.5 còn trong Git history. Khi sửa SRS, đồng bộ cả bản root; không duy trì hai phạm vi khác nhau. Mermaid trong midterm phải trùng 5 hình chính trong System Design; không chỉnh hai bản độc lập. Timeline chi tiết theo Implementation Plan; roadmap/midterm chỉ tóm tắt.
 
 | Nội dung cần cập nhật | Nguồn chuẩn | Tài liệu cần đồng bộ theo |
 |---|---|---|

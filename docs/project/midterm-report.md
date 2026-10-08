@@ -13,6 +13,8 @@
 
 **Giảng viên:** [Nhóm bổ sung] · **Ngày nộp báo cáo:** [Nhóm bổ sung]
 
+Các trách nhiệm của Vũ, Hiếu và My trong bảng là **phân công dự kiến**, chưa được tính là kết quả đã bàn giao. MSSV, giảng viên và ngày nộp cần điền từ thông tin chính thức trước khi nộp; không tự suy đoán.
+
 ## 1. Overview — Tổng quan
 
 ATI hỗ trợ người nghiên cứu từ câu hỏi và nguồn riêng tới **bản thảo bài báo hoàn chỉnh** theo loại, có bằng chứng, phương pháp và kết quả thật khi cần. Các agent phân vai tìm nguồn, phân tích, thiết kế phương pháp, viết và phản biện; graph điều phối bằng state/guards. Mỗi bài có workspace độc lập; người dùng xem tiến độ, hỏi/sửa bài và có thể làm bài khác khi một bài đang chờ dữ liệu.
@@ -75,6 +77,15 @@ REVIEW chủ yếu dùng năm vai trò; method/data roles có điều kiện. Cu
 
 Kiến trúc dùng một backend codebase và các process API/worker, không tách mỗi agent thành microservice. Khái niệm container view theo [C4](https://c4model.com/diagrams/container); pause/resume theo [LangGraph](https://docs.langchain.com/oss/python/langgraph/interrupts); idempotency theo [Celery](https://docs.celeryq.dev/en/stable/userguide/tasks.html). Pin thư viện tương thích trước implementation.
 
+| Phương pháp / thuật toán | Áp dụng trong ATI | Đánh đổi và giới hạn |
+|---|---|---|
+| Truy xuất bằng embedding + pgvector | Web/PDF → chunk có locator/hash → tìm trong đúng task → Evidence Analyst chọn và đối chiếu đoạn nguồn | Tìm gần nghĩa hỗ trợ tổng hợp, nhưng đoạn được tìm thấy chưa chứng minh claim; cần quote/locator và kiểm ngữ nghĩa |
+| Graph có state + hai vòng phản biện hữu hạn | Research loop tìm thêm evidence thiếu; Writer–Critic sửa bản thảo; guard theo budget và evidence delta | Bounded loop giảm chi phí/vòng lặp vô hạn, nhưng có thể dừng khi câu hỏi chưa giải quyết được; trả giới hạn rõ |
+| Validator xác định + Critic | Code kiểm IDs/lineage/artifact/status; Critic đọc lập luận, phương pháp và kết quả theo section | FK và citation hợp lệ không bảo đảm nội dung đúng; con người vẫn kiểm kết luận khoa học |
+| Routine thống kê có đối chứng | Mean baseline so với Ridge cùng split/metric, imputer/scaler chỉ fit train | Chạy thật, kiểm được và tái lập trong phạm vi hẹp; không suy rộng sang mọi phương pháp/lĩnh vực hoặc nhân quả |
+
+LLM và embedding provider được cấu hình/pin theo run, có adapter, data policy và cap. Không tuyên bố một model cố định sẽ luôn tốt nhất; chất lượng đa tác tử phải qua phép so sánh ở §3.3.
+
 Ma trận chi tiết chức năng–công nghệ–design pattern và ranh giới trust được nêu ở [Technical Design](../architecture/technical-design.md); HLD giải thích thành phần và trade-offs tại [System Architecture](../architecture/system-architecture.md).
 
 ### 3.3 Thực nghiệm và đánh giá
@@ -87,7 +98,7 @@ Routine tham chiếu `tabular_regression_v1`: CSV numeric → descriptive statis
 
 ## 4. System Design — Thiết kế hệ thống
 
-Năm hình sau được đồng bộ từ [System Design](../architecture/system-design.md). Đây là target, không phải runtime đã nghiệm thu. Các nguyên tắc và giới hạn dưới mỗi hình trong nguồn chuẩn là một phần của thiết kế.
+Ba hình §4.1–4.3 trả lời trực tiếp yêu cầu **system architecture, data flow, inference flow chart**; §4.4–4.5 bổ sung để thấy pause/resume và truy xuất kết quả. Năm hình được đồng bộ từ [System Design](../architecture/system-design.md), là kiến trúc mục tiêu chứ không phải runtime đã nghiệm thu. Hướng dẫn bố cục để vẽ lại nằm ở đầu tài liệu System Design; mỗi hình nên ở một trang riêng.
 
 ### 4.1 System Architecture — C4 Container View
 
@@ -100,7 +111,7 @@ flowchart TB
         API["Application API<br/>FastAPI · auth · task · report · dispatcher"]
         Worker["Research worker<br/>Celery + LangGraph · agent workflow"]
         Redis[("Redis<br/>job broker · event notification")]
-        DB[("PostgreSQL + pgvector<br/>tasks/runs · evidence · checkpoints · events")]
+        DB[("PostgreSQL + pgvector<br/>runs · evidence · journal · checkpoints · events")]
         Files[("Private ArtifactStore<br/>PDF · CSV · charts · reports")]
         Launcher["Analysis launcher<br/>trusted operator process"]
         Runner["Analysis container<br/>approved routine · resource limits"]
@@ -119,7 +130,7 @@ flowchart TB
     API -->|"authorized file access"| Files
     API <-->|"dispatch jobs · subscribe notifications"| Redis
     Redis <-->|"deliver jobs · publish notifications"| Worker
-    Worker -->|"evidence · versions · checkpoints · events"| DB
+    Worker -->|"evidence · versions · journal · checkpoints · events"| DB
     Worker -->|"read inputs · persist outputs"| Files
     Worker -->|"bounded manifest / result"| Launcher
     Launcher -->|"launch · supervise · collect"| Runner
@@ -149,7 +160,7 @@ flowchart LR
     Sources(["Nguồn tài liệu bên ngoài"])
 
     P1["1.0 Quản lý yêu cầu<br/>và kế hoạch nghiên cứu"]
-    P2["2.0 Thu thập, kiểm tra<br/>và chuẩn hóa nguồn"]
+    P2["2.0 Thu thập và chuẩn hóa<br/>nguồn / dữ liệu đầu vào"]
     P3["3.0 Phân tích bằng chứng<br/>và gợi ý khoảng trống"]
     P4["4.0 Thiết kế phương pháp<br/>và protocol"]
     P5["5.0 Phân tích dữ liệu<br/>bằng routine hỗ trợ"]
@@ -177,7 +188,7 @@ flowchart LR
     P4 -->|"protocol và kế hoạch phân tích"| D1
     P4 -->|"cấu hình phân tích được hỗ trợ"| P5
     D4 -->|"dataset hợp lệ"| P5
-    P5 -->|"metrics · charts · manifest"| D4
+    P5 -->|"metrics · charts · journal · manifest"| D4
     P5 -->|"bằng chứng kết quả"| D3
     D1 -->|"scope · method · protocol"| P6
     D3 -->|"claims và evidence anchors"| P6
@@ -212,7 +223,7 @@ flowchart TB
     DataGate{"Dữ liệu/kết quả thật<br/>đủ và hợp lệ?"}
     Protocol["Methodologist + Writer/Critic<br/>protocol và biểu mẫu trung gian"]
     WaitData["WAITING_USER_DATA<br/>checkpoint · worker kết thúc"]
-    Analysis["Data Analyst + isolated runner<br/>run thật · metrics · charts · manifest"]
+    Analysis["Data Analyst + isolated runner<br/>run thật · metrics · charts · journal"]
     Draft["Writer<br/>bản nháp đúng loại và có provenance"]
     Critic["Critic<br/>toàn bài · evidence · method · results"]
     Verdict{"Verdict"}
@@ -234,7 +245,7 @@ flowchart TB
     DataGate -->|"thiếu CSV hoặc kết quả"| WaitData
     WaitData -->|"upload READY · resume"| DataGate
     DataGate -->|"CSV + routine được hỗ trợ"| Analysis
-    DataGate -->|"kết quả human-led có provenance"| Draft
+    DataGate -->|"kết quả human-led đã kiểm provenance"| Draft
     Analysis -->|"run thành công · output hợp lệ"| Draft
     Analysis -->|"failed / timeout sau retry"| Limited
     Draft --> Critic --> Verdict
@@ -286,8 +297,9 @@ sequenceDiagram
     API->>Q: Dispatch khi có suất chạy
     Q->>W: Deliver A
     W->>DB: Claim A, lưu plan và evidence/events
-    W->>X: Các agent tìm nguồn và kiểm protocol
-    X-->>W: Evidence + reviewed protocol
+    W->>X: Search / LLM requests trong budget
+    X-->>W: Nội dung nguồn / model responses
+    W->>DB: Neo evidence và kiểm protocol qua Writer/Critic
     W->>F: Lưu protocol, biểu mẫu và bản nháp A
     W->>DB: Checkpoint A + WAITING_USER_DATA + event
     W-->>Q: Kết thúc job, trả worker lease
@@ -315,8 +327,12 @@ sequenceDiagram
     API-->>UI: 202 Accepted, A QUEUED nếu hết suất
     API->>Q: Dispatch A khi có suất
     Q->>W: Claim A, load checkpoint A
-    W->>X: Kiểm provenance / phân tích routine hỗ trợ
-    X-->>W: Kết quả thật hoặc lý do cần bổ sung
+    W->>DB: Kiểm provenance và plan version của A
+    opt CSV hợp routine được hỗ trợ
+        W->>X: Gửi manifest cho analysis adapter
+        X-->>W: Metrics / charts / execution status thật
+        W->>DB: Lưu analysis journal và kiểm tái lập
+    end
     alt Đủ bằng chứng và Results thật
         W->>DB: Writer/Critic/Validator + report A version + COMPLETED
         API-->>UI: Bài báo A có thể đọc, hỏi, sửa và xuất
@@ -460,19 +476,19 @@ Evidence neo đúng một chunk hoặc artifact; report → ReportClaim → clai
 
 Thời hạn 10/09–10/11/2026. Giai đoạn đầu đã có planning/scaffold và baseline log 27/09. Lịch còn lại tính từ 08/10, giả định Chiến có 3–4 giờ tập trung/ngày; cần điều chỉnh theo velocity thực tế sau baseline.
 
-| Thời gian | Công việc | Người phụ trách | Gate/đầu ra |
-|---|---|---|---|
-| 08–10/10 | P0 baseline/dependency/DB/test isolation | Chiến | G0: tái lập môi trường |
-| 11–14/10 | P1 auth/ownership/run/outbox/events | Chiến | G1: lifecycle và quyền |
-| 15–19/10 | P2 web E2E/evidence/critic/validator/budget | Chiến | G2: review chạy thật |
-| 20–23/10 | P3 PDF/dashboard nhiều bài/progress | Chiến | G3: web+PDF |
-| 24–26/10 | P4 plan/protocol/wait/resume | Chiến | G4: durable resume |
-| 27–30/10 | P5 routine/metrics/charts/human-led results/empirical | Chiến | G5: experiment thật và tái lập |
-| 31/10–02/11 | P6 Q&A/revision/export và delete/cleanup | Chiến | G6: phiên bản, đầu ra và retention |
-| 03–07/11 | P7 evaluation/manual QA/fix/báo cáo | Chiến | G7: kết quả có evidence |
-| 08–10/11 | Buffer/freeze/demo/backup | Chiến | Bản nộp |
+| Thời gian | Công việc | Giờ ước tính | Người phụ trách | Gate/đầu ra |
+|---|---|---:|---|---|
+| 08–10/10 | P0 baseline/dependency/DB/test isolation | 4–6 | Chiến | G0: tái lập môi trường |
+| 11–14/10 | P1 auth/ownership/run/outbox/events | 12–16 | Chiến | G1: lifecycle và quyền |
+| 15–19/10 | P2 web E2E/evidence/critic/validator/budget | 16–20 | Chiến | G2: review chạy thật |
+| 20–23/10 | P3 PDF/dashboard nhiều bài/progress | 11–14 | Chiến | G3: web+PDF |
+| 24–26/10 | P4 plan/protocol/wait/resume | 14–18 | Chiến | G4: durable resume |
+| 27–30/10 | P5 routine/metrics/charts/journal/rerun/human-led results/empirical | 24–34 | Chiến | G5: experiment thật và tái lập |
+| 31/10–02/11 | P6 Q&A/revision/export và delete/cleanup | 9–12 | Chiến | G6: phiên bản, đầu ra và retention |
+| 03–07/11 | P7 evaluation/manual QA/fix/báo cáo | 14–20 | Chiến | G7: kết quả có evidence |
+| 08–10/11 | Buffer/freeze/demo/backup | Ngoài ước tính | Chiến | Bản nộp |
 
-Chi tiết ước lượng 104–140 giờ trong [Implementation Plan](implementation-plan.md), gồm nhật ký mọi lần thử và một lần chạy lại để kiểm tái lập. Đây là kế hoạch rủi ro cao do một developer và nhiều phần chưa chạy. Cắt polish/ảnh/PDF đẹp khi trễ; không bỏ số liệu thật/provenance/ownership rồi báo đủ scope.
+Chi tiết ước lượng 104–140 giờ trong [Implementation Plan](implementation-plan.md), gồm nhật ký mọi lần thử và một lần chạy lại để kiểm tái lập. Giả định thời gian tập trung thực tế còn 90–115 giờ tạo khoảng thiếu 14–50 giờ; riêng P5 cần 24–34 giờ trong bốn ngày mục tiêu. Đây là kế hoạch rủi ro cao, phải đo lại sau G0/G1 và báo mốc/gate nào cần điều chỉnh nếu không tăng được thời gian. Khi trễ, ưu tiên các gate thật và cắt polish/ảnh/PDF đẹp; không báo số liệu/provenance/ownership chưa đạt là đã hoàn thành.
 
 Report version/ReportClaim và plan schema được đặt nền ở P2; P4 mở approval/resume, P6 mở Q&A/revision. WAITING_* giữ active run **của chính task** nhưng trả worker/quota RUNNING; Q&A đọc phiên bản bài qua operation có cap riêng. Mọi trường hợp xóa task phải chặn truy cập/resume và kết quả đến muộn theo policy đã ghi trong SRS.
 
@@ -480,14 +496,14 @@ Report version/ReportClaim và plan schema được đặt nền ở P2; P4 mở
 
 | Hạng mục | Bằng chứng hiện có | Chưa được xác nhận |
 |---|---|---|
-| Planning | SRS v4.1, ADR-004, diagrams, user journey và implementation/evaluation plans cập nhật 09/10 | Feature chưa hoàn tất chỉ vì đã mô tả |
+| Planning | SRS v4.1 đồng bộ vào `SRS ATI.md`, ADR-004/005, diagrams, user journey, experiment journal và implementation/evaluation plans cập nhật 09/10 | Feature chưa hoàn tất chỉ vì đã mô tả |
 | Docker/DB/API/worker/graph | Baseline chạy 27/09: services, health/task smoke, worker ping, graph compile/routing mẫu | Revision hiện tại, clean DB migration, research provider E2E |
 | Auth/provenance schema | Source `ebb525a` có register và ClaimEvidence/Citation migration | Login/ownership, migration áp dụng, validator thật |
 | Research workflow | Có search/fetch/embed/retrieval/Writer/Critic source | Đủ budget/lineage/review/loop và chất lượng thực tế |
 | Upload/resume/analysis/Q&A | Có thiết kế và backlog | Chưa đủ runtime evidence |
 | Monitoring/evaluation | Kế hoạch event/log/timeline và baseline/ablation | Chưa có số đo chất lượng/cost/superiority |
 
-[Baseline Verification](baseline-verification.md) giữ nguyên lệnh/kết quả lịch sử. Đọc source ngày 08/10 không chứng minh deployment hiện tại đã chạy. Lượt chốt planning này không gọi provider hoặc chạy experiment.
+[Baseline Verification](baseline-verification.md) giữ nguyên lệnh/kết quả lịch sử. Đọc source ngày 08/10 không chứng minh deployment hiện tại đã chạy. Lượt chốt planning này chỉ kiểm tài liệu/sơ đồ, không gọi provider hoặc chạy experiment.
 
 ## 7. AI Disclosure — Đóng góp con người và AI
 
@@ -497,14 +513,15 @@ Report version/ReportClaim và plan schema được đặt nền ở P2; P4 mở
 | Phạm Long Vũ | Dataset/query/rubric và QA/chấm nội dung | Phân công; cập nhật bàn giao thực tế |
 | Nguyễn Văn Hiếu | Scenarios/flow/checklist/issue log | Phân công; cập nhật bàn giao thực tế |
 | Nguyễn Thị Hải My | Related work/nguồn, chấm và biên tập | Phân công; cập nhật bàn giao thực tế |
-| Gemini / Antigravity | Theo thông tin chủ dự án: hỗ trợ drafts/code/docs và workflow review | Gắn task/commit/model thực tế trước nộp; không suy đoán mức đóng góp |
-| Codex | Hỗ trợ đọc source/docs, rà kiến trúc, đề xuất/chỉnh planning và diagrams; các lượt trước có hỗ trợ code/baseline | Lượt 08/10 là rà soát/planning, không nghiệm thu runtime; Chiến review quyết định cuối |
+| Gemini | Đã hỗ trợ tạo bản nháp planning docs theo thông tin chủ dự án | Chiến rà nội dung với yêu cầu, code và source; xác nhận model/prompt/file sử dụng trước nộp |
+| Antigravity | Dự kiến hỗ trợ viết code theo issue/branch; chưa có evidence đủ để ghi nhận task cụ thể trong tiến độ giữa kỳ | Chỉ bổ sung phần việc khi có commit/PR và kết quả Chiến kiểm lại |
+| Codex | Hỗ trợ đọc source/docs, rà kiến trúc, đề xuất/chỉnh SRS, planning, journal và diagrams; các lượt trước có hỗ trợ code/baseline | Các lượt 08–09/10 là rà soát/planning, không nghiệm thu runtime; Chiến review quyết định cuối |
 
 AI của sản phẩm ATI khác với AI giúp nhóm phát triển. Không tự điền tỷ lệ AI/con người hoặc model version chưa xác minh. Người làm chịu trách nhiệm nguồn, số liệu, code và kết luận. Hồ sơ chi tiết ở [AI Disclosure](ai-disclosure.md).
 
 ## 8. Tài liệu kèm theo và tham khảo
 
-- [SRS](../requirements/SRS.md), [HLD](../architecture/system-architecture.md), [ADR-004](../architecture/decisions/ADR-004-multi-agent-research-delivery.md).
+- [SRS](../requirements/SRS.md), [HLD](../architecture/system-architecture.md), [ADR-004](../architecture/decisions/ADR-004-multi-agent-research-delivery.md), [ADR-005](../architecture/decisions/ADR-005-experiment-journal-and-reproducibility.md).
 - [Product Assessment](product-assessment.md), [Implementation Plan](implementation-plan.md), [Evaluation Plan](evaluation-plan.md), [Team Task Guide](team-task-guide.md).
 - [GPT Researcher](https://github.com/assafelovic/gpt-researcher): tham khảo thu thập nguồn và báo cáo.
 - [STORM](https://github.com/stanford-oval/storm): tham khảo lập câu hỏi nhiều góc nhìn và tổ chức tri thức.

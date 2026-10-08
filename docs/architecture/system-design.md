@@ -8,6 +8,8 @@ ATI phối hợp agent để tạo bài báo có bằng chứng và thực nghi�
 
 Năm hình chính đáp ứng kiến trúc, data flow, inference, tương tác bất đồng bộ và mô hình dữ liệu. Hai phụ lục phục vụ kỹ thuật. Mermaid dùng notation dễ đọc; Logical DFD là biểu diễn logic, không tuyên bố đúng toàn bộ hình dạng Gane–Sarson. Hình kiến trúc thể hiện process/data boundary; agent là logic bên trong worker.
 
+**Bố cục để vẽ lại bằng tay:** Ba hình bắt buộc (§2–4) nên đặt mỗi hình trên một trang ngang. Kiến trúc: người dùng bên trái, UI → API → worker ở giữa, DB/Redis/file dưới các process, launcher/runner bên phải và provider ở mép ngoài; đường nét đứt chỉ hoạt động nghiên cứu ngoài hệ thống. DFD: các process 1.0–6.0 theo chiều trái → phải, kho D1–D5 ở hàng dưới, nguồn ngoài ở trên 2.0; có thể lặp ký hiệu User ở mép phải với chú thích “cùng một thực thể” để tránh đường quay dài. Inference: trục chính dọc từ Start tới Done, nhánh chờ ở trái, nhánh tìm bổ sung/sửa bài ở phải; ghi cap 3 vòng/2 lần sửa trong chú thích thay vì vẽ lại mọi vòng. Sequence và ERD là hai hình bổ sung, nên để riêng trang/phụ lục, không ép chung với ba hình bắt buộc. Tên node và ý nghĩa mũi tên phải giữ như Mermaid; có thể rút ngắn text trong hộp khi vẽ.
+
 ## 2. System Architecture — C4 Container View
 
 Một kiến trúc hoàn chỉnh với các dependency chính. Mũi tên tới provider/storage biểu diễn lời gọi và dữ liệu trả về theo giao thức đó; không vẽ thêm từng response để tránh giao cắt.
@@ -21,7 +23,7 @@ flowchart TB
         API["Application API<br/>FastAPI · auth · task · report · dispatcher"]
         Worker["Research worker<br/>Celery + LangGraph · agent workflow"]
         Redis[("Redis<br/>job broker · event notification")]
-        DB[("PostgreSQL + pgvector<br/>tasks/runs · evidence · checkpoints · events")]
+        DB[("PostgreSQL + pgvector<br/>runs · evidence · journal · checkpoints · events")]
         Files[("Private ArtifactStore<br/>PDF · CSV · charts · reports")]
         Launcher["Analysis launcher<br/>trusted operator process"]
         Runner["Analysis container<br/>approved routine · resource limits"]
@@ -40,7 +42,7 @@ flowchart TB
     API -->|"authorized file access"| Files
     API <-->|"dispatch jobs · subscribe notifications"| Redis
     Redis <-->|"deliver jobs · publish notifications"| Worker
-    Worker -->|"evidence · versions · checkpoints · events"| DB
+    Worker -->|"evidence · versions · journal · checkpoints · events"| DB
     Worker -->|"read inputs · persist outputs"| Files
     Worker -->|"bounded manifest / result"| Launcher
     Launcher -->|"launch · supervise · collect"| Runner
@@ -77,7 +79,7 @@ flowchart LR
     Sources(["Nguồn tài liệu bên ngoài"])
 
     P1["1.0 Quản lý yêu cầu<br/>và kế hoạch nghiên cứu"]
-    P2["2.0 Thu thập, kiểm tra<br/>và chuẩn hóa nguồn"]
+    P2["2.0 Thu thập và chuẩn hóa<br/>nguồn / dữ liệu đầu vào"]
     P3["3.0 Phân tích bằng chứng<br/>và gợi ý khoảng trống"]
     P4["4.0 Thiết kế phương pháp<br/>và protocol"]
     P5["5.0 Phân tích dữ liệu<br/>bằng routine hỗ trợ"]
@@ -105,7 +107,7 @@ flowchart LR
     P4 -->|"protocol và kế hoạch phân tích"| D1
     P4 -->|"cấu hình phân tích được hỗ trợ"| P5
     D4 -->|"dataset hợp lệ"| P5
-    P5 -->|"metrics · charts · manifest"| D4
+    P5 -->|"metrics · charts · journal · manifest"| D4
     P5 -->|"bằng chứng kết quả"| D3
     D1 -->|"scope · method · protocol"| P6
     D3 -->|"claims và evidence anchors"| P6
@@ -142,7 +144,7 @@ flowchart TB
     DataGate{"Dữ liệu/kết quả thật<br/>đủ và hợp lệ?"}
     Protocol["Methodologist + Writer/Critic<br/>protocol và biểu mẫu trung gian"]
     WaitData["WAITING_USER_DATA<br/>checkpoint · worker kết thúc"]
-    Analysis["Data Analyst + isolated runner<br/>run thật · metrics · charts · manifest"]
+    Analysis["Data Analyst + isolated runner<br/>run thật · metrics · charts · journal"]
     Draft["Writer<br/>bản nháp đúng loại và có provenance"]
     Critic["Critic<br/>toàn bài · evidence · method · results"]
     Verdict{"Verdict"}
@@ -164,7 +166,7 @@ flowchart TB
     DataGate -->|"thiếu CSV hoặc kết quả"| WaitData
     WaitData -->|"upload READY · resume"| DataGate
     DataGate -->|"CSV + routine được hỗ trợ"| Analysis
-    DataGate -->|"kết quả human-led có provenance"| Draft
+    DataGate -->|"kết quả human-led đã kiểm provenance"| Draft
     Analysis -->|"run thành công · output hợp lệ"| Draft
     Analysis -->|"failed / timeout sau retry"| Limited
     Draft --> Critic --> Verdict
@@ -197,6 +199,7 @@ flowchart TB
 - WaitData không tự chạy bất kỳ file nào; upload/resume phải qua owner, READY, checkpoint/plan version và idempotency checks. Dataset hoặc routine chưa hỗ trợ phải hướng dẫn sửa dữ liệu/đổi method hợp lệ; không chuyển ngầm thành bài khác. Results do người dùng cung cấp phải được kiểm provenance và ghi nhãn; không tự báo đã tái lập. Thất bại runner được retry hữu hạn theo cùng manifest, sau đó chờ can thiệp hoặc thành NEEDS_REVIEW; không tạo Results giả.
 - PARTIAL chỉ được phát hành khi lineage của phần giữ lại hợp lệ; lỗi lineage/method chưa giải quyết là NEEDS_REVIEW. Mọi node có thể kết thúc FAILED/CANCELLED; không vẽ lặp các nhánh này.
 - Với bài human-led, Writer chỉ viết Results sau khi có dữ liệu/kết quả thực và metadata phương pháp đủ dùng; nếu cần suy luận định lượng nhưng routine không hỗ trợ, yêu cầu người dùng cung cấp kết quả phân tích có provenance hoặc thay phương pháp. `COMPLETED` luôn là bài báo đủ phần theo loại, không phải protocol.
+- Nhánh Analysis đóng băng manifest trước chạy, giữ mọi attempt/kết quả âm trong journal và chạy lại để kiểm repeatability trước khi gắn nhãn tái lập; một phép chạy lại cùng seed không chứng minh kết luận vững trên dữ liệu khác. Xem [Experiment Journal](../technical/experiment-journal-and-reproducibility.md).
 
 ## 5. Asynchronous Sequence — Hai bài độc lập, pause và resume
 
@@ -225,8 +228,9 @@ sequenceDiagram
     API->>Q: Dispatch khi có suất chạy
     Q->>W: Deliver A
     W->>DB: Claim A, lưu plan và evidence/events
-    W->>X: Các agent tìm nguồn và kiểm protocol
-    X-->>W: Evidence + reviewed protocol
+    W->>X: Search / LLM requests trong budget
+    X-->>W: Nội dung nguồn / model responses
+    W->>DB: Neo evidence và kiểm protocol qua Writer/Critic
     W->>F: Lưu protocol, biểu mẫu và bản nháp A
     W->>DB: Checkpoint A + WAITING_USER_DATA + event
     W-->>Q: Kết thúc job, trả worker lease
@@ -254,8 +258,12 @@ sequenceDiagram
     API-->>UI: 202 Accepted, A QUEUED nếu hết suất
     API->>Q: Dispatch A khi có suất
     Q->>W: Claim A, load checkpoint A
-    W->>X: Kiểm provenance / phân tích routine hỗ trợ
-    X-->>W: Kết quả thật hoặc lý do cần bổ sung
+    W->>DB: Kiểm provenance và plan version của A
+    opt CSV hợp routine được hỗ trợ
+        W->>X: Gửi manifest cho analysis adapter
+        X-->>W: Metrics / charts / execution status thật
+        W->>DB: Lưu analysis journal và kiểm tái lập
+    end
     alt Đủ bằng chứng và Results thật
         W->>DB: Writer/Critic/Validator + report A version + COMPLETED
         API-->>UI: Bài báo A có thể đọc, hỏi, sửa và xuất
