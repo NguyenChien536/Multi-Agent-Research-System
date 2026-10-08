@@ -1,7 +1,7 @@
 # Technical Design — Chức năng, công nghệ và mẫu kiến trúc ATI
 
-**Cập nhật:** 08/10/2026 · **Trạng thái:** quyết định thiết kế cho bản nộp; không phải xác nhận implementation.<br>
-**Nguồn yêu cầu:** [SRS v4.0](../requirements/SRS.md) · **Quyết định:** [ADR-004](decisions/ADR-004-multi-agent-research-delivery.md) · **Luồng chuẩn:** [System Design](system-design.md).
+**Cập nhật:** 09/10/2026 · **Trạng thái:** quyết định thiết kế cho bản nộp; không phải xác nhận implementation.<br>
+**Nguồn yêu cầu:** [SRS v4.1](../requirements/SRS.md) · **Quyết định:** [ADR-004](decisions/ADR-004-multi-agent-research-delivery.md) · **Luồng chuẩn:** [System Design](system-design.md), [User Journey](../project/user-journey-and-outputs.md).
 
 Tài liệu này giúp đọc từ chức năng người dùng tới thành phần xử lý, dữ liệu, technology và design pattern. “Hiện có” nghĩa là thấy trong source tại revision ebb525a; “target” cần implement và đạt gate tương ứng. Dependency phải được pin ở P0 trước khi viết code mới; adapter không được tự đổi provider/model trong lúc chạy.
 
@@ -10,18 +10,18 @@ Tài liệu này giúp đọc từ chức năng người dùng tới thành ph�
 | Chức năng | Hành vi mong đợi | Luồng/thành phần | Pattern chính | Hiện trạng đọc source |
 |---|---|---|---|---|
 | Tài khoản và workspace riêng | Đăng ký, đăng nhập, chỉ xem task/file của mình | FastAPI auth → owner-scoped service/repository → PostgreSQL | Bearer authentication, authorization by ownership, service/repository | Có đăng ký, password hashing và JWT helper; chưa có login/current-user dependency, research route còn dummy user |
-| Tạo task và plan | Nhập câu hỏi, ngôn ngữ/output; xem/chỉnh plan và budget trước chạy | API → ResearchTask/ResearchPlan → LangGraph Supervisor | Command/service layer, immutable plan version, policy guard | Có tạo task và vài trường form; chưa có ResearchPlan version/gate thực |
+| Tạo nhiều bài và plan | Nhập câu hỏi, ngôn ngữ/loại bài; xem/chỉnh plan và budget; chuyển bài A/B độc lập | API → ResearchTask/ResearchPlan → LangGraph Supervisor | Command/service layer, immutable plan version, policy guard | Có tạo/list task; chưa có plan version, quota RUNNING hoặc multi-task wait/resume đã nghiệm thu |
 | Tìm web và nguồn PDF | Search nguồn, safe-fetch nội dung; upload PDF có text và giới hạn owner/size/type | Researcher → Search adapter/fetch; PDF ingest → Source/DocumentChunk | Ports and adapters, ingestion pipeline, dedup/idempotency | Tavily/fetch/chunk/embed có source; PDF upload và full E2E chưa được chứng minh |
 | Bằng chứng và gợi ý gap | Xem claim, quote, nguồn/đoạn và ý kiến trái chiều; gap gắn phạm vi tìm kiếm | Evidence Analyst → Evidence/ClaimEvidence/ResearchClaim → Writer/ReportClaim | Provenance/lineage, structured output, deterministic validation | Junction schema có trong source; Analyst chưa lưu đủ UUID/quote chain; validator còn thiếu |
 | Research loop | Khi Critic chỉ ra thiếu căn cứ, tìm bổ sung đúng câu hỏi, dừng khi không có nguồn mới/cạn budget | Critic → code router → Researcher → ingestion → Evidence Analyst | Bounded feedback loop, state machine, dedup/no-delta guard | Có macro/micro routing mẫu; chưa có đầy đủ evidence delta, budget, critique toàn bài và stop gate |
-| Phương pháp/protocol | Nhận method/hypothesis/protocol; lab/khảo sát/thực địa do người dùng làm | Methodologist → Writer/Critic/Validator → wait checkpoint khi cần | Conditional workflow, HITL durable interrupt/resume | Chưa có role/checkpointer/resume hoàn chỉnh |
+| Phương pháp/protocol | Nhận method/hypothesis; protocol đã review là artifact trung gian; lab/khảo sát/thực địa do người dùng làm rồi nạp kết quả thật | Methodologist → Writer/Critic/Validator → WAITING_USER_DATA → resume | Conditional workflow, HITL durable interrupt/resume | Chưa có role/checkpointer/resume hoàn chỉnh |
 | Experiment tính toán | Chạy routine được duyệt trên CSV numeric; xem bảng/metrics/plots và provenance | Data Analyst → AnalysisRun → trusted launcher/container → artifacts | Allowlisted strategy, isolated process boundary, immutable manifest | Chưa có runner/AnalysisRun thực tế |
-| Bài, hỏi đáp và sửa | Bài đúng loại; Q&A dựa phiên bản/evidence; sửa giữ bản cũ | Writer → Critic → Validator; Q&A/revision service | Versioned document, evaluator loop, command/idempotency | Có một ResearchReport/task và Writer/Critic sơ khai; chưa có version/Q&A |
-| Theo dõi task | Thấy stage, agent role, event, warnings và trạng thái chờ/lỗi | TaskEvent/AgentRun → DB → SSE và polling UI | Durable event log + notification, snapshot/replay | Frontend polling 5s; SSE/API progress chưa được nghiệm thu |
+| Bài, hỏi đáp và sửa | `COMPLETED` chỉ với bài báo đủ phần/Results thật; Q&A dựa phiên bản/evidence; sửa giữ bản cũ | Writer → Critic → Validator; Q&A/revision service | Versioned document, evaluator loop, command/idempotency | Có một ResearchReport/task và Writer/Critic sơ khai; chưa có version/Q&A |
+| Theo dõi nhiều bài | Dashboard status/stage/next action từng bài; thấy agent role, event, warnings và trạng thái chờ/lỗi | TaskEvent/AgentRun → DB → SSE và polling UI | Durable event log + notification, snapshot/replay | Frontend polling 5s; SSE/API progress chưa được nghiệm thu |
 | Export và xóa dữ liệu | Tải Markdown/artifacts có quyền; xóa task chặn truy cập ngay rồi dọn dữ liệu | ArtifactStore → authorized API; tombstone → cleanup worker | Private object abstraction, tombstone/retryable cleanup | ExportArtifact model có; private file flow/delete lifecycle chưa đủ |
 | Ảnh minh họa | Bài có thể tự thêm ảnh và người dùng bỏ/tắt ảnh | Source page image → optional Serper adapter → report image association | Optional enrichment/adapter | Ngoài bản nộp; không phải evidence hay experiment chart |
 
-Ba thành viên ngoài Chiến chuẩn bị query/source set, dataset/rubric, scenarios, đánh giá thủ công và biên tập; không nhận coding/database/test implementation. Chiến giữ trách nhiệm implementation và gate kỹ thuật.
+Chiến giữ trách nhiệm implementation, dữ liệu đánh giá, review và các gate kỹ thuật; bằng chứng nào chưa thu thập thì chưa đánh dấu nghiệm thu.
 
 ## 2. Công nghệ được chọn
 
@@ -54,9 +54,10 @@ Ba thành viên ngoài Chiến chuẩn bị query/source set, dataset/rubric, sc
 | Shared typed workflow state | LangGraph state chứa task/run IDs, plan refs, evidence/artifact IDs, counters | Node trả delta bất biến; reducer có chủ ý; không nối outputs lặp hoặc sửa list tích lũy ngầm |
 | Durable HITL interrupt/resume | Duyệt plan hoặc chờ lab/user data | PostgreSQL checkpointer + stable thread/run ID; worker trả khi interrupt; resume kiểm owner/checkpoint/version/file READY |
 | Transactional outbox + idempotent consumer | Ghi run/decision và dispatch Celery | Cùng DB transaction lưu outbox; dispatcher claim/retry; worker lease/CAS/output unique. At-least-once, không exactly-once provider call |
-| Optimistic concurrency (CAS) + lease | Start/resume/cancel/worker claim | Version/state condition chống double start và stale worker; WAITING vẫn là active run nhưng không giữ worker lease |
+| Optimistic concurrency (CAS) + lease | Start/resume/cancel/worker claim | Version/state condition chống double start và stale worker; WAITING vẫn là active run trong task nhưng không giữ worker/quota RUNNING; tối đa 2 RUNNING/user |
 | Provider gateway + budget decorator | Mọi search/LLM/embedding call, retry, fallback, Q&A | Reserve trước, call qua gateway, reconcile sau; không thể thu hồi request provider đã nhận |
 | Immutable versioned records | Plan/report/revision/analysis manifest | Bản mới append version; Q&A gắn report version; thay data/method vô hiệu hóa kết quả cũ |
+| Article template strategy | REVIEW / EMPIRICAL_COMPUTATIONAL / EMPIRICAL_HUMAN | Mỗi loại có section schema, completion gate và provenance rules riêng; lựa chọn template ở plan version, không lấy một dàn ý chung rồi đổi nhãn |
 | Provenance graph + deterministic validator | Claims/citations/evidence/analysis artifacts | Kiểm FK/ownership/task/quote/manifest bằng code; FK không chứng minh semantic truth |
 | Bounded evaluator/research loop | Critic → targeted search hoặc Writer revision | Tối đa 3 collection rounds gồm lần đầu, 2 revisions sau draft; no-evidence-delta dừng; budget/cancel áp dụng mọi vòng |
 | Tombstone + retryable cleanup | Xóa task khi còn job/file/checkpoint | Thu hồi quyền/resume ngay; late output không persist; dọn storage/index/checkpoint có retry trong deadline SRS |
@@ -86,10 +87,10 @@ Flow target của ba output types ở [System Architecture HLD](system-architect
 
 ## 5. Ràng buộc hợp đồng và trạng thái
 
-- ResearchTask là workspace; ResearchRun là lần execute/revise. status lifecycle độc lập stage.
+- ResearchTask là workspace của một bài; một user có nhiều task độc lập. ResearchRun là lần execute/revise. status lifecycle độc lập stage.
 - Tạo task trả 201; start/resume trả 202 khi run/outbox đã commit. Route hiện tại còn contract cũ, phải thay và đồng bộ UI.
-- Một active run/task bao gồm WAITING_APPROVAL/WAITING_USER_DATA; sửa plan đúng version giữ run/counters/budget; sửa report sau terminal tạo ResearchRun mới.
-- COMPLETED chỉ khi output type yêu cầu và technical lineage gates đạt. PARTIAL công khai phần thiếu và giữ lineage hợp lệ; NEEDS_REVIEW giữ output không phát hành như bản hoàn tất.
+- Một active run/task bao gồm WAITING_APPROVAL/WAITING_USER_DATA; A chờ không chặn B. RUNNING/user cap ở dispatcher/worker; QUEUED có outbox bền vững. Sửa plan đúng version giữ run/counters/budget; sửa report sau terminal tạo ResearchRun mới.
+- COMPLETED chỉ khi bài báo đúng loại có đủ sections, Results thật khi cần và technical lineage gates đạt. Protocol/biểu mẫu là trung gian; PARTIAL công khai phần thiếu và giữ lineage hợp lệ; NEEDS_REVIEW giữ output không phát hành như bản hoàn tất.
 - Report/Q&A/revision/delete/upload mọi route phải owner-check. Xóa task tombstone chặn read/resume/late writes trước cleanup.
 - External content/file không tin cậy; không cho nội dung nguồn gọi tool hoặc thay đổi policy.
 - Full requirements và budget defaults ở [SRS](../requirements/SRS.md); state/API transitions ở [Data Model & API](../technical/data-model-and-api.md).

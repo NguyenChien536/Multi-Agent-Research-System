@@ -1,6 +1,6 @@
 # Agent Workflow — vai trò, điều phối và kiểm tra
 
-**Chốt thiết kế:** 08/10/2026. Xem [SRS](../requirements/SRS.md), [System Design](../architecture/system-design.md), [ADR-004](../architecture/decisions/ADR-004-multi-agent-research-delivery.md).
+**Cập nhật thiết kế:** 09/10/2026. Xem [SRS](../requirements/SRS.md), [System Design](../architecture/system-design.md), [ADR-004](../architecture/decisions/ADR-004-multi-agent-research-delivery.md).
 
 ## 1. Agent và công cụ khác nhau thế nào?
 
@@ -37,14 +37,14 @@ Plan phải chỉ rõ: loại output, phạm vi, nguồn dự kiến, phương p
 
 WAITING_APPROVAL và WAITING_USER_DATA là trạng thái bền vững: checkpoint và quyết định được ghi DB, worker job kết thúc. Resume phải kiểm owner, plan_version, checkpoint, file READY và idempotency key. Upload cũ/decision lặp không tạo thêm run hoặc lặp side effect.
 
-WAITING_* vẫn là active run của task, nhưng không giữ worker lease. Sửa plan trong run giữ run_id/counters/budget; sửa bài sau terminal tạo run mới. Tombstone thu hồi quyền resume/ghi kết quả ngay; cancellation được xử lý tại safe boundary. Bảng chuyển trạng thái chuẩn nằm ở [Data Model & API §3](data-model-and-api.md#3-vòng-đời-và-event).
+WAITING_* vẫn là active run của **task đó**, nhưng không giữ worker lease/quota RUNNING; user có thể tạo/chạy task khác. Sửa plan trong run giữ run_id/counters/budget; sửa bài sau terminal tạo run mới. Tombstone thu hồi quyền resume/ghi kết quả ngay; cancellation được xử lý tại safe boundary. Bảng chuyển trạng thái chuẩn nằm ở [Data Model & API §3](data-model-and-api.md#3-vòng-đời-và-event).
 
 ## 4. Luồng và research loop
 
 1. Supervisor lập plan; chuẩn hóa/kiểm policy; duyệt nếu cần.
 2. Researcher + ingestion thu thập nguồn web/PDF. Evidence Analyst tạo evidence/claims và gợi ý khoảng trống nghiên cứu có giới hạn.
-3. REVIEW đi Writer. EMPIRICAL gọi Methodologist/Data Analyst và runner khi data/config hợp lệ. PROTOCOL gọi Methodologist rồi Writer; có thể xuất protocol đã kiểm hoặc chờ data để tiếp tục.
-4. Writer → Critic → deterministic validation. Protocol cũng qua chuỗi này.
+3. REVIEW đi Writer. EMPIRICAL_COMPUTATIONAL gọi Methodologist/Data Analyst và runner khi data/config hợp lệ. EMPIRICAL_HUMAN gọi Methodologist, tạo protocol/biểu mẫu đã review rồi WAITING_USER_DATA; sau khi nạp kết quả thật mới đi Writer cho bài báo hoàn chỉnh.
+4. Writer → Critic → deterministic validation. Protocol trung gian cũng được review, nhưng không đi tới `COMPLETED`.
 5. Critic NEED_EVIDENCE chỉ rõ câu hỏi/claim thiếu; Researcher tìm bổ sung có mục tiêu. REVISE đưa issues cho Writer; NEED_METHOD_REVIEW quay lại plan gate, không chạy lặp để tìm kết quả mong muốn.
 
 | Guard | Quy tắc |
@@ -60,12 +60,12 @@ Không dùng vòng feedback để “chứng minh” giả thuyết hoặc sửa
 
 ## 5. Kết thúc và trải nghiệm người dùng
 
-- **COMPLETED:** output đúng loại, mandatory gates đạt, provenance hợp lệ; không đồng nghĩa nghiên cứu đã được công nhận khoa học.
+- **COMPLETED:** bài báo đúng loại, đủ các phần/Results thật bắt buộc, mandatory gates đạt, provenance hợp lệ; không đồng nghĩa nghiên cứu đã được công nhận khoa học.
 - **PARTIAL:** output còn hạn chế/thiếu coverage nhưng phần được công bố có lineage hợp lệ và limitations rõ.
 - **NEEDS_REVIEW:** lỗi method/lineage hoặc quyết định chưa giải quyết; không xuất như bài hoàn tất.
 - **FAILED/CANCELLED:** không tạo Results hay báo thành công; giữ error và dữ liệu bàn giao phù hợp.
 - Q&A dùng report/evidence version hiện có, có operation ID/cap riêng trong quota task qua cùng budget adapter; không reset budget research run. Yêu cầu nghiên cứu mới sau terminal tạo run mới có cap; nếu đang active thì xử lý theo plan gate hoặc trả 409. Revision lưu version, không ghi đè bản đã dùng để đánh giá.
-- UI hiển thị role/stage, sự kiện, output summary, chi phí ước tính và việc cần người dùng làm; không cần hiển thị chain-of-thought.
+- UI hiển thị danh sách nhiều bài, role/stage của từng bài, sự kiện, output summary, chi phí ước tính và việc cần người dùng làm; không cần hiển thị chain-of-thought. Xem [User Journey](../project/user-journey-and-outputs.md).
 
 ## 6. Khoảng cách với source
 

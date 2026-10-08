@@ -2,9 +2,9 @@
 
 ## 1. Phạm vi và nguyên tắc
 
-**Chốt thiết kế: 08/10/2026.** Đây là nguồn chuẩn cho sơ đồ mục tiêu; không mô tả mọi tính năng đã chạy. [SRS v4.0](../requirements/SRS.md) chốt yêu cầu; [ADR-004](decisions/ADR-004-multi-agent-research-delivery.md) giải thích quyết định; mục 9 tách hiện trạng.
+**Cập nhật thiết kế: 09/10/2026.** Đây là nguồn chuẩn cho sơ đồ mục tiêu; không mô tả mọi tính năng đã chạy. [SRS v4.1](../requirements/SRS.md) chốt yêu cầu; [ADR-004](decisions/ADR-004-multi-agent-research-delivery.md) giải thích quyết định; mục 9 tách hiện trạng.
 
-ATI phối hợp agent để nghiên cứu có bằng chứng và thực nghiệm tái lập. Ba đường REVIEW / EMPIRICAL / PROTOCOL dùng chung workspace, provenance và review. Tổng quan/protocol áp dụng nhiều lĩnh vực; execution chỉ cho routine hỗ trợ. Không có dữ liệu thật thì không tạo Results. Gợi ý khoảng trống nghiên cứu phải nêu phạm vi nguồn đã xem; Critic không thay peer review.
+ATI phối hợp agent để tạo bài báo có bằng chứng và thực nghiệm tái lập. Ba đường REVIEW / EMPIRICAL_COMPUTATIONAL / EMPIRICAL_HUMAN dùng chung provenance và review; **mỗi bài có workspace, run, checkpoint và phiên bản riêng**. Protocol là artifact trung gian của đường human-led, không phải bài báo đã hoàn thành. Execution tự động chỉ cho routine hỗ trợ. Không có dữ liệu thật thì không tạo Results. Gợi ý khoảng trống nghiên cứu phải nêu phạm vi nguồn đã xem; Critic không thay peer review.
 
 Năm hình chính đáp ứng kiến trúc, data flow, inference, tương tác bất đồng bộ và mô hình dữ liệu. Hai phụ lục phục vụ kỹ thuật. Mermaid dùng notation dễ đọc; Logical DFD là biểu diễn logic, không tuyên bố đúng toàn bộ hình dạng Gane–Sarson. Hình kiến trúc thể hiện process/data boundary; agent là logic bên trong worker.
 
@@ -17,11 +17,11 @@ flowchart TB
     User(["Người nghiên cứu"])
 
     subgraph ATI["ATI — Multi-Agent Research System"]
-        UI["Web application<br/>Next.js · workspace và progress"]
+        UI["Web application<br/>Next.js · danh sách bài, workspace và progress"]
         API["Application API<br/>FastAPI · auth · task · report · dispatcher"]
         Worker["Research worker<br/>Celery + LangGraph · agent workflow"]
         Redis[("Redis<br/>job broker · event notification")]
-        DB[("PostgreSQL + pgvector<br/>state · evidence · checkpoints · events")]
+        DB[("PostgreSQL + pgvector<br/>tasks/runs · evidence · checkpoints · events")]
         Files[("Private ArtifactStore<br/>PDF · CSV · charts · reports")]
         Launcher["Analysis launcher<br/>trusted operator process"]
         Runner["Analysis container<br/>approved routine · resource limits"]
@@ -65,6 +65,7 @@ flowchart TB
 - Runner staging input/output riêng theo job; launcher kiểm manifest và thu artifacts. API/worker **không có Docker socket**. Container chỉ chạy routine tin cậy, không là sandbox cho mã đối kháng.
 - File storage private local volume cho bản nộp, có interface đổi S3-compatible sau. Ảnh minh họa tùy chọn dùng source page trước; provider Serper có thể bổ sung qua adapter theo ADR-001, không phải dependency bắt buộc.
 - Không tách phase/release trong hình; phạm vi triển khai được quản lý ở kế hoạch.
+- Một user có nhiều task độc lập. Task đang chờ dữ liệu không giữ worker và không khóa task khác; quota chạy đồng thời kiểm ở dispatcher, không dùng Redis làm nơi lưu checkpoint.
 
 ## 3. Logical Data Flow — DFD Level 1
 
@@ -112,7 +113,7 @@ flowchart LR
     D5 -->|"bài và phản hồi phiên bản trước"| P6
     User -->|"câu hỏi hoặc yêu cầu sửa bài"| P6
     P6 -->|"bài mới và kết quả kiểm tra"| D5
-    P6 -->|"bài · protocol · câu trả lời có nguồn"| User
+    P6 -->|"bài báo đầy đủ · protocol trung gian · câu trả lời có nguồn"| User
     P6 -->|"câu hỏi thiếu bằng chứng"| P2
     P6 -->|"đề xuất đổi scope hoặc phương pháp"| P1
 
@@ -122,7 +123,7 @@ flowchart LR
     class D1,D2,D3,D4,D5 data
 ```
 
-P5 chỉ có dữ liệu khi method/schema được hỗ trợ; P6 có thể cung cấp REVIEW hoặc PROTOCOL mà không qua thí nghiệm. User-supplied results lưu nhãn và nguồn riêng, không được nhận là ATI đã chạy/tái lập. DFD không biểu diễn điều kiện điều khiển hay mọi provider call; xem inference và physical view.
+P5 chỉ chạy routine được hỗ trợ; dữ liệu/kết quả human-led đã nạp vẫn đi từ D4 qua kiểm provenance tới P6, không gắn nhãn ATI đã chạy nếu ATI không phân tích lại. P6 có thể cung cấp REVIEW không qua thí nghiệm hoặc cung cấp **protocol trung gian** khi đang chờ; chỉ bài đáp ứng gate theo loại mới là đầu ra `COMPLETED`. DFD không biểu diễn điều kiện điều khiển hay mọi provider call; xem inference và physical view.
 
 ## 4. Inference Flow — Multi-Agent Workflow
 
@@ -130,7 +131,7 @@ Flowchart mô tả điều khiển ở độ chi tiết vừa đủ. **Mọi pro
 
 ```mermaid
 flowchart TB
-    Start(["Câu hỏi · nguồn riêng · loại đầu ra"])
+    Start(["Câu hỏi · nguồn riêng · bài muốn viết"])
     Plan["Supervisor<br/>lập plan có version và budget"]
     Approval{"Plan phù hợp policy<br/>và đã được duyệt?"}
     WaitPlan["WAITING_APPROVAL<br/>checkpoint · worker kết thúc"]
@@ -138,11 +139,9 @@ flowchart TB
     Evidence["Evidence Analyst<br/>claims · đối chiếu · gợi ý gap"]
     Path{"Đường nghiên cứu"}
     Method["Methodologist<br/>giả thuyết · method · protocol"]
-    Execution{"Cần thực hiện bên ngoài?"}
-    Protocol["Writer → Critic → Validator<br/>kiểm protocol trước bàn giao"]
-    Continue{"Xuất protocol<br/>hay chờ dữ liệu?"}
+    DataGate{"Dữ liệu/kết quả thật<br/>đủ và hợp lệ?"}
+    Protocol["Methodologist + Writer/Critic<br/>protocol và biểu mẫu trung gian"]
     WaitData["WAITING_USER_DATA<br/>checkpoint · worker kết thúc"]
-    DataGate{"Data và routine hợp lệ?"}
     Analysis["Data Analyst + isolated runner<br/>run thật · metrics · charts · manifest"]
     Draft["Writer<br/>bản nháp đúng loại và có provenance"]
     Critic["Critic<br/>toàn bài · evidence · method · results"]
@@ -153,23 +152,21 @@ flowchart TB
     Revise["Writer sửa theo issues<br/>tăng revision counter"]
     Validate{"Validator<br/>lineage và artifacts đạt?"}
     Limited["Kết thúc có giới hạn<br/>PARTIAL hoặc NEEDS_REVIEW"]
-    Done(["COMPLETED<br/>bài đúng loại · artifacts · limitations"])
+    Done(["COMPLETED<br/>bài báo đủ phần · nguồn · Results thật nếu cần"])
 
     Start --> Plan --> Approval
     Approval -->|"cần user"| WaitPlan
     WaitPlan -->|"decision đúng version · resume"| Plan
     Approval -->|"đạt"| Collect --> Evidence --> Path
     Path -->|"REVIEW"| Draft
-    Path -->|"EMPIRICAL / PROTOCOL"| Method --> Execution
-    Execution -->|"có / xuất PROTOCOL"| Protocol --> Continue
-    Continue -->|"chỉ xuất · gate đạt"| Done
-    Continue -->|"tiếp tục study"| WaitData
-    Execution -->|"tính toán hỗ trợ"| DataGate
-    DataGate -->|"thiếu hoặc chưa hỗ trợ"| WaitData
+    Path -->|"EMPIRICAL_COMPUTATIONAL / EMPIRICAL_HUMAN"| Method --> DataGate
+    DataGate -->|"cần lab / khảo sát / thực địa"| Protocol --> WaitData
+    DataGate -->|"thiếu CSV hoặc kết quả"| WaitData
     WaitData -->|"upload READY · resume"| DataGate
-    DataGate -->|"đạt"| Analysis
+    DataGate -->|"CSV + routine được hỗ trợ"| Analysis
+    DataGate -->|"kết quả human-led có provenance"| Draft
     Analysis -->|"run thành công · output hợp lệ"| Draft
-    Analysis -->|"failed / timeout"| Limited
+    Analysis -->|"failed / timeout sau retry"| Limited
     Draft --> Critic --> Verdict
     Verdict -->|"đủ bằng chứng"| Validate
     Verdict -->|"thiếu evidence"| SearchGuard
@@ -187,7 +184,7 @@ flowchart TB
     classDef wait fill:#f5f3ff,stroke:#7c3aed,color:#2e1065
     classDef terminal fill:#ecfdf5,stroke:#059669,color:#064e3b
     class Plan,Collect,Evidence,Method,Protocol,Analysis,Draft,Critic,Target,Revise agent
-    class Approval,Path,Execution,Continue,DataGate,Verdict,SearchGuard,RevisionGuard,Validate gate
+    class Approval,Path,DataGate,Verdict,SearchGuard,RevisionGuard,Validate gate
     class WaitPlan,WaitData wait
     class Done,Limited terminal
 ```
@@ -195,15 +192,15 @@ flowchart TB
 **Quy tắc đọc hình:**
 
 - Assisted cần user duyệt; Automatic chỉ duyệt trong policy/cap đã cấp. Approve giữ plan version, revise tạo version mới; node Plan kiểm decision hiện hữu, không sinh lại plan sau approve.
-- Thu thập tối đa 3 rounds tính cả lần đầu; có thể dừng sớm khi no-evidence-delta. Writer tối đa 2 revisions sau draft đầu, citation repair dùng chung counter. Nhánh Protocol dùng cùng guard/review pipeline, không được bỏ qua lỗi rồi đi Done.
+- Thu thập tối đa 3 rounds tính cả lần đầu; có thể dừng sớm khi no-evidence-delta. Writer tối đa 2 revisions sau draft đầu, citation repair dùng chung counter. Protocol là bản hướng dẫn đã review để người dùng thực hiện bên ngoài; không đi thẳng tới Done.
 - Method change tạo plan version, kiểm lại policy và hủy hiệu lực Results cũ. Các lượt này vẫn chịu active-time/call/cost cap, không reset budget.
-- WaitData không tự chạy bất kỳ file nào. Unsupported data phải hướng dẫn đổi schema/method hoặc chọn protocol bằng quyết định người dùng. Results do người dùng cung cấp phải được kiểm provenance và ghi nhãn; không tự báo đã tái lập.
+- WaitData không tự chạy bất kỳ file nào; upload/resume phải qua owner, READY, checkpoint/plan version và idempotency checks. Dataset hoặc routine chưa hỗ trợ phải hướng dẫn sửa dữ liệu/đổi method hợp lệ; không chuyển ngầm thành bài khác. Results do người dùng cung cấp phải được kiểm provenance và ghi nhãn; không tự báo đã tái lập. Thất bại runner được retry hữu hạn theo cùng manifest, sau đó chờ can thiệp hoặc thành NEEDS_REVIEW; không tạo Results giả.
 - PARTIAL chỉ được phát hành khi lineage của phần giữ lại hợp lệ; lỗi lineage/method chưa giải quyết là NEEDS_REVIEW. Mọi node có thể kết thúc FAILED/CANCELLED; không vẽ lặp các nhánh này.
-- Protocol được xuất thành COMPLETED chỉ khi output yêu cầu là PROTOCOL. Yêu cầu EMPIRICAL chưa có data thì phải chờ hoặc có quyết định đổi output, không tự đổi loại rồi báo hoàn thành.
+- Với bài human-led, Writer chỉ viết Results sau khi có dữ liệu/kết quả thực và metadata phương pháp đủ dùng; nếu cần suy luận định lượng nhưng routine không hỗ trợ, yêu cầu người dùng cung cấp kết quả phân tích có provenance hoặc thay phương pháp. `COMPLETED` luôn là bài báo đủ phần theo loại, không phải protocol.
 
-## 5. Asynchronous Sequence — Task, Pause and Resume
+## 5. Asynchronous Sequence — Hai bài độc lập, pause và resume
 
-Tách tạo workspace (201 Created) và nhận job (202 Accepted). Không giữ worker trong thời gian chờ người dùng. Đây là contract target; route hiện tại còn trả 200 khi start.
+Tách tạo workspace (201 Created) và nhận job (202 Accepted). Ví dụ task A cần nghiên cứu ngoài hệ thống, còn task B là review; hai task giữ run/checkpoint/artifacts riêng. Không giữ worker trong thời gian chờ người dùng. Đây là contract target; route hiện tại còn trả 200 khi start.
 
 ```mermaid
 sequenceDiagram
@@ -217,60 +214,62 @@ sequenceDiagram
     participant X as Provider / analysis adapter
     participant F as Private ArtifactStore
 
-    U->>UI: Câu hỏi và lựa chọn output
-    UI->>API: POST research (auth)
-    API->>DB: Create owned task
-    API-->>UI: 201 Created + task_id
-    opt Nguồn hoặc dataset có sẵn
-        UI->>API: Upload cho task
-        API->>F: Validate/stage private file
-        API->>DB: Artifact metadata + validation status
-        API-->>UI: Artifact ID, chờ READY nếu parse async
+    U->>UI: Tạo bài A, chọn nghiên cứu ngoài hệ thống
+    UI->>API: POST tasks (auth)
+    API->>DB: Tạo task A có owner
+    API-->>UI: 201 Created + task_id A
+    UI->>API: POST A/start + Idempotency-Key
+    API->>DB: Run A QUEUED + outbox trong transaction
+    API-->>UI: 202 Accepted + run_id A
+    UI->>API: GET A/events (SSE) hoặc polling snapshot
+    API->>Q: Dispatch khi có suất chạy
+    Q->>W: Deliver A
+    W->>DB: Claim A, lưu plan và evidence/events
+    W->>X: Các agent tìm nguồn và kiểm protocol
+    X-->>W: Evidence + reviewed protocol
+    W->>F: Lưu protocol, biểu mẫu và bản nháp A
+    W->>DB: Checkpoint A + WAITING_USER_DATA + event
+    W-->>Q: Kết thúc job, trả worker lease
+    API-->>UI: Snapshot / SSE: A chờ dữ liệu, có protocol để tải
+    Note over U,W: Không có job A sống trong thời gian lab / khảo sát
+    U->>UI: Tạo bài B trong lúc A chờ
+    UI->>API: POST tasks (bài B)
+    API->>DB: Tạo task B có owner
+    API-->>UI: 201 Created + task_id B
+    UI->>API: POST B/start + Idempotency-Key
+    API->>DB: Run B QUEUED + outbox độc lập
+    API-->>UI: 202 Accepted + run_id B
+    UI->>API: GET B/events (SSE) hoặc polling snapshot
+    API->>Q: Dispatch B theo quota/fairness
+    Q->>W: Deliver B
+    W->>DB: Research B, report version, COMPLETED
+    API-->>UI: Bài báo B sẵn sàng, A vẫn WAITING_USER_DATA
+    U->>UI: Quay lại A, tải dữ liệu/kết quả thực lên
+    UI->>API: POST A/artifacts
+    API->>F: Validate và lưu file riêng của A
+    API->>DB: Artifact A chuyển READY sau xử lý
+    API-->>UI: Artifact ID và trạng thái READY
+    UI->>API: POST A/resume với plan/checkpoint version
+    API->>DB: Kiểm owner/READY/version, QUEUED + outbox A
+    API-->>UI: 202 Accepted, A QUEUED nếu hết suất
+    API->>Q: Dispatch A khi có suất
+    Q->>W: Claim A, load checkpoint A
+    W->>X: Kiểm provenance / phân tích routine hỗ trợ
+    X-->>W: Kết quả thật hoặc lý do cần bổ sung
+    alt Đủ bằng chứng và Results thật
+        W->>DB: Writer/Critic/Validator + report A version + COMPLETED
+        API-->>UI: Bài báo A có thể đọc, hỏi, sửa và xuất
+    else Thiếu hoặc lỗi dữ liệu
+        W->>DB: WAITING_USER_DATA / NEEDS_REVIEW + lý do
+        API-->>UI: Việc cần làm, bài báo chưa hoàn thành
     end
-    UI->>API: Start + Idempotency-Key
-    API->>DB: Transaction: run + QUEUED + outbox
-    API-->>UI: 202 Accepted + run_id
-    API->>Q: Background dispatcher publishes operation
-    Q->>W: Deliver job (có thể lặp)
-    W->>DB: Claim run/lease, dedup operation
-    W->>X: Guarded plan call
-    X-->>W: Versioned plan
-    opt Assisted approval
-        W->>DB: Checkpoint + WAITING_APPROVAL + event
-        W-->>Q: Notify, job ends
-        UI->>API: Approve/revise đúng plan_version
-        API->>DB: Decision + resume outbox in transaction
-        API->>Q: Dispatch resume
-        Q->>W: New job, load checkpoint
-    end
-    W->>X: Guarded search/retrieval/analysis as applicable
-    X-->>W: Evidence or verified artifacts
-    opt Nghiên cứu cần dữ liệu người dùng
-        W->>DB: Reviewed protocol + checkpoint + WAITING_USER_DATA
-        W-->>Q: Notify, job ends
-        API-->>UI: Progress snapshot / event, hướng dẫn upload
-        Note over U,W: Không có Celery job sống trong thời gian làm lab/khảo sát
-        U->>UI: Nạp kết quả được phép
-        UI->>API: Upload, sau READY gửi resume
-        API->>F: Validate + save private input
-        API->>DB: Input/decision + resume outbox đúng version
-        API->>Q: Dispatch resume
-        Q->>W: New job, claim + load checkpoint
-        W->>X: Supported routine / validate supplied-result provenance
-        X-->>W: Actual output or needs-review reason
-    end
-    W->>DB: Writer/Critic/Validator results + report version + final event
-    W-->>Q: Notify progress/final state
-    Q-->>API: Notification hint
-    API->>DB: Authorized event replay / snapshot
-    API-->>UI: SSE / polling response
-    UI->>API: Read report / download artifact
-    API->>DB: Check owner and output validation status
-    API->>F: Read authorized artifact
-    API-->>UI: Report and artifacts
+    UI->>API: Xem bài/tiến độ/tải artifact theo task_id
+    API->>DB: Kiểm owner + replay event/snapshot
+    API->>F: Đọc file riêng được phép
+    API-->>UI: Report/protocol/manifest tương ứng task
 ```
 
-Provider error, cancellation và redelivery được xử lý bằng transition/idempotency guards ở mỗi bước; không chỉ dựa Celery acknowledgement. File phải READY trước resume. Notification không thay DB event; mất Pub/Sub vẫn khôi phục tiến độ từ DB.
+Provider error, cancellation và redelivery được xử lý bằng transition/idempotency guards ở mỗi bước; không chỉ dựa Celery acknowledgement. File phải READY trước resume. Quota chạy đồng thời chỉ giới hạn job RUNNING; QUEUED bền vững có thể đợi, WAITING_* không chiếm suất. Notification không thay DB event; mất Pub/Sub vẫn khôi phục tiến độ từ DB.
 
 ## 6. Core ERD — Target Traceability Model
 
@@ -307,6 +306,8 @@ erDiagram
     RESEARCH_TASK {
         uuid id PK
         uuid owner_id FK
+        string article_type
+        string status
     }
     RESEARCH_PLAN {
         uuid id PK
@@ -353,6 +354,7 @@ erDiagram
         uuid producer_analysis_run_id FK "nullable"
         string kind
         string checksum
+        string validation_status
     }
     ANALYSIS_RUN {
         uuid id PK
@@ -365,7 +367,9 @@ erDiagram
         uuid id PK
         uuid run_id FK
         int version
+        string article_type
         string validation_status
+        string completeness_status
     }
     REPORT_CLAIM {
         uuid report_id PK,FK
@@ -387,7 +391,7 @@ erDiagram
 2. Upload artifact có producer nullable; output phân tích có producer_analysis_run_id và input/config/hash/version truy xuất được. Một AnalysisRun hiện dùng một CSV đầu vào; mở nhiều input cần junction sau.
 3. Citation là thư mục tài liệu. Kết quả thực nghiệm trace qua ReportClaim → ClaimEvidence → Evidence → Artifact → AnalysisRun → input. Không bắt artifact giả làm Source hoặc citation thư mục.
 4. Report version unique trong task; plan version unique trong task. Claim có thể được tái dùng trong version cùng task nhưng phải giữ nguyên provenance. Citation gắn claim phải xuất hiện trong ReportClaim tương ứng.
-5. Một active ResearchRun/task; plan_id nullable trước khi Supervisor tạo plan, bắt buộc có trước research execution; khi revise plan trong run, cập nhật selected plan bằng CAS, giữ audit/version cũ. Delete/tombstone không được để resume tiếp tục.
+5. Một active ResearchRun/task, nhiều task/user; WAITING_* chỉ khóa run của chính task, không giữ worker hoặc quota RUNNING. plan_id nullable trước khi Supervisor tạo plan, bắt buộc có trước research execution; khi revise plan trong run, cập nhật selected plan bằng CAS, giữ audit/version cũ. Delete/tombstone không được để resume tiếp tục.
 6. Hình lược bỏ field vận hành; migration phải bổ sung composite keys/check constraints theo [data contract](../technical/data-model-and-api.md), không suy diễn schema hiện tại đã có chúng.
 
 ## 7. Phụ lục — Physical DFD

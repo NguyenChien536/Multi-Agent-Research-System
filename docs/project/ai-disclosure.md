@@ -1,6 +1,6 @@
 # Khai báo sử dụng trí tuệ nhân tạo (AI Disclosure)
 
-**Cập nhật hồ sơ:** 08/10/2026. Ghi nhận theo thông tin chủ dự án và lịch sử task; thành viên cần xác nhận trước khi nộp. Không suy đoán model/version hoặc đóng góp từ văn phong.
+**Cập nhật hồ sơ:** 09/10/2026. Ghi nhận theo thông tin chủ dự án và lịch sử task; thành viên cần xác nhận trước khi nộp. Không suy đoán model/version hoặc đóng góp từ văn phong.
 
 ## 1. Con người chịu trách nhiệm
 
@@ -11,14 +11,14 @@
 | **Nguyễn Văn Hiếu** | User scenarios, progress flow, demo checklist/issue log | Phân công; chưa ghi nhận bàn giao trong docs |
 | **Nguyễn Thị Hải My** | Related-work/source matrix, consistency review, biên tập tài liệu | Phân công; chưa ghi nhận bàn giao trong docs |
 
-Phân công không đồng nghĩa đã hoàn thành. Mỗi người xác nhận việc thực tế và AI có hỗ trợ phần đó không.
+Phân công không đồng nghĩa đã hoàn thành. Kế hoạch triển khai hiện hành chỉ tính Chiến là nguồn lực thực hiện/đánh giá; các dòng phân công cũ được giữ để hồ sơ học phần không bị xóa, chưa ghi nhận bàn giao. Trước khi nộp phải xác nhận việc thực tế và AI có hỗ trợ phần đó không.
 
 ## 2. AI hỗ trợ quá trình làm dự án
 
 | Công cụ | Việc được ghi nhận | Cách con người kiểm tra | Cần xác nhận |
 |---|---|---|---|
 | **Google Gemini** | Chủ dự án nói Gemini tạo bản nháp planning docs; các bản được rà soát/chỉnh sửa sau đó | So sánh với yêu cầu, source code và baseline; kiểm tra thuật ngữ/consistency | Model/version, prompt, file/phần giữ/sửa/bỏ |
-| **OpenAI Codex** | Rà repository/tài liệu; hỗ trợ baseline; task history ghi patch SQLAlchemy async dependency và State keys; cập nhật SRS/README/docs; các lượt trước hỗ trợ model/migration/registration; ngày 08/10 rà source/kiến trúc, chốt SRS v4.0, ADR-004, diagrams, kế hoạch triển khai/đánh giá | Baseline command/output ghi trong biên bản 27/09; lượt docs có rà link/nội dung tĩnh; lượt planning 08/10 không sửa runtime code hay chạy provider; kiểm tra tài liệu riêng, không thay runtime evidence | Model/version theo app history; patch nào được nhóm chấp nhận; reviewer |
+| **OpenAI Codex** | Rà repository/tài liệu; hỗ trợ baseline; task history ghi patch SQLAlchemy async dependency và State keys; cập nhật SRS/README/docs; các lượt trước hỗ trợ model/migration/registration; ngày 08–09/10 rà source/kiến trúc, chốt SRS v4.1, ADR-004, user journey, diagrams và kế hoạch triển khai/đánh giá | Baseline command/output ghi trong biên bản 27/09; lượt docs có kiểm tra link/Mermaid/đồng bộ sơ đồ; lượt planning 08/10 không sửa runtime code hay chạy provider, nên không thay runtime evidence | Model/version theo app history; patch nào được chủ dự án chấp nhận; reviewer |
 | **Antigravity** | Chủ dự án dự định dùng cho coding và Codex review theo workflow luân phiên; chưa có evidence đủ để liệt kê task cụ thể tại đây | Chỉ thêm task/branch/PR/commit và kết quả review đã xác nhận | Model/version; file đã đổi; ai xác minh |
 | **Khác** | Chưa có thông tin xác nhận | — | Thành viên bổ sung khi cần |
 

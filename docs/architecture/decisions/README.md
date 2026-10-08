@@ -27,5 +27,5 @@ Thư mục này lưu trữ các quyết định kiến trúc quan trọng của 
    - Quyết định: Routine tính toán được duyệt chạy trong isolated boundary; human-led studies dừng ở protocol, chờ data bền vững, không sinh Results giả.
 
 4. **[ADR-004: Kiến trúc và phạm vi triển khai Multi-Agent Research](ADR-004-multi-agent-research-delivery.md)**
-   - Trạng thái: Chốt thiết kế 08/10/2026; chưa nghiệm thu implementation.
-   - Quyết định: 7 agent roles, modular monolith, run/versioning/outbox/events; experiment CSV thật bắt buộc; trusted routine runner, protocol/resume và evaluation baseline/ablation.
+   - Trạng thái: Chốt thiết kế 08/10/2026, cập nhật 09/10/2026; chưa nghiệm thu implementation.
+   - Quyết định: 7 agent roles, modular monolith, mỗi task hướng tới bài báo hoàn chỉnh; nhiều task/user độc lập, wait/resume không giữ worker; experiment CSV thật bắt buộc, trusted routine runner và evaluation baseline/ablation.

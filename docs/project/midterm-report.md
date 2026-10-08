@@ -2,7 +2,7 @@
 
 **Tên đề tài:** Hệ thống đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập<br>
 **Tên tiếng Anh:** Multi-Agent Research System (ATI)<br>
-**Thời gian thực hiện:** 10/09/2026–10/11/2026 · **Planning cập nhật:** 08/10/2026
+**Thời gian thực hiện:** 10/09/2026–10/11/2026 · **Planning cập nhật:** 09/10/2026
 
 | STT | Họ tên | MSSV | Trách nhiệm |
 |---:|---|---|---|
@@ -15,17 +15,17 @@
 
 ## 1. Overview — Tổng quan
 
-ATI hỗ trợ người nghiên cứu từ câu hỏi và nguồn riêng tới tổng quan có bằng chứng, gợi ý khoảng trống nghiên cứu, phương pháp và bản thảo đúng loại. Các agent phân vai tìm nguồn, phân tích, thiết kế phương pháp, viết và phản biện; graph điều phối bằng state/guards. Người dùng xem agent đang làm gì, hỏi về bài và yêu cầu sửa trong cùng workspace.
+ATI hỗ trợ người nghiên cứu từ câu hỏi và nguồn riêng tới **bản thảo bài báo hoàn chỉnh** theo loại, có bằng chứng, phương pháp và kết quả thật khi cần. Các agent phân vai tìm nguồn, phân tích, thiết kế phương pháp, viết và phản biện; graph điều phối bằng state/guards. Mỗi bài có workspace độc lập; người dùng xem tiến độ, hỏi/sửa bài và có thể làm bài khác khi một bài đang chờ dữ liệu.
 
 | Đường nghiên cứu | Hệ thống thực hiện | Đầu ra |
 |---|---|---|
 | REVIEW | Web/PDF → evidence → tổng hợp và gợi ý gap → viết/kiểm | Literature review có phạm vi tìm nguồn, citations và limitations |
-| EMPIRICAL | Method + CSV hợp lệ → routine được duyệt → metrics/charts → viết/kiểm | Bài thực nghiệm và gói tái lập |
-| PROTOCOL | Đề xuất phương pháp/quy trình, review; chờ người dùng nếu cần | Protocol có hướng dẫn thu thập/phân tích; có thể resume khi nạp data |
+| EMPIRICAL_COMPUTATIONAL | Method + CSV hợp lệ → routine được duyệt → metrics/charts → viết/kiểm | Bài thực nghiệm và gói tái lập |
+| EMPIRICAL_HUMAN | Protocol trung gian → người dùng thực hiện nghiên cứu, nạp kết quả thật → resume/viết/kiểm | Bài thực nghiệm hoàn chỉnh có provenance; protocol không là bài đã hoàn thành |
 
-Tổng quan/protocol áp dụng nhiều lĩnh vực; execution đầu tiên giới hạn một routine trên CSV numeric. Với lab/khảo sát/thực địa/người tham gia, con người thực hiện và xin phê duyệt phù hợp bên ngoài ATI. Thiếu actual data không tạo Results. Gợi ý gap chỉ dựa phạm vi nguồn đã xem; bản thảo hoàn chỉnh về cấu trúc không đồng nghĩa đã được peer review hoặc có novelty được công nhận.
+Tổng quan/human-led protocol áp dụng nhiều lĩnh vực; execution đầu tiên giới hạn một routine trên CSV numeric. Với lab/khảo sát/thực địa/người tham gia, con người thực hiện và xin phê duyệt phù hợp bên ngoài ATI. Thiếu actual data không tạo Results và task vẫn chờ; trong thời gian đó người dùng có thể tạo/chạy bài khác. Gợi ý gap chỉ dựa phạm vi nguồn đã xem; bản thảo hoàn chỉnh về cấu trúc không đồng nghĩa đã được peer review hoặc có novelty được công nhận.
 
-**Mục tiêu bản nộp:** cả review web+PDF, một experiment chạy thật, protocol/wait/resume, Q&A/revision cơ bản, monitoring và đánh giá multi-agent. Tất cả là target cho tới khi có evidence nghiệm thu.
+**Mục tiêu bản nộp:** review web+PDF thành bài báo, một experiment CSV chạy thật thành bài empirical, protocol/wait/resume cho nghiên cứu ngoài hệ thống và bài empirical sau khi nạp kết quả thật, Q&A/revision cơ bản, monitoring và đánh giá multi-agent. Tất cả là target cho tới khi có evidence nghiệm thu.
 
 ## 2. Problems and Objectives — Vấn đề và mục tiêu
 
@@ -42,7 +42,7 @@ Tổng quan/protocol áp dụng nhiều lĩnh vực; execution đầu tiên gi�
 
 Không đưa tỷ lệ cải thiện, SLA hoặc chất lượng “production-ready” khi chưa đo. Citation tồn tại và quote khớp là integrity; mức độ bằng chứng hỗ trợ claim là đánh giá ngữ nghĩa riêng.
 
-Yêu cầu chi tiết được đánh mã FR-01–FR-16 và NFR-01–NFR-07 trong [SRS](../requirements/SRS.md). Mã nghiệm thu G0–G7 ở SRS thống nhất với kế hoạch P0–P7; bảng ánh xạ giúp nhóm truy từ yêu cầu tới công việc và bằng chứng, tránh đánh dấu hoàn tất chỉ từ tài liệu.
+Yêu cầu chi tiết được đánh mã FR-01–FR-17 và NFR-01–NFR-07 trong [SRS](../requirements/SRS.md). Mã nghiệm thu G0–G7 ở SRS thống nhất với kế hoạch P0–P7; bảng ánh xạ giúp truy từ yêu cầu tới công việc và bằng chứng, tránh đánh dấu hoàn tất chỉ từ tài liệu.
 
 ## 3. Technical Approaches — Công nghệ, phương pháp và trade-offs
 
@@ -55,7 +55,7 @@ Yêu cầu chi tiết được đánh mã FR-01–FR-16 và NFR-01–NFR-07 tron
 | Evidence Analyst | Trích claims/evidence, đối chiếu, synthesis và gợi ý gap |
 | Methodologist | Đề xuất giả thuyết/phương pháp/protocol khi cần |
 | Data Analyst | Chọn routine hỗ trợ và diễn giải kết quả thật |
-| Writer | Viết đúng cấu trúc REVIEW/EMPIRICAL/PROTOCOL |
+| Writer | Viết đúng cấu trúc REVIEW/EMPIRICAL_COMPUTATIONAL/EMPIRICAL_HUMAN; protocol chỉ là artifact trung gian |
 | Critic | Review toàn bài cùng evidence/method/results, trả issues/verdict |
 
 REVIEW chủ yếu dùng năm vai trò; method/data roles có điều kiện. Curator/ingestion, router, validator, budget và runner là code/tools, không tính thêm agent. Critic không là peer reviewer độc lập. Research loop quay lại thu thập khi thiếu bằng chứng; revision loop sửa bài; guards quyết định có được đi tiếp.
@@ -81,7 +81,7 @@ Ma trận chi tiết chức năng–công nghệ–design pattern và ranh giớ
 
 Routine tham chiếu `tabular_regression_v1`: CSV numeric → descriptive statistics → DummyRegressor(mean) so với Ridge(alpha=1), cùng train/test 80/20 seed 42. Preprocessing chỉ fit train; MAE chính, RMSE phụ; plots prediction/residual; không suy ra nhân quả, không thử lặp để chọn kết quả đẹp. Đây là lát cắt thực thi/tái lập, không phải thuật toán phù hợp mọi loại nghiên cứu. Nguyên tắc chống leakage tham khảo [scikit-learn](https://scikit-learn.org/stable/common_pitfalls.html).
 
-Đánh giá ATI khác với experiment của người dùng: 4 câu pilot và 8 held-out, ba cấu hình single-agent / multi-agent / multi-agent tắt macro loop; cố định corpus/model/cap, đo citation integrity, semantic support, coverage, cost/latency và failures. Vũ/My chấm ẩn nhãn, có phần chấm đôi; tập nhỏ nên không tuyên bố vượt trội phổ quát. [Evaluation Plan](evaluation-plan.md) ghi cách chọn mẫu và nghiệm thu.
+Đánh giá ATI khác với experiment của người dùng: 4 câu pilot và 8 held-out, ba cấu hình single-agent / multi-agent / multi-agent tắt macro loop; cố định corpus/model/cap, đo citation integrity, semantic support, coverage, cost/latency và failures. Chiến chấm ẩn nhãn cấu hình theo rubric đóng băng; chấm một người có nguy cơ thiên lệch và không đo được đồng thuận, nên không tuyên bố vượt trội phổ quát. [Evaluation Plan](evaluation-plan.md) ghi cách chọn mẫu và nghiệm thu.
 
 ## 4. System Design — Thiết kế hệ thống
 
@@ -94,11 +94,11 @@ flowchart TB
     User(["Người nghiên cứu"])
 
     subgraph ATI["ATI — Multi-Agent Research System"]
-        UI["Web application<br/>Next.js · workspace và progress"]
+        UI["Web application<br/>Next.js · danh sách bài, workspace và progress"]
         API["Application API<br/>FastAPI · auth · task · report · dispatcher"]
         Worker["Research worker<br/>Celery + LangGraph · agent workflow"]
         Redis[("Redis<br/>job broker · event notification")]
-        DB[("PostgreSQL + pgvector<br/>state · evidence · checkpoints · events")]
+        DB[("PostgreSQL + pgvector<br/>tasks/runs · evidence · checkpoints · events")]
         Files[("Private ArtifactStore<br/>PDF · CSV · charts · reports")]
         Launcher["Analysis launcher<br/>trusted operator process"]
         Runner["Analysis container<br/>approved routine · resource limits"]
@@ -183,7 +183,7 @@ flowchart LR
     D5 -->|"bài và phản hồi phiên bản trước"| P6
     User -->|"câu hỏi hoặc yêu cầu sửa bài"| P6
     P6 -->|"bài mới và kết quả kiểm tra"| D5
-    P6 -->|"bài · protocol · câu trả lời có nguồn"| User
+    P6 -->|"bài báo đầy đủ · protocol trung gian · câu trả lời có nguồn"| User
     P6 -->|"câu hỏi thiếu bằng chứng"| P2
     P6 -->|"đề xuất đổi scope hoặc phương pháp"| P1
 
@@ -199,7 +199,7 @@ Mọi data store/external entity đi qua process; không đưa broker hoặc API
 
 ```mermaid
 flowchart TB
-    Start(["Câu hỏi · nguồn riêng · loại đầu ra"])
+    Start(["Câu hỏi · nguồn riêng · bài muốn viết"])
     Plan["Supervisor<br/>lập plan có version và budget"]
     Approval{"Plan phù hợp policy<br/>và đã được duyệt?"}
     WaitPlan["WAITING_APPROVAL<br/>checkpoint · worker kết thúc"]
@@ -207,11 +207,9 @@ flowchart TB
     Evidence["Evidence Analyst<br/>claims · đối chiếu · gợi ý gap"]
     Path{"Đường nghiên cứu"}
     Method["Methodologist<br/>giả thuyết · method · protocol"]
-    Execution{"Cần thực hiện bên ngoài?"}
-    Protocol["Writer → Critic → Validator<br/>kiểm protocol trước bàn giao"]
-    Continue{"Xuất protocol<br/>hay chờ dữ liệu?"}
+    DataGate{"Dữ liệu/kết quả thật<br/>đủ và hợp lệ?"}
+    Protocol["Methodologist + Writer/Critic<br/>protocol và biểu mẫu trung gian"]
     WaitData["WAITING_USER_DATA<br/>checkpoint · worker kết thúc"]
-    DataGate{"Data và routine hợp lệ?"}
     Analysis["Data Analyst + isolated runner<br/>run thật · metrics · charts · manifest"]
     Draft["Writer<br/>bản nháp đúng loại và có provenance"]
     Critic["Critic<br/>toàn bài · evidence · method · results"]
@@ -222,23 +220,21 @@ flowchart TB
     Revise["Writer sửa theo issues<br/>tăng revision counter"]
     Validate{"Validator<br/>lineage và artifacts đạt?"}
     Limited["Kết thúc có giới hạn<br/>PARTIAL hoặc NEEDS_REVIEW"]
-    Done(["COMPLETED<br/>bài đúng loại · artifacts · limitations"])
+    Done(["COMPLETED<br/>bài báo đủ phần · nguồn · Results thật nếu cần"])
 
     Start --> Plan --> Approval
     Approval -->|"cần user"| WaitPlan
     WaitPlan -->|"decision đúng version · resume"| Plan
     Approval -->|"đạt"| Collect --> Evidence --> Path
     Path -->|"REVIEW"| Draft
-    Path -->|"EMPIRICAL / PROTOCOL"| Method --> Execution
-    Execution -->|"có / xuất PROTOCOL"| Protocol --> Continue
-    Continue -->|"chỉ xuất · gate đạt"| Done
-    Continue -->|"tiếp tục study"| WaitData
-    Execution -->|"tính toán hỗ trợ"| DataGate
-    DataGate -->|"thiếu hoặc chưa hỗ trợ"| WaitData
+    Path -->|"EMPIRICAL_COMPUTATIONAL / EMPIRICAL_HUMAN"| Method --> DataGate
+    DataGate -->|"cần lab / khảo sát / thực địa"| Protocol --> WaitData
+    DataGate -->|"thiếu CSV hoặc kết quả"| WaitData
     WaitData -->|"upload READY · resume"| DataGate
-    DataGate -->|"đạt"| Analysis
+    DataGate -->|"CSV + routine được hỗ trợ"| Analysis
+    DataGate -->|"kết quả human-led có provenance"| Draft
     Analysis -->|"run thành công · output hợp lệ"| Draft
-    Analysis -->|"failed / timeout"| Limited
+    Analysis -->|"failed / timeout sau retry"| Limited
     Draft --> Critic --> Verdict
     Verdict -->|"đủ bằng chứng"| Validate
     Verdict -->|"thiếu evidence"| SearchGuard
@@ -256,7 +252,7 @@ flowchart TB
     classDef wait fill:#f5f3ff,stroke:#7c3aed,color:#2e1065
     classDef terminal fill:#ecfdf5,stroke:#059669,color:#064e3b
     class Plan,Collect,Evidence,Method,Protocol,Analysis,Draft,Critic,Target,Revise agent
-    class Approval,Path,Execution,Continue,DataGate,Verdict,SearchGuard,RevisionGuard,Validate gate
+    class Approval,Path,DataGate,Verdict,SearchGuard,RevisionGuard,Validate gate
     class WaitPlan,WaitData wait
     class Done,Limited terminal
 ```
@@ -277,60 +273,62 @@ sequenceDiagram
     participant X as Provider / analysis adapter
     participant F as Private ArtifactStore
 
-    U->>UI: Câu hỏi và lựa chọn output
-    UI->>API: POST research (auth)
-    API->>DB: Create owned task
-    API-->>UI: 201 Created + task_id
-    opt Nguồn hoặc dataset có sẵn
-        UI->>API: Upload cho task
-        API->>F: Validate/stage private file
-        API->>DB: Artifact metadata + validation status
-        API-->>UI: Artifact ID, chờ READY nếu parse async
+    U->>UI: Tạo bài A, chọn nghiên cứu ngoài hệ thống
+    UI->>API: POST tasks (auth)
+    API->>DB: Tạo task A có owner
+    API-->>UI: 201 Created + task_id A
+    UI->>API: POST A/start + Idempotency-Key
+    API->>DB: Run A QUEUED + outbox trong transaction
+    API-->>UI: 202 Accepted + run_id A
+    UI->>API: GET A/events (SSE) hoặc polling snapshot
+    API->>Q: Dispatch khi có suất chạy
+    Q->>W: Deliver A
+    W->>DB: Claim A, lưu plan và evidence/events
+    W->>X: Các agent tìm nguồn và kiểm protocol
+    X-->>W: Evidence + reviewed protocol
+    W->>F: Lưu protocol, biểu mẫu và bản nháp A
+    W->>DB: Checkpoint A + WAITING_USER_DATA + event
+    W-->>Q: Kết thúc job, trả worker lease
+    API-->>UI: Snapshot / SSE: A chờ dữ liệu, có protocol để tải
+    Note over U,W: Không có job A sống trong thời gian lab / khảo sát
+    U->>UI: Tạo bài B trong lúc A chờ
+    UI->>API: POST tasks (bài B)
+    API->>DB: Tạo task B có owner
+    API-->>UI: 201 Created + task_id B
+    UI->>API: POST B/start + Idempotency-Key
+    API->>DB: Run B QUEUED + outbox độc lập
+    API-->>UI: 202 Accepted + run_id B
+    UI->>API: GET B/events (SSE) hoặc polling snapshot
+    API->>Q: Dispatch B theo quota/fairness
+    Q->>W: Deliver B
+    W->>DB: Research B, report version, COMPLETED
+    API-->>UI: Bài báo B sẵn sàng, A vẫn WAITING_USER_DATA
+    U->>UI: Quay lại A, tải dữ liệu/kết quả thực lên
+    UI->>API: POST A/artifacts
+    API->>F: Validate và lưu file riêng của A
+    API->>DB: Artifact A chuyển READY sau xử lý
+    API-->>UI: Artifact ID và trạng thái READY
+    UI->>API: POST A/resume với plan/checkpoint version
+    API->>DB: Kiểm owner/READY/version, QUEUED + outbox A
+    API-->>UI: 202 Accepted, A QUEUED nếu hết suất
+    API->>Q: Dispatch A khi có suất
+    Q->>W: Claim A, load checkpoint A
+    W->>X: Kiểm provenance / phân tích routine hỗ trợ
+    X-->>W: Kết quả thật hoặc lý do cần bổ sung
+    alt Đủ bằng chứng và Results thật
+        W->>DB: Writer/Critic/Validator + report A version + COMPLETED
+        API-->>UI: Bài báo A có thể đọc, hỏi, sửa và xuất
+    else Thiếu hoặc lỗi dữ liệu
+        W->>DB: WAITING_USER_DATA / NEEDS_REVIEW + lý do
+        API-->>UI: Việc cần làm, bài báo chưa hoàn thành
     end
-    UI->>API: Start + Idempotency-Key
-    API->>DB: Transaction: run + QUEUED + outbox
-    API-->>UI: 202 Accepted + run_id
-    API->>Q: Background dispatcher publishes operation
-    Q->>W: Deliver job (có thể lặp)
-    W->>DB: Claim run/lease, dedup operation
-    W->>X: Guarded plan call
-    X-->>W: Versioned plan
-    opt Assisted approval
-        W->>DB: Checkpoint + WAITING_APPROVAL + event
-        W-->>Q: Notify, job ends
-        UI->>API: Approve/revise đúng plan_version
-        API->>DB: Decision + resume outbox in transaction
-        API->>Q: Dispatch resume
-        Q->>W: New job, load checkpoint
-    end
-    W->>X: Guarded search/retrieval/analysis as applicable
-    X-->>W: Evidence or verified artifacts
-    opt Nghiên cứu cần dữ liệu người dùng
-        W->>DB: Reviewed protocol + checkpoint + WAITING_USER_DATA
-        W-->>Q: Notify, job ends
-        API-->>UI: Progress snapshot / event, hướng dẫn upload
-        Note over U,W: Không có Celery job sống trong thời gian làm lab/khảo sát
-        U->>UI: Nạp kết quả được phép
-        UI->>API: Upload, sau READY gửi resume
-        API->>F: Validate + save private input
-        API->>DB: Input/decision + resume outbox đúng version
-        API->>Q: Dispatch resume
-        Q->>W: New job, claim + load checkpoint
-        W->>X: Supported routine / validate supplied-result provenance
-        X-->>W: Actual output or needs-review reason
-    end
-    W->>DB: Writer/Critic/Validator results + report version + final event
-    W-->>Q: Notify progress/final state
-    Q-->>API: Notification hint
-    API->>DB: Authorized event replay / snapshot
-    API-->>UI: SSE / polling response
-    UI->>API: Read report / download artifact
-    API->>DB: Check owner and output validation status
-    API->>F: Read authorized artifact
-    API-->>UI: Report and artifacts
+    UI->>API: Xem bài/tiến độ/tải artifact theo task_id
+    API->>DB: Kiểm owner + replay event/snapshot
+    API->>F: Đọc file riêng được phép
+    API-->>UI: Report/protocol/manifest tương ứng task
 ```
 
-Tạo task trả 201, start/resume nhận job trả 202. WAITING_* giữ checkpoint và kết thúc worker; file READY + decision đúng owner/version mới được resume.
+Tạo task trả 201, start/resume nhận job trả 202. WAITING_* giữ checkpoint và kết thúc worker; file READY + decision đúng owner/version mới được resume. Bài A chờ không chiếm suất RUNNING và không chặn bài B; mỗi task có artifacts, event và report versions riêng. Protocol là trung gian, bài empirical chỉ hoàn thành sau khi có Results thật.
 
 ### 4.5 Core ERD — Traceability Model
 
@@ -365,6 +363,8 @@ erDiagram
     RESEARCH_TASK {
         uuid id PK
         uuid owner_id FK
+        string article_type
+        string status
     }
     RESEARCH_PLAN {
         uuid id PK
@@ -411,6 +411,7 @@ erDiagram
         uuid producer_analysis_run_id FK "nullable"
         string kind
         string checksum
+        string validation_status
     }
     ANALYSIS_RUN {
         uuid id PK
@@ -423,7 +424,9 @@ erDiagram
         uuid id PK
         uuid run_id FK
         int version
+        string article_type
         string validation_status
+        string completeness_status
     }
     REPORT_CLAIM {
         uuid report_id PK,FK
@@ -449,23 +452,23 @@ Thời hạn 10/09–10/11/2026. Giai đoạn đầu đã có planning/scaffold 
 |---|---|---|---|
 | 08–10/10 | P0 baseline/dependency/DB/test isolation | Chiến | G0: tái lập môi trường |
 | 11–14/10 | P1 auth/ownership/run/outbox/events | Chiến | G1: lifecycle và quyền |
-| 15–19/10 | P2 web E2E/evidence/critic/validator/budget | Chiến; My/Vũ review nội dung | G2: review chạy thật |
-| 20–23/10 | P3 PDF/workspace/progress | Chiến; Hiếu scenarios | G3: web+PDF |
+| 15–19/10 | P2 web E2E/evidence/critic/validator/budget | Chiến | G2: review chạy thật |
+| 20–23/10 | P3 PDF/dashboard nhiều bài/progress | Chiến | G3: web+PDF |
 | 24–26/10 | P4 plan/protocol/wait/resume | Chiến | G4: durable resume |
-| 27–30/10 | P5 routine/metrics/charts/empirical | Chiến; Vũ dataset trước 16/10 | G5: experiment thật và tái lập |
+| 27–30/10 | P5 routine/metrics/charts/human-led results/empirical | Chiến | G5: experiment thật và tái lập |
 | 31/10–02/11 | P6 Q&A/revision/export và delete/cleanup | Chiến | G6: phiên bản, đầu ra và retention |
-| 03–07/11 | P7 evaluation/manual QA/fix/báo cáo | Cả nhóm theo vai trò | G7: kết quả có evidence |
-| 08–10/11 | Buffer/freeze/demo/backup | Cả nhóm | Bản nộp |
+| 03–07/11 | P7 evaluation/manual QA/fix/báo cáo | Chiến | G7: kết quả có evidence |
+| 08–10/11 | Buffer/freeze/demo/backup | Chiến | Bản nộp |
 
-Chi tiết ước lượng 83–108 giờ trong [Implementation Plan](implementation-plan.md). Đây là kế hoạch rủi ro cao do một developer và nhiều phần chưa chạy. Cắt polish/ảnh/PDF đẹp khi trễ; không bỏ số liệu thật/provenance/ownership rồi báo đủ scope.
+Chi tiết ước lượng 100–134 giờ trong [Implementation Plan](implementation-plan.md). Đây là kế hoạch rủi ro cao do một developer và nhiều phần chưa chạy. Cắt polish/ảnh/PDF đẹp khi trễ; không bỏ số liệu thật/provenance/ownership rồi báo đủ scope.
 
-Report version/ReportClaim và plan schema được đặt nền ở P2; P4 mở approval/resume, P6 mở Q&A/revision. WAITING_* giữ active run nhưng trả worker; Q&A đọc phiên bản bài qua operation có cap riêng. Mọi trường hợp xóa task phải chặn truy cập/resume và kết quả đến muộn theo policy đã ghi trong SRS.
+Report version/ReportClaim và plan schema được đặt nền ở P2; P4 mở approval/resume, P6 mở Q&A/revision. WAITING_* giữ active run **của chính task** nhưng trả worker/quota RUNNING; Q&A đọc phiên bản bài qua operation có cap riêng. Mọi trường hợp xóa task phải chặn truy cập/resume và kết quả đến muộn theo policy đã ghi trong SRS.
 
 ## 6. Progress — Tiến độ có bằng chứng
 
 | Hạng mục | Bằng chứng hiện có | Chưa được xác nhận |
 |---|---|---|
-| Planning | SRS v4.0, ADR-004, diagrams, implementation/evaluation plans cập nhật 08/10 | Feature chưa hoàn tất chỉ vì đã mô tả |
+| Planning | SRS v4.1, ADR-004, diagrams, user journey và implementation/evaluation plans cập nhật 09/10 | Feature chưa hoàn tất chỉ vì đã mô tả |
 | Docker/DB/API/worker/graph | Baseline chạy 27/09: services, health/task smoke, worker ping, graph compile/routing mẫu | Revision hiện tại, clean DB migration, research provider E2E |
 | Auth/provenance schema | Source `ebb525a` có register và ClaimEvidence/Citation migration | Login/ownership, migration áp dụng, validator thật |
 | Research workflow | Có search/fetch/embed/retrieval/Writer/Critic source | Đủ budget/lineage/review/loop và chất lượng thực tế |

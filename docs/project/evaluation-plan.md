@@ -1,14 +1,14 @@
 # Evaluation Plan — Đánh giá Multi-Agent Research
 
-**Thiết kế:** 08/10/2026 · **Trạng thái:** chưa chạy/chưa có kết quả.
+**Thiết kế cập nhật:** 09/10/2026 · **Trạng thái:** chưa chạy/chưa có kết quả.
 
-Phân biệt hai việc: (A) người dùng dùng ATI chạy một thí nghiệm trên CSV; (B) nhóm chạy đánh giá ATI để chứng minh giá trị multi-agent. Kết quả A không thay thế bằng chứng B.
+Phân biệt hai việc: (A) người dùng dùng ATI chạy một thí nghiệm trên CSV; (B) đánh giá ATI để kiểm tra giá trị multi-agent. Kết quả A không thay thế bằng chứng B.
 
 ## 1. Câu hỏi nghiên cứu của đồ án
 
 - RQ1: Với cùng corpus, model và cap, phối hợp vai trò có cải thiện độ hỗ trợ claim/bao phủ câu hỏi so với single-agent không?
 - RQ2: Research loop tìm thiếu sót đem lại thay đổi gì về chất lượng so với cùng multi-agent workflow tắt macro loop? Chi phí/latency tăng bao nhiêu?
-- RQ3: Người dùng có truy lại nguồn/kết quả và tiếp tục task sau khi chờ dữ liệu mà không mất tiến độ không?
+- RQ3: Người dùng có truy lại nguồn/kết quả, làm bài B khi bài A chờ dữ liệu và tiếp tục A sau restart mà không mất tiến độ không?
 
 Giả thuyết đánh giá chỉ là dự kiến; không ghi “multi-agent tốt hơn” khi chưa đo. Một kết quả không tốt hơn vẫn có giá trị nếu báo cáo trung thực về trade-off.
 
@@ -16,10 +16,10 @@ Giả thuyết đánh giá chỉ là dự kiến; không ghi “multi-agent tố
 
 | Bộ | Quy mô dự kiến | Người chuẩn bị | Kiểm soát |
 |---|---|---|---|
-| Development/pilot | 4 câu hỏi | Vũ + My | Dùng chỉnh prompt/rubric, không tính vào kết quả cuối |
-| Held-out review | 8 câu hỏi thuộc 2–3 chủ đề, có nguồn bất đồng/thiếu dữ kiện | Vũ + My | Freeze question/corpus/expected points trước khi chạy; có cả web snapshot và PDF text |
-| Product experiment | 1 public numeric CSV không định danh + data dictionary | Vũ; Chiến duyệt routine | URL/license/checksum/units/target; tối thiểu số hàng phù hợp split, quan sát độc lập và không phải time series/grouped samples; không claim data tổng hợp là dữ liệu thực |
-| Negative cases | Input thiếu/sai, access chéo, no evidence, budget hết, retry/resume | Hiếu + Chiến | Assertions kỹ thuật do Chiến; QA thao tác do Hiếu |
+| Development/pilot | 4 câu hỏi | Chiến | Dùng chỉnh prompt/rubric, không tính vào kết quả cuối |
+| Held-out review | 8 câu hỏi thuộc 2–3 chủ đề, có nguồn bất đồng/thiếu dữ kiện | Chiến | Freeze question/corpus/expected points trước khi chạy; có cả web snapshot và PDF text |
+| Product experiment | 1 public numeric CSV không định danh + data dictionary | Chiến | URL/license/checksum/units/target; tối thiểu số hàng phù hợp split, quan sát độc lập và không phải time series/grouped samples; không claim data tổng hợp là dữ liệu thực |
+| Negative cases | Input thiếu/sai, access chéo, no evidence, budget hết, retry/resume, A chờ/B chạy | Chiến | Assertions kỹ thuật và ghi nhận thao tác thực tế |
 
 Ba cấu hình dùng cùng corpus đã freeze và cùng retrieval tool/index, không gọi live web trong phép so sánh chính:
 
@@ -43,9 +43,9 @@ Không ép actual token bằng nhau: báo cả chất lượng và chi phí th�
 | Research loop | Rounds, evidence delta sau dedup, lý do stop và cost tăng từng vòng |
 | Cost/latency | Actual/estimated usage tách riêng; active duration, failures, timeouts; median/range cho mẫu nhỏ, không gọi p95 của vài run là SLA |
 | Reliability | Duplicate start/resume, restart, cancel, ownership và artifact consistency tests |
-| Usability | Hoàn thành 4 scenarios; lỗi/điểm bối rối; không diễn giải 3 thành viên QA thành user study đại diện |
+| Usability | Hoàn thành 4 scenarios gồm A chờ/B chạy/A resume; lỗi/điểm bối rối; tự kiểm một người không phải user study đại diện |
 
-Vũ và My chấm blind A/B/C labels. Chọn có quy tắc 5 claims/report, gồm claim trung tâm, claim có số liệu nếu có, các claims ở đầu/giữa/cuối; tránh chỉ chọn câu dễ. Hai người cùng chấm ít nhất 20% mẫu, lưu bất đồng và cách xử lý. Bộ chính 8 × 3 = 24 report, khoảng 120 claims; báo đây là sample đánh giá, không phải kiểm chứng mọi câu.
+Chiến chấm với nhãn A/B/C được che và thứ tự báo cáo xáo trộn; rubric/expected points đóng băng trước khi chạy held-out. Chọn có quy tắc 5 claims/report, gồm claim trung tâm, claim có số liệu nếu có, các claims ở đầu/giữa/cuối; tránh chỉ chọn câu dễ. Chấm một người có nguy cơ thiên lệch và không đo được đồng thuận giữa người chấm; phải công khai hạn chế này. Nếu có người đánh giá độc lập thực sự, lưu danh tính/vai trò và mức đồng thuận khi đã diễn ra, không ghi trước như kết quả. Bộ chính 8 × 3 = 24 report, khoảng 120 claims; đây là sample đánh giá, không phải kiểm chứng mọi câu.
 
 ## 4. Nghiệm thu experiment của sản phẩm
 
@@ -66,13 +66,13 @@ Tham khảo kỹ thuật: [scikit-learn — Common pitfalls](https://scikit-lear
 |---|---|---|---|
 | Environment | G0 | DB sạch lên head, dependencies pin, test dispatch/provider tách biệt | Revision/config, commands và outputs |
 | Access/files | G1, G3 | Owner A/B; unauthorized event/download; malformed/oversize PDF/CSV | Automated checks + QA screenshots |
-| Lifecycle | G1, G4 | Double start, broker fail, duplicate job, restart wait/resume, stale decision, cancel; WAITING_* chặn run thứ hai | DB transitions, event IDs, logs |
+| Lifecycle | G1, G4 | Double start, broker fail, duplicate job, restart wait/resume, stale decision, cancel; WAITING_* chặn run thứ hai **cùng task** nhưng A chờ vẫn cho B chạy; 2 RUNNING/user, QUEUED không mất | DB transitions, event IDs, logs |
 | Grounding | G2, G4, G5 | Invalid source/chunk, quote mismatch, no-source, contradictory sources, protocol/result provenance | Validator output + rubric |
 | Budget/loops | G2, G5, G6 | Guard trước LLM/search/embed/retry; no-delta; 3 rounds/2 revisions; Q&A có cap riêng và không reset run budget | Usage ledger, stop reasons, kết quả kiểm tra |
 | Runner/results | G5 | Real execution; failed/timeout run không Results; artifact integrity; reproduce | Input/config/output manifests + commands |
-| Reports/chat | G6 | Đủ cấu trúc theo loại; Q&A citation; revision giữ bản cũ, thay data/config không dùng lại result cũ; authorized export | Version IDs, report snapshots |
+| Reports/chat | G6 | REVIEW/EMPIRICAL_COMPUTATIONAL/EMPIRICAL_HUMAN đủ cấu trúc; protocol chưa data không COMPLETED; Q&A citation; revision giữ bản cũ, thay data/config không dùng lại result cũ; authorized export | Version IDs, report snapshots |
 | Retention/delete | G6 | Tombstone chặn read/resume/late writes; cancel tại safe boundary; cleanup retry và deadline 24 giờ, backup policy tối đa 7 ngày | Tombstone/cleanup timestamps, file/index/checkpoint inventory, cấu hình và kiểm retention |
-| Evaluation bundle | G7 | Baseline/ablation đúng corpus/model/cap, blind rubric, failures và limitations; liên kết evidence G0–G6 | Frozen manifests, bảng chấm, kết quả và báo cáo |
+| Evaluation bundle | G7 | Baseline/ablation đúng corpus/model/cap, rubric che nhãn, failures và hạn chế chấm một người; liên kết evidence G0–G6 | Frozen manifests, bảng chấm, kết quả và báo cáo |
 
 Technical gates cần 100% ca bắt buộc đạt và không có citation sai lineage/Results bịa trong artifact được phát hành. Các chỉ số semantic/coverage là kết quả đo, không hứa “100% đúng”. Nếu baseline tốt hơn ATI, giữ kết quả và giải thích.
 
@@ -80,6 +80,6 @@ Mã gate theo [SRS §8](../requirements/SRS.md#8-acceptance-gates); mapping FR/N
 
 ## 6. Lịch, ngân sách và báo cáo
 
-Pilot trước 03/11; held-out 03–05/11; chấm/QA 05–07/11. Với (4 pilot + 8 held-out) × 3 cấu hình có tối đa 36 report runs trước reruns. Tổng cap evaluation phải được cấu hình riêng theo ngân sách nhóm; số run/cap là kế hoạch, không phải cho phép tự tiêu tiền trong lượt cập nhật docs.
+Pilot trước 03/11; held-out 03–05/11; chấm/QA 05–07/11. Với (4 pilot + 8 held-out) × 3 cấu hình có tối đa 36 report runs trước reruns. Tổng cap evaluation phải được cấu hình riêng theo ngân sách dự án; số run/cap là kế hoạch, không phải cho phép tự tiêu tiền trong lượt cập nhật docs.
 
 Lưu manifest câu hỏi/corpus/prompt/model/config/commit, output và logs redacted trong storage riêng; chỉ version kết quả/rubric đã bỏ dữ liệu riêng tư. Báo cáo kết quả gồm paired differences theo câu, trung bình/median, cost và failures; cỡ mẫu nhỏ không đủ để khẳng định ưu thế mọi lĩnh vực.

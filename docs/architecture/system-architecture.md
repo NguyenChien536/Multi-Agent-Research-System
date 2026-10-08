@@ -1,12 +1,12 @@
 # System Architecture — High-Level Design
 
-**Cập nhật:** 08/10/2026 · **Trạng thái:** thiết kế mục tiêu; chưa phải hệ thống đã nghiệm thu.
+**Cập nhật:** 09/10/2026 · **Trạng thái:** thiết kế mục tiêu; chưa phải hệ thống đã nghiệm thu.
 
 ## 1. Định hướng
 
-**ATI — Hệ thống đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập.** Hệ thống hỗ trợ tổng quan tài liệu, một phạm vi phân tích tính toán được kiểm soát, và protocol cho nghiên cứu con người thực hiện bên ngoài. Bản thảo đúng cấu trúc và có căn cứ không đồng nghĩa đã được peer review hoặc đủ điều kiện công bố.
+**ATI — Hệ thống đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập.** Đầu ra cuối của mỗi task là bản thảo bài báo hoàn chỉnh theo loại: review hoặc empirical paper. Hệ thống hỗ trợ tổng quan tài liệu, một phạm vi phân tích tính toán được kiểm soát, và protocol **trung gian** cho nghiên cứu con người thực hiện bên ngoài trước khi nạp kết quả thực để viết bài. Bản thảo đúng cấu trúc và có căn cứ không đồng nghĩa đã được peer review hoặc đủ điều kiện công bố.
 
-[SRS](../requirements/SRS.md) chốt yêu cầu; [System Design](system-design.md) là nguồn chuẩn sơ đồ; [ADR-004](decisions/ADR-004-multi-agent-research-delivery.md) chốt quyết định; [Implementation Plan](../project/implementation-plan.md) chốt thứ tự xây dựng.
+[SRS](../requirements/SRS.md) chốt yêu cầu; [System Design](system-design.md) là nguồn chuẩn sơ đồ; [User Journey](../project/user-journey-and-outputs.md) chốt trải nghiệm/đầu ra; [ADR-004](decisions/ADR-004-multi-agent-research-delivery.md) chốt quyết định; [Implementation Plan](../project/implementation-plan.md) chốt thứ tự xây dựng.
 
 Ma trận chức năng, technology và patterns nằm tại [Technical Design](technical-design.md); HLD tập trung boundary, trách nhiệm và đánh đổi.
 
@@ -16,7 +16,7 @@ Ma trận chức năng, technology và patterns nằm tại [Technical Design](t
 
 | Thành phần | Trách nhiệm | Quyết định và đánh đổi |
 |---|---|---|
-| Next.js UI | Tạo workspace, thêm nguồn, xem plan/agent progress, Q&A, sửa/xuất bài | Timeline phản ánh event thực; polling dùng được trước SSE |
+| Next.js UI | Danh sách nhiều bài, tạo workspace, thêm nguồn, xem plan/agent progress, Q&A, sửa/xuất bài | Timeline phản ánh event thực; bài chờ có action rõ; polling dùng được trước SSE |
 | FastAPI | Auth/ownership, vòng đời task/run, upload, duyệt, resume, report access | Request ngắn; background dispatcher chuyển outbox sang broker |
 | Redis | Celery broker và thông báo tiến độ | Không giữ trạng thái nghiên cứu duy nhất |
 | Celery + LangGraph | Chạy graph, gọi provider, phối hợp agent, checkpoint | Delivery có thể lặp; mỗi side effect phải có định danh và dedup |
@@ -35,13 +35,13 @@ Curator/ingestion, router, validator, budget manager và runner là mô-đun xá
 
 Xem [Agent Workflow](../technical/agent-workflow.md) cho hợp đồng từng vai trò.
 
-## 4. Ba đường đi, một workspace
+## 4. Ba đường đi, mỗi bài một workspace
 
 | Đường đi | Xử lý | Đầu ra hợp lệ |
 |---|---|---|
-| REVIEW | Web/PDF → evidence → tổng hợp/gợi ý gap → viết → phản biện/validate | Tổng quan có nguồn, phạm vi tìm kiếm và giới hạn |
-| EMPIRICAL | Evidence + phương pháp + CSV hợp lệ → routine → actual results → viết/kiểm tra | Bài thực nghiệm, bảng/biểu đồ và gói tái lập |
-| PROTOCOL | Thiết kế phương pháp → protocol có review; có thể xuất ngay hoặc chờ data | Protocol hoàn chỉnh theo phạm vi; không có Results giả |
+| REVIEW | Web/PDF → evidence → tổng hợp/gợi ý gap → viết → phản biện/validate | Bài tổng quan có nguồn, phạm vi tìm kiếm và giới hạn |
+| EMPIRICAL_COMPUTATIONAL | Evidence + phương pháp + CSV hợp lệ → routine → actual results → viết/kiểm tra | Bài thực nghiệm, bảng/biểu đồ và gói tái lập |
+| EMPIRICAL_HUMAN | Evidence + phương pháp → protocol/biểu mẫu → WAITING_USER_DATA → nhận kết quả thực → viết/kiểm tra | Bài thực nghiệm với provenance kết quả người dùng nạp; protocol chỉ là artifact trung gian |
 
 Nếu tiếp tục nghiên cứu bên ngoài: lưu checkpoint, chuyển WAITING_USER_DATA, kết thúc worker job. Upload hợp lệ tạo yêu cầu resume gắn đúng plan/checkpoint/version. Method ngoài khả năng routine chỉ được hướng dẫn hoặc diễn giải kết quả người dùng cung cấp có provenance, không tự nhận đã chạy phân tích.
 
@@ -49,8 +49,8 @@ Routine tham chiếu của bản nộp là `tabular_regression_v1`: mô tả CSV
 
 ## 5. State, reliability và ngân sách
 
-- ResearchTask là workspace; ResearchRun là một lần nghiên cứu/sửa; chỉ một active run/task. Lifecycle status khác stage/agent đang chạy.
-- WAITING_* vẫn chiếm active run, nhưng trả worker lease. Revise plan đang active giữ run/budget; revision sau terminal tạo run mới. Q&A đọc report version qua operation/cap riêng, không mở lại run đã kết thúc.
+- ResearchTask là workspace **của một bài**; ResearchRun là một lần nghiên cứu/sửa; chỉ một active run/task nhưng một user có nhiều task. Lifecycle status khác stage/agent đang chạy.
+- WAITING_* vẫn chiếm active run của chính task, nhưng trả worker lease và không chiếm quota RUNNING của user. User mở/chạy bài khác; tối đa 2 job RUNNING/user, QUEUED đợi bền vững theo dispatcher. Revise plan đang active giữ run/budget; revision sau terminal tạo run mới. Q&A đọc report version qua operation/cap riêng, không mở lại run đã kết thúc.
 - API ghi task/run/outbox trong cùng transaction. Dispatcher nền trong API lifespan publish và retry; worker claim/lease, kiểm version và dedup. Không hứa exactly-once cho provider.
 - Checkpointer PostgreSQL giữ namespace riêng. State graph chủ yếu gồm IDs/counters; không nhồi file bytes hoặc toàn văn vào checkpoint. Version thư viện phải được pin trước khi áp dụng API interrupt/resume.
 - TaskEvent lưu DB trước khi phát thông báo Pub/Sub. SSE dùng event ID để replay hoặc trả snapshot; mất Redis event không mất trạng thái.

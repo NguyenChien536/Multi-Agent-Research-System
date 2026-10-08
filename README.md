@@ -48,9 +48,9 @@
 
 Người nghiên cứu cần tìm và đối chiếu nhiều nguồn, thiết kế phương pháp, kiểm tra kết quả và viết bài có căn cứ. Một câu trả lời trôi chảy hoặc citation tồn tại chưa chứng minh kết luận đúng. Giá trị của việc dùng nhiều agent cần được so sánh thực nghiệm với single-agent có tools và cùng nguồn.
 
-**ATI — Hệ thống đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập** hỗ trợ ba đường: tổng quan từ web/PDF (REVIEW), phân tích/thí nghiệm tính toán trong phạm vi được hỗ trợ (EMPIRICAL), và protocol cho nghiên cứu con người thực hiện bên ngoài (PROTOCOL). Có hỏi đáp/sửa bài, report versions và tiến độ agent.
+**ATI — Hệ thống đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập** hướng tới một **bản thảo bài báo hoàn chỉnh cho mỗi task** qua ba đường: tổng quan từ web/PDF (REVIEW), thí nghiệm tính toán trong phạm vi được hỗ trợ (EMPIRICAL_COMPUTATIONAL), và nghiên cứu con người thực hiện bên ngoài rồi nạp kết quả thực (EMPIRICAL_HUMAN). Protocol của đường human-led là artifact trung gian. Một user có thể làm bài B khi bài A đang chờ dữ liệu; mỗi bài có state và file riêng. Có hỏi đáp/sửa bài, report versions và tiến độ agent.
 
-Bản chốt 08/10/2026 yêu cầu một experiment CSV chạy thật trước 10/11, cùng citation/provenance, durable waits và đánh giá baseline/ablation. Tổng quan/protocol nhận nhiều lĩnh vực; execution ban đầu giới hạn routine numeric CSV. Không tự sinh Results khi thiếu data hoặc cam kết bài đủ điều kiện công bố.
+Bản chốt cập nhật 09/10/2026 yêu cầu một experiment CSV chạy thật trước 10/11, cùng citation/provenance, durable waits và đánh giá baseline/ablation. Tổng quan/human-led protocol nhận nhiều lĩnh vực; execution tự động ban đầu giới hạn routine numeric CSV. Thiếu dữ liệu/kết quả thật thì bài empirical tiếp tục chờ hoặc cần review, không tự sinh Results hay cam kết bài đủ điều kiện công bố. [User Journey và Outputs](docs/project/user-journey-and-outputs.md) mô tả luồng sử dụng đầy đủ.
 
 | Vai trò agent mục tiêu | Trách nhiệm |
 |---|---|
@@ -238,8 +238,8 @@ celery -A app.worker.celery_app worker --loglevel=info --concurrency=4
 | `OPENAI_API_KEY` | `string` | Tùy chọn | Khóa API OpenAI (dùng cho GPT-4o và Embeddings). |
 | `ANTHROPIC_API_KEY` | `string` | Tùy chọn | Khóa API Anthropic (dùng cho Claude 3.5 Sonnet). |
 | `EMBEDDING_MODEL` | `string` | `text-embedding-3-small` | Tên mô hình vector hóa tri thức. |
-| `DEFAULT_BUDGET_USD` | `float` | `2.00` | Giá trị cấu hình; guard xuyên provider/run là mục tiêu SRS v4.0, chưa được xác minh thực thi. |
-| `DEFAULT_MAX_LLM_CALLS` | `integer` | `50` trong source hiện tại | Target SRS v4.0 là 40 calls; thay sau khi budget gateway được implement và kiểm chứng. |
+| `DEFAULT_BUDGET_USD` | `float` | `2.00` | Giá trị cấu hình; guard xuyên provider/run là mục tiêu SRS v4.1, chưa được xác minh thực thi. |
+| `DEFAULT_MAX_LLM_CALLS` | `integer` | `50` trong source hiện tại | Target SRS v4.1 là 40 calls; thay sau khi budget gateway được implement và kiểm chứng. |
 | `LANGSMITH_TRACING` | `boolean` | `false` | Bật/tắt giám sát vết thực thi trên LangSmith. |
 
 ---
@@ -334,7 +334,7 @@ Chỉ so sánh với prompting/RAG cơ bản sau khi chạy cùng bộ câu hỏ
 
 Lộ trình chi tiết, thời hạn, phụ trách và trạng thái theo evidence nằm tại [roadmap-and-progress.md](docs/project/roadmap-and-progress.md). Định hướng mở rộng người dùng theo release gates: cá nhân/nhà nghiên cứu trước; chuyên gia và nhiều loại phương pháp sau khi chất lượng được đánh giá; nhóm/tổ chức chỉ sau khi có collaboration, tenant isolation, privacy và operational controls. Đây là định hướng, không phải cam kết phát hành.
 
-Mốc 10/11/2026 gồm review web+PDF, một experiment CSV thật, protocol/wait/resume, Q&A/revision và evaluation. Runner phải qua gate trước khi chạy; chưa đạt thì ghi feature còn thiếu, không thay bằng mock. Ảnh, PDF đẹp, arbitrary-code execution và cộng tác để sau. Thứ tự P0–P7 ở Implementation Plan.
+Mốc 10/11/2026 gồm review web+PDF, một experiment CSV thật, protocol trung gian/wait/resume, bài empirical sau khi có kết quả thật, Q&A/revision và evaluation. Runner phải qua gate trước khi chạy; chưa đạt thì ghi feature còn thiếu, không thay bằng mock. Ảnh, PDF đẹp, arbitrary-code execution và cộng tác để sau. Thứ tự P0–P7 ở Implementation Plan.
 
 ---
 

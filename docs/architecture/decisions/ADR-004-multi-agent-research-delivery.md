@@ -1,6 +1,6 @@
 # ADR-004: Kiến trúc và phạm vi triển khai Multi-Agent Research
 
-**Trạng thái:** Chốt thiết kế theo yêu cầu rà soát/chốt phương án 08/10/2026; implementation phải qua gates.<br>
+**Trạng thái:** Chốt thiết kế 08/10/2026, bổ sung article-first/multi-task lifecycle 09/10/2026; implementation phải qua gates.<br>
 **Thay thế:** release constraint của ADR-003 còn để experiment tùy chọn; giữ ranh giới human-led research.<br>
 **Phạm vi:** bản nộp 10/11 và nền mở rộng.
 
@@ -10,17 +10,17 @@ Code `ebb525a` có API, graph với micro/macro loop và lưu nguồn. Chưa có
 
 ## Quyết định
 
-1. **Định vị:** đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập; REVIEW/EMPIRICAL/PROTOCOL, Q&A và revision cùng workspace.
+1. **Định vị/đầu ra:** đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập; REVIEW/EMPIRICAL_COMPUTATIONAL/EMPIRICAL_HUMAN đều hướng tới **bản thảo bài báo hoàn chỉnh**. Protocol human-led là artifact trung gian, không đánh dấu bài hoàn thành khi thiếu dữ liệu/kết quả thật. Q&A và revision ở workspace từng bài.
 2. **Modular monolith:** một backend codebase, API/worker process riêng; giữ FastAPI, Celery/Redis, LangGraph, PostgreSQL/pgvector. Không tách agent thành microservice; chưa cần Kafka/Kubernetes/vector DB thứ hai/long-term agent memory.
 3. **7 agent roles:** Supervisor, Researcher, Evidence Analyst, Methodologist, Data Analyst, Writer, Critic. Evidence Analyst kiêm synthesis/gap. Curator, router, validator, budget manager, runner là code; review không bắt buộc gọi role thực nghiệm.
-4. **State:** DB giữ Task/ResearchRun/plan/report versions/artifact metadata; PostgreSQL checkpointer cùng DB nhưng namespace riêng. Checkpoint chủ yếu chứa IDs/counters. Một active run/task, claim/lease chống worker chạy trùng, decision/upload unique keys.
+4. **State và nhiều bài:** DB giữ Task/ResearchRun/plan/report versions/artifact metadata; PostgreSQL checkpointer cùng DB nhưng namespace riêng. Checkpoint chủ yếu chứa IDs/counters. Một active run/task, nhiều task/user; WAITING_* không giữ worker/quota RUNNING và không chặn task khác. Mặc định tối đa 2 job RUNNING/user, QUEUED đợi bền vững theo dispatcher. Claim/lease chống worker chạy trùng, decision/upload unique keys.
 5. **Dispatch/events:** task/run + outbox cùng transaction; dispatcher nền trong API lifespan publish và retry khi broker trở lại. Nhiều API replica phải claim outbox bằng DB lock/lease. Delivery at-least-once, worker dedup/CAS và output unique; không hứa exactly-once provider calls. TaskEvent lưu DB; Pub/Sub chỉ báo có cập nhật; SSE replay/snapshot có ownership, polling fallback.
 6. **Budget/providers:** adapter bọc LLM/search/embedding/retry/fallback, reserve trước/reconcile sau. Pin model và embedding profile; đổi profile cần re-index. Cache private scoped hoặc tắt; fallback trong allowlist/data policy.
 7. **Experiment bắt buộc:** `tabular_regression_v1`, CSV numeric; mô tả dữ liệu, DummyRegressor(mean) vs Ridge(alpha=1), split 80/20 seed 42 định trước, MAE chính/RMSE phụ. Preprocessing chỉ fit train. Không lặp để tìm kết quả đẹp hoặc tuyên bố nhân quả/novelty.
 8. **Runner:** container Docker riêng cho routine do dự án viết/duyệt, non-root, no network, drop capabilities/no-new-privileges, read-only rootfs, resource/time/output limits. API/worker không mount Docker socket. Operator/launcher tin cậy trên host khởi động job container từ manifest và staging directory theo job. Adapter cho phép dùng managed sandbox sau này; không nhận code LLM tùy ý và không gọi là production sandbox.
 9. **Files:** private local volume qua ArtifactStore cho demo, metadata/checksum/owner ở DB; UI qua API authorized download. Target deployment có thể dùng S3-compatible object storage cùng interface, không buộc thêm MinIO trước hạn.
 10. **Observability:** JSON logs, AgentRun, TaskEvent và task detail UI bắt buộc. OTel/Grafana/LangSmith tùy chọn; không gửi raw private content tới tracing bên ngoài mặc định.
-11. **Loops:** tối đa 3 vòng thu thập gồm vòng đầu, 2 writer revisions gồm citation repairs; no-evidence-delta thì dừng. Missing data phải chờ; unsupported method trả protocol/yêu cầu sửa. Protocol cũng qua Critic/Validator.
+11. **Loops và completion:** tối đa 3 vòng thu thập gồm vòng đầu, 2 writer revisions gồm citation repairs; no-evidence-delta thì dừng. Missing data phải chờ; unsupported method trả hướng dẫn/protocol trung gian và yêu cầu sửa, không giả định Results. Protocol cũng qua Critic/Validator nhưng không đi tới COMPLETED. Bài empirical chỉ COMPLETED sau khi có kết quả thật, provenance và đủ sections.
 
 ## Lựa chọn và đánh đổi
 

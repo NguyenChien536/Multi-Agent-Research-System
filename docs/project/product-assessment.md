@@ -1,8 +1,8 @@
 # Rà soát và chốt định hướng — Multi-Agent Research System
 
-**Ngày chốt thiết kế:** 08/10/2026 · **Mốc nộp:** 10/11/2026 · **Code được rà:** `ebb525a`.
+**Cập nhật định hướng:** 09/10/2026 · **Mốc nộp:** 10/11/2026 · **Code được rà 08/10:** `ebb525a`.
 
-Đây là review tĩnh code/tài liệu, không phải biên bản chạy hệ thống. Quyết định này thay scope v3.0 còn để thí nghiệm thật là tùy chọn. [SRS v4.0](../requirements/SRS.md) là yêu cầu hiện hành; [Implementation Plan](implementation-plan.md) là thứ tự thực hiện.
+Đây là review tĩnh code/tài liệu, không phải biên bản chạy hệ thống. Quyết định này thay scope v3.0 còn để thí nghiệm thật là tùy chọn. [SRS v4.1](../requirements/SRS.md) là yêu cầu hiện hành; [User Journey](user-journey-and-outputs.md) chốt luồng sử dụng/đầu ra; [Implementation Plan](implementation-plan.md) là thứ tự thực hiện.
 
 ## 1. Kết luận và tên đề tài
 
@@ -18,9 +18,9 @@ Hướng này phù hợp đề tài và góp ý giảng viên. Thu hẹp **năng
 |---|---|---|
 | Tổng quan có nguồn | Câu hỏi, web, PDF có text | Bài tổng quan có phạm vi tìm kiếm, đối chiếu nguồn, gợi ý khoảng trống, giới hạn và citations |
 | Thực nghiệm tính toán | CSV không định danh; câu hỏi dự đoán đại lượng số | So sánh baseline và phương pháp cho phép; số liệu/bảng/biểu đồ thật; bản thảo thực nghiệm và gói tái lập |
-| Nghiên cứu ngoài hệ thống | Câu hỏi cần lab/khảo sát/thực địa | Protocol/checklist và bài protocol; chờ dữ liệu, nhận CSV phù hợp để tiếp tục phân tích |
+| Nghiên cứu ngoài hệ thống | Câu hỏi cần lab/khảo sát/thực địa | Protocol/checklist **trung gian**; chờ dữ liệu/kết quả thật, resume đúng bài rồi viết empirical paper có provenance |
 
-“Bài báo hoàn chỉnh” là bản thảo đủ cấu trúc và có căn cứ theo loại bài. Không đồng nghĩa peer-reviewed, chứng minh tính mới hoặc được tạp chí nhận. Thiếu dữ liệu phải trả protocol/partial, không điền giả Results.
+“Bài báo hoàn chỉnh” là bản thảo đủ cấu trúc và có căn cứ theo loại bài; empirical bắt buộc có Results thật. Không đồng nghĩa peer-reviewed, chứng minh tính mới hoặc được tạp chí nhận. Thiếu dữ liệu chỉ trả protocol/bản nháp trung gian và giữ trạng thái chờ, không điền giả Results. Một user có nhiều bài độc lập: A chờ lab không cản B; mỗi task có checkpoint, files và versions riêng. Đây là quyết định cần thể hiện trong UI, state machine và acceptance gates, không chỉ trong văn xuôi.
 
 ## 2. Điểm tốt giữ lại
 
@@ -28,7 +28,7 @@ Hướng này phù hợp đề tài và góp ý giảng viên. Thu hẹp **năng
 - Source → chunk → evidence → claim dùng chung cho review, hỏi đáp và viết bài.
 - Phân biệt hệ thống tính toán với nghiên cứu ngoài đời giúp giữ phạm vi nhiều lĩnh vực.
 - Bounded loops, ownership và trạng thái chờ bền vững đã có trong định hướng.
-- Ba thành viên không code đóng góp trực tiếp vào dữ liệu đánh giá, kiểm nguồn và QA sử dụng.
+- Đánh giá multi-agent bằng đối chứng cùng corpus/model/cap, kết hợp kiểm lineage bằng code và rubric nội dung, giúp chứng minh vai trò phân công nếu kết quả thực sự tốt hơn.
 
 ## 3. Điểm cần sửa trong định hướng
 

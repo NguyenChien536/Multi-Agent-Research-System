@@ -1,12 +1,12 @@
 # Kế hoạch triển khai đã chốt — ATI
 
-**Chốt:** 08/10/2026 · **Hạn:** 10/11/2026 · **Baseline source:** `ebb525a`.<br>
-Phạm vi theo [SRS v4.0](../requirements/SRS.md); lý do và findings ở [Product Assessment](product-assessment.md). Đây là backlog đề xuất, **chưa phải các GitHub issues đã tạo**.
+**Cập nhật:** 09/10/2026 · **Hạn:** 10/11/2026 · **Baseline source:** `ebb525a`.<br>
+Phạm vi theo [SRS v4.1](../requirements/SRS.md) và [User Journey](user-journey-and-outputs.md); lý do và findings ở [Product Assessment](product-assessment.md). Đây là backlog đề xuất, **chưa phải các GitHub issues đã tạo**.
 
 ## 1. Quy tắc thực hiện
 
-- Giả định để lập lịch (chưa đo năng lực): Chiến có 3–4 giờ tập trung/ngày, khoảng 90–115 giờ còn lại. P0–P7 ước lượng 83–108 giờ; buffer nhỏ, không thêm feature ngoài scope.
-- Mỗi gói là một lát cắt có thể kiểm tra; cần chia nhỏ PR nếu vượt khoảng 2 ngày làm việc. Giữ một feature branch/PR đang triển khai cho Chiến; ba thành viên nghiên cứu/QA song song.
+- Giả định để lập lịch (chưa đo năng lực): Chiến có 3–4 giờ tập trung/ngày, khoảng 90–115 giờ thực tế còn lại sau các nghĩa vụ khác. P0–P7 hiện ước lượng **100–134 giờ** sau khi bổ sung nhiều bài độc lập và bài empirical human-led. Nếu chỉ có 90 giờ khả dụng, thiếu khoảng 10–44 giờ so với ước lượng; ngay cả 115 giờ cũng không đủ ở kịch bản 134 giờ. Đây là rủi ro tiến độ cao, không phải cam kết đã đủ nguồn lực. Cần đo lại sau G0/G1 và dành thêm thời gian tập trung hoặc báo giới hạn scope theo gate thực tế; không thêm feature ngoài scope.
+- Mỗi gói là một lát cắt có thể kiểm tra; cần chia nhỏ PR nếu vượt khoảng 2 ngày làm việc. Giữ một feature branch/PR đang triển khai cho Chiến.
 - Cùng thư mục làm việc; không cần tạo thêm checkout. Ví dụ branch `codex/p1-auth-task-lifecycle`; base là nhánh tích hợp đã chứa prerequisite và được chọn rõ trước khi bắt đầu. Không mặc định có `develop` hoặc merge trực tiếp `main`.
 - Chu trình: đọc issue/contract → plan ngắn → code → checks phù hợp → review diff → sửa findings → lưu evidence → merge qua PR. Codex/Antigravity đọc cùng SRS, ADR và file này; tool/model có thể thay mà contract không đổi.
 - Done cần source + checks + runtime evidence phù hợp; tài liệu ghi planned/implemented/verified tách biệt. Stub-provider test không thay run provider thật cuối cùng.
@@ -19,13 +19,13 @@ Phạm vi theo [SRS v4.0](../requirements/SRS.md); lý do và findings ở [Prod
 | Gói | Mốc mục tiêu | Giờ Chiến | Đầu ra | Gate |
 |---|---|---:|---|---|
 | P0 · baseline tái lập | 08–10/10 | 4–6 | Runtime/dependency thống nhất, DB sạch, test isolation | G0: dựng lại được, tests không gọi dịch vụ thật |
-| P1 · auth và lifecycle | 11–14/10 | 10–13 | Owner, ResearchRun, start/cancel/idempotency, outbox, events | G1: không truy cập chéo/dispatch lặp |
-| P2 · research E2E có evidence | 15–19/10 | 15–18 | Web → persisted evidence → draft/critic → citations, budget | G2: một review chạy thật trong cap |
-| P3 · PDF và workspace UI | 20–23/10 | 10–13 | Upload/ingest, evidence explorer, stage/event timeline | G3: web + PDF chung task, UI thấy lỗi/partial |
-| P4 · plan/protocol/resume | 24–26/10 | 8–11 | Assisted/automatic, PostgreSQL checkpoint, durable waits | G4: restart/resume đúng, protocol qua review |
-| P5 · experiment thật | 27–30/10 | 14–18 | Routine runner CSV, metrics/charts, empirical manuscript, reproducibility | G5: cùng input/config tái lập được |
-| P6 · Q&A/revision và hoàn thiện | 31/10–02/11 | 8–10 | Hỏi đáp có nguồn, report versions, authorized export | G6: sửa giữ bản cũ, không dùng result lỗi thời |
-| P7 · evaluation và bản nộp | 03–07/11 | 14–19 | Baseline/ablation, QA, sửa blockers, evaluation report | G7: evidence đủ, failures/limits công khai |
+| P1 · auth và lifecycle | 11–14/10 | 12–16 | Owner, nhiều task/user, ResearchRun, start/cancel/idempotency, outbox, events, quota RUNNING | G1: task A chờ không chặn B; không truy cập chéo/dispatch lặp |
+| P2 · research E2E có evidence | 15–19/10 | 16–20 | Web → persisted evidence → draft/critic → citations, budget | G2: một review chạy thật trong cap |
+| P3 · PDF và workspace UI | 20–23/10 | 11–14 | Upload/ingest, danh sách nhiều bài, evidence explorer, stage/event timeline | G3: web + PDF chung task, UI thấy trạng thái/việc cần làm |
+| P4 · plan/protocol/resume | 24–26/10 | 14–18 | Assisted/automatic, PostgreSQL checkpoint, protocol trung gian, durable waits | G4: A chờ vẫn chạy B, restart/resume đúng |
+| P5 · experiment và bài empirical | 27–30/10 | 20–28 | Routine CSV, metrics/charts, kết quả human-led có provenance, empirical manuscript | G5: Results thật; cùng input/config tính toán tái lập được |
+| P6 · Q&A/revision và hoàn thiện | 31/10–02/11 | 9–12 | Hỏi đáp có nguồn, report versions, authorized export | G6: sửa giữ bản cũ, không dùng result lỗi thời |
+| P7 · evaluation và bản nộp | 03–07/11 | 14–20 | Baseline/ablation, QA, sửa blockers, evaluation report | G7: evidence đủ, failures/limits công khai |
 | Buffer / freeze | 08–10/11 | Ngoài ước lượng trên | Dry run, backup demo, đồng bộ báo cáo/AI disclosure | Không thêm feature |
 
 ## 3. Nội dung từng gói
@@ -41,10 +41,10 @@ Phạm vi theo [SRS v4.0](../requirements/SRS.md); lý do và findings ở [Prod
 ### P1 — Auth, run và dispatch reliability
 
 - Login/token hoặc session, dependency current_user, owner-scoped query cho mọi route; registration chỉ là bước tạo tài khoản.
-- ResearchRun, status/stage và transition table; compare-and-set start, một active run/task, idempotency key. Task POST vẫn tạo tài nguyên 201; start/resume được nhận vào queue trả 202.
+- ResearchRun, status/stage và transition table; compare-and-set start, một active run/task, nhiều task/user, idempotency key. Task POST vẫn tạo tài nguyên 201; start/resume được nhận vào queue trả 202. Dispatcher/worker enforce tối đa 2 RUNNING/user bằng DB admission/lease atomically; QUEUED đợi bền vững, WAITING_* không chiếm suất. Cấu hình source hiện tên `MAX_CONCURRENT_TASKS_PER_USER=2` nhưng chưa enforce; khi triển khai đổi tên/ý nghĩa rõ thành giới hạn **RUNNING jobs**, không giới hạn số workspace chờ.
 - Transactional outbox cùng task/run; dispatcher nền trong API lifespan claim/retry, worker claim/lease; không dựa riêng Celery task ID/acks_late. Cancellation kiểm trước mỗi stage/tool, stale worker không ghi terminal đè run mới.
 - TaskEvent/AgentRun từ đầu; JSON logs, task/run/step ID; UI polling snapshot trước, SSE khi contract ổn.
-- Gate: user A/B isolation; double start; broker unavailable; worker redelivery; cancel; no silent queue loss.
+- Gate: user A/B isolation; task A WAITING_USER_DATA vẫn tạo/chạy task B; cả hai suất bận thì resume A QUEUED và chạy sau; double start; broker unavailable; worker redelivery; cancel; no silent queue loss.
 
 ### P2 — Một luồng research thực sự có căn cứ
 
@@ -61,16 +61,16 @@ Phạm vi theo [SRS v4.0](../requirements/SRS.md); lý do và findings ở [Prod
 - ArtifactStore private local volume; upload status, metadata/checksum, PDF text parser có limits. Không OCR; lỗi hướng dẫn người dùng rõ.
 - File/ingestion job gắn owner/task và tombstone check từ đầu; thống kê mọi storage key/index/checkpoint cần cleanup để P6 triển khai xóa đầy đủ.
 - Ingestion độc lập/idempotent; source READY mới được retrieve; embedding nhất quán web/PDF. Tắt cache private nếu chưa enforce scope/retention.
-- UI login/create/detail; role/stage/status/round/budget, timeline, evidence/source passages, report và warnings. Owner-only API fetch, sanitize Markdown.
+- UI login/create/list/detail; mỗi bài có status/stage/next_action/updated_at, role/round/budget, timeline, evidence/source passages, report và warnings. Owner-only API fetch, sanitize Markdown.
 - Gate: PDF hợp lệ/quá lớn/malformed/không text; foreign artifact denied; reconnect polling đúng trạng thái, không fake phần trăm tiến độ.
 
 ### P4 — Plan, protocol, pause/resume
 
 - Plan versions, policy-assisted/automatic và audit decision. Methodologist chỉ chạy khi protocol/experiment cần; review path bỏ qua roles đó.
 - PostgreSQL checkpointer/thread ID, interrupt trả về worker như WAITING, không coi thiếu report là exception. Side effects trước interrupt phải idempotent.
-- Human-led protocol qua Writer/Critic/Validator; artifact có trước khi chờ, task không COMPLETED trong lúc WAITING_USER_DATA.
+- Human-led protocol/biểu mẫu qua Writer/Critic/Validator; artifact có trước khi chờ, task không COMPLETED trong lúc WAITING_USER_DATA. Form thu kết quả có tối thiểu phương pháp, cỡ mẫu/đơn vị, thời điểm, nguồn file và mô tả phân tích để Writer không tự suy đoán.
 - Resume chỉ sau owner/state/checkpoint/plan version đúng và data READY; unsupported input trả lỗi hoặc tiếp tục chờ. Không tự dựng “user supplied summary” khi chưa có file kết quả.
-- Gate: restart worker/API; duplicate approval/upload/resume; stale plan decision; wait không giữ worker và không đếm active-time.
+- Gate: restart worker/API; duplicate approval/upload/resume; stale plan decision; wait không giữ worker/slot RUNNING và không đếm active-time; B hoàn thành trong lúc A chờ.
 
 ### P5 — Experiment hẹp chạy thật
 
@@ -79,7 +79,8 @@ Phạm vi theo [SRS v4.0](../requirements/SRS.md); lý do và findings ở [Prod
 - Trusted host launcher chạy Docker job container riêng theo manifest; API/worker không có Docker socket. Routine/code/image pin, network off, non-root, caps/resource/output limits.
 - Lưu AnalysisRun/input/output hash/exit code/log redacted; metrics JSON/CSV, plots PNG, manifest, config, routine source/launcher và README tái lập. Validate schema/finite numbers/artifact paths trước Writer.
 - Data Analyst diễn giải actual output; Writer viết Methods/Results có provenance, phân biệt exploratory/predictive và không tuyên bố causal.
-- Gate: empty/invalid CSV, target leakage, timeout/OOM, forged artifact, repeatability. Routine thất bại không tạo Results. Bộ data và expected checks do Vũ bàn giao trước 16/10.
+- Human-led result intake: form metadata + file kết quả thật; CSV hợp routine thì phân tích lại, ngoài routine thì gắn nhãn user-supplied/chưa tái lập và kiểm tính nhất quán trong khả năng. Thiếu metadata bắt buộc tiếp tục WAITING_USER_DATA/NEEDS_REVIEW; không tạo empirical paper hoàn chỉnh từ protocol.
+- Gate: empty/invalid CSV, target leakage, timeout/OOM, forged artifact, repeatability; human-led data thiếu/thật và provenance; cả hai đường empirical có bài báo đủ phần khi điều kiện đạt. Routine thất bại không tạo Results.
 
 ### P6 — Hỏi đáp, sửa và xuất
 
@@ -87,13 +88,13 @@ Phạm vi theo [SRS v4.0](../requirements/SRS.md); lý do và findings ở [Prod
 - Mỗi Q&A có operation ID/cap riêng trong quota task, dùng provider gateway; không reset budget research run đã đóng. Kiểm câu hỏi lặp/rate limit, thiếu budget và không đọc report của owner khác.
 - Revision dùng base_report_version và unique request; lưu version mới; đổi data/method tạo plan/run mới, không tái sử dụng kết quả của input cũ.
 - Authenticated event stream/reconnect theo DB event IDs nếu triển khai SSE; polling vẫn là nghiệm thu tối thiểu.
-- Export Markdown và experiment package qua API; protocol/report đều kiểm lineage trước phát hành. PDF polished/image enrichment để sau.
+- Export Markdown và experiment package qua API; protocol **trung gian**/report đều kiểm lineage trước phát hành, UI phân biệt trạng thái. PDF polished/image enrichment để sau.
 - Xóa task: tombstone chặn read/resume/late writes ngay, cancel tại safe boundary; cleanup có retry trong 24 giờ, backup retention tối đa 7 ngày theo SRS. Gate gồm xóa task đang chạy/chờ, duplicate cleanup và file không bị tạo lại bởi worker cũ.
 
 ### P7 — Đánh giá và bàn giao
 
 - Chạy [Evaluation Plan](evaluation-plan.md), chỉ công bố số thực đo. Chạy provider tốn phí phải nằm trong cap riêng đã cấu hình cho đợt evaluation.
-- Vũ/My chấm nội dung theo blind labels; Hiếu chạy kịch bản và ghi lỗi; Chiến sửa P0/P1 blockers và xác nhận runtime.
+- Chiến chuẩn bị bộ câu hỏi/nguồn đóng băng, chấm rubric ẩn nhãn cấu hình, chạy kịch bản sử dụng và lưu bất đồng/giới hạn đánh giá một người; sửa blockers và xác nhận runtime. Nếu có người đánh giá độc lập sau này, ghi rõ đóng góp thực tế lúc đó.
 - Cập nhật midterm/final progress, limitations, acceptance matrix; AI disclosure theo đóng góp thực tế, không điền tỷ lệ tùy ý.
 
 ## 4. Điều kiện dừng mở scope
@@ -102,7 +103,7 @@ Nếu G2 chưa đạt 19/10, cắt PDF đẹp/ảnh/SSE nâng cao và UI trang t
 
 ## 5. Bước bắt đầu ngay
 
-Thực hiện **P0 trước**: baseline tái lập + DB sạch/test isolation, sau đó P1. Không tạo agent mới trước khi G1/G2 đạt. Chiến ghi một command/evidence log; Vũ chuẩn bị query/dataset, Hiếu scenarios, My nguồn/template theo [Team Task Guide](team-task-guide.md).
+Thực hiện **P0 trước**: baseline tái lập + DB sạch/test isolation, sau đó P1. Không tạo agent mới trước khi G1/G2 đạt. Chiến ghi command/evidence log, chọn query/dataset công khai và kịch bản A-chờ/B-chạy để kiểm lifecycle.
 
 ## 6. Bàn giao giữa các gói
 
