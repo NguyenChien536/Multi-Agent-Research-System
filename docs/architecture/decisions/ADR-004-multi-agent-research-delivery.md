@@ -36,6 +36,8 @@ Giữ stack hiện có, nhưng phải làm run/versioning, dispatch reliability,
 
 Nếu runner chưa đạt gate, ghi feature chưa đạt; không dùng mock như kết quả thực. Run thật có manifests/metrics/charts và đánh giá baseline là nghiệm thu bắt buộc.
 
+Nhật ký mọi attempt, kết quả âm và rerun được cụ thể hóa trong [ADR-005](ADR-005-experiment-journal-and-reproducibility.md); không mở rộng sang mã AI tự sinh chỉ vì routine có Docker container.
+
 ## Tham khảo
 
 - [LangGraph — Interrupts](https://docs.langchain.com/oss/python/langgraph/interrupts)

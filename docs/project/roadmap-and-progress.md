@@ -57,7 +57,7 @@ G0–G7 có một định nghĩa thống nhất tại [SRS §8](../requirements/
 | Writer/Critic/Validator | Writer/Critic có; validator placeholder | Full-report review, persisted lineage, bounded loops |
 | Budget/idempotency | Chưa thực thi đầy đủ | Reserve/reconcile, start/redelivery/restart gates |
 | Protocol/wait/resume | Target mới; graph chưa checkpointer | Protocol trung gian, durable checkpoint + upload READY + đúng version; A chờ/B chạy |
-| Routine/experiment | Chưa có đủ implementation | Actual CSV run, manifest và reproducibility; human-led result provenance và bài hoàn chỉnh sau upload |
+| Routine/experiment | Chưa có đủ implementation | Actual CSV run, journal mọi attempt/kết quả âm, manifest + rerun có sai khác; human-led result provenance và bài hoàn chỉnh sau upload |
 | UI/Q&A/report versions | Starter/polling; phiên bản/Q&A còn thiếu | Tương tác và feedback/end states thực tế |
 | Evaluation | Đã có kế hoạch | Chưa đo; không có số quality/cost/superiority |
 
@@ -69,5 +69,6 @@ G0–G7 có một định nghĩa thống nhất tại [SRS §8](../requirements/
 | Nhiều phương pháp/ngành | Routine/template có validation riêng và người đánh giá phù hợp |
 | Nhóm nghiên cứu | Workspace membership/roles/sharing/audit, cách ly dữ liệu, không chỉ thêm bảng users |
 | Vận hành rộng | Threat model, secure sandbox nếu nhận code tự sinh, load/recovery/backup evaluation, privacy policy |
+| Mã do AI sinh | Chỉ xét sau khi journal và kiểm tái lập được nghiệm thu, runner cô lập mã không tin cậy qua threat model/security review, benchmark chất lượng/chi phí/ca âm đủ mạnh; quyết định bằng ADR mới |
 
 Không ấn định ngày mở rộng trước khi biết kết quả đánh giá. Mục tiêu dài hạn giữ đa lĩnh vực, còn chất lượng và khả năng tái lập quyết định method được hỗ trợ.

@@ -57,6 +57,8 @@ Routine đầu tiên `tabular_regression_v1` dùng CSV numeric, mean baseline v�
 - Test không rò dữ liệu: preprocess fit train-only, không tune dựa hold-out. Sửa dữ liệu/cấu hình sau khi xem test phải tạo run mới có nhãn exploratory; không chỉ giữ run thắng.
 - Dataset quá nhỏ, target thiếu/hằng, non-finite hoặc schema sai phải báo hạn chế/không chạy. Không suy ra causal inference hoặc statistical significance từ MAE thấp hơn trên một split.
 - Technical retry giữ cùng config/seed; đổi phương pháp cần plan version mới. Kết quả âm/không cải thiện vẫn xuất báo cáo trung thực.
+- Kiểm journal theo [đặc tả thí nghiệm](../technical/experiment-journal-and-reproducibility.md): `PLAN_FROZEN` phải có trước attempt; giữ tất cả attempts kể cả timeout/lỗi, `NO_IMPROVEMENT` và corrections; `TaskEvent` không thay journal. Ca nghiệm thu cố ý dùng dataset cho kết quả không cải thiện: vẫn có hai metrics và Results/Discussion đúng nhãn; lỗi kỹ thuật thì không có Results.
+- Một execution thứ hai trong runner mới dùng đúng manifest để so MAE/RMSE/chart data và ghi `REPRODUCTION_CHECK` với sai khác. Cùng seed kiểm repeatability kỹ thuật, không chứng minh kết luận vững trên seed/dataset khác; nếu rerun lệch, giữ cả hai và không gắn nhãn “ATI đã tái lập”.
 
 Tham khảo kỹ thuật: [scikit-learn — Common pitfalls](https://scikit-learn.org/stable/common_pitfalls.html). Routine cụ thể là lựa chọn phạm vi của ATI, không phải khuyến nghị áp dụng Ridge cho mọi nghiên cứu.
 
@@ -69,7 +71,7 @@ Tham khảo kỹ thuật: [scikit-learn — Common pitfalls](https://scikit-lear
 | Lifecycle | G1, G4 | Double start, broker fail, duplicate job, restart wait/resume, stale decision, cancel; WAITING_* chặn run thứ hai **cùng task** nhưng A chờ vẫn cho B chạy; 2 RUNNING/user, QUEUED không mất | DB transitions, event IDs, logs |
 | Grounding | G2, G4, G5 | Invalid source/chunk, quote mismatch, no-source, contradictory sources, protocol/result provenance | Validator output + rubric |
 | Budget/loops | G2, G5, G6 | Guard trước LLM/search/embed/retry; no-delta; 3 rounds/2 revisions; Q&A có cap riêng và không reset run budget | Usage ledger, stop reasons, kết quả kiểm tra |
-| Runner/results | G5 | Real execution; failed/timeout run không Results; artifact integrity; reproduce | Input/config/output manifests + commands |
+| Runner/results | G5 | Real execution; failed/timeout run không Results; journal có plan trước chạy và mọi attempt; ca âm hợp lệ vẫn vào Results; artifact integrity; rerun độc lập đạt tolerance | Journal export, input/config/output manifests, hai execution và bảng sai khác |
 | Reports/chat | G6 | REVIEW/EMPIRICAL_COMPUTATIONAL/EMPIRICAL_HUMAN đủ cấu trúc; protocol chưa data không COMPLETED; Q&A citation; revision giữ bản cũ, thay data/config không dùng lại result cũ; authorized export | Version IDs, report snapshots |
 | Retention/delete | G6 | Tombstone chặn read/resume/late writes; cancel tại safe boundary; cleanup retry và deadline 24 giờ, backup policy tối đa 7 ngày | Tombstone/cleanup timestamps, file/index/checkpoint inventory, cấu hình và kiểm retention |
 | Evaluation bundle | G7 | Baseline/ablation đúng corpus/model/cap, rubric che nhãn, failures và hạn chế chấm một người; liên kết evidence G0–G6 | Frozen manifests, bảng chấm, kết quả và báo cáo |
@@ -83,3 +85,4 @@ Mã gate theo [SRS §8](../requirements/SRS.md#8-acceptance-gates); mapping FR/N
 Pilot trước 03/11; held-out 03–05/11; chấm/QA 05–07/11. Với (4 pilot + 8 held-out) × 3 cấu hình có tối đa 36 report runs trước reruns. Tổng cap evaluation phải được cấu hình riêng theo ngân sách dự án; số run/cap là kế hoạch, không phải cho phép tự tiêu tiền trong lượt cập nhật docs.
 
 Lưu manifest câu hỏi/corpus/prompt/model/config/commit, output và logs redacted trong storage riêng; chỉ version kết quả/rubric đã bỏ dữ liệu riêng tư. Báo cáo kết quả gồm paired differences theo câu, trung bình/median, cost và failures; cỡ mẫu nhỏ không đủ để khẳng định ưu thế mọi lĩnh vực.
+Giữ đủ kết quả của A/B/C theo từng câu, kể cả multi-agent không cải thiện hoặc bị lỗi; không loại run bất lợi khỏi bảng tổng hợp mà không nêu lý do. Đây là nhật ký **đánh giá ATI**, tách với `ExperimentJournalEntry` của thí nghiệm người dùng.

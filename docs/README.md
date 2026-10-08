@@ -10,6 +10,7 @@
 4. [Implementation Plan](project/implementation-plan.md) — P0–P7, dependency, lịch/giờ và gate; bắt đầu ở P0.
 5. [Evaluation Plan](project/evaluation-plan.md) — cách kiểm chứng ích lợi multi-agent, ablation và thực nghiệm tái lập.
 6. [ADR-004](architecture/decisions/ADR-004-multi-agent-research-delivery.md) — quyết định kiến trúc/phạm vi đã chốt.
+7. [Experiment Journal](technical/experiment-journal-and-reproducibility.md) và [ADR-005](architecture/decisions/ADR-005-experiment-journal-and-reproducibility.md) — lưu mọi attempt, kiểm tái lập, kết quả âm và gate trước mã AI tự sinh.
 
 ## Tài liệu học phần
 
@@ -37,6 +38,7 @@ SRS hiện hành là v4.1; root `SRS ATI.md` giữ làm lịch sử. Mermaid tro
 | Scope, FR/NFR và gate G0–G7 | SRS §3, §7–9 | Implementation Plan, Evaluation Plan, midterm |
 | Vai trò và quy tắc điều phối | Agent Workflow + ADR-004 | HLD, System Design, SRS |
 | Schema/API và chuyển trạng thái | Data Model & API | ERD/sequence, workflow, implementation tasks |
+| Thí nghiệm, journal và rerun | Experiment Journal + ADR-005 | SRS FR-07/NFR-05/G5, ERD, Evaluation Plan, P5 |
 | Sơ đồ | System Design | 5 hình chính trong midterm |
 | Lịch và phụ thuộc công việc | Implementation Plan | Roadmap, midterm, Team Task Guide |
 | Kết quả chạy | Baseline Verification + evidence từng gate | Roadmap, midterm; không thay bằng mô tả target |

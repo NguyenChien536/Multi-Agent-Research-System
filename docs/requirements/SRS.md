@@ -35,19 +35,19 @@ Review và human-led protocol nhận câu hỏi nhiều lĩnh vực; thực thi 
 | FR-04 | Evidence/gợi ý khoảng trống | Claim liên kết chunk/source; quote/locator, counterevidence và search limits; UI dùng “Gợi ý khoảng trống nghiên cứu”, không khẳng định novelty tuyệt đối | Core |
 | FR-05 | Research loop | Tối đa 3 vòng thu thập gồm vòng đầu; targeted query từ thiếu sót cụ thể; dừng nếu không thêm evidence dùng được sau dedup/hết budget | Core |
 | FR-06 | Phương pháp/protocol | Câu hỏi/giả thuyết khi phù hợp, biến số, phương pháp, data cần, metric; protocol cũng qua Writer/Critic/Validator | Core |
-| FR-07 | Thí nghiệm thật | Routine allowlist ngoài API/worker; CSV hợp lệ; baseline + Ridge cùng split/metric; lưu input hash/config/seed/code/version/metrics/charts/errors | Core |
+| FR-07 | Thí nghiệm thật | Routine allowlist ngoài API/worker; CSV hợp lệ; baseline + Ridge cùng split/metric; nhật ký append-only lưu plan trước chạy, mọi attempt/kết quả âm/lỗi, input hash/config/seed/code/version/metrics/charts; rerun từ manifest và ghi sai khác | Core |
 | FR-08 | Chờ data/resume | WAITING_USER_DATA có checkpoint, worker kết thúc; protocol là artifact trung gian; upload READY + quyết định hợp lệ resume đúng checkpoint; input chưa đủ tiếp tục chờ hoặc yêu cầu sửa | Core |
 | FR-09 | Bài báo theo loại | `COMPLETED` có toàn bộ phần mục 2 và Results thật khi bắt buộc; thiếu data chỉ trả protocol/bản nháp đúng nhãn, không tự đổi loại bài rồi báo hoàn thành | Core |
 | FR-10 | Critic/sửa | Review theo section cùng evidence/method/results; tối đa 2 lần sửa sau draft đầu; verdict có issue IDs và claim/section liên quan | Core |
 | FR-11 | Citation/provenance | Citation thư mục → source/chunk; claim kết quả → evidence → output artifact → run/input/config; kiểm cùng task và toàn bài | Core |
 | FR-12 | Agent progress/monitoring | UI role/stage/status/iteration/budget/warning; DB event timeline, polling fallback; structured logs có task/run/step IDs, latency/usage/redaction | Core |
-| FR-13 | Export | Markdown/report versions; input được phép, config, routine source hoặc launcher, metrics JSON/CSV, chart PNG, manifest/README tái lập; owner-only download | Core |
+| FR-13 | Export | Markdown/report versions; input được phép, config, routine source hoặc launcher, metrics JSON/CSV, chart PNG, manifest/README và nhật ký thí nghiệm/kiểm tái lập; owner-only download | Core |
 | FR-14 | Ảnh tùy chọn | Ưu tiên ảnh source, Serper backend tùy chọn; attribution/license; tự bỏ qua khi thiếu, user bỏ ảnh/tắt tất cả; ảnh minh họa không là evidence | Later |
 | FR-15 | Q&A/sửa bản thảo | Q&A theo report version + evidence, có citations; chỉnh bài tạo version mới; đổi data/method có plan/run revision và trace | Core |
 | FR-16 | Đánh giá multi-agent | Query/corpus/rubric versioned; baseline/ablation; cấu hình, cost, kết quả/người chấm; báo cáo cả thất bại/giới hạn | Core |
 | FR-17 | Nhiều bài độc lập | Một user tạo/xem/chuyển giữa nhiều task; task A chờ dữ liệu không cản tạo/chạy task B; danh sách hiển thị status/stage/việc cần làm và bản thảo mới nhất | Core |
 
-FR-07 và FR-08 là hai nhánh của plan: ATI chạy routine hỗ trợ, hoặc hướng dẫn nghiên cứu viên thực hiện ngoài hệ thống và nhận data/results có provenance. User-supplied results luôn có nhãn, không được báo đã tái lập nếu ATI chưa chạy lại.
+FR-07 và FR-08 là hai nhánh của plan: ATI chạy routine hỗ trợ, hoặc hướng dẫn nghiên cứu viên thực hiện ngoài hệ thống và nhận data/results có provenance. Kết quả không ủng hộ giả thuyết ở cả hai nhánh vẫn được giữ và báo trung thực. User-supplied results luôn có nhãn, không được báo đã tái lập nếu ATI chưa chạy lại. Nhật ký khoa học, log vận hành và cách phân biệt kết quả âm với lỗi được định nghĩa tại [Experiment Journal](../technical/experiment-journal-and-reproducibility.md).
 
 ## 4. Tương tác và quyền hạn
 
@@ -112,7 +112,7 @@ Các NFR dưới đây định danh những ràng buộc đã nêu ở mục 4�
 | NFR-02 | Tính bền vững và idempotency | Broker lỗi, job lặp, restart, stale decision/cancel không mất hoặc nhân đôi output |
 | NFR-03 | Budget và giới hạn | Reserve trước mọi call/retry; caps mục 6; no-delta và hết budget dừng đúng trạng thái |
 | NFR-04 | Input và execution boundary | Fetch/upload có giới hạn; nguồn không điều khiển tools; runner chỉ routine cho phép |
-| NFR-05 | Khả năng tái lập | Pin dependencies/model/embedding profile; manifest input/config/seed; không dùng lại result sai phiên bản |
+| NFR-05 | Khả năng tái lập | Pin dependencies/model/embedding profile; manifest input/config/seed; rerun độc lập cùng manifest và so metrics/chart data theo tolerance; lưu cả sai khác và mọi attempt, không dùng lại result sai phiên bản |
 | NFR-06 | Khả năng quan sát | State/stage/event/log có IDs và usage; UI reconnect được; không hiển thị tiến độ giả |
 | NFR-07 | Xóa và lưu giữ dữ liệu | Tombstone chặn truy cập/resume/late writes; cleanup và backup retention theo mục 7 |
 
@@ -127,7 +127,7 @@ Mã G0–G7 dùng thống nhất với các gói P0–P7 trong [Implementation P
 | G2 · review có căn cứ | Web → evidence persist → REVIEW có citation; provider run thật trong cap; Critic/targeted search/no-delta/invalid-citation/hết cap dừng đúng |
 | G3 · PDF và workspace | Web+PDF cùng task; upload không hợp lệ bị từ chối; UI thể hiện stage/wait/fail/partial và khôi phục snapshot |
 | G4 · plan/protocol/resume | Assisted/automatic theo policy; protocol trung gian qua review/validation; WAITING_* resume sau restart đúng checkpoint/plan version, giữ độc lập task khác |
-| G5 · experiment | CSV thật → metrics/charts; manifest tái lập đạt tolerance; run lỗi không sinh Results; evidence nối đúng input/config |
+| G5 · experiment | CSV thật → metrics/charts; plan đóng băng trước chạy, journal giữ cả attempt lỗi/kết quả âm; rerun độc lập cùng manifest đạt tolerance và ghi sai khác; run lỗi không sinh Results; evidence nối đúng input/config |
 | G6 · tương tác và bàn giao | Q&A có nguồn/cap; revision giữ bản cũ và không dùng result lỗi thời; export có quyền; xóa task/cleanup đạt policy |
 | G7 · đánh giá | Có baseline/ablation, rubric, quality/cost/latency/failures và limitations; tổng hợp evidence của G0–G6 |
 

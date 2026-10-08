@@ -26,7 +26,8 @@ Migration ClaimEvidence/Citation.chunk_id đã được commit trong `ebb525a`; 
 | ResearchClaim | Nhận định, mức độ chắc chắn và phạm vi; thuộc task/run tạo ra |
 | Evidence / ClaimEvidence | Evidence neo đúng một chunk hoặc artifact; claim–evidence nhiều-nhiều, có stance/support/contradict |
 | ResearchArtifact | File upload hoặc output; kind (input/protocol/form/draft/result/chart/export), owner/task, checksum, storage_key, validation_status; producer_analysis_run_id nullable |
-| AnalysisRun | run_id, input_artifact_id, routine/code/image version, config/seed, status, metrics/manifest refs; input/output không được đánh tráo |
+| AnalysisRun | run_id, input_artifact_id, routine/code/image version, config/seed, status, conclusion riêng với execution status, metrics/manifest refs; input/output không được đánh tráo |
+| ExperimentJournalEntry | Append-only theo task/AnalysisRun; sequence, kind, attempt_id?, plan_version, actor, timestamp, schema-versioned payload, artifact IDs/checksums, idempotency key; plan, mọi attempt, quan sát, diễn giải và rerun đều giữ |
 | ResearchReport / ReportClaim | Report version và các claim thực sự có trong version đó; task_id/run_id, article_type, validation_status, completeness_status, unique(task_id, version). Protocol/draft chưa có Results không là report COMPLETED |
 | Citation | Tham chiếu thư mục từ report/claim tới source và optional chunk; không dùng làm đường duy nhất cho kết quả phân tích |
 | AgentRun | Role/model/prompt version, timestamps, status, usage/cost và references; không chứa secrets/raw reasoning |
@@ -36,6 +37,8 @@ Migration ClaimEvidence/Citation.chunk_id đã được commit trong `ebb525a`; 
 | LangGraph checkpoints | Namespace riêng trong PostgreSQL; thread/checkpoint gắn run và plan version |
 
 **Lineage:** report → ReportClaim → claim → ClaimEvidence → evidence → chunk → source; hoặc evidence → artifact → AnalysisRun → input artifact. Citation là thư mục tài liệu, còn bảng/biểu đồ thực nghiệm dùng evidence/artifact references. Ảnh minh họa không được dùng làm evidence thực nghiệm.
+
+`TaskEvent`/`AgentRun` phục vụ vận hành; `ExperimentJournalEntry` là hồ sơ khoa học, không lấy raw log làm Results. Unique `(analysis_run_id, sequence)` và idempotency key chống ghi lặp; correction thêm entry mới. `NO_IMPROVEMENT` là kết luận của run hợp lệ, `TECHNICAL_FAILURE` là lỗi, không được gộp. Manifest được đóng băng trước chạy; một rerun mới cùng manifest ghi kết quả đối chiếu riêng trước khi gắn nhãn “ATI đã tái lập”. Field và trạng thái chi tiết: [Experiment Journal](experiment-journal-and-reproducibility.md).
 
 Database constraints kiểm cùng task/owner qua composite FK/unique phù hợp; không chỉ dựa UUID tồn tại. Evidence có CHECK đúng một anchor, source phải khớp chunk; ReportClaim/Citation không trỏ claim ngoài report/task. Artifact upload không có analysis producer; artifact kết quả tính toán do ATI sinh phải trỏ AnalysisRun thành công và checksum/manifest đã validate. Protocol/export do workflow sinh không bắt buộc có AnalysisRun, nhưng giữ run/report version tạo ra chúng. User-supplied results có nhãn nguồn, file hash, phương pháp/đơn vị/mẫu và provenance người cung cấp; không tự tạo AnalysisRun giả. Các invariant vượt khả năng FK được kiểm transaction/validator, không khẳng định FK chứng minh ý nghĩa claim.
 
@@ -77,6 +80,7 @@ Tên tài nguyên dưới đây là **contract thiết kế**, implementation ph
 | Revision | Chưa có | POST /research/{id}/revisions, base_report_version + yêu cầu; 202; version mới |
 | Cancel | Chưa có hợp đồng đầy đủ | POST /research/{id}/cancel; idempotent; dừng tại safe boundary |
 | Export/download | Chưa đủ | Export Markdown/package; GET artifact qua API kiểm quyền; file private |
+| Nhật ký thí nghiệm | Chưa có | GET /research/{id}/analysis-runs/{analysis_run_id}/journal theo owner; timeline phân trang và export có manifest/attempt/rerun, không lộ raw secrets |
 | Delete | Chưa đủ | DELETE task; tombstone trước, purge theo policy, không resume sau delete |
 
 Các route rút gọn trong bảng đều ở `/api/v1`. Mã lỗi: 401 thiếu token, 404 không có quyền/tài nguyên, 409 stale version/state conflict, 413 vượt size, 422 sai schema/routine, 429 vượt quota. Operation lặp cùng key+payload trả cùng kết quả; cùng key khác payload trả 409. Upload nội dung lớn có thể 202 processing; UI chờ READY trước resume.
@@ -94,6 +98,6 @@ Delete trả thành công sau khi tombstone bền vững, không có nghĩa file
 1. Auth ownership + ResearchRun/lifecycle + outbox/events.
 2. Provenance constraints, embedding profile, plan schema/version cơ bản, report/version/ReportClaim (P2).
 3. Upload/artifact/tombstone hooks (P3), checkpoint và approval decision (P4).
-4. AnalysisRun, routine manifest và provenance kết quả.
+4. AnalysisRun, ExperimentJournalEntry append-only, routine manifest, rerun records và provenance kết quả (P5).
 
 Backfill data cũ phải đánh dấu thiếu lineage; không tạo evidence giả để migration pass. Giữ DB demo riêng khi thử upgrade/downgrade. Chi tiết nhiệm vụ và gates ở [Implementation Plan](../project/implementation-plan.md).

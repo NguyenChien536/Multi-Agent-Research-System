@@ -20,7 +20,7 @@ Ma trận chức năng, technology và patterns nằm tại [Technical Design](t
 | FastAPI | Auth/ownership, vòng đời task/run, upload, duyệt, resume, report access | Request ngắn; background dispatcher chuyển outbox sang broker |
 | Redis | Celery broker và thông báo tiến độ | Không giữ trạng thái nghiên cứu duy nhất |
 | Celery + LangGraph | Chạy graph, gọi provider, phối hợp agent, checkpoint | Delivery có thể lặp; mỗi side effect phải có định danh và dedup |
-| PostgreSQL + pgvector | Task/run/plan versions, evidence, reports, events, outbox, vector | Một DB giảm vận hành; pin embedding profile và lọc ownership |
+| PostgreSQL + pgvector | Task/run/plan versions, evidence, reports, events, experiment journal, outbox, vector | Một DB giảm vận hành; journal append-only riêng với event UI, pin embedding profile và lọc ownership |
 | ArtifactStore | PDF, CSV, protocol, metrics/charts và exports | Private local volume cho bản nộp; interface cho S3-compatible sau này |
 | Analysis runner | Chạy routine do dự án viết/duyệt trong container riêng | Host launcher tin cậy; API/worker không có Docker socket; không nhận mã LLM tùy ý |
 | Telemetry | JSON logs, AgentRun, TaskEvent, duration/usage/errors | Là năng lực của API/worker và DB, không bắt buộc một dịch vụ observability mới |
@@ -45,7 +45,7 @@ Xem [Agent Workflow](../technical/agent-workflow.md) cho hợp đồng từng va
 
 Nếu tiếp tục nghiên cứu bên ngoài: lưu checkpoint, chuyển WAITING_USER_DATA, kết thúc worker job. Upload hợp lệ tạo yêu cầu resume gắn đúng plan/checkpoint/version. Method ngoài khả năng routine chỉ được hướng dẫn hoặc diễn giải kết quả người dùng cung cấp có provenance, không tự nhận đã chạy phân tích.
 
-Routine tham chiếu của bản nộp là `tabular_regression_v1`: mô tả CSV numeric và so sánh baseline với Ridge bằng cấu hình cố định. Đây là lát cắt chứng minh thực thi/tái lập, không giới hạn tổng quan và protocol vào AI/ML. Chi tiết tại ADR-004.
+Routine tham chiếu của bản nộp là `tabular_regression_v1`: mô tả CSV numeric và so sánh baseline với Ridge bằng cấu hình cố định. Journal giữ plan trước chạy, mọi attempt/kết quả âm và phép chạy lại riêng; log vận hành không thay journal. Đây là lát cắt chứng minh thực thi/tái lập, không giới hạn tổng quan và protocol vào AI/ML. Chi tiết tại [ADR-004](decisions/ADR-004-multi-agent-research-delivery.md) và [ADR-005](decisions/ADR-005-experiment-journal-and-reproducibility.md).
 
 ## 5. State, reliability và ngân sách
 
@@ -62,7 +62,7 @@ Routine tham chiếu của bản nộp là `tabular_regression_v1`: mô tả CSV
 
 Upload kiểm magic bytes, kích thước, schema và quyền; fetch chặn địa chỉ nội bộ, giới hạn response/timeout và kiểm điểm kết nối thực tế. Nội dung nguồn là dữ liệu không tin cậy, không được dùng làm chỉ dẫn hệ thống.
 
-Launcher chỉ nhận routine/config thuộc allowlist, stage file theo job; container non-root, read-only rootfs, no network, drop capabilities, giới hạn CPU/RAM/time/output. Giới hạn này phục vụ **routine tin cậy trong môi trường kiểm soát**, không phải bảo đảm sandbox cho mã đối kháng. Mở chạy mã tự sinh cần ADR/threat model và sandbox thích hợp riêng.
+Launcher chỉ nhận routine/config thuộc allowlist, stage file theo job; container non-root, read-only rootfs, no network, drop capabilities, giới hạn CPU/RAM/time/output. Giới hạn này phục vụ **routine tin cậy trong môi trường kiểm soát**, không phải bảo đảm sandbox cho mã đối kháng. Mở chạy mã tự sinh cần threat model, execution boundary được kiểm an toàn, đánh giá chất lượng/tái lập đủ mạnh và ADR chọn công nghệ riêng; tiêu chí tại [Experiment Journal](../technical/experiment-journal-and-reproducibility.md#5-điều-kiện-mở-rộng-sang-mã-do-ai-tạo).
 
 Q&A chỉ đọc report version/evidence; sửa tạo version mới. Thay dữ liệu/phương pháp tạo plan/run mới và vô hiệu hóa kết quả cũ. Log giữ IDs, status, timing, usage, lỗi đã che dữ liệu; không công bố raw reasoning nội bộ hay secrets.
 

@@ -81,6 +81,8 @@ Ma trận chi tiết chức năng–công nghệ–design pattern và ranh giớ
 
 Routine tham chiếu `tabular_regression_v1`: CSV numeric → descriptive statistics → DummyRegressor(mean) so với Ridge(alpha=1), cùng train/test 80/20 seed 42. Preprocessing chỉ fit train; MAE chính, RMSE phụ; plots prediction/residual; không suy ra nhân quả, không thử lặp để chọn kết quả đẹp. Đây là lát cắt thực thi/tái lập, không phải thuật toán phù hợp mọi loại nghiên cứu. Nguyên tắc chống leakage tham khảo [scikit-learn](https://scikit-learn.org/stable/common_pitfalls.html).
 
+`ExperimentJournalEntry` ghi plan trước chạy, từng attempt, kết quả âm hợp lệ, lỗi kỹ thuật và lần kiểm lại từ cùng manifest. Writer chỉ dùng metrics/artifacts đã xác minh; người dùng có thể đọc và tải journal cùng gói tái lập. Một lần chạy lại cùng seed kiểm repeatability kỹ thuật, chưa chứng minh kết luận tổng quát. [Đặc tả journal](../technical/experiment-journal-and-reproducibility.md) và [ADR-005](../architecture/decisions/ADR-005-experiment-journal-and-reproducibility.md) giữ quyết định này; code AI tự sinh thuộc mở rộng có gate an toàn/đánh giá riêng.
+
 Đánh giá ATI khác với experiment của người dùng: 4 câu pilot và 8 held-out, ba cấu hình single-agent / multi-agent / multi-agent tắt macro loop; cố định corpus/model/cap, đo citation integrity, semantic support, coverage, cost/latency và failures. Chiến chấm ẩn nhãn cấu hình theo rubric đóng băng; chấm một người có nguy cơ thiên lệch và không đo được đồng thuận, nên không tuyên bố vượt trội phổ quát. [Evaluation Plan](evaluation-plan.md) ghi cách chọn mẫu và nghiệm thu.
 
 ## 4. System Design — Thiết kế hệ thống
@@ -349,6 +351,7 @@ erDiagram
     RESEARCH_RUN ||--o{ ANALYSIS_RUN : executes
     RESEARCH_ARTIFACT ||--o{ ANALYSIS_RUN : input_to
     ANALYSIS_RUN |o--o{ RESEARCH_ARTIFACT : produces
+    ANALYSIS_RUN ||--o{ EXPERIMENT_JOURNAL_ENTRY : records
     RESEARCH_RUN ||--o{ RESEARCH_REPORT : creates
     RESEARCH_REPORT ||--o{ REPORT_CLAIM : includes
     RESEARCH_CLAIM ||--o{ REPORT_CLAIM : appears_in
@@ -420,6 +423,15 @@ erDiagram
         string routine_version
         string config_seed_manifest
     }
+    EXPERIMENT_JOURNAL_ENTRY {
+        uuid id PK
+        uuid analysis_run_id FK
+        uuid task_id FK
+        int sequence
+        string kind
+        string attempt_id
+        string artifact_refs
+    }
     RESEARCH_REPORT {
         uuid id PK
         uuid run_id FK
@@ -460,7 +472,7 @@ Thời hạn 10/09–10/11/2026. Giai đoạn đầu đã có planning/scaffold 
 | 03–07/11 | P7 evaluation/manual QA/fix/báo cáo | Chiến | G7: kết quả có evidence |
 | 08–10/11 | Buffer/freeze/demo/backup | Chiến | Bản nộp |
 
-Chi tiết ước lượng 100–134 giờ trong [Implementation Plan](implementation-plan.md). Đây là kế hoạch rủi ro cao do một developer và nhiều phần chưa chạy. Cắt polish/ảnh/PDF đẹp khi trễ; không bỏ số liệu thật/provenance/ownership rồi báo đủ scope.
+Chi tiết ước lượng 104–140 giờ trong [Implementation Plan](implementation-plan.md), gồm nhật ký mọi lần thử và một lần chạy lại để kiểm tái lập. Đây là kế hoạch rủi ro cao do một developer và nhiều phần chưa chạy. Cắt polish/ảnh/PDF đẹp khi trễ; không bỏ số liệu thật/provenance/ownership rồi báo đủ scope.
 
 Report version/ReportClaim và plan schema được đặt nền ở P2; P4 mở approval/resume, P6 mở Q&A/revision. WAITING_* giữ active run **của chính task** nhưng trả worker/quota RUNNING; Q&A đọc phiên bản bài qua operation có cap riêng. Mọi trường hợp xóa task phải chặn truy cập/resume và kết quả đến muộn theo policy đã ghi trong SRS.
 

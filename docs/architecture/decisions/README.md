@@ -29,3 +29,7 @@ Thư mục này lưu trữ các quyết định kiến trúc quan trọng của 
 4. **[ADR-004: Kiến trúc và phạm vi triển khai Multi-Agent Research](ADR-004-multi-agent-research-delivery.md)**
    - Trạng thái: Chốt thiết kế 08/10/2026, cập nhật 09/10/2026; chưa nghiệm thu implementation.
    - Quyết định: 7 agent roles, modular monolith, mỗi task hướng tới bài báo hoàn chỉnh; nhiều task/user độc lập, wait/resume không giữ worker; experiment CSV thật bắt buộc, trusted routine runner và evaluation baseline/ablation.
+
+5. **[ADR-005: Nhật ký thí nghiệm, kết quả âm và kiểm tái lập](ADR-005-experiment-journal-and-reproducibility.md)**
+   - Trạng thái: Chốt thiết kế 09/10/2026; chưa nghiệm thu implementation.
+   - Quyết định: Journal append-only theo AnalysisRun, giữ mọi attempt/kết quả âm, rerun riêng để xác nhận repeatability; mã AI tự sinh chỉ xét sau khi có sandbox và evaluation đủ mạnh.

@@ -292,6 +292,7 @@ erDiagram
     RESEARCH_RUN ||--o{ ANALYSIS_RUN : executes
     RESEARCH_ARTIFACT ||--o{ ANALYSIS_RUN : input_to
     ANALYSIS_RUN |o--o{ RESEARCH_ARTIFACT : produces
+    ANALYSIS_RUN ||--o{ EXPERIMENT_JOURNAL_ENTRY : records
     RESEARCH_RUN ||--o{ RESEARCH_REPORT : creates
     RESEARCH_REPORT ||--o{ REPORT_CLAIM : includes
     RESEARCH_CLAIM ||--o{ REPORT_CLAIM : appears_in
@@ -363,6 +364,15 @@ erDiagram
         string routine_version
         string config_seed_manifest
     }
+    EXPERIMENT_JOURNAL_ENTRY {
+        uuid id PK
+        uuid analysis_run_id FK
+        uuid task_id FK
+        int sequence
+        string kind
+        string attempt_id
+        string artifact_refs
+    }
     RESEARCH_REPORT {
         uuid id PK
         uuid run_id FK
@@ -393,6 +403,7 @@ erDiagram
 4. Report version unique trong task; plan version unique trong task. Claim có thể được tái dùng trong version cùng task nhưng phải giữ nguyên provenance. Citation gắn claim phải xuất hiện trong ReportClaim tương ứng.
 5. Một active ResearchRun/task, nhiều task/user; WAITING_* chỉ khóa run của chính task, không giữ worker hoặc quota RUNNING. plan_id nullable trước khi Supervisor tạo plan, bắt buộc có trước research execution; khi revise plan trong run, cập nhật selected plan bằng CAS, giữ audit/version cũ. Delete/tombstone không được để resume tiếp tục.
 6. Hình lược bỏ field vận hành; migration phải bổ sung composite keys/check constraints theo [data contract](../technical/data-model-and-api.md), không suy diễn schema hiện tại đã có chúng.
+7. `EXPERIMENT_JOURNAL_ENTRY` là sổ append-only cho plan, mọi attempt, quan sát và rerun; không thay `TaskEvent` vận hành. Kết quả âm của run hợp lệ khác lỗi kỹ thuật. Chi tiết ở [Experiment Journal](../technical/experiment-journal-and-reproducibility.md).
 
 ## 7. Phụ lục — Physical DFD
 
@@ -473,6 +484,10 @@ classDiagram
         <<interface>>
         +runApprovedRoutine(manifest)
     }
+    class ExperimentJournalRepository {
+        +appendEntry()
+        +listByAnalysisRun()
+    }
     class ArtifactStore {
         <<interface>>
         +putPrivate()
@@ -491,11 +506,12 @@ classDiagram
     ResearchWorkflow --> EvidenceRepository
     ResearchWorkflow --> OutputValidator
     ResearchWorkflow --> AnalysisAdapter
+    ResearchWorkflow --> ExperimentJournalRepository
     ResearchWorkflow --> RunRepository
     AnalysisAdapter --> ArtifactStore : stages validated inputs and outputs
 ```
 
-Bảy role implement cùng contract nhưng có input/output schema riêng. Validator không phải LLM role; semantic review thuộc Critic và đánh giá con người. Worker gọi analysis adapter, không được thực thi shell do model tạo.
+Bảy role implement cùng contract nhưng có input/output schema riêng. Validator không phải LLM role; semantic review thuộc Critic và đánh giá con người. Worker gọi analysis adapter, không được thực thi shell do model tạo. Experiment journal ghi plan/attempt/result/rerun riêng với event vận hành; xem [đặc tả journal](../technical/experiment-journal-and-reproducibility.md).
 
 ## 9. Hiện trạng và khoảng cách
 

@@ -38,11 +38,11 @@ Một task chỉ có một run chưa kết thúc; user có nhiều task. Mặc �
 
 ## 5. Thực nghiệm tính toán không bị mập mờ
 
-1. Methodologist chốt RQ/hypothesis, dataset schema, target/features, metric, split/seed và routine trước khi xem kết quả. Bản nộp hỗ trợ `tabular_regression_v1` trên numeric CSV, không giả vờ hỗ trợ mọi lĩnh vực.
+1. Methodologist chốt RQ/hypothesis, dataset schema, target/features, metric, split/seed và routine trước khi xem kết quả; ATI ghi `PLAN_FROZEN` trong nhật ký thí nghiệm. Bản nộp hỗ trợ `tabular_regression_v1` trên numeric CSV, không giả vờ hỗ trợ mọi lĩnh vực.
 2. Preflight kiểm owner/file READY, số hàng/cột, đơn vị/metadata cần thiết, missing values, leakage, target và routine compatibility. Input không đạt thì UI nêu lỗi và yêu cầu sửa, task chưa hoàn thành.
 3. Worker gửi immutable manifest (input checksum, config, seed, routine/code/container version) cho launcher; runner riêng chạy routine với giới hạn tài nguyên, không nhận code do LLM sinh. Retry kỹ thuật giữ cùng manifest/idempotency key; không lựa chọn lần chạy đẹp nhất.
-4. Validator kiểm exit status, JSON schema, finite metrics, chart paths/checksums và input/config lineage. Data Analyst diễn giải **kết quả thực**, kể cả kết quả âm; Writer đưa vào Methods/Results/Discussion; Critic kiểm overclaim.
-5. Lỗi/timeout sau retry → NEEDS_REVIEW hoặc đợi người dùng sửa input; không sinh Results. Đổi input/method/metric tạo plan/analysis version mới, vô hiệu hóa kết quả cũ. Bản cũ còn để audit nhưng không được dùng làm kết quả của bản mới.
+4. Validator kiểm exit status, JSON schema, finite metrics, chart paths/checksums và input/config lineage; mọi attempt được ghi riêng. ATI chạy lại từ cùng manifest trong runner mới và ghi kết quả đối chiếu. Data Analyst diễn giải **kết quả thực**, kể cả `NO_IMPROVEMENT`; Writer đưa vào Methods/Results/Discussion; Critic kiểm overclaim và việc bỏ qua run bất lợi.
+5. Lỗi/timeout sau retry → NEEDS_REVIEW hoặc đợi người dùng sửa input; không sinh Results và không được gọi là “kết quả âm”. Đổi input/method/metric tạo plan/analysis version mới, vô hiệu hóa kết quả cũ. Bản cũ còn để audit nhưng không được dùng làm kết quả của bản mới. Người dùng xem timeline experiment và tải journal/manifest cùng gói tái lập.
 
 Dữ liệu human-led có hai mức: (a) CSV/số liệu trong routine ATI hỗ trợ thì ATI phân tích lại và ghi AnalysisRun; (b) kết quả đã phân tích ở ngoài thì ATI kiểm file, phương pháp, đơn vị, nguồn gốc và consistency ở mức khả thi, gắn nhãn **user-supplied, chưa được ATI tái lập**. Không dùng RAG để tính số liệu; không suy ra chất lượng thí nghiệm chỉ từ file upload.
 
