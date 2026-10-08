@@ -1,6 +1,6 @@
 # ADR-003: Hỗ trợ đa phương pháp với ranh giới thực nghiệm có người giám sát
 
-**Trạng thái:** Đã chấp thuận về nguyên tắc sản phẩm; công nghệ isolated runner cần quyết định riêng<br>
+**Trạng thái:** Giữ nguyên tắc sản phẩm; phần release constraint và chọn runner được thay thế bởi [ADR-004](ADR-004-multi-agent-research-delivery.md) ngày 08/10/2026.<br>
 **Ngày:** 2026-10-06
 
 ## Bối cảnh
@@ -24,7 +24,9 @@
 
 **Đánh đổi/rủi ro:** study types cần template/method/evaluation domain-specific; runner an toàn tăng effort; researcher chịu trách nhiệm ethics và quyền xử lý data; monitoring cần storage/chi phí và log redaction.
 
-## Release constraint
+## Release constraint lịch sử — đã được thay thế
+
+Nội dung dưới là quyết định ngày 06/10, không còn là scope hiện hành. ADR-004 yêu cầu một experiment thật và chốt runner routine tin cậy.
 
 Đến 10/11/2026 ưu tiên một literature review workflow E2E; tối đa một routine phân tích hẹp nếu safety gate đạt. Human study là protocol + wait/upload/resume target; chỉ báo cáo là implemented sau runtime evidence. ADR không phải bằng chứng tính năng đã xong.
 

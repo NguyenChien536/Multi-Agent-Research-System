@@ -6,7 +6,7 @@
 | **Ngày** | 2026-10-01 |
 | **Trạng thái** | ✅ Accepted |
 | **Người quyết định** | Chiến (Tech Lead) |
-| **Phạm vi** | Image enrichment sau MVP; không thay đổi phạm vi MVP hiện tại |
+| **Phạm vi** | Image enrichment sau bản nộp; biểu đồ từ experiment thuộc core theo SRS v4.0 |
 | **Liên quan** | System Design; SRS rút gọn FR-14; Product Assessment |
 
 ---
@@ -21,7 +21,9 @@ Báo cáo nghiên cứu có thể được trình bày trực quan hơn bằng �
 - Lưu URL ảnh và trang chứa ảnh, tiêu đề/caption, attribution/tác giả nếu có, provider, license status, thời điểm thu thập và vị trí trong report.
 - Ảnh chỉ là minh họa; không tạo Evidence/Claim/Citation từ ảnh.
 - Không tự suy ra quyền tái sử dụng từ kết quả tìm kiếm. Nếu license không rõ, lưu `Unknown` và hiển thị cảnh báo cùng liên kết nguồn. Không dùng ảnh nếu điều khoản nguồn/provider cấm sử dụng.
-- Image discovery thuộc roadmap sau MVP theo SRS; quyết định này không yêu cầu triển khai ngay.
+- Image discovery thuộc roadmap sau bản nộp theo SRS v4.0; quyết định này không yêu cầu triển khai ngay.
+
+ADR này chỉ nói về ảnh minh họa lấy ngoài hệ thống. Biểu đồ tính từ dataset thật là `ResearchArtifact` của `AnalysisRun`, thuộc FR-07/FR-11 core và có thể làm evidence cho kết quả; không đi qua Serper hoặc `ReportImage`.
 
 ## Các lựa chọn
 
@@ -61,7 +63,7 @@ Luồng người dùng mặc định tự thêm ảnh sau khi report draft qua k
 
 - Lưu ứng viên ảnh như `ResearchSource` với `source_type=IMAGE`; `url` là URL ảnh và `source_page_url` là trang chứa ảnh. Lưu provider, attribution, license status, title/caption và ngày truy xuất khi có.
 - Dùng quan hệ mục tiêu `ReportImage` (hoặc tên tương đương sau khi đối chiếu model) để gắn `ResearchSource` ảnh với report, section/position, inline marker, alt text/caption và trạng thái `is_included`. Renderer/UI chỉ resolve marker qua các ảnh được include. Bỏ ảnh khỏi report bằng cách đổi trạng thái, không xóa provenance nguồn.
-- Lưu cờ `include_images` ở cấu hình task/report. Cờ mặc định có hiệu lực khi tính năng image enrichment được bật; MVP hiện tại không gọi image provider.
+- Lưu cờ `include_images` ở cấu hình task/report. Cờ mặc định có hiệu lực khi tính năng image enrichment được bật; core bản nộp không bắt buộc image provider.
 - ERD trong system-design là thiết kế mục tiêu. Cần migration/API acceptance criteria riêng trước khi gọi schema hoặc chức năng này là đã triển khai.
 
 ## Xem thêm

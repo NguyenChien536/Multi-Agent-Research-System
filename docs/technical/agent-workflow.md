@@ -1,69 +1,74 @@
-# LangGraph Agent Workflow — hiện trạng và thiết kế mục tiêu
+# Agent Workflow — vai trò, điều phối và kiểm tra
 
-**Cập nhật tài liệu:** 06/10/2026. Runtime evidence gần nhất trong [baseline-verification.md](../project/baseline-verification.md) được thu 27/09/2026. Đọc source hiện tại không đồng nghĩa xác nhận runtime; không chạy research workflow trong lượt cập nhật docs.
+**Chốt thiết kế:** 08/10/2026. Xem [SRS](../requirements/SRS.md), [System Design](../architecture/system-design.md), [ADR-004](../architecture/decisions/ADR-004-multi-agent-research-delivery.md).
 
-## 1. Nguyên tắc
+## 1. Agent và công cụ khác nhau thế nào?
 
-ATI là workflow có nhiều vai trò/agent node được điều phối bởi LangGraph, không phải tập agent độc lập có quyền tự quyết. AI hỗ trợ từng bước; người dùng giữ quyền với kế hoạch, nghiên cứu ngoài hệ thống và quyết định quan trọng. Outputs phải giữ provenance.
+ATI là workflow đa tác tử điều phối bằng LangGraph. Agent dùng LLM để đưa ra đầu ra có cấu trúc; router và guards bằng code quyết định có được hành động/chuyển bước hay không. Không để agent tự sinh thêm agent hoặc tool ngoài allowlist.
 
-## 2. Vai trò trong workflow mục tiêu
+| Agent | Đầu vào | Đầu ra có cấu trúc | Ràng buộc |
+|---|---|---|---|
+| Supervisor | Câu hỏi, output type, constraints, budget | Plan version, phạm vi, bước/role cần dùng, đề xuất route | Không tăng cap, bỏ ownership hoặc tự nhận ethics approved |
+| Researcher | Plan, câu hỏi còn thiếu, nguồn hiện có | Search queries, source candidates, search log | Tìm cả bằng chứng trái chiều; giới hạn query/provider calls |
+| Evidence Analyst | Chunks có ID, retrieval results | Claims, evidence anchors/quotes, mâu thuẫn, tổng hợp và gợi ý gap | Gap chỉ trong corpus/search scope; không bỏ source/chunk IDs |
+| Methodologist | Question/gap, evidence, data availability | Giả thuyết có thể kiểm tra, method, protocol, tiêu chí đo/giới hạn | REVIEW có thể bỏ role này; method không hỗ trợ phải nói rõ |
+| Data Analyst | Dataset schema, method/config, output runner | Đề xuất routine cho phép; diễn giải metrics/charts đã chạy | Không tạo metric bằng suy đoán, không chạy arbitrary code |
+| Writer | Output schema, evidence, protocol/results được xác nhận | Bản nháp theo loại bài, claim references, limitations | Thiếu dữ liệu không viết Results như đã quan sát |
+| Critic | Toàn bộ draft theo sections, evidence, plan/method, artifacts | PASS / REVISE / NEED_EVIDENCE / NEED_METHOD_REVIEW và issues có anchor | Phản biện nội dung/phương pháp; không tự phê duyệt ngoại lệ, không thay peer review |
 
-| Vai trò / node | Trách nhiệm target | Ràng buộc |
-|---|---|---|
-| Supervisor | Phân loại study type, dựng plan, xác định budget, report type và đường đi | Không tự phê duyệt nghiên cứu/ethics |
-| Researcher | Tìm web, truy vấn bổ sung có mục tiêu; safe fetch | Query có giới hạn; kiểm tra URL/SSRF; dừng nếu không có evidence mới |
-| Curator | Khử trùng, chuẩn hóa, chunk, embed web/upload sources | Kiểm tra file; không tin cậy nội dung/prompt trong nguồn |
-| Evidence Analyst | Trích claim/quote, nguồn/chunk, mâu thuẫn và độ bất định | Mỗi claim phải có lineage hoặc gắn nhãn thiếu evidence |
-| Synthesis / Gap Analyst | Tổng hợp đồng thuận, tranh luận, giới hạn và candidate research questions | Nêu search scope; không khẳng định gap toàn ngành |
-| Methodology Designer | Đề xuất hypothesis/question, method, protocol, data plan và article type | Protocol human study là draft, cần review phù hợp |
-| Data / Experiment Analyst | Chọn routine hỗ trợ, diễn giải output bảng/biểu đồ từ dữ liệu thật | Chỉ chạy trong isolated runner; không chạy arbitrary LLM code |
-| Writer | Viết theo cấu trúc đúng với loại đầu ra | Không bịa citations/results; thiếu data thì không viết empirical findings |
-| Critic | Kiểm tra evidence, phương pháp, coverage, giới hạn; phát verdict | Không phải peer reviewer độc lập |
-| Citation / Artifact Validator | Xác nhận source/chunk/report và input/output artifact lineage | Referential integrity không đồng nghĩa semantic correctness |
+Mỗi lượt có agent_run_id, prompt/model version, input references, output schema, duration và usage. Model có thể dùng chung; lợi ích cần đo qua phân vai/context/feedback, không suy ra từ số model.
 
-Các vai trò trong cột này là **target design**. Source hiện có một phần node tương ứng, chưa đồng nghĩa đã chạy được toàn workflow.
+## 2. Mô-đun xác định bằng code
 
-## 3. State mục tiêu cần lưu bền vững
+- **Curator/Ingestion:** validate, dedup, parse PDF/web, chunk, embed và lưu provenance.
+- **Router/State machine:** allowlisted transitions; lifecycle tách stage; optimistic version/CAS.
+- **Budget manager:** reserve/reconcile cho LLM/search/embedding, retry/fallback và job tài nguyên.
+- **Citation/Artifact Validator:** cùng task/owner, anchor tồn tại, quote khớp, report-claim-evidence lineage và manifest thực nghiệm.
+- **Runner adapter/launcher:** routine registry/config schema, staging và giới hạn; không cho worker Docker socket.
+- **ArtifactStore và event publisher:** file private/checksum, event bền vững và thông báo tiến độ.
 
-Target state nên chứa: task/user ID; question/scope/study type/mode/report type; plan versions và user decision; provider/resource budget; sources/chunks/vectors; claims/evidence/citation lineage; macro/micro counters; checkpoint/status; input/protocol/result/chart/report artifact IDs; run metadata, warning và errors.
+Đây không phải các agent LLM bổ sung.
 
-WAITING_APPROVAL và WAITING_USER_DATA là trạng thái bền vững. Graph checkpoint lưu vào DB; Celery job hiện tại kết thúc. Khi user decision/upload được authorize và persist, API enqueue một resume job idempotent. Không giữ HTTP request hay worker job trong nhiều ngày.
+## 3. State và hợp đồng chuyển bước
 
-## 4. Target routing và bounded loops
+State graph giữ task_id, run_id, owner_id, plan/version, output/study path, source/evidence/artifact/report IDs, counters, budgets, checkpoint ID và warnings. Full documents/file bytes nằm trong DB/storage. Node trả immutable delta, không sửa ngầm list lồng nhau đã tích lũy.
 
-- Supervisor → optional approval → source discovery/ingestion → evidence analysis → candidate gap/synthesis → method selection.
-- Literature/review path đi Writer bằng evidence hiện có.
-- Computational path chỉ chạy data schema/routine được hỗ trợ, sau khi user cung cấp data và duyệt cấu hình; chạy ở isolated runner, không trong API/Celery.
-- Lab/survey/field/human-participant path chỉ xuất protocol/ethics notice, chuyển WAITING_USER_DATA và chờ user mang kết quả được phép xử lý về.
-- Writer ↔ Critic micro-loop bị giới hạn bởi max revision.
-- Critic có thể yêu cầu macro-loop tìm evidence cụ thể; tối đa 3 vòng, dừng sớm nếu không có nguồn/evidence mới sau dedup.
-- Budget, timeout và retry limit được kiểm tra trước mỗi provider call.
-- PASS dẫn đến deterministic citation/artifact validation; đầu ra mang trạng thái COMPLETED/PARTIAL/NEEDS_REVIEW. Citation validator không chứng minh semantic correctness.
-- Không có actual data thì output là review/protocol/draft thiếu phần; không tạo empirical Results.
+Plan phải chỉ rõ: loại output, phạm vi, nguồn dự kiến, phương pháp, dữ liệu cần có, calls/cost/time cap và điều kiện dừng. Assisted yêu cầu user duyệt tại gate; Automatic chỉ tự đi tiếp trong policy đã chọn. Thay phương pháp hoặc vượt policy phải chờ quyết định; không có chế độ tự bỏ guard.
 
-Sơ đồ điều khiển chuẩn: [System Design — Inference Flow](../architecture/system-design.md#4-inference-flow--multi-agent-workflow).
+WAITING_APPROVAL và WAITING_USER_DATA là trạng thái bền vững: checkpoint và quyết định được ghi DB, worker job kết thúc. Resume phải kiểm owner, plan_version, checkpoint, file READY và idempotency key. Upload cũ/decision lặp không tạo thêm run hoặc lặp side effect.
 
-## 5. Source inventory và baseline evidence
+WAITING_* vẫn là active run của task, nhưng không giữ worker lease. Sửa plan trong run giữ run_id/counters/budget; sửa bài sau terminal tạo run mới. Tombstone thu hồi quyền resume/ghi kết quả ngay; cancellation được xử lý tại safe boundary. Bảng chuyển trạng thái chuẩn nằm ở [Data Model & API §3](data-model-and-api.md#3-vòng-đời-và-event).
 
-| Phần | Source inventory khi đọc ngày 06/10 | Runtime evidence |
-|---|---|---|
-| State / routing | Agent state, graph và node modules có trong repository | Graph import/compile và 5 routing case mẫu pass tại baseline 27/09; chưa invoke toàn graph |
-| Supervisor, Researcher, Curator, Analyst, Writer, Critic | Các node hiện hữu trong source | Provider thật, end-to-end loop và quality chưa được kiểm tra |
-| Worker | Worker gọi graph async invoke, cập nhật task status/report trong source | Celery ping đạt; chưa gửi research task thật |
-| Claim/evidence | Source đã khai báo ClaimEvidence junction và Citation.chunk_id nullable; có migration mới trong working tree | Thay đổi sau baseline chưa áp dụng/xác minh trên DB sạch hoặc runtime |
-| Auth | Source có registration endpoint; research API còn dùng dummy user ID | Login/token/ownership chưa được xác minh |
-| Search/retrieval | Tavily, fetch, embedding, vector retrieval trong source | Chưa E2E với credentials/provider thật |
-| Upload, durable HITL, WAITING_USER_DATA, experiment runner, full monitoring | Chưa thấy implementation đủ trong baseline/source inventory đã ghi | Chưa xác minh |
+## 4. Luồng và research loop
 
-Không dùng source inventory để kết luận feature hoàn tất. Giữ nguyên working tree hiện có; không thay đổi source code trong lượt cập nhật tài liệu.
+1. Supervisor lập plan; chuẩn hóa/kiểm policy; duyệt nếu cần.
+2. Researcher + ingestion thu thập nguồn web/PDF. Evidence Analyst tạo evidence/claims và gợi ý khoảng trống nghiên cứu có giới hạn.
+3. REVIEW đi Writer. EMPIRICAL gọi Methodologist/Data Analyst và runner khi data/config hợp lệ. PROTOCOL gọi Methodologist rồi Writer; có thể xuất protocol đã kiểm hoặc chờ data để tiếp tục.
+4. Writer → Critic → deterministic validation. Protocol cũng qua chuỗi này.
+5. Critic NEED_EVIDENCE chỉ rõ câu hỏi/claim thiếu; Researcher tìm bổ sung có mục tiêu. REVISE đưa issues cho Writer; NEED_METHOD_REVIEW quay lại plan gate, không chạy lặp để tìm kết quả mong muốn.
 
-## 6. Việc kỹ thuật theo thứ tự
+| Guard | Quy tắc |
+|---|---|
+| Thu thập nguồn | Tối đa 3 rounds, tính cả lần đầu |
+| No evidence delta | Dừng vòng thu thập khi không thêm evidence sau dedup; giữ giới hạn trong output |
+| Writer revision | Tối đa 2 lần sau draft đầu; sửa citation tính vào cùng counter |
+| Method change | Version plan mới, kiểm user policy; không dùng lại Results của config/data cũ |
+| Provider budget | Kiểm trước mọi call/retry/fallback, reserve atomic theo run |
+| Hết cap | Dừng calls; giữ draft, metadata và nguyên nhân; không tự tăng cap |
 
-1. Khóa dependency/runtime, DB sạch và Alembic upgrade; review migration mới trước khi áp dụng.
-2. Hoàn thành authentication/token và kiểm tra ownership cho mọi task/report/file route.
-3. Chốt task state machine, budgets, idempotency, error state và worker dispatch/retry.
-4. Hoàn thiện source/upload validation, safe fetch, source/chunk/evidence/citation lineage.
-5. Test workflow bằng mock provider trước; chạy provider thật chỉ sau khi đặt quota/cost cap.
-6. Chọn analysis runner bằng ADR/threat model; nếu chưa đủ an toàn thì không chạy arbitrary/generated code.
-7. Chứng minh durable WAITING_APPROVAL/WAITING_USER_DATA + resume, progress delivery và monitoring.
-8. Đánh giá chất lượng grounding/report bằng dataset versioned và rubric; tách citation integrity khỏi semantic support.
+Không dùng vòng feedback để “chứng minh” giả thuyết hoặc sửa số liệu. Kết quả phủ định cũng là đầu ra hợp lệ.
+
+## 5. Kết thúc và trải nghiệm người dùng
+
+- **COMPLETED:** output đúng loại, mandatory gates đạt, provenance hợp lệ; không đồng nghĩa nghiên cứu đã được công nhận khoa học.
+- **PARTIAL:** output còn hạn chế/thiếu coverage nhưng phần được công bố có lineage hợp lệ và limitations rõ.
+- **NEEDS_REVIEW:** lỗi method/lineage hoặc quyết định chưa giải quyết; không xuất như bài hoàn tất.
+- **FAILED/CANCELLED:** không tạo Results hay báo thành công; giữ error và dữ liệu bàn giao phù hợp.
+- Q&A dùng report/evidence version hiện có, có operation ID/cap riêng trong quota task qua cùng budget adapter; không reset budget research run. Yêu cầu nghiên cứu mới sau terminal tạo run mới có cap; nếu đang active thì xử lý theo plan gate hoặc trả 409. Revision lưu version, không ghi đè bản đã dùng để đánh giá.
+- UI hiển thị role/stage, sự kiện, output summary, chi phí ước tính và việc cần người dùng làm; không cần hiển thị chain-of-thought.
+
+## 6. Khoảng cách với source
+
+Rà soát source `ebb525a` ngày 08/10: đã có Supervisor/Researcher/Curator/Analyst/Writer/Critic và graph, nhưng Curator hiện là code ingestion; chưa có đầy đủ method/data roles. Graph chưa gắn durable checkpointer; worker chưa đưa budget vào initial state; Analyst mất chunk UUID trong output; postprocessor chưa validate citation; Critic chỉ đọc prefix draft. Auth/ownership và lifecycle là blockers trước khi mở rộng roles.
+
+Đây là nhận xét đọc code, không phải kết quả chạy. Runtime cũ ghi tại [Baseline](../project/baseline-verification.md). Khắc phục theo [Implementation Plan](../project/implementation-plan.md); đo ích lợi của multi-agent theo [Evaluation Plan](../project/evaluation-plan.md).

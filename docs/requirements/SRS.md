@@ -1,103 +1,151 @@
-# Đặc tả Yêu cầu Rút gọn — ATI
+# SRS — Multi-Agent Research System (ATI)
 
-> **Phiên bản định hướng:** 3.0 · **Cập nhật:** 06/10/2026
-> Bản này chốt phạm vi sản phẩm mục tiêu và tiêu chí nghiệm thu. Phần trạng thái hiện tại chỉ ghi theo bằng chứng baseline ngày 27/09/2026; các yêu cầu target chưa được xem là đã triển khai. SRS ATI.md là bản 2.5 lưu trữ đã superseded; bản yêu cầu hiện hành nằm trong tài liệu này. Sơ đồ chuẩn: [System Design](../architecture/system-design.md).
+> **Phiên bản:** 4.0 · **Chốt định hướng:** 08/10/2026 · **Kỳ hạn:** 10/09–10/11/2026.
+> Yêu cầu mục tiêu, không phải danh sách tính năng đã nghiệm thu. Thay v3.0; `SRS ATI.md` v2.5 là bản lịch sử. Sơ đồ chuẩn: [System Design](../architecture/system-design.md). Review: [Product Assessment](../project/product-assessment.md).
 
-## 1. Mục đích, vấn đề và phạm vi
+## 1. Mục đích và giá trị
 
-ATI là hệ thống điều phối nghiên cứu có AI hỗ trợ, giúp cá nhân/người học chuyển từ câu hỏi nghiên cứu sang một trong các đầu ra phù hợp: tổng quan tài liệu, candidate research question/gap, giả thuyết/hướng nghiên cứu, protocol, phân tích dữ liệu được hỗ trợ và bản thảo bài báo theo loại nghiên cứu.
+ATI là hệ thống đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập: nhận câu hỏi/nguồn riêng, lập kế hoạch, tìm/đối chiếu tài liệu, gợi ý khoảng trống nghiên cứu/giả thuyết, chọn phương pháp, thực hiện phân tích được hỗ trợ và tạo bản thảo bài báo theo loại. Người dùng hỏi tiếp và sửa bài trong cùng task.
 
-Hệ thống tiếp nhận nguồn web và tài liệu người dùng cung cấp. Với nghiên cứu tính toán, ATI chỉ chạy phân tích thuộc danh mục routine an toàn, có cấu hình và dữ liệu đầu vào được kiểm tra. Với nghiên cứu cần lab, khảo sát, thực địa hoặc người tham gia, ATI tạo protocol và hướng dẫn; nhà nghiên cứu tự xin review cần thiết, tự thực hiện và nạp kết quả đã được phép xử lý. ATI không tuyển người hoặc thực hiện nghiên cứu ngoài đời.
+Giá trị cần đánh giá là chất lượng evidence/report và hiệu quả vòng phản biện so với single-agent dùng cùng nguồn, model và giới hạn tài nguyên. Số agent không phải thước đo chất lượng.
 
-**Vấn đề cần giải quyết:** tìm kiếm và tổng hợp nguồn tốn công; câu trả lời LLM khó kiểm chứng; thiếu kết nối giữa claim, bằng chứng, dữ liệu/phương pháp và kết quả; quy trình nghiên cứu nhiều bước cần lưu tiến độ lâu dài; một báo cáo thực nghiệm phải dựa trên dữ liệu thật chứ không được tự bịa kết quả.
+## 2. Người dùng, phạm vi và đầu ra
 
-**Ngoài cam kết demo trước 10/11/2026:** hỗ trợ đầy đủ mọi lĩnh vực/chuẩn báo cáo, runner cho mã tùy ý, thực hiện lab/thực địa, tuyển người, xử lý dữ liệu định danh nhạy cảm, collaboration/tenant doanh nghiệp, DOCX và image enrichment hoàn chỉnh. Một demo có thể triển khai sâu một đường nghiên cứu và trình bày các đường khác ở mức protocol/target; không tuyên bố hỗ trợ mọi phương pháp.
+Người dùng chính là sinh viên/nhà nghiên cứu cá nhân; nhiều tài khoản có task riêng. Bản nộp chưa có workspace nhóm/chia sẻ task/tenant doanh nghiệp. Chiến là developer duy nhất; ba thành viên khác phụ trách nguồn, đánh giá và QA thủ công.
 
-## 2. Người dùng và vai trò
-
-| Tác nhân | Quyền/trách nhiệm |
-|---|---|
-| Researcher/User | Tạo task, chọn loại nghiên cứu/đầu ra, tải nguồn/dữ liệu được phép, duyệt kế hoạch khi cấu hình yêu cầu, cung cấp quyết định hoặc kết quả bên ngoài, kiểm tra bài và nguồn |
-| ATI workflow | Điều phối có giới hạn; tìm và xử lý nguồn; đề xuất phương pháp; gọi provider; lưu trạng thái, provenance và artefact |
-| Reviewer/Instructor (ngoài hệ thống hoặc user được mời sau này) | Con người đánh giá protocol/ethics hoặc nội dung khoa học; Critic agent không thay thế vai trò này |
-| Search / LLM providers | Dịch vụ ngoài; nội dung gửi đi, chi phí và lỗi phải có cấu hình/ghi nhận phù hợp |
-
-## 3. Yêu cầu chức năng mục tiêu
-
-| ID | Yêu cầu | Tiêu chí nghiệm thu mục tiêu |
+| Loại đầu ra | Cấu trúc tối thiểu | Điều kiện |
 |---|---|---|
-| FR-01 | Quản lý task và quyền sở hữu | User tạo/xem task của mình; mọi API kiểm tra owner; kiểm thử truy cập chéo user bị từ chối |
-| FR-02 | Nhập nguồn | Hỗ trợ nguồn web và tải lên tài liệu nghiên cứu; xác thực định dạng/kích thước, checksum, owner, trạng thái xử lý và lỗi; không biến file tải lên thành nội dung đáng tin mặc định |
-| FR-03 | Kế hoạch và phê duyệt | Supervisor đề xuất câu hỏi, phạm vi, loại nghiên cứu, phương pháp, nguồn, budget và đầu ra; lưu version/checkpoint; user có thể duyệt/sửa/hủy khi chế độ yêu cầu |
-| FR-04 | Tổng hợp nguồn và candidate gap | Duy trì provenance source → chunk → evidence → claim; nêu phạm vi tìm kiếm, thiếu sót, mâu thuẫn; gọi gap là candidate, không khẳng định bao quát toàn ngành |
-| FR-05 | Bounded research loop | Critic có thể yêu cầu evidence còn thiếu; macro loop tối đa 3 vòng và dừng nếu không thêm nguồn/evidence sau dedup; ghi verdict và lý do |
-| FR-06 | Thiết kế phương pháp | Đề xuất giả thuyết/câu hỏi, thiết kế và protocol theo loại nghiên cứu; phân biệt hướng dẫn mẫu với phê duyệt đạo đức/chuyên môn |
-| FR-07 | Chạy phân tích được hỗ trợ | Chỉ chạy routine đã cho phép trên dữ liệu đã kiểm tra trong runner cô lập; lưu routine/version, config, input/output artifact, lỗi và giới hạn tài nguyên; không chạy LLM-generated arbitrary code |
-| FR-08 | Nghiên cứu ngoài hệ thống | Với lab/khảo sát/thực địa/người tham gia, chỉ xuất protocol/checklist; task chuyển WAITING_USER_DATA; sau khi user nạp kết quả được phép, tạo job resume; không tự tuyển/thu thập dữ liệu |
-| FR-09 | Bài báo theo loại | Sinh cấu trúc đúng với loại đầu ra được hỗ trợ; empirical Results chỉ có khi có dữ liệu thật; thiếu data thì xuất review/protocol hoặc phần chưa hoàn tất có nhãn |
-| FR-10 | Critic và sửa | Critic kiểm tra evidence, tính nhất quán phương pháp, phạm vi và phần thiếu; Writer sửa có giới hạn; không mô tả Critic như peer reviewer độc lập |
-| FR-11 | Citation và lineage | Validator xác nhận citation trỏ đúng report/task/source/chunk; claim dựa trên kết quả tính toán truy xuất qua evidence → output artifact → AnalysisRun/input/routine; tách referential integrity khỏi đánh giá claim có được evidence hỗ trợ hay không |
-| FR-12 | Theo dõi task | UI hiển thị stage, status, lần lặp, điểm đang chờ user, cảnh báo và lỗi; có polling hoặc SSE theo trạng thái triển khai; log có correlation/task ID, thời gian và provider usage đã redacted |
-| FR-13 | Export | Tạo Markdown trước; PDF sau khi renderer và quyền tải đã xác minh; xuất report/protocol/artifacts với trạng thái hoàn chỉnh/partial rõ |
-| FR-14 | Ảnh minh họa tùy chọn | Ưu tiên ảnh từ trang đã thu thập; provider ảnh chỉ là fallback có cấu hình/quota; giữ attribution/license status; user bỏ từng ảnh/tắt tất cả; ảnh không phải evidence |
+| `REVIEW` — tổng quan tài liệu | Title, Abstract, Introduction, phạm vi/cách tìm nguồn, tổng hợp theo chủ đề, Discussion/gợi ý khoảng trống, Limitations, Conclusion, References | Ghi corpus, ngày tìm, loại nguồn và giới hạn; không tự gắn nhãn systematic review/PRISMA |
+| `EMPIRICAL` — bài thực nghiệm tính toán | Title, Abstract, Introduction/Related work, Research question/hypothesis, Methods, Results, Discussion, Limitations, Conclusion, References, reproducibility appendix | Run thật thành công và artifacts đã kiểm tra; phân biệt ATI-executed với user-supplied results |
+| `PROTOCOL` — đề cương nghiên cứu | Background, câu hỏi/mục tiêu, phương pháp, dữ liệu/mẫu dự kiến, quy trình, kế hoạch phân tích, ethics/data management khi phù hợp, giới hạn, References | Là phương án dự kiến; không viết kết quả đã quan sát khi chưa có data |
 
-FR-07 và FR-08 là hai nhánh của quyết định phương pháp: ATI chạy routine tính toán được hỗ trợ trong phạm vi kiểm soát, hoặc dừng ở protocol để con người thực hiện nghiên cứu ngoài hệ thống rồi nạp dữ liệu/kết quả được phép. Cả hai nhánh đều phải duy trì provenance và không được tạo Results khi thiếu dữ liệu thật.
+Đầu ra chính là bản thảo đủ cấu trúc theo loại, kèm tóm tắt dễ đọc, nguồn/bằng chứng và trạng thái kiểm tra. Markdown và file thí nghiệm là export bắt buộc. PDF/DOCX đẹp, OCR, SPSS, video, mọi journal template, dữ liệu nhạy cảm, GPU training và arbitrary-code execution ngoài bản nộp.
 
-## 4. Trạng thái task mục tiêu
+Review/protocol nhận câu hỏi nhiều lĩnh vực; thực thi ban đầu chỉ gồm **CSV numeric → thống kê mô tả → so sánh dự đoán biến số bằng baseline và Ridge**. Không suy ra nhân quả hoặc cam kết novelty. Lab/khảo sát/thực địa do con người thực hiện ngoài ATI.
 
-| Trạng thái | Ý nghĩa |
+## 3. Chức năng và nghiệm thu
+
+`Core` bắt buộc trước 10/11; `Later` sau bản nộp.
+
+| ID | Yêu cầu | Tiêu chí nghiệm thu | Mức |
+|---|---|---|---|
+| FR-01 | Tài khoản/task ownership | Login/session; task/source/report/artifact/event chỉ owner truy cập; hai user không đọc/sửa dữ liệu nhau | Core |
+| FR-02 | Web và PDF | PDF có text; size/type/owner/checksum hợp lệ; ingest async, lỗi có lý do; chỉ nguồn READY tạo evidence | Core |
+| FR-03 | Plan và quyền tự xử lý | Plan version ghi câu hỏi con, scope, output, tools, budget; assisted có approve/revise/cancel; automatic ghi quyết định theo policy đã cấp | Core |
+| FR-04 | Evidence/gợi ý khoảng trống | Claim liên kết chunk/source; quote/locator, counterevidence và search limits; UI dùng “Gợi ý khoảng trống nghiên cứu”, không khẳng định novelty tuyệt đối | Core |
+| FR-05 | Research loop | Tối đa 3 vòng thu thập gồm vòng đầu; targeted query từ thiếu sót cụ thể; dừng nếu không thêm evidence dùng được sau dedup/hết budget | Core |
+| FR-06 | Phương pháp/protocol | Câu hỏi/giả thuyết khi phù hợp, biến số, phương pháp, data cần, metric; protocol cũng qua Writer/Critic/Validator | Core |
+| FR-07 | Thí nghiệm thật | Routine allowlist ngoài API/worker; CSV hợp lệ; baseline + Ridge cùng split/metric; lưu input hash/config/seed/code/version/metrics/charts/errors | Core |
+| FR-08 | Chờ data/resume | WAITING_USER_DATA có checkpoint, worker kết thúc; upload READY + quyết định hợp lệ resume đúng checkpoint; unsupported input yêu cầu sửa hoặc trả protocol | Core |
+| FR-09 | Bản thảo theo loại | Đủ cấu trúc mục 2; Results chỉ từ artifact thật; thiếu data trả protocol/partial đúng nhãn; không tự đổi empirical thành review rồi báo hoàn thành | Core |
+| FR-10 | Critic/sửa | Review theo section cùng evidence/method/results; tối đa 2 lần sửa sau draft đầu; verdict có issue IDs và claim/section liên quan | Core |
+| FR-11 | Citation/provenance | Citation thư mục → source/chunk; claim kết quả → evidence → output artifact → run/input/config; kiểm cùng task và toàn bài | Core |
+| FR-12 | Agent progress/monitoring | UI role/stage/status/iteration/budget/warning; DB event timeline, polling fallback; structured logs có task/run/step IDs, latency/usage/redaction | Core |
+| FR-13 | Export | Markdown/report versions; input được phép, config, routine source hoặc launcher, metrics JSON/CSV, chart PNG, manifest/README tái lập; owner-only download | Core |
+| FR-14 | Ảnh tùy chọn | Ưu tiên ảnh source, Serper backend tùy chọn; attribution/license; tự bỏ qua khi thiếu, user bỏ ảnh/tắt tất cả; ảnh minh họa không là evidence | Later |
+| FR-15 | Q&A/sửa bản thảo | Q&A theo report version + evidence, có citations; chỉnh bài tạo version mới; đổi data/method có plan/run revision và trace | Core |
+| FR-16 | Đánh giá multi-agent | Query/corpus/rubric versioned; baseline/ablation; cấu hình, cost, kết quả/người chấm; báo cáo cả thất bại/giới hạn | Core |
+
+FR-07 và FR-08 là hai nhánh của plan: ATI chạy routine hỗ trợ, hoặc hướng dẫn nghiên cứu viên thực hiện ngoài hệ thống và nhận data/results có provenance. User-supplied results luôn có nhãn, không được báo đã tái lập nếu ATI chưa chạy lại.
+
+## 4. Tương tác và quyền hạn
+
+- Form chỉ bắt buộc câu hỏi; sources/data tùy chọn. ATI đề xuất output/method; user được đổi trước thực thi.
+- `ASSISTED` yêu cầu duyệt plan. `AUTOMATIC` tiếp tục bước trong quyền/cap đã cấp, ghi audit; user vẫn xem/hủy được.
+- Không tự vượt budget, đổi sang provider không được phép nhận data, duyệt ethics, tuyển người hoặc suy ra dữ liệu chưa có.
+- Q&A chỉ đọc, không chạy lại toàn research. Revision có job/version riêng; yêu cầu xung đột khi task đang chạy trả lỗi rõ.
+- Q&A gắn `operation_id` và `report_version`, dùng cùng budget adapter với cap riêng do server cấu hình và quota của task; không mở lại hoặc reset budget của research run đã kết thúc. Chưa cấp budget thì không gọi provider tốn phí.
+- UI hiển thị bước và output quan sát được; không công khai chain-of-thought, secrets hay raw private prompts.
+
+## 5. Lifecycle
+
+ResearchTask là workspace dài hạn. ResearchRun là lần chạy/revision; tối đa một active run/task. `status` là lifecycle; `stage` là PLANNING/SEARCHING/INGESTING/ANALYZING/EXPERIMENTING/WRITING/REVIEWING/VALIDATING. Không dùng stage thay lifecycle.
+
+| Status | Ý nghĩa |
 |---|---|
-| PENDING / QUEUED | Đã lưu và chờ worker |
-| RUNNING | Workflow đang xử lý |
-| WAITING_APPROVAL | Đã lưu checkpoint, đang chờ quyết định của user |
-| WAITING_USER_DATA | Đã lưu protocol/checkpoint; worker kết thúc, chờ upload hoặc thông tin user |
-| PARTIAL | Có đầu ra hữu ích nhưng nêu rõ thiếu evidence/data/validation |
-| COMPLETED | Đầu ra đạt các kiểm tra kỹ thuật đã định nghĩa |
-| NEEDS_REVIEW | Cần người dùng kiểm tra do giới hạn/không giải quyết được lỗi |
-| FAILED | Lỗi kỹ thuật không tạo được đầu ra |
-| CANCELLED | User hủy task |
+| PENDING | Đã tạo task, chưa có job |
+| QUEUED / RUNNING | Job chờ/chạy |
+| WAITING_APPROVAL / WAITING_USER_DATA | Checkpoint lưu bền vững, worker kết thúc; cần input có quyền |
+| COMPLETED | Đúng output yêu cầu, technical gates đạt; không đồng nghĩa được xác nhận khoa học |
+| PARTIAL | Draft có tham chiếu hợp lệ nhưng thiếu nội dung/evidence, phần thiếu được công khai |
+| NEEDS_REVIEW | Lỗi reference/method/result chưa giải quyết; không xuất như bài đã kiểm tra |
+| FAILED / CANCELLED | Lỗi không có output dùng được / user hủy |
 
-WAITING_* là trạng thái bền vững, không giữ HTTP connection hoặc worker task chạy trong nhiều ngày. Tải lên/quyết định mới phải authorize, persist và enqueue job resume idempotent.
+Resume giữ run ID; revision sau terminal tạo run mới. QUEUED, RUNNING và WAITING_* đều chiếm vị trí active run của task; chờ user không giữ worker lease. Khi đang chờ, chỉ duyệt/sửa plan hoặc resume đúng version; muốn bắt đầu research revision khác phải hủy run hiện tại trước. Checkpoint/version/decision ID phải khớp; delivery lặp không tạo output trùng. Active-time budget không tính ngày chờ user.
 
-## 5. Yêu cầu an toàn, riêng tư và chất lượng
+## 6. Giới hạn ban đầu
 
-- Tách authenticated user và task ownership trước khi nhiều người dùng truy cập.
-- Xem web pages và upload là dữ liệu không tin cậy; chống prompt injection, SSRF, file quá cỡ/định dạng giả, malware và content độc hại.
-- Không ghi secrets, access token, raw private documents hoặc dữ liệu định danh nhạy cảm trong log. Chốt retention/xóa trước khi nhận dữ liệu nghiên cứu nhạy cảm.
-- Runner hạn chế quyền, non-root, resource/time limits, filesystem riêng, outbound network mặc định bị chặn; không chạy code trực tiếp trong Celery.
-- Kiểm tra citation integrity tự động; đánh giá semantic support bằng rubric/dataset và người chấm. Không hứa loại bỏ hallucination.
-- Log model/provider/version, token/usage, latency, retries và lỗi; budget guard trước mỗi lần gọi provider.
-- Nghiên cứu human-subject phải hiển thị rõ protocol là draft và yêu cầu người dùng xin review/approval theo quy định tổ chức trước khi tuyển người/thu thập dữ liệu.
-- Không phát hành cho người dùng thật nếu auth/ownership, upload security, retention và error handling chưa qua rà soát.
+Đây là **default thiết kế cần xác minh**, không phải số đo đạt được. Server giữ cap; user không tăng vượt project cap.
 
-## 6. NFR và đánh giá
-
-Ngưỡng số cụ thể chỉ chốt sau khi có baseline. Đánh giá tối thiểu cần version hóa query/dataset, nguồn tham chiếu, model/provider, config, rubric, người đánh giá và lỗi.
-
-| Nhóm | Đo lường |
+| Tài nguyên | Default bản nộp |
 |---|---|
-| Grounding | Citation resolves; semantic support; unsupported claim rate; coverage và source diversity |
-| Research loop | Số nguồn/evidence mới mỗi vòng; dừng đúng khi không có delta; budget compliance |
-| Analysis | Tái lập output từ routine/version/config/input; schema errors; chart/table provenance |
-| Reliability | Job success/failure, retry/idempotency, resume correctness, stuck-task count |
-| Performance/cost | p50/p95 theo task type, provider latency, tokens/API cost và chi phí mỗi task |
-| Usability | User hiểu stage/warning/output type; hoàn tất các scenario mục tiêu |
+| Research / writer loops | 3 tổng vòng thu thập / 2 lần sửa sau draft đầu; citation repair dùng chung revision counter |
+| Sources / search concurrency | 12 nguồn mặc định, trần 20 / 2 truy vấn đồng thời |
+| LLM / provider budget | Tối đa 40 LLM calls/run, kể cả retry/fallback; tổng chi phí provider ước tính ≤2 USD/run gồm LLM, embedding và search; cần price table hợp lệ |
+| Active runtime | 15 phút/run, không tính WAITING_* |
+| PDF | 5 file/task, 10 MiB và 100 trang/file; không OCR |
+| CSV | 5 MiB, 20.000 hàng, 30 cột số; target số, không định danh |
+| Runner | 1 job, 2 CPU/1 GiB RAM/120 giây; input read-only, output ≤20 MiB, no network |
+| Retry | Tối đa 2 retry lỗi tạm thời; reserve mỗi attempt; analysis retry giữ config/seed |
 
-## 7. Demo scope đến 10/11/2026
+Budget manager reserve worst-case theo max tokens/quota trước call, reconcile usage sau. Giá/usage không xác định thì chặn paid call hoặc dùng quota cứng đã cấu hình; estimate không cam kết hóa đơn chính xác. Timeout không thu hồi được request provider đã nhận.
 
-- **Core path cần ưu tiên:** câu hỏi → source web + upload PDF → tổng hợp/candidate gap có giới hạn → bài tổng quan có citation → theo dõi trạng thái và lưu provenance.
-- **Experiment slice:** chỉ chọn một kiểu dữ liệu và routine thống kê/thuật toán có thể tái lập; nếu runner chưa an toàn/kịp hạn thì trình diễn protocol + dataset fixture với routine được duyệt ở mức local controlled, không tuyên bố chạy sandbox production.
-- **Human-led path:** có thể hoàn thiện protocol và state WAITING_USER_DATA/resume nếu kịp; không thực hiện tuyển người hoặc hoạt động nghiên cứu ngoài hệ thống.
-- **Non-core:** ảnh, PDF polished, hỗ trợ nhiều template/standard, collaboration.
-- Mọi mục chưa có runtime evidence phải ghi “target/planned” hoặc “chưa xác minh”.
+## 7. Chất lượng và dữ liệu
 
-## 8. Acceptance gates trước phát hành
+- Ownership trên API/SQL/storage; cache/log không trộn user/task; không nhận dữ liệu định danh nhạy cảm trong bản nộp.
+- Fetch kiểm scheme/DNS/redirect tại kết nối thực, giới hạn bytes/time/type. Upload kiểm extension/MIME/signature, parser timeout và malformed input.
+- Web/PDF là dữ liệu không tin cậy, không được điều khiển tools qua chỉ dẫn trong nguồn. Sanitize Markdown/HTML.
+- Runner chỉ nhận routine ID/config/artifact IDs; không nhận code/shell từ LLM. Docker restricted runner là môi trường demo kiểm soát, không là sandbox cho mã thù địch.
+- Private files: owner xóa task → tombstone và thu hồi quyền đọc/ghi/resume ngay; yêu cầu cancel được worker/launcher xử lý tại safe boundary. Provider request đã gửi có thể vẫn kết thúc nhưng không được phát hành kết quả hoặc ghi lại vào task đã xóa. Purge file/index/checkpoint/cache/event trong 24 giờ; cleanup retry khi lỗi. Không TTL xóa ngầm trước khi user tải output. Backup demo purge tối đa 7 ngày; cấu hình/thông báo trước khi dùng dữ liệu thật, không hứa xóa bản sao phía provider ngoài chính sách của họ.
+- Pin provider/model/embedding profile theo run/corpus; fallback theo allowlist/data policy; đổi embedding phải re-index.
+- DB là nguồn sự thật; SSE/polling phản ánh DB. Log IDs, role/provider/usage/latency/error code; không ghi secrets/raw private content.
 
-1. Migration có thể dựng database sạch; các quan hệ provenance có FK/constraint cần thiết.
-2. Auth/ownership test cho mọi route, bao gồm chặn user truy cập task/file/report của người khác.
-3. Upload validation, size/type limits, storage access control, retention/deletion được xác định.
-4. Worker start/fail/retry/cancel/resume có trạng thái bền vững, idempotency và event hợp lệ.
-5. Một workflow đầu cuối dùng provider có kiểm soát hoặc mock được lưu bằng chứng; budget limit thực thi trước mỗi call.
-6. Citation integrity và kết quả analysis có lineage; semantic evaluation được báo cáo riêng.
-7. Không tạo Results nếu chưa có dữ liệu; human research protocol có ethics notice.
-8. Không đánh dấu các kiến trúc target (SSE, runner, upload, WAITING_USER_DATA...) là đã hoàn thành nếu chưa chạy xác minh.
+Các NFR dưới đây định danh những ràng buộc đã nêu ở mục 4–7 để theo dõi triển khai; không tạo thêm phạm vi sản phẩm.
+
+| ID | Nhóm yêu cầu phi chức năng | Nghiệm thu chính |
+|---|---|---|
+| NFR-01 | Quyền truy cập và riêng tư | Owner isolation trên API, retrieval, artifacts, events, cache; secrets/private content không lộ qua log |
+| NFR-02 | Tính bền vững và idempotency | Broker lỗi, job lặp, restart, stale decision/cancel không mất hoặc nhân đôi output |
+| NFR-03 | Budget và giới hạn | Reserve trước mọi call/retry; caps mục 6; no-delta và hết budget dừng đúng trạng thái |
+| NFR-04 | Input và execution boundary | Fetch/upload có giới hạn; nguồn không điều khiển tools; runner chỉ routine cho phép |
+| NFR-05 | Khả năng tái lập | Pin dependencies/model/embedding profile; manifest input/config/seed; không dùng lại result sai phiên bản |
+| NFR-06 | Khả năng quan sát | State/stage/event/log có IDs và usage; UI reconnect được; không hiển thị tiến độ giả |
+| NFR-07 | Xóa và lưu giữ dữ liệu | Tombstone chặn truy cập/resume/late writes; cleanup và backup retention theo mục 7 |
+
+## 8. Acceptance gates
+
+Mã G0–G7 dùng thống nhất với các gói P0–P7 trong [Implementation Plan](../project/implementation-plan.md). Tại bản planning này, các gate **chưa có đủ bằng chứng nghiệm thu trên revision hiện tại**.
+
+| Gate | Điều kiện đạt |
+|---|---|
+| G0 · nền tảng | DB sạch → migration head; dependencies/runtime tái lập; môi trường test tách broker/provider thật |
+| G1 · quyền và lifecycle | Login/ownership negative cases; double start, broker lỗi, redelivery và cancellation đúng state, không tạo output trùng |
+| G2 · review có căn cứ | Web → evidence persist → REVIEW có citation; provider run thật trong cap; Critic/targeted search/no-delta/invalid-citation/hết cap dừng đúng |
+| G3 · PDF và workspace | Web+PDF cùng task; upload không hợp lệ bị từ chối; UI thể hiện stage/wait/fail/partial và khôi phục snapshot |
+| G4 · plan/protocol/resume | Assisted/automatic theo policy; protocol qua review/validation; WAITING_* resume sau restart đúng checkpoint/plan version |
+| G5 · experiment | CSV thật → metrics/charts; manifest tái lập đạt tolerance; run lỗi không sinh Results; evidence nối đúng input/config |
+| G6 · tương tác và bàn giao | Q&A có nguồn/cap; revision giữ bản cũ và không dùng result lỗi thời; export có quyền; xóa task/cleanup đạt policy |
+| G7 · đánh giá | Có baseline/ablation, rubric, quality/cost/latency/failures và limitations; tổng hợp evidence của G0–G6 |
+
+Chi tiết cách đo: [Evaluation Plan](../project/evaluation-plan.md). Gate chưa đạt không được thay bằng mock rồi báo hoàn thành.
+
+## 9. Ánh xạ yêu cầu sang kế hoạch
+
+| Yêu cầu | Gói triển khai | Gate |
+|---|---|---|
+| FR-01 | P1; áp dụng tiếp cho routes mới P3–P6 | G1, kiểm hồi quy G3–G6 |
+| FR-02 | P2 web; P3 PDF | G2, G3 |
+| FR-03 | P2 plan schema; P4 approval/policy | G2, G4 |
+| FR-04, FR-05, FR-10 | P2 evidence/loops/critic; áp dụng tiếp protocol/empirical | G2, G4, G5 |
+| FR-06, FR-08 | P4 method/protocol/waits | G4 |
+| FR-07 | P5 experiment | G5 |
+| FR-09 | P2 REVIEW; P4 PROTOCOL; P5 EMPIRICAL | G2, G4, G5 |
+| FR-11 | P2 document lineage; P5 artifact lineage | G2, G5 |
+| FR-12 | P1 events/log; P3 UI; P4–P5 wait/experiment stages | G1, G3–G5 |
+| FR-13, FR-15 | P6 Q&A/revision/export; dữ liệu version nền từ P2 | G6 |
+| FR-14 | Sau bản nộp; ADR-001 | Không phải gate 10/11 |
+| FR-16 | Chuẩn bị dữ liệu trước; P7 chạy/chấm | G7 |
+| NFR-01, NFR-02 | P1 nền; P3–P6 áp dụng và kiểm hồi quy | G1, G3–G6 |
+| NFR-03, NFR-04 | P2 provider/fetch; P3 parser; P5 runner; P6 Q&A | G2, G3, G5, G6 |
+| NFR-05, NFR-06 | P0 pin runtime; P1/P2 trace/profile; P3–P6 hoàn thiện | G0–G6 theo thành phần |
+| NFR-07 | P3 storage/tombstone hooks; P6 delete/cleanup; P7 bàn giao | G6, G7 |

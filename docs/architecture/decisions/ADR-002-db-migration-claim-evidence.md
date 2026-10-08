@@ -12,18 +12,18 @@
 
 ## Trạng thái implementation và vấn đề dữ liệu
 
-Model hiện trong working tree đã có ClaimEvidence và Citation.chunk_id nullable; migration mới cũng đang có trong working tree. Đây là source inventory, không phải bằng chứng migration đã chạy. Baseline DB gần nhất vẫn ghi revision 5ee074153cf3; cần kiểm tra DB rỗng trước khi áp dụng.
+Đọc source 08/10: ClaimEvidence, Citation.chunk_id nullable và migration đã được commit tại `ebb525a`. Đây là source inventory, không phải bằng chứng migration đã chạy. Baseline DB gần nhất vẫn ghi revision 5ee074153cf3; cần kiểm tra DB rỗng trước khi áp dụng.
 
 ## Vấn đề (Tech Debt)
 
-Ở database baseline revision 5ee074153cf3, schema còn 2 vấn đề ảnh hưởng tính traceability. Model/migration trong working tree có thay đổi tương ứng nhưng chưa được xác minh trên database:
+Ở database baseline revision 5ee074153cf3, schema còn 2 vấn đề ảnh hưởng tính traceability. Model/migration đã commit có thay đổi tương ứng nhưng chưa được xác minh trên database:
 
 ### 1. `ResearchClaim.evidence_ids` — UUID Array
 ```sql
 -- Hiện tại (tech debt):
-evidence_ids UUID[]   -- không thể JOIN, không có FK constraint, không có relevance score
+evidence_ids UUID[]   -- không có FK cho từng phần tử; không lưu relevance theo từng quan hệ
 ```
-**Hệ quả:** Citation Validator không thể kiểm tra bằng SQL JOIN đơn giản rằng một claim thực sự được hỗ trợ bởi evidence cụ thể từ cùng một task.
+**Hệ quả:** Có thể JOIN bằng `ANY` hoặc `unnest`, nhưng database không tự bảo đảm từng UUID tham chiếu Evidence hợp lệ. Junction table hỗ trợ FK và metadata theo quan hệ; kiểm cùng task và semantic support vẫn là các bước riêng.
 
 ### 2. `Citation.chunk_reference` — String thay vì FK
 ```sql
@@ -36,7 +36,9 @@ chunk_reference VARCHAR(100)  -- chỉ là text label, không ràng buộc với
 
 ## Giải pháp
 
-### Schema sau migration
+### Schema minh họa sau migration
+
+Đây là trích lược cấu trúc, không thay script Alembic có index/backfill. Source hiện tại backfill `citations.research_task_id` từ report rồi đặt NOT NULL ngay trong cùng migration; `chunk_id` vẫn nullable và `chunk_reference` được giữ làm fallback. Các constraint cùng task của thiết kế mới còn cần triển khai ở P2.
 
 ```sql
 -- Bảng mới: junction table thay thế UUID array
@@ -106,8 +108,8 @@ docker compose exec -T backend alembic downgrade 5ee074153cf3
 | **2** | Cập nhật Writer agent: populate `Citation.chunk_id` khi tạo citation | Chiến |
 | **3** | Cập nhật Citation Validator: dùng JOIN thay vì `ANY(evidence_ids)` | Chiến |
 | **4** | Sau khi Writer đã populate `chunk_id` đầy đủ: tạo migration mới drop `chunk_reference` | Chiến |
-| **5** | Sau khi backfill `research_task_id` đầy đủ: tạo migration tighten `nullable=False` | Chiến |
-| **6** | Kiểm thử: Vũ rà scenario thủ công theo checklist; Chiến viết/chạy automated tests cho lineage claim → evidence → chunk → source | Vũ |
+| **5** | Xác minh backfill và NOT NULL của `research_task_id` trong migration hiện có; bổ sung constraints cùng task ở P2, không tạo migration tighten trùng | Chiến |
+| **6** | Kiểm thử: Vũ rà scenario thủ công theo checklist; Chiến viết/chạy automated tests cho lineage claim → evidence → chunk → source | Chiến (automated), Vũ (manual) |
 
 ---
 

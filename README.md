@@ -2,7 +2,7 @@
 
 # 🌐 Multi-Agent Research System
 
-### *Nền tảng Nghiên cứu Chuyên sâu Tự động hóa bằng Kiến trúc Đa Tác tử (Multi-Agent System)*
+### *Hệ thống đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập*
 
 [![Python: 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -46,26 +46,23 @@
 
 ## 💡 Đặt vấn đề & Giải pháp
 
-Trong kỷ nguyên bùng nổ thông tin, việc sử dụng các mô hình ngôn ngữ lớn (LLM) đơn lẻ (như ChatGPT, Claude) bằng một prompt trực tiếp thường bộc lộ những hạn chế cố hữu:
+Người nghiên cứu cần tìm và đối chiếu nhiều nguồn, thiết kế phương pháp, kiểm tra kết quả và viết bài có căn cứ. Một câu trả lời trôi chảy hoặc citation tồn tại chưa chứng minh kết luận đúng. Giá trị của việc dùng nhiều agent cần được so sánh thực nghiệm với single-agent có tools và cùng nguồn.
 
-* ❌ **Ảo giác thông tin (Hallucination):** Tự bịa số liệu, sự kiện hoặc trích dẫn các liên kết không tồn tại.
-* ❌ **Nông cạn & Thiếu cấu trúc:** Câu trả lời ngắn, không đào sâu vào các khía cạnh ngách của vấn đề.
-* ❌ **Thiếu cơ chế tự sửa sai:** Khi gặp thông tin sai hoặc mâu thuẫn, LLM đơn lẻ không có quy trình phản biện để kiểm chứng chéo.
+**ATI — Hệ thống đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập** hỗ trợ ba đường: tổng quan từ web/PDF (REVIEW), phân tích/thí nghiệm tính toán trong phạm vi được hỗ trợ (EMPIRICAL), và protocol cho nghiên cứu con người thực hiện bên ngoài (PROTOCOL). Có hỏi đáp/sửa bài, report versions và tiến độ agent.
 
-**Multi-Agent Research System** hướng tới hỗ trợ bước khảo sát ban đầu một chủ đề từ nguồn web công khai: lập kế hoạch, tổng hợp nguồn, trình bày claim/evidence và tạo bản báo cáo có thể kiểm tra. Hệ thống không loại bỏ hoàn toàn hallucination, không thay thế chuyên gia và không tự được xem là công cụ systematic review đạt chuẩn xuất bản.
+Bản chốt 08/10/2026 yêu cầu một experiment CSV chạy thật trước 10/11, cùng citation/provenance, durable waits và đánh giá baseline/ablation. Tổng quan/protocol nhận nhiều lĩnh vực; execution ban đầu giới hạn routine numeric CSV. Không tự sinh Results khi thiếu data hoặc cam kết bài đủ điều kiện công bố.
 
-ATI hướng tới hỗ trợ nhiều phương pháp nghiên cứu có giám sát, từ tìm và tổng hợp tài liệu đến protocol và phân tích dữ liệu có provenance. Demo/MVP trước 10/11/2026 ưu tiên một luồng literature review đầu-cuối; các phương pháp khác chỉ được tuyên bố hỗ trợ khi có implementation và evaluation evidence phù hợp.
+| Vai trò agent mục tiêu | Trách nhiệm |
+|---|---|
+| Supervisor | Lập plan/version, scope và route trong policy/budget |
+| Researcher | Search/query và thu thập thêm theo thiếu sót |
+| Evidence Analyst | Claim/evidence, tổng hợp, mâu thuẫn và gợi ý khoảng trống nghiên cứu |
+| Methodologist | Giả thuyết/phương pháp/protocol khi phù hợp |
+| Data Analyst | Chọn routine cho phép và diễn giải actual outputs |
+| Writer | Bản thảo đúng loại và có provenance |
+| Critic | Kiểm cả bài cùng evidence/method/results; phản hồi có cấu trúc |
 
-Kiến trúc đích dự kiến gồm các vai trò phối hợp sau. Đây là mục tiêu thiết kế, không phải cam kết mọi thành phần đã hoạt động:
-
-| Vai trò Agent | Chức năng tương ứng | Công nghệ áp dụng |
-| :--- | :--- | :--- |
-| 🧑‍💼 **Supervisor Agent** | Lập đề cương phân tầng, phân bổ tác vụ và điều phối | LangGraph State Graph & Dynamic Routing |
-| 🕵️ **Researcher Agent** | Tìm kiếm mở rộng, cào dữ liệu web song song | Tavily Search API, Trafilatura, SSRF Guard |
-| 🗄️ **Curator & VectorDB** | Khử trùng URL, chia đoạn ngữ nghĩa và vector hóa | pgvector (PostgreSQL 16), Cosine Similarity |
-| 🧠 **Analyst Agent** | Khai phóng insight, tổng hợp luận điểm (`Claims`) kèm bằng chứng (`Evidence`) | Semantic RAG, Multi-query Retrieval |
-| ⚖️ **Critic** | Lớp kiểm tra draft, nêu điểm thiếu bằng chứng/mâu thuẫn | Vai trò trong kiến trúc đích; cần evaluation để kiểm chứng chất lượng |
-| ✍️ **Writer & Citation Validator** | Biên soạn báo cáo, đánh số trích dẫn chuẩn hóa | Regex Deterministic Citation `[1]`, `[2]` |
+Curator/ingestion, router, citation validator, budget và runner là mô-đun code/tools. REVIEW không bắt buộc gọi đủ bảy vai trò. Kiến trúc là modular monolith với API/worker, không phải mỗi agent một microservice. Đây là **thiết kế mục tiêu**, trạng thái triển khai ghi riêng bên dưới.
 
 ---
 
@@ -85,6 +82,7 @@ Không gọi hệ thống là “zero hallucination”. Citation tag trỏ tới
 
 ## 📚 Tài liệu Dự án
 
+- [Định hướng đã chốt](docs/project/product-assessment.md), [Kế hoạch triển khai](docs/project/implementation-plan.md), [Kế hoạch đánh giá](docs/project/evaluation-plan.md), [Technical Design: chức năng/công nghệ/patterns](docs/architecture/technical-design.md).
 - [SRS hiện hành](docs/requirements/SRS.md) — yêu cầu, tiêu chí nghiệm thu, demo boundary và security gates.
 - [Báo cáo giữa kỳ](docs/project/midterm-report.md) — overview, problems/objectives, technical approach, system design, plan, progress và AI disclosure.
 - [System Design](docs/architecture/system-design.md) — nguồn chuẩn cho C4 Container, DFD, inference flow, async sequence, ERD, physical DFD và class diagram.
@@ -240,8 +238,8 @@ celery -A app.worker.celery_app worker --loglevel=info --concurrency=4
 | `OPENAI_API_KEY` | `string` | Tùy chọn | Khóa API OpenAI (dùng cho GPT-4o và Embeddings). |
 | `ANTHROPIC_API_KEY` | `string` | Tùy chọn | Khóa API Anthropic (dùng cho Claude 3.5 Sonnet). |
 | `EMBEDDING_MODEL` | `string` | `text-embedding-3-small` | Tên mô hình vector hóa tri thức. |
-| `DEFAULT_BUDGET_USD` | `float` | `2.00` | Ngân sách chi phí trần cho mỗi phiên nghiên cứu. |
-| `DEFAULT_MAX_LLM_CALLS` | `integer` | `50` | Giới hạn tối đa số lần gọi LLM trong 1 tác vụ. |
+| `DEFAULT_BUDGET_USD` | `float` | `2.00` | Giá trị cấu hình; guard xuyên provider/run là mục tiêu SRS v4.0, chưa được xác minh thực thi. |
+| `DEFAULT_MAX_LLM_CALLS` | `integer` | `50` trong source hiện tại | Target SRS v4.0 là 40 calls; thay sau khi budget gateway được implement và kiểm chứng. |
 | `LANGSMITH_TRACING` | `boolean` | `false` | Bật/tắt giám sát vết thực thi trên LangSmith. |
 
 ---
@@ -306,15 +304,15 @@ Ví dụ dưới đây chỉ minh họa định dạng báo cáo dự kiến, kh
 # Báo cáo Nghiên cứu: Chuyển Dịch Thị Trường Xe Điện Việt Nam 2026
 
 ## 1. Tổng quan Xu hướng
-Thị trường xe điện tại Việt Nam ghi nhận tốc độ tăng trưởng kép hàng năm đạt 28.5% [1]...
+[Nhận định phải dựa trên evidence đã xác minh; số liệu lấy nguyên từ nguồn được trích dẫn] [1]...
 
 ## 2. Phân tích Hạ tầng Trạm Sạc
 ...
 
 ---
 ## Danh mục Tài liệu Tham khảo
-[1] Bộ Công Thương - Báo cáo Phát triển Năng lượng Xanh 2025. URL: https://moit.gov.vn/...
-[2] Vietnam EV Market Outlook 2026 - BloombergNEF. URL: https://about.bnef.com/...
+[1] [Tác giả/tổ chức, tiêu đề, ngày, URL/DOI của nguồn thực tế]
+[2] [Nguồn thứ hai đã đọc và xác minh]
 ```
 
 ---
@@ -326,7 +324,7 @@ Thị trường xe điện tại Việt Nam ghi nhận tốc độ tăng trưở
 | Citation integrity | Tỷ lệ citation trỏ tới source/chunk tồn tại và thuộc đúng task. |
 | Claim support | Người đánh giá gán nhãn claim/evidence; báo cáo precision/recall hoặc tỷ lệ hỗ trợ trên test set versioned. |
 | Coverage/diversity | Mức bao phủ câu hỏi con, loại nguồn, thời gian và quan điểm đối lập. |
-| Hiệu năng/chi phí | p50/p95 latency, lỗi, token/cost trên bộ câu hỏi và cấu hình đã ghi. |
+| Hiệu năng/chi phí | Median/range latency, lỗi, token/cost trên mẫu nhỏ; không trình bày như SLA. |
 
 Chỉ so sánh với prompting/RAG cơ bản sau khi chạy cùng bộ câu hỏi, nguồn đầu vào, model/budget và rubric đánh giá; không dùng bảng tính năng chủ quan như benchmark.
 
@@ -336,7 +334,7 @@ Chỉ so sánh với prompting/RAG cơ bản sau khi chạy cùng bộ câu hỏ
 
 Lộ trình chi tiết, thời hạn, phụ trách và trạng thái theo evidence nằm tại [roadmap-and-progress.md](docs/project/roadmap-and-progress.md). Định hướng mở rộng người dùng theo release gates: cá nhân/nhà nghiên cứu trước; chuyên gia và nhiều loại phương pháp sau khi chất lượng được đánh giá; nhóm/tổ chức chỉ sau khi có collaboration, tenant isolation, privacy và operational controls. Đây là định hướng, không phải cam kết phát hành.
 
-Mốc demo 10/11/2026 tập trung một đường literature-review đầu-cuối. Runner chỉ được đưa vào demo nếu routine/dataset hẹp đạt kiểm tra an toàn và tái lập; các research path ngoài hệ thống dừng ở protocol và chờ người dùng. Không mở rộng scope nếu làm giảm thời gian kiểm chứng core path.
+Mốc 10/11/2026 gồm review web+PDF, một experiment CSV thật, protocol/wait/resume, Q&A/revision và evaluation. Runner phải qua gate trước khi chạy; chưa đạt thì ghi feature còn thiếu, không thay bằng mock. Ảnh, PDF đẹp, arbitrary-code execution và cộng tác để sau. Thứ tự P0–P7 ở Implementation Plan.
 
 ---
 

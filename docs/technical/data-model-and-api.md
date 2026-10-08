@@ -1,76 +1,99 @@
-# Data Model và API — source inventory và target
+# Data Model and API — baseline và hợp đồng mục tiêu
 
-**Cập nhật:** 07/10/2026. Runtime evidence gần nhất được thu 27/09/2026, ghi tại [baseline-verification.md](../project/baseline-verification.md). Bảng phân biệt source hiện trong working tree với database/API đã chạy xác minh; migration và E2E mới chưa được chạy/xác minh.
+**Rà soát source:** 08/10/2026 tại `ebb525a`. Các bảng/route ghi “target” chưa được xem là đã migration/mount. [System Design](../architecture/system-design.md) chứa ERD chuẩn; [ADR-004](../architecture/decisions/ADR-004-multi-agent-research-delivery.md) chốt cơ chế run/versioning.
 
-## 1. Model/source hiện có
+## 1. Hiện trạng đọc code
 
-| Entity / route group | Source hiện tại | Trạng thái runtime / lưu ý |
+| Nhóm | Có trong source | Khoảng cách |
 |---|---|---|
-| User | UUID, username/email, full name, password hash | Model và registration route có; chưa có login/token flow hoàn chỉnh |
-| ResearchTask | question, owner UUID, status, approval flag, source/iteration limits, budget/counters | POST/GET smoke-test ngày 27/09 dùng dummy user; chưa ownership enforcement |
-| ResearchIteration | loop type, queries, count, verdict, timestamps | Có model/migration; workflow chưa ghi dữ liệu E2E |
-| ResearchSource | task, tag, URL, metadata, source_type, image attribution fields | Model có; ingest/upload E2E chưa xác minh |
-| DocumentChunk | source/task, text, pgvector embedding, vector ID | Model có; pgvector có trong DB baseline; clean DB/retrieval chưa xác minh |
-| Evidence | task/source/chunk FK, quote/content, type | Model có; grounding chưa E2E |
-| ResearchClaim / ClaimEvidence | Source đã có ClaimEvidence junction table; ORM bỏ UUID array cũ | Migration mới có trong working tree, chưa chứng minh apply thành công/runtime |
-| Citation | required task/report/source FKs, nullable chunk_id FK, claim ID; deprecated chunk_reference still exists | Chuyển đổi schema chưa hoàn tất; cùng-task consistency cần migration/validation |
-| ResearchReport | Markdown, summary/count; unique report per task | Model/route có; report versioning theo target chưa đầy đủ |
-| ExportArtifact | task, type, file path/size/URL | Metadata model có; object storage/PDF flow chưa xác minh |
-| AgentRun / Evaluation | Audit/evaluation entities | Model có; log privacy và evaluation pipeline chưa nghiệm thu |
+| Identity | User, register và password/JWT helpers | Login/current-user/ownership trên research routes chưa đủ; còn dummy_user_id |
+| Research | Task, ResearchIteration; create/list/get/start/report | Start thiếu transition guard/idempotency; chưa có ResearchRun riêng |
+| Provenance | Source, Chunk, Evidence, Claim, ClaimEvidence, Citation | Analyst chưa persist đầy đủ lineage; validator còn placeholder |
+| Output | ResearchReport, ExportArtifact | Một report/task; chưa hỗ trợ report versions |
+| Execution | AgentRun/evaluation metadata | Chưa có đầy đủ artifact/run/checkpoint/event contracts mục tiêu |
 
-**Target ERD:** [System Design — Core ERD](../architecture/system-design.md#6-core-erd--target-traceability-model). Thiết kế thêm ResearchPlan, ResearchArtifact, AnalysisRun, report versioning và durable checkpoint/run metadata. Evidence từ phân tích định lượng phải neo vào output artifact để truy về run/input/routine; citation thư mục vẫn trỏ source/chunk. Đây là target, không phải bảng đã có đủ trong DB hiện tại.
+Migration ClaimEvidence/Citation.chunk_id đã được commit trong `ebb525a`; không gọi là “chưa commit”. Chưa có evidence áp dụng migration này trên DB sạch/DB hiện hành. Runtime gần nhất ghi 27/09.
 
-### Schema gates
+## 2. Mô hình mục tiêu
 
-1. Review migration có trong working tree; thử upgrade trên DB rỗng trước khi xem schema là đạt.
-2. Enforce ClaimEvidence FK thực, Citation.chunk_id FK và quan hệ evidence/report/source/chunk cùng task; evidence của kết quả tính toán phải resolve về output artifact và AnalysisRun.
-3. Thiết kế ResearchArtifact metadata: owner/task, type, storage key, checksum, upload source, provenance, retention/deletion state. File bytes không lưu trong Postgres.
-4. Định nghĩa ResearchPlan/checkpoint và AnalysisRun: version, method, approval state, routine/config/input/output, status, timestamps.
-5. Thêm task states WAITING_USER_DATA/PARTIAL/NEEDS_REVIEW chỉ cùng lifecycle/resume behavior.
-6. Có index/filter theo task/owner và vector dimension/index trước khi benchmark.
+| Entity | Mục đích và khóa/ràng buộc chính |
+|---|---|
+| User | Owner workspace; mọi query/download kiểm quyền |
+| ResearchTask | Workspace/câu hỏi; owner_id; snapshot trạng thái hiện tại |
+| ResearchRun | Một execution/revision; task_id, base_report_id?, plan_id nullable trước planning, plan_version, status, stage, lease/version, budget/counters; một active run/task |
+| ResearchPlan | Version immutable; task_id, version, output_type, study_path, method/config; unique(task_id, version) |
+| Source / DocumentChunk | Nguồn web/PDF có hash/locator; chunk thuộc source và task; corpus gắn embedding profile |
+| ResearchClaim | Nhận định, mức độ chắc chắn và phạm vi; thuộc task/run tạo ra |
+| Evidence / ClaimEvidence | Evidence neo đúng một chunk hoặc artifact; claim–evidence nhiều-nhiều, có stance/support/contradict |
+| ResearchArtifact | File upload hoặc output; kind, owner/task, checksum, storage_key, validation_status; producer_analysis_run_id nullable |
+| AnalysisRun | run_id, input_artifact_id, routine/code/image version, config/seed, status, metrics/manifest refs; input/output không được đánh tráo |
+| ResearchReport / ReportClaim | Report version và các claim thực sự có trong version đó; task_id/run_id, output_type, validation_status, unique(task_id, version) |
+| Citation | Tham chiếu thư mục từ report/claim tới source và optional chunk; không dùng làm đường duy nhất cho kết quả phân tích |
+| AgentRun | Role/model/prompt version, timestamps, status, usage/cost và references; không chứa secrets/raw reasoning |
+| Q&A operation metadata | operation_id, task_id, report_version, idempotency key, cap/usage, answer references; reuse operation/usage store, không cần graph run mới để hỏi bài |
+| TaskEvent | Event ID theo task, run_id, kind, timestamp, public payload; DB là nguồn replay |
+| DispatchOutbox | Operation ID, run/checkpoint/version, payload, dispatch state/retry; ghi cùng transaction với operation |
+| LangGraph checkpoints | Namespace riêng trong PostgreSQL; thread/checkpoint gắn run và plan version |
 
-## 2. API route inventory
+**Lineage:** report → ReportClaim → claim → ClaimEvidence → evidence → chunk → source; hoặc evidence → artifact → AnalysisRun → input artifact. Citation là thư mục tài liệu, còn bảng/biểu đồ thực nghiệm dùng evidence/artifact references. Ảnh minh họa không được dùng làm evidence thực nghiệm.
 
-Router hiện gắn dưới /api/v1. Các route phản ánh source; không đồng nghĩa mọi route đã test.
+Database constraints kiểm cùng task/owner qua composite FK/unique phù hợp; không chỉ dựa UUID tồn tại. Evidence có CHECK đúng một anchor, source phải khớp chunk; ReportClaim/Citation không trỏ claim ngoài report/task. Artifact upload không có analysis producer; artifact kết quả tính toán do ATI sinh phải trỏ AnalysisRun thành công và checksum/manifest đã validate. Protocol/export do workflow sinh không bắt buộc có AnalysisRun, nhưng giữ run/report version tạo ra chúng. User-supplied results có nhãn nguồn, file hash và provenance người cung cấp; không tự tạo AnalysisRun giả. Các invariant vượt khả năng FK được kiểm transaction/validator, không khẳng định FK chứng minh ý nghĩa claim.
 
-| Method / route | Source hiện tại | Evidence / gap |
+## 3. Vòng đời và event
+
+Lifecycle target: PENDING → QUEUED → RUNNING → WAITING_APPROVAL / WAITING_USER_DATA → QUEUED; terminal COMPLETED / PARTIAL / NEEDS_REVIEW / FAILED / CANCELLED. Stage (planning/searching/analyzing/writing/reviewing/exporting) là trường riêng. Chuyển trạng thái bằng CAS/version, không overwrite vô điều kiện.
+
+| Thao tác | Điều kiện | Kết quả |
 |---|---|---|
-| GET /api/v1/health | Health route | HTTP 200 tại baseline 27/09 |
-| POST /api/v1/auth/register | Tạo user và hash password | Source có; duplicate/security/error cases chưa test |
-| POST /api/v1/research | Tạo task | Smoke-test 201/PENDING đạt 27/09; dùng dummy user |
-| GET /api/v1/research | List tasks | Source có; chưa smoke-test/owner filter |
-| GET /api/v1/research/{task_id} | Read task | GET smoke-test đạt; chưa enforce owner |
-| POST /api/v1/research/{task_id}/start | Set state/enqueue Celery | Source có; chưa dispatch E2E |
-| GET /api/v1/research/{task_id}/report | Read report | Source có; chưa smoke-test/owner filter |
+| Start | Task PENDING, owner hợp lệ, chưa active run | Run mới QUEUED + outbox trong transaction |
+| Claim job | Operation/version hợp lệ, lease khả dụng | RUNNING; duplicate không chạy side effect lần hai |
+| Interrupt | Đang RUNNING, checkpoint ghi thành công | WAITING_APPROVAL hoặc WAITING_USER_DATA; worker trả job/lease |
+| Approve/resume | Đang WAITING_*, đúng owner/plan/checkpoint, data READY khi cần | Giữ run_id, QUEUED + resume outbox; không reset counters/budget |
+| Revise plan đang chờ | Đúng active run/plan version, trong policy | Plan version mới; giữ run và budget, invalidates results của config cũ |
+| Finalize | Gate của output_type đạt hoặc có lý do dừng rõ | Terminal đúng nghĩa, report version không ghi đè |
+| Revise bài sau terminal | Có base_report_version, không active run | Run mới với budget mới trong project cap; giữ report cũ |
+| Cancel/delete | Owner hợp lệ; operation idempotent | Cancel tại safe boundary; delete tombstone ngay và cleanup theo SRS |
 
-Login/token, approval/revise/cancel, upload/download, progress stream, WAITING_USER_DATA resume, source/evidence explorer, analysis artifacts và PDF export chưa được chứng minh là mounted/hoạt động. Stream stub không được coi là route hoạt động.
+QUEUED, RUNNING và WAITING_* đều tính là active run. Chờ người dùng không giữ worker lease, nhưng vẫn chặn start/research revision khác; trả 409 cùng hướng dẫn revise plan/resume hoặc cancel. PENDING là trạng thái task chưa có run, không phải một worker đang chờ. Q&A có thể đọc report version đã tồn tại, với operation/cap riêng và ownership; không sửa run đang chạy.
 
-## 3. Target API groups
+DB transaction ghi operation + outbox; API background dispatcher publish Celery job. Worker claim lease và kiểm operation/version trước side effects. Event ghi DB rồi mới Pub/Sub; SSE reconnect lấy lại event hoặc snapshot. Không coi Celery ack là chứng minh task chỉ chạy một lần.
 
-Khi triển khai cần chốt OpenAPI schema, auth, status/error behavior và idempotency cho các nhóm:
+## 4. Route inventory và target API
 
-- Authentication/login and user session.
-- Task, plan/revision/approval/cancel.
-- Upload source/result artifact và ingest status.
-- Resume task sau approval hoặc WAITING_USER_DATA.
-- Progress event stream hoặc polling.
-- Report versions, citation/evidence lineage và export.
-- Analysis run summary/artifact download.
+Tên tài nguyên dưới đây là **contract thiết kế**, implementation phải thống nhất schemas trước khi mở rộng UI. Research routes hiện nằm dưới `/api/v1/research`; target giữ prefix này để giảm thay đổi.
 
-Tên route cụ thể chưa thành contract cho đến khi được khai báo trong OpenAPI và kiểm tra. API không giữ request mở cho workflow dài.
+| Operation | Hiện tại | Target |
+|---|---|---|
+| Register | Có route source | Validate identity và duplicate; password hash |
+| Login/current user | Chưa hoàn chỉnh | POST /auth/login; GET /auth/me; token + owner filter |
+| Tạo task | POST /research, 201 | 201 Created, workspace PENDING |
+| List/get | GET /research và /research/{id} | Filter owner; resource khác owner trả 404 |
+| Start | POST /research/{id}/start; trả 200 PLANNING | 202 Accepted + run_id sau transaction/outbox; Idempotency-Key |
+| Tiến độ | UI polling task | GET task snapshot; GET /research/{id}/events có SSE replay và auth |
+| Upload | Chưa triển khai đủ | POST /research/{id}/artifacts → validate → READY hoặc REJECTED; không resume file chưa READY |
+| Duyệt/sửa/cancel plan | Chưa đủ | POST /research/{id}/decisions với plan_version/checkpoint_id và idempotency key |
+| Resume với dữ liệu | Chưa đủ | POST /research/{id}/resume với checkpoint/plan_version và artifact_ids READY; 202 |
+| Report/Q&A | GET /research/{id}/report; chưa version/Q&A | GET report version; POST /research/{id}/questions với report_version/idempotency key; operation/cap riêng, không research ngầm |
+| Revision | Chưa có | POST /research/{id}/revisions, base_report_version + yêu cầu; 202; version mới |
+| Cancel | Chưa có hợp đồng đầy đủ | POST /research/{id}/cancel; idempotent; dừng tại safe boundary |
+| Export/download | Chưa đủ | Export Markdown/package; GET artifact qua API kiểm quyền; file private |
+| Delete | Chưa đủ | DELETE task; tombstone trước, purge theo policy, không resume sau delete |
 
-## 4. Status và security boundaries
+Các route rút gọn trong bảng đều ở `/api/v1`. Mã lỗi: 401 thiếu token, 404 không có quyền/tài nguyên, 409 stale version/state conflict, 413 vượt size, 422 sai schema/routine, 429 vượt quota. Operation lặp cùng key+payload trả cùng kết quả; cùng key khác payload trả 409. Upload nội dung lớn có thể 202 processing; UI chờ READY trước resume.
 
-Task target: PENDING → QUEUED/RUNNING → optional WAITING_APPROVAL/WAITING_USER_DATA → COMPLETED/PARTIAL/NEEDS_REVIEW/FAILED/CANCELLED. DB là source of truth; Redis chỉ delivery. Resume phải kiểm tra task owner/state, artifact authorization, idempotency key và checkpoint.
+## 5. Files và dữ liệu phân tích
 
-Uploads cần extension + MIME/magic-byte + size + checksum checks; chặn archive bombs/unsafe types; private storage; authorized downloads; retention/delete policy. Không nhận dữ liệu định danh nhạy cảm trước khi có privacy/security policy. Logs cần redaction.
+Private ArtifactStore dùng local volume cho bản nộp, có interface thay object storage sau này. DB lưu metadata/checksum, không file bytes. PDF chỉ text extraction trong giới hạn SRS; không hứa OCR. CSV numeric theo schema routine, không dùng RAG để tính thống kê.
 
-## 5. Evidence cần có để nghiệm thu
+Runner nhận immutable manifest với input hash/config/seed/routine version; trả metrics/charts/log/manifest có kiểm tra schema và paths. Không chấp nhận đường dẫn ngoài staging directory. Writer chỉ diễn giải ATI-executed Results từ analysis run thành công; kết quả người dùng cung cấp phải qua kiểm provenance và ghi nhãn riêng. Thay input/method khi run còn active tạo plan version/analysis execution mới, giữ counters/budget và vô hiệu hóa results cũ; revision sau terminal mới tạo ResearchRun mới.
 
-- DB rỗng → migrations upgrade thành công, đúng revision, schema inspection; có kế hoạch downgrade/rollback.
-- Unit/contract tests auth/ownership và chặn truy cập chéo task/file/report.
-- Upload validation, object storage access, retention/delete lifecycle.
-- Workflow mock-provider: idempotent job, loop/budget limits, error/retry, checkpoint/resume.
-- Integration test source/chunk/evidence/claim/citation cùng-task lineage.
-- Tái lập analysis artifact từ data, approved routine/version/config.
-- OpenAPI contract và SSE/polling status/error coverage.
+Delete trả thành công sau khi tombstone bền vững, không có nghĩa file bytes đã purge. Mọi writer/ingestion/runner completion kiểm tombstone trước publish/persist; output tạm đến muộn được cleanup. Cleanup theo [NFR-07](../requirements/SRS.md#7-chất-lượng-và-dữ-liệu), có retry và bằng chứng deadline; không để file/index/checkpoint còn truy cập được qua URL cũ.
+
+## 6. Thứ tự migration
+
+1. Auth ownership + ResearchRun/lifecycle + outbox/events.
+2. Provenance constraints, embedding profile, plan schema/version cơ bản, report/version/ReportClaim (P2).
+3. Upload/artifact/tombstone hooks (P3), checkpoint và approval decision (P4).
+4. AnalysisRun, routine manifest và provenance kết quả.
+
+Backfill data cũ phải đánh dấu thiếu lineage; không tạo evidence giả để migration pass. Giữ DB demo riêng khi thử upgrade/downgrade. Chi tiết nhiệm vụ và gates ở [Implementation Plan](../project/implementation-plan.md).

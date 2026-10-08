@@ -1,7 +1,7 @@
 # TÀI LIỆU ĐẶC TẢ YÊU CẦU PHẦN MỀM (SRS)
 # DỰ ÁN: MULTI-AGENT RESEARCH SYSTEM (ATI)
 
-> **ĐÃ ĐƯỢC THAY THẾ / BẢN LƯU TRỮ:** Đây là SRS v2.5.0, chứa các đề xuất và phạm vi cũ. Kể từ 06/10/2026, yêu cầu hiện hành là [SRS rút gọn v3.0](docs/requirements/SRS.md), sơ đồ tại [System Design](docs/architecture/system-design.md), và quyết định phạm vi tại [ADR-003](docs/architecture/decisions/ADR-003-research-execution-modes.md). Các phần bên dưới chỉ để tham khảo lịch sử; không dùng làm spec triển khai khi có mâu thuẫn.
+> **ĐÃ ĐƯỢC THAY THẾ / BẢN LƯU TRỮ:** Đây là SRS v2.5.0, chứa các đề xuất và phạm vi cũ. Kể từ 08/10/2026, yêu cầu hiện hành là [SRS v4.0](docs/requirements/SRS.md), sơ đồ tại [System Design](docs/architecture/system-design.md), và quyết định phạm vi tại [ADR-004](docs/architecture/decisions/ADR-004-multi-agent-research-delivery.md). Các phần bên dưới chỉ để tham khảo lịch sử; không dùng làm spec triển khai khi có mâu thuẫn.
 
 ---
 

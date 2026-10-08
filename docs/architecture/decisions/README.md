@@ -23,5 +23,9 @@ Thư mục này lưu trữ các quyết định kiến trúc quan trọng của 
    - Quyết định: Cấu trúc lại quan hệ nhiều-nhiều cho `ClaimEvidence` và bổ sung `chunk_id` vào bảng `Citation` bằng migration mới để đảm bảo tính toàn vẹn tham chiếu (traceability).
 
 3. **[ADR-003: Hỗ trợ đa phương pháp và ranh giới thực nghiệm có người giám sát](ADR-003-research-execution-modes.md)**
-   - Trạng thái: Chấp thuận nguyên tắc sản phẩm; runner vendor/implementation còn mở.
+   - Trạng thái: Giữ nguyên tắc; phần runner/release constraint được ADR-004 thay thế ngày 08/10/2026.
    - Quyết định: Routine tính toán được duyệt chạy trong isolated boundary; human-led studies dừng ở protocol, chờ data bền vững, không sinh Results giả.
+
+4. **[ADR-004: Kiến trúc và phạm vi triển khai Multi-Agent Research](ADR-004-multi-agent-research-delivery.md)**
+   - Trạng thái: Chốt thiết kế 08/10/2026; chưa nghiệm thu implementation.
+   - Quyết định: 7 agent roles, modular monolith, run/versioning/outbox/events; experiment CSV thật bắt buộc; trusted routine runner, protocol/resume và evaluation baseline/ablation.
