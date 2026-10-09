@@ -11,7 +11,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.api.v1.endpoints import research as research_endpoint
-from app.core.database import AsyncSessionLocal
+from app.core.database import AsyncSessionLocal, engine
 from app.main import app
 from app.models.report import ResearchReport
 
@@ -97,3 +97,7 @@ async def test_auth_and_research_ownership(monkeypatch: pytest.MonkeyPatch) -> N
         assert report.status_code == 200, report.text
         assert report.json()["research_task_id"] == author_id
         assert (await client.get(f"/api/v1/research/{author_id}/report", headers=reader_headers)).status_code == 404
+
+    # pytest-asyncio gives each test a new loop; pooled asyncpg connections
+    # cannot be reused by the next test's loop.
+    await engine.dispose()
