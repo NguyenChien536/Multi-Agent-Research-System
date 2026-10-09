@@ -10,7 +10,7 @@ from app.core.config import settings
 # ---------------------------------------------------------------------------
 # Caching Configuration
 # ---------------------------------------------------------------------------
-from langchain.globals import set_llm_cache
+from langchain_core.globals import set_llm_cache
 from langchain_community.cache import RedisCache
 from redis import Redis
 

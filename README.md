@@ -340,7 +340,7 @@ Mốc 10/11/2026 gồm review web+PDF, một experiment CSV thật, protocol tru
 
 ## 🤝 Hướng dẫn Đóng góp (Contributing)
 
-Chiến triển khai chính trên các nhánh `codex/*` tạo từ `develop`. Mỗi lát cắt đi qua Pull Request vào `develop`; bản được chọn phát hành đi từ `develop` vào `main`. [CONTRIBUTING.md](CONTRIBUTING.md) ghi lệnh Git, mẫu PR, CI/CD và cách phân biệt source với bằng chứng chạy thực tế. Người đóng góp khác có thể fork và gửi PR vào `develop` theo cùng quy tắc.
+Chiến triển khai chính trên các nhánh `feature/<issue>-<slug>`, `bugfix/<issue>-<slug>`, `chore/<slug>` hoặc `docs/<slug>` tạo từ `develop`. Mỗi lát cắt đi qua Pull Request vào `develop`; chỉ đưa `develop` lên `main` sau khi toàn bộ check/test bắt buộc đạt và có bằng chứng nghiệm thu phù hợp. [CONTRIBUTING.md](CONTRIBUTING.md) ghi lệnh Git, mẫu PR và CI/CD. Người đóng góp khác có thể fork và gửi PR vào `develop` theo cùng quy tắc.
 
 ---
 

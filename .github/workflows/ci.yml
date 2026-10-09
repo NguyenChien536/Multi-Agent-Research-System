@@ -15,6 +15,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  branch-policy:
+    name: Branch policy
+    runs-on: ubuntu-latest
+    env:
+      HEAD_REF: ${{ github.head_ref }}
+      BASE_REF: ${{ github.base_ref }}
+    steps:
+      - name: Check branch name and merge direction
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
+            exit 0
+          fi
+          if [[ "$HEAD_REF" =~ (codex|antigravity|gemini|claude|chatgpt|openai) ]]; then
+            echo "Branch names must describe work, not a tool or person." >&2
+            exit 1
+          fi
+          if [[ "$BASE_REF" == "main" ]]; then
+            [[ "$HEAD_REF" == "develop" || "$HEAD_REF" =~ ^hotfix/[0-9]+-[a-z0-9]+(-[a-z0-9]+)*$ ]] || {
+              echo "Only develop or a numbered hotfix may target main." >&2
+              exit 1
+            }
+          elif [[ "$BASE_REF" == "develop" ]]; then
+            [[ "$HEAD_REF" =~ ^(feature|bugfix|hotfix)/[0-9]+-[a-z0-9]+(-[a-z0-9]+)*$ || "$HEAD_REF" =~ ^(chore|docs)/[a-z0-9]+(-[a-z0-9]+)*$ ]] || {
+              echo "Use feature/<issue>-slug, bugfix/<issue>-slug, hotfix/<issue>-slug, chore/slug or docs/slug." >&2
+              exit 1
+            }
+          fi
+
   backend-syntax:
     name: Backend syntax
     runs-on: ubuntu-latest
@@ -25,6 +54,48 @@ jobs:
           python-version: '3.11'
       - name: Compile Python source
         run: python -m compileall -q backend/app backend/alembic
+
+  backend-tests:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: research_test
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: research_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U research_test -d research_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DATABASE_URL: postgresql+asyncpg://research_test:ci_only_password@127.0.0.1:5432/research_test
+      POSTGRES_SYNC_URL: postgresql://research_test:ci_only_password@127.0.0.1:5432/research_test
+      APP_SECRET_KEY: ci-only-secret-not-used-outside-github-actions
+      ENVIRONMENT: development
+      MOCK_PROVIDERS: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Install backend dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Enable pgvector in isolated CI database
+        run: python -c "import os, psycopg2; db = psycopg2.connect(os.environ['POSTGRES_SYNC_URL']); db.autocommit = True; db.cursor().execute('CREATE EXTENSION IF NOT EXISTS vector'); db.close()"
+      - name: Migrate clean database
+        run: alembic upgrade head
+      - name: Run complete backend suite
+        run: python -m pytest -q tests
 
   frontend-build:
     name: Frontend build

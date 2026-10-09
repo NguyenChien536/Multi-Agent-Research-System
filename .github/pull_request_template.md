@@ -19,4 +19,5 @@
 - [ ] PR chỉ chứa một lát cắt có thể review
 - [ ] Đã xem diff và không có secret hoặc dữ liệu cá nhân
 - [ ] Tài liệu và trạng thái thực tế được cập nhật khi cần
-- [ ] CI đạt, hoặc lỗi CI được ghi rõ
+- [ ] Toàn bộ check/test bắt buộc đã đạt; PR vào `main` không được merge nếu còn lỗi hoặc check đang chạy
+- [ ] Với PR vào `main`, đã ghi bằng chứng nghiệm thu runtime cho chức năng bị ảnh hưởng
