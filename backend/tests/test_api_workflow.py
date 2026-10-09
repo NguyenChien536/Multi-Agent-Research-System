@@ -27,8 +27,8 @@ async def test_auth_and_research_ownership(monkeypatch: pytest.MonkeyPatch) -> N
 
     suffix = uuid.uuid4().hex[:12]
     users = [
-        {"username": f"author_{suffix}", "email": f"author_{suffix}@example.test", "password": "SecurePass123!"},
-        {"username": f"reader_{suffix}", "email": f"reader_{suffix}@example.test", "password": "SecurePass123!"},
+        {"username": f"author_{suffix}", "email": f"author_{suffix}@example.com", "password": "SecurePass123!"},
+        {"username": f"reader_{suffix}", "email": f"reader_{suffix}@example.com", "password": "SecurePass123!"},
     ]
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         assert (await client.get("/api/v1/research")).status_code == 401
