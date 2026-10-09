@@ -1,7 +1,8 @@
 # Báo cáo Tiến độ Giữa kỳ
 
 **Tên đề tài:** Hệ thống đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập<br>
-**Tên tiếng Anh:** Multi-Agent Research System (ATI)<br>
+**Tên tiếng Anh:** Synthia — Multi-Agent Research System<br>
+**Tên gọi trong báo cáo:** Synthia là tên sản phẩm; ATI là tên học phần.<br>
 **Thời gian thực hiện:** 10/09/2026–10/11/2026 · **Planning cập nhật:** 09/10/2026
 
 | STT | Họ tên | MSSV | Trách nhiệm |
@@ -17,17 +18,19 @@ Các trách nhiệm của Vũ, Hiếu và My trong bảng là **phân công dự
 
 ## 1. Overview — Tổng quan
 
-ATI hỗ trợ người nghiên cứu từ câu hỏi và nguồn riêng tới **bản thảo bài báo hoàn chỉnh** theo loại, có bằng chứng, phương pháp và kết quả thật khi cần. Các agent phân vai tìm nguồn, phân tích, thiết kế phương pháp, viết và phản biện; graph điều phối bằng state/guards. Mỗi bài có workspace độc lập; người dùng xem tiến độ, hỏi/sửa bài và có thể làm bài khác khi một bài đang chờ dữ liệu.
+**Synthia** là không gian làm việc hỗ trợ người dùng chuẩn bị một bài nghiên cứu từ câu hỏi ban đầu đến **bản thảo bài báo có đầy đủ các phần phù hợp với loại nghiên cứu**. Người dùng đặt câu hỏi, có thể cung cấp tài liệu của mình và theo dõi từng bước. Nhiều tác tử AI phối hợp: một tác tử tìm nguồn, tác tử khác đối chiếu bằng chứng, tác tử đề xuất phương pháp, rồi các tác tử viết và kiểm tra bản thảo. Hệ thống giữ đường dẫn từ nhận định trong bài về nguồn hoặc kết quả đã dùng, để người dùng có thể xem và tự đánh giá.
 
-| Đường nghiên cứu | Hệ thống thực hiện | Đầu ra |
+Ví dụ, với câu hỏi về tác động của AI trong giáo dục, Synthia có thể tìm và so sánh các nghiên cứu đã công bố, chỉ ra vấn đề còn ít bằng chứng, rồi viết **bài tổng quan tài liệu** có trích dẫn và giới hạn rõ ràng. Nếu người dùng muốn làm nghiên cứu thực nghiệm, hệ thống chuyển sang một trong hai cách sau:
+
+| Loại bài người dùng chọn | Synthia hỗ trợ như thế nào? | Người dùng nhận được gì? |
 |---|---|---|
-| REVIEW | Web/PDF → evidence → tổng hợp và gợi ý gap → viết/kiểm | Literature review có phạm vi tìm nguồn, citations và limitations |
-| EMPIRICAL_COMPUTATIONAL | Method + CSV hợp lệ → routine được duyệt → metrics/charts → viết/kiểm | Bài thực nghiệm và gói tái lập |
-| EMPIRICAL_HUMAN | Protocol trung gian → người dùng thực hiện nghiên cứu, nạp kết quả thật → resume/viết/kiểm | Bài thực nghiệm hoàn chỉnh có provenance; protocol không là bài đã hoàn thành |
+| Tổng quan tài liệu | Tìm và đọc nguồn web/PDF, so sánh kết quả, gợi ý câu hỏi còn cần nghiên cứu, kiểm tra trích dẫn | Bản thảo bài tổng quan có phương pháp tìm tài liệu, nội dung tổng hợp, tài liệu tham khảo và giới hạn |
+| Thực nghiệm tính toán | Lập phương pháp; với dữ liệu CSV hợp lệ, chạy một quy trình phân tích đã được định trước, lưu số liệu và biểu đồ thật | Bản thảo bài thực nghiệm cùng nhật ký và tệp cần thiết để kiểm tra lại phép phân tích |
+| Nghiên cứu cần làm ngoài hệ thống | Soạn kế hoạch, quy trình và biểu mẫu để người dùng thực hiện khảo sát, thực địa hoặc thí nghiệm; tiếp tục viết sau khi người dùng nạp kết quả thật | Trước khi có dữ liệu: bản kế hoạch để tham khảo. Sau khi có dữ liệu đủ điều kiện: bản thảo bài thực nghiệm |
 
-Tổng quan/human-led protocol áp dụng nhiều lĩnh vực; execution đầu tiên giới hạn một routine trên CSV numeric. Với lab/khảo sát/thực địa/người tham gia, con người thực hiện và xin phê duyệt phù hợp bên ngoài ATI. Thiếu actual data không tạo Results và task vẫn chờ; trong thời gian đó người dùng có thể tạo/chạy bài khác. Gợi ý gap chỉ dựa phạm vi nguồn đã xem; bản thảo hoàn chỉnh về cấu trúc không đồng nghĩa đã được peer review hoặc có novelty được công nhận.
+Mỗi bài được lưu riêng trong tài khoản. Nếu bài A đang chờ khảo sát hoặc dữ liệu phòng lab, người dùng vẫn có thể tạo và làm tiếp bài B, C hoặc D; sau này mở lại A để nạp kết quả. Synthia không tự thực hiện thí nghiệm ngoài đời, không tạo số liệu khi chưa có dữ liệu thật, và không thay thế việc con người kiểm tra kết luận, xin chấp thuận cần thiết hoặc quyết định nộp bài. “Bài báo hoàn chỉnh” ở đây là **bản thảo hoàn chỉnh về cấu trúc và có kết quả đủ căn cứ**; điều đó không có nghĩa bài đã qua phản biện học thuật hoặc được chấp nhận xuất bản.
 
-**Mục tiêu bản nộp:** review web+PDF thành bài báo, một experiment CSV chạy thật thành bài empirical, protocol/wait/resume cho nghiên cứu ngoài hệ thống và bài empirical sau khi nạp kết quả thật, Q&A/revision cơ bản, monitoring và đánh giá multi-agent. Tất cả là target cho tới khi có evidence nghiệm thu.
+**Phạm vi dự kiến cho bản nộp cuối kỳ:** một bài tổng quan từ nguồn web và PDF; một bài thực nghiệm tính toán trên CSV chạy thật; luồng lập kế hoạch, chờ và tiếp tục cho nghiên cứu ngoài hệ thống; hỏi/sửa bài, theo dõi tiến độ và đánh giá tác dụng của việc phối hợp nhiều tác tử. Đây là **mục tiêu triển khai**, chưa được tính là chức năng đã hoàn thành khi chưa có bằng chứng chạy thực tế.
 
 ## 2. Problems and Objectives — Vấn đề và mục tiêu
 
@@ -77,7 +80,7 @@ REVIEW chủ yếu dùng năm vai trò; method/data roles có điều kiện. Cu
 
 Kiến trúc dùng một backend codebase và các process API/worker, không tách mỗi agent thành microservice. Khái niệm container view theo [C4](https://c4model.com/diagrams/container); pause/resume theo [LangGraph](https://docs.langchain.com/oss/python/langgraph/interrupts); idempotency theo [Celery](https://docs.celeryq.dev/en/stable/userguide/tasks.html). Pin thư viện tương thích trước implementation.
 
-| Phương pháp / thuật toán | Áp dụng trong ATI | Đánh đổi và giới hạn |
+| Phương pháp / thuật toán | Áp dụng trong Synthia | Đánh đổi và giới hạn |
 |---|---|---|
 | Truy xuất bằng embedding + pgvector | Web/PDF → chunk có locator/hash → tìm trong đúng task → Evidence Analyst chọn và đối chiếu đoạn nguồn | Tìm gần nghĩa hỗ trợ tổng hợp, nhưng đoạn được tìm thấy chưa chứng minh claim; cần quote/locator và kiểm ngữ nghĩa |
 | Graph có state + hai vòng phản biện hữu hạn | Research loop tìm thêm evidence thiếu; Writer–Critic sửa bản thảo; guard theo budget và evidence delta | Bounded loop giảm chi phí/vòng lặp vô hạn, nhưng có thể dừng khi câu hỏi chưa giải quyết được; trả giới hạn rõ |
@@ -94,7 +97,7 @@ Routine tham chiếu `tabular_regression_v1`: CSV numeric → descriptive statis
 
 `ExperimentJournalEntry` ghi plan trước chạy, từng attempt, kết quả âm hợp lệ, lỗi kỹ thuật và lần kiểm lại từ cùng manifest. Writer chỉ dùng metrics/artifacts đã xác minh; người dùng có thể đọc và tải journal cùng gói tái lập. Một lần chạy lại cùng seed kiểm repeatability kỹ thuật, chưa chứng minh kết luận tổng quát. [Đặc tả journal](../technical/experiment-journal-and-reproducibility.md) và [ADR-005](../architecture/decisions/ADR-005-experiment-journal-and-reproducibility.md) giữ quyết định này; code AI tự sinh thuộc mở rộng có gate an toàn/đánh giá riêng.
 
-Đánh giá ATI khác với experiment của người dùng: 4 câu pilot và 8 held-out, ba cấu hình single-agent / multi-agent / multi-agent tắt macro loop; cố định corpus/model/cap, đo citation integrity, semantic support, coverage, cost/latency và failures. Chiến chấm ẩn nhãn cấu hình theo rubric đóng băng; chấm một người có nguy cơ thiên lệch và không đo được đồng thuận, nên không tuyên bố vượt trội phổ quát. [Evaluation Plan](evaluation-plan.md) ghi cách chọn mẫu và nghiệm thu.
+Đánh giá Synthia khác với experiment của người dùng: 4 câu pilot và 8 held-out, ba cấu hình single-agent / multi-agent / multi-agent tắt macro loop; cố định corpus/model/cap, đo citation integrity, semantic support, coverage, cost/latency và failures. Chiến chấm ẩn nhãn cấu hình theo rubric đóng băng; chấm một người có nguy cơ thiên lệch và không đo được đồng thuận, nên không tuyên bố vượt trội phổ quát. [Evaluation Plan](evaluation-plan.md) ghi cách chọn mẫu và nghiệm thu.
 
 ## 4. System Design — Thiết kế hệ thống
 
@@ -106,7 +109,7 @@ Ba hình §4.1–4.3 trả lời trực tiếp yêu cầu **system architecture,
 flowchart TB
     User(["Người nghiên cứu"])
 
-    subgraph ATI["ATI — Multi-Agent Research System"]
+    subgraph ATI["Synthia — Multi-Agent Research System"]
         UI["Web application<br/>Next.js · danh sách bài, workspace và progress"]
         API["Application API<br/>FastAPI · auth · task · report · dispatcher"]
         Worker["Research worker<br/>Celery + LangGraph · agent workflow"]
@@ -117,7 +120,7 @@ flowchart TB
         Runner["Analysis container<br/>approved routine · resource limits"]
     end
 
-    subgraph Outside["Ngoài ranh giới ATI"]
+    subgraph Outside["Ngoài ranh giới Synthia"]
         Search["Search provider"]
         Web["Public websites"]
         Models["LLM / embedding provider"]
@@ -498,12 +501,12 @@ Report version/ReportClaim và plan schema được đặt nền ở P2; P4 mở
 |---|---|---|
 | Planning | SRS v4.1 đồng bộ vào `SRS ATI.md`, ADR-004/005, diagrams, user journey, experiment journal và implementation/evaluation plans cập nhật 09/10 | Feature chưa hoàn tất chỉ vì đã mô tả |
 | Docker/DB/API/worker/graph | Baseline chạy 27/09: services, health/task smoke, worker ping, graph compile/routing mẫu | Revision hiện tại, clean DB migration, research provider E2E |
-| Auth/provenance schema | Source `ebb525a` có register và ClaimEvidence/Citation migration | Login/ownership, migration áp dụng, validator thật |
+| Auth/provenance schema | Source `ebb525a` có register và ClaimEvidence/Citation migration; nhánh triển khai 09/10 đã thêm login/JWT và owner filter cho task/report ở mức mã nguồn | Chưa xác minh runtime hoặc chống truy cập chéo trên DB sạch; migration áp dụng và validator thật chưa có evidence |
 | Research workflow | Có search/fetch/embed/retrieval/Writer/Critic source | Đủ budget/lineage/review/loop và chất lượng thực tế |
 | Upload/resume/analysis/Q&A | Có thiết kế và backlog | Chưa đủ runtime evidence |
 | Monitoring/evaluation | Kế hoạch event/log/timeline và baseline/ablation | Chưa có số đo chất lượng/cost/superiority |
 
-[Baseline Verification](baseline-verification.md) giữ nguyên lệnh/kết quả lịch sử. Đọc source ngày 08/10 không chứng minh deployment hiện tại đã chạy. Lượt chốt planning này chỉ kiểm tài liệu/sơ đồ, không gọi provider hoặc chạy experiment.
+[Baseline Verification](baseline-verification.md) giữ nguyên lệnh/kết quả lịch sử. Đọc source ngày 08/10 không chứng minh deployment hiện tại đã chạy. Lượt 09/10 đã bắt đầu code auth/ownership nhưng chưa kiểm runtime, chưa gọi provider hoặc chạy experiment.
 
 ## 7. AI Disclosure — Đóng góp con người và AI
 
@@ -515,9 +518,9 @@ Report version/ReportClaim và plan schema được đặt nền ở P2; P4 mở
 | Nguyễn Thị Hải My | Related work/nguồn, chấm và biên tập | Phân công; cập nhật bàn giao thực tế |
 | Gemini | Đã hỗ trợ tạo bản nháp planning docs theo thông tin chủ dự án | Chiến rà nội dung với yêu cầu, code và source; xác nhận model/prompt/file sử dụng trước nộp |
 | Antigravity | Dự kiến hỗ trợ viết code theo issue/branch; chưa có evidence đủ để ghi nhận task cụ thể trong tiến độ giữa kỳ | Chỉ bổ sung phần việc khi có commit/PR và kết quả Chiến kiểm lại |
-| Codex | Hỗ trợ đọc source/docs, rà kiến trúc, đề xuất/chỉnh SRS, planning, journal và diagrams; các lượt trước có hỗ trợ code/baseline | Các lượt 08–09/10 là rà soát/planning, không nghiệm thu runtime; Chiến review quyết định cuối |
+| Codex | Hỗ trợ đọc source/docs, rà kiến trúc, đề xuất/chỉnh SRS, planning, journal và diagrams; ngày 09/10 hỗ trợ viết lại Overview và code auth/ownership | Chưa nghiệm thu runtime; Chiến review quyết định cuối |
 
-AI của sản phẩm ATI khác với AI giúp nhóm phát triển. Không tự điền tỷ lệ AI/con người hoặc model version chưa xác minh. Người làm chịu trách nhiệm nguồn, số liệu, code và kết luận. Hồ sơ chi tiết ở [AI Disclosure](ai-disclosure.md).
+AI của sản phẩm Synthia khác với AI giúp nhóm phát triển. Không tự điền tỷ lệ AI/con người hoặc model version chưa xác minh. Người làm chịu trách nhiệm nguồn, số liệu, code và kết luận. Hồ sơ chi tiết ở [AI Disclosure](ai-disclosure.md).
 
 ## 8. Tài liệu kèm theo và tham khảo
 
@@ -525,7 +528,7 @@ AI của sản phẩm ATI khác với AI giúp nhóm phát triển. Không tự 
 - [Product Assessment](product-assessment.md), [Implementation Plan](implementation-plan.md), [Evaluation Plan](evaluation-plan.md), [Team Task Guide](team-task-guide.md).
 - [GPT Researcher](https://github.com/assafelovic/gpt-researcher): tham khảo thu thập nguồn và báo cáo.
 - [STORM](https://github.com/stanford-oval/storm): tham khảo lập câu hỏi nhiều góc nhìn và tổ chức tri thức.
-- [AI Scientist v2](https://github.com/SakanaAI/AI-Scientist-v2): tham khảo chu trình thực nghiệm/bài viết; không đồng nhất scope rộng của ATI với khả năng tự nghiên cứu mọi lĩnh vực.
-- [Building effective agents](https://www.anthropic.com/engineering/building-effective-agents): tham khảo thiết kế workflow có cấu trúc, đánh giá trade-offs; không là bằng chứng ATI tốt hơn baseline.
+- [AI Scientist v2](https://github.com/SakanaAI/AI-Scientist-v2): tham khảo chu trình thực nghiệm/bài viết; không đồng nhất phạm vi rộng của Synthia với khả năng tự nghiên cứu mọi lĩnh vực.
+- [Building effective agents](https://www.anthropic.com/engineering/building-effective-agents): tham khảo thiết kế workflow có cấu trúc, đánh giá trade-offs; không là bằng chứng Synthia tốt hơn baseline.
 
 MSSV, giảng viên, ngày nộp, bàn giao cá nhân và progress thực tế còn phải điền từ thông tin nhóm; không tạo dữ liệu giả.

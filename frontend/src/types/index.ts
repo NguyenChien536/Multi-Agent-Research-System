@@ -45,6 +45,25 @@ export interface ApiError {
   detail: string | Array<{ loc: string[]; msg: string; type: string }>;
 }
 
+export interface UserCreate {
+  username: string;
+  email: string;
+  password: string;
+  full_name?: string;
+}
+
+export interface UserResponse {
+  id: string;
+  username: string;
+  email: string;
+  full_name?: string | null;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  token_type: 'bearer';
+}
+
 export interface ResearchReportResponse {
   id: string;
   research_task_id: string;

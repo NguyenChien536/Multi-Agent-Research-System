@@ -24,6 +24,16 @@ class UserCreate(UserBase):
         return value
 
 
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+
+
 class UserResponse(UserBase):
     id: uuid.UUID
     created_at: datetime

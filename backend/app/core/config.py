@@ -1,10 +1,10 @@
 from typing import List, Union, Optional
-from pydantic import AnyHttpUrl, field_validator
+from pydantic import AnyHttpUrl, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Multi-Agent Research System"
+    PROJECT_NAME: str = "Synthia — Multi-Agent Research System"
     VERSION: str = "2.2.0"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
@@ -61,6 +61,18 @@ class Settings(BaseSettings):
     DEFAULT_TIMEOUT_SECONDS: int = 300
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @model_validator(mode="after")
+    def require_production_secret(self) -> "Settings":
+        if self.ENVIRONMENT != "development" and (
+            len(self.APP_SECRET_KEY) < 32
+            or self.APP_SECRET_KEY in {
+                "development-secret-key-replace-in-production-32-chars-min",
+                "replace-with-a-secure-random-secret-key-32-chars-min",
+            }
+        ):
+            raise ValueError("APP_SECRET_KEY must be a unique secret of at least 32 characters outside development")
+        return self
 
 
 settings = Settings()

@@ -2,21 +2,26 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { LayoutDashboard, FileText, Menu, X, Plus } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { LayoutDashboard, FileText, Menu, X, Plus, LogOut } from 'lucide-react';
 import { api } from '@/lib/api';
 import type { ResearchTaskResponse } from '@/types';
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [recentTasks, setRecentTasks] = React.useState<ResearchTaskResponse[]>([]);
 
   React.useEffect(() => {
+    if (!api.auth.hasSession()) {
+      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      return;
+    }
     let active = true;
     api.tasks.list(0, 3).then(tasks => { if (active) setRecentTasks(tasks); }).catch(() => { if (active) setRecentTasks([]); });
     return () => { active = false; };
-  }, [pathname]);
+  }, [pathname, router]);
 
   const navItems = [
     { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
@@ -74,6 +79,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
           </nav>
+          <button className="mt-auto flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900" onClick={() => { api.auth.logout(); router.replace('/login'); }}>
+            <LogOut size={18} /> Đăng xuất
+          </button>
         </div>
       </div>
 

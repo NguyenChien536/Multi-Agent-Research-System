@@ -6,8 +6,9 @@ from typing import Any
 
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse
-from app.core.security import get_password_hash
+from app.schemas.user import TokenResponse, UserCreate, UserLogin, UserResponse
+from app.core.security import create_access_token, get_password_hash, verify_password
+from app.api.deps import get_current_user
 
 router = APIRouter()
 
@@ -55,3 +56,24 @@ async def register_user(
     await db.refresh(db_user)
 
     return db_user
+
+
+@router.post("/login", response_model=TokenResponse)
+async def login_user(
+    credentials: UserLogin,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
+    result = await db.execute(select(User).where(User.email == credentials.email))
+    user = result.scalar_one_or_none()
+    if user is None or not verify_password(credentials.password, user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Email hoặc mật khẩu không đúng.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return TokenResponse(access_token=create_access_token(user.id))
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(current_user: User = Depends(get_current_user)) -> User:
+    return current_user

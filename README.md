@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🌐 Multi-Agent Research System
+# 🌐 Synthia — Multi-Agent Research System
 
 ### *Hệ thống đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập*
 

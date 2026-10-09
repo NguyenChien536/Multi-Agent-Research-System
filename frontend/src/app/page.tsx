@@ -20,6 +20,10 @@ export default function Home() {
       setError('Vui lòng nhập câu hỏi nghiên cứu dài ít nhất 10 ký tự.');
       return;
     }
+    if (!api.auth.hasSession()) {
+      router.push('/login?next=%2F');
+      return;
+    }
     setError('');
     setIsLoading(true);
     try {
@@ -48,6 +52,7 @@ export default function Home() {
         </div>
         <div className="flex gap-4">
           <Button variant="ghost" onClick={() => router.push('/dashboard')}>Dashboard</Button>
+          <Button variant="outline" onClick={() => router.push(api.auth.hasSession() ? '/dashboard' : '/login')}>Tài khoản</Button>
         </div>
       </div>
 
