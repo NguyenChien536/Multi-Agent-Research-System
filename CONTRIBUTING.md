@@ -27,6 +27,6 @@ Chiến là người triển khai và quyết định cuối cùng. Quy trình n
 - [CI](.github/workflows/ci.yml) chạy trên PR và push của `develop`/`main`: biên dịch cú pháp Python và build/typecheck Next.js. CI hiện chưa thay thế kiểm tra DB, Celery, provider hoặc bài báo đầu ra.
 - [Release backend](.github/workflows/release-backend.yml) chạy khi push tag `v*` trỏ tới lịch sử `main`; image chạy không có `--reload` và cần cấu hình môi trường/secret khi triển khai.
 - `backend/requirements.txt` chưa có lockfile/pin đầy đủ, nên image được tag theo source nhưng rebuild sau này chưa bảo đảm ra cùng dependency. Cần khóa phiên bản trước khi gọi đây là artifact production có thể tái lập.
-- Trên GitHub, nên bảo vệ `main` và `develop`: yêu cầu PR, hai check `Backend syntax` và `Frontend build`, chặn force push/xóa nhánh. Với một người code, không đặt yêu cầu một người khác phê duyệt PR nếu không có reviewer thật.
+- Đã bật bảo vệ `main` và `develop` ngày 09/10: yêu cầu PR, hai check `Backend syntax` và `Frontend build`, nhánh cập nhật với base, lịch sử tuyến tính, chặn force push/xóa nhánh và áp dụng cả chủ repo. Số approval bắt buộc là 0 vì hiện không có reviewer lập trình độc lập; Chiến vẫn phải đọc diff và bằng chứng trước khi merge.
 
 Repo [ATI_Project](https://github.com/VinhDat267/ATI_Project) gợi ý cách dùng nhánh feature, PR template, CI và phân biệt bằng chứng chạy cục bộ với chạy dịch vụ thật. Quy trình này rút gọn cho một người; không sao chép module ownership của nhóm nhiều lập trình viên.
