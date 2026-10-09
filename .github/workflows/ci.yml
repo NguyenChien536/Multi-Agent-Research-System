@@ -124,5 +124,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate Compose configuration
         run: docker compose config --quiet
-      - name: Build API and worker images
-        run: docker compose build backend worker
+      - name: Build API and frontend images
+        run: docker compose build backend frontend

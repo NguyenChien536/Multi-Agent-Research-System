@@ -1,5 +1,6 @@
 param(
     [string]$ApiBaseUrl = 'http://localhost:8000/api/v1',
+    [string]$FrontendUrl = 'http://localhost:3000',
     [int]$TimeoutSeconds = 600
 )
 
@@ -11,8 +12,19 @@ $password = "Aa1!$([guid]::NewGuid().ToString('N'))"
 $credentials = @{ email = $email; password = $password }
 
 try {
-    $health = Invoke-RestMethod -Uri "$api/health" -Method Get
-    $null = $health
+    $startupDeadline = (Get-Date).AddSeconds(120)
+    do {
+        try {
+            $health = Invoke-RestMethod -Uri "$api/health" -Method Get -TimeoutSec 5
+            $frontend = Invoke-WebRequest -Uri $FrontendUrl -Method Get -TimeoutSec 5 -UseBasicParsing
+            if ($health.status -eq 'healthy' -and $frontend.StatusCode -eq 200) { break }
+        } catch {
+            Start-Sleep -Seconds 3
+        }
+    } while ((Get-Date) -lt $startupDeadline)
+    if ($health.status -ne 'healthy' -or $frontend.StatusCode -ne 200) {
+        throw 'API and frontend did not become healthy within 120 seconds.'
+    }
     $register = @{ username = "demo_$suffix"; email = $email; password = $password }
     $null = Invoke-RestMethod -Uri "$api/auth/register" -Method Post -ContentType 'application/json' -Body ($register | ConvertTo-Json)
     $login = Invoke-RestMethod -Uri "$api/auth/login" -Method Post -ContentType 'application/json' -Body ($credentials | ConvertTo-Json)
