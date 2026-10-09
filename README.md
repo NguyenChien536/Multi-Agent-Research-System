@@ -340,15 +340,7 @@ Mốc 10/11/2026 gồm review web+PDF, một experiment CSV thật, protocol tru
 
 ## 🤝 Hướng dẫn Đóng góp (Contributing)
 
-Chúng tôi luôn chào đón mọi đóng góp từ cộng đồng mã nguồn mở! Nếu bạn muốn đóng góp:
-
-1. **Fork** repository này về tài khoản GitHub của bạn.
-2. Tạo một nhánh tính năng mới (`git checkout -b feature/tinh-nang-moi`).
-3. Commit những thay đổi của bạn (`git commit -m 'feat: thêm thuật toán lọc nguồn thông minh'`).
-4. Push nhánh lên GitHub (`git push origin feature/tinh-nang-moi`).
-5. Tạo một **Pull Request** mới để chúng tôi xem xét và gộp mã nguồn.
-
-> Vui lòng tuân thủ quy tắc định dạng mã nguồn (PEP 8, Black, Ruff) trước khi gửi PR.
+Chiến triển khai chính trên các nhánh `codex/*` tạo từ `develop`. Mỗi lát cắt đi qua Pull Request vào `develop`; bản được chọn phát hành đi từ `develop` vào `main`. [CONTRIBUTING.md](CONTRIBUTING.md) ghi lệnh Git, mẫu PR, CI/CD và cách phân biệt source với bằng chứng chạy thực tế. Người đóng góp khác có thể fork và gửi PR vào `develop` theo cùng quy tắc.
 
 ---
 

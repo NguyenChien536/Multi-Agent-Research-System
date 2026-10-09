@@ -1,6 +1,6 @@
-# Tài liệu dự án ATI
+# Tài liệu dự án Synthia
 
-**Bản chốt planning: 09/10/2026 — SRS v4.1.** ATI là hệ thống đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập; mỗi task hướng tới một bài báo hoàn chỉnh. Tài liệu mục tiêu tách riêng source inventory và runtime evidence.
+**Bản chốt planning: 09/10/2026 — SRS v4.1.** Synthia là hệ thống đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập; mỗi task hướng tới một bài báo hoàn chỉnh. Tài liệu mục tiêu tách riêng source inventory và runtime evidence. [Quy trình Git và CI/CD](../CONTRIBUTING.md) dành cho người triển khai.
 
 Phạm vi/gate G0–G7 và ba sơ đồ giữa kỳ đã được chốt làm baseline để triển khai P0. Thay đổi phạm vi sau mốc này cần nêu lý do trong ADR, sửa SRS và kế hoạch/evaluation tương ứng; trạng thái chỉ chuyển sang Verified khi có bằng chứng chạy trên revision cụ thể.
 
