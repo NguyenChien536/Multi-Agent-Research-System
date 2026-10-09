@@ -24,6 +24,7 @@ export interface ResearchTaskResponse {
   id: string;
   user_id: string;
   title: string;
+  description?: string | null;
   research_question: string;
   research_depth: string;
   language: string;
