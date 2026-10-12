@@ -5,25 +5,32 @@ external AI provider is contacted.
 """
 
 import uuid
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 
-from app.api.v1.endpoints import research as research_endpoint
+from app.services import task_dispatcher
 from app.core.database import AsyncSessionLocal, engine
 from app.main import app
 from app.models.report import ResearchReport
+from app.models.task import ResearchTask, TaskDispatchOutbox
+from app.worker import run_langgraph_workflow
 
 
 @pytest.mark.asyncio
 async def test_auth_and_research_ownership(monkeypatch: pytest.MonkeyPatch) -> None:
     dispatched: list[str] = []
-    monkeypatch.setattr(
-        research_endpoint,
-        "execute_research_workflow",
-        SimpleNamespace(delay=lambda task_id: dispatched.append(task_id)),
-    )
+    should_fail_dispatch = True
+
+    def publish(task_id: str) -> None:
+        if should_fail_dispatch:
+            raise ConnectionError("broker unavailable")
+        dispatched.append(task_id)
+
+    monkeypatch.setattr(task_dispatcher, "execute_research_workflow", SimpleNamespace(delay=publish))
 
     suffix = uuid.uuid4().hex[:12]
     users = [
@@ -32,6 +39,10 @@ async def test_auth_and_research_ownership(monkeypatch: pytest.MonkeyPatch) -> N
     ]
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         assert (await client.get("/api/v1/research")).status_code == 401
+        assert (await client.post("/api/v1/research", json={
+            "title": "Unauthenticated task",
+            "research_question": "Should reject without a token?",
+        })).status_code == 401
 
         tokens = []
         for user in users:
@@ -75,23 +86,56 @@ async def test_auth_and_research_ownership(monkeypatch: pytest.MonkeyPatch) -> N
         assert author_id not in {item["id"] for item in reader_list.json()}
 
         assert (await client.get(f"/api/v1/research/{author_id}", headers=reader_headers)).status_code == 404
+        assert (await client.get(f"/api/v1/research/{author_id}")).status_code == 401
         assert (await client.post(f"/api/v1/research/{author_id}/start", headers=reader_headers)).status_code == 404
+        assert (await client.post(f"/api/v1/research/{author_id}/start")).status_code == 401
         assert (await client.get(f"/api/v1/research/{author_id}/report", headers=reader_headers)).status_code == 404
+        assert (await client.get(f"/api/v1/research/{author_id}/report")).status_code == 401
 
         started = await client.post(f"/api/v1/research/{author_id}/start", headers=author_headers)
-        assert started.status_code == 200, started.text
-        assert started.json()["status"] == "PLANNING"
+        assert started.status_code == 202, started.text
+        assert started.json()["status"] == "QUEUED"
         assert (await client.post(f"/api/v1/research/{author_id}/start", headers=author_headers)).status_code == 409
+
+        # A broker outage leaves the durable event retryable; recovery publishes it.
+        assert await task_dispatcher.dispatch_one_outbox_event()
+        async with AsyncSessionLocal() as db:
+            event = (await db.execute(
+                select(TaskDispatchOutbox).where(TaskDispatchOutbox.research_task_id == uuid.UUID(author_id))
+            )).scalar_one()
+            assert event.dispatched_at is None
+            assert event.attempts == 1
+            assert "broker unavailable" in event.last_error
+            event.available_at = datetime.now(timezone.utc)
+            await db.commit()
+        should_fail_dispatch = False
+        assert await task_dispatcher.dispatch_one_outbox_event()
         assert dispatched == [author_id]
 
+        # A lost worker stops renewing its lease; recovery requeues the same task.
         async with AsyncSessionLocal() as db:
-            db.add(ResearchReport(
-                research_task_id=uuid.UUID(author_id),
-                title="Evidence report",
-                content_markdown="# Evidence report",
-                word_count=2,
-            ))
+            task = await db.get(ResearchTask, uuid.UUID(author_id))
+            task.status = "RUNNING"
+            task.attempt_number = 1
+            task.worker_lease_until = datetime.now(timezone.utc) - timedelta(seconds=1)
             await db.commit()
+        assert await task_dispatcher.recover_expired_worker_claims() == 1
+        assert await task_dispatcher.dispatch_one_outbox_event()
+        assert dispatched == [author_id, author_id]
+
+        class SuccessfulGraph:
+            async def ainvoke(self, _state: dict) -> dict:
+                return {"final_report_markdown": "# Evidence report", "current_agent": "Writer"}
+
+        monkeypatch.setattr("app.worker.research_graph", SuccessfulGraph())
+        assert (await run_langgraph_workflow(author_id))["status"] == "SUCCESS"
+        assert (await run_langgraph_workflow(author_id))["status"] == "IGNORED"
+
+        async with AsyncSessionLocal() as db:
+            reports = (await db.execute(
+                select(ResearchReport).where(ResearchReport.research_task_id == uuid.UUID(author_id))
+            )).scalars().all()
+            assert len(reports) == 1
 
         report = await client.get(f"/api/v1/research/{author_id}/report", headers=author_headers)
         assert report.status_code == 200, report.text

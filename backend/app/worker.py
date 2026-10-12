@@ -1,6 +1,7 @@
 import asyncio
+from datetime import datetime, timedelta, timezone
 from celery import Celery
-from sqlalchemy import select
+from sqlalchemy import select, update
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.task import ResearchTask
@@ -23,25 +24,55 @@ celery_app.conf.update(
     enable_utc=True,
     task_track_started=True,
     task_acks_late=True,  # Idempotency & Worker Crash Protection
+    task_reject_on_worker_lost=True,
+    broker_transport_options={"visibility_timeout": 360},
     worker_prefetch_multiplier=1,  # Đảm bảo phân bổ task công bằng
 )
 
 
+async def renew_worker_lease(task_id: str, attempt_number: int) -> None:
+    """Renew the active claim so the API dispatcher can recover dead workers."""
+    while True:
+        await asyncio.sleep(settings.WORKER_HEARTBEAT_SECONDS)
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(
+                update(ResearchTask)
+                .where(
+                    ResearchTask.id == task_id,
+                    ResearchTask.status == "RUNNING",
+                    ResearchTask.attempt_number == attempt_number,
+                )
+                .values(worker_lease_until=datetime.now(timezone.utc) + timedelta(seconds=settings.WORKER_LEASE_SECONDS))
+            )
+            await session.commit()
+            if result.rowcount != 1:
+                return
+
+
 async def run_langgraph_workflow(task_id: str) -> dict:
     """Hàm chạy async LangGraph và tương tác với DB."""
+    heartbeat: asyncio.Task | None = None
     try:
         async with AsyncSessionLocal() as session:
-            # 1. Fetch Task Info
-            stmt = select(ResearchTask).where(ResearchTask.id == task_id)
-            result = await session.execute(stmt)
+            # Claim only a queued task. A duplicate Celery delivery is acknowledged
+            # without starting another graph run or creating another report.
+            result = await session.execute(
+                select(ResearchTask)
+                .where(ResearchTask.id == task_id)
+                .with_for_update()
+            )
             task = result.scalar_one_or_none()
-
             if not task:
                 return {"status": "FAILED", "task_id": task_id, "message": "Task not found in DB"}
+            if task.status != "QUEUED":
+                return {"status": "IGNORED", "task_id": task_id, "message": f"Task is {task.status}"}
 
-            # Cập nhật trạng thái
             task.status = "RUNNING"
+            task.attempt_number += 1
+            task.worker_lease_until = datetime.now(timezone.utc) + timedelta(seconds=settings.WORKER_LEASE_SECONDS)
+            claim_attempt = task.attempt_number
             await session.commit()
+            heartbeat = asyncio.create_task(renew_worker_lease(task_id, claim_attempt))
 
             # 2. Khởi tạo State ban đầu
             initial_state = {
@@ -66,6 +97,10 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 if not report_content:
                     raise RuntimeError("Research graph completed without producing a report")
 
+                await session.refresh(task)
+                if task.status != "RUNNING" or task.attempt_number != claim_attempt:
+                    return {"status": "SUPERSEDED", "task_id": task_id}
+
                 from app.models.report import ResearchReport
                 report = ResearchReport(
                     research_task_id=task.id,
@@ -75,6 +110,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 )
                 session.add(report)
                 task.status = "COMPLETED"
+                task.worker_lease_until = None
                 await session.commit()
 
                 return {
@@ -84,12 +120,22 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     "final_agent": final_state.get("current_agent")
                 }
             except Exception as e:
+                await session.refresh(task)
+                if task.status != "RUNNING" or task.attempt_number != claim_attempt:
+                    return {"status": "SUPERSEDED", "task_id": task_id}
                 task.status = "FAILED"
+                task.worker_lease_until = None
                 error_msg = f"ERROR: {str(e)}"
                 task.description = f"{task.description}\n\n{error_msg}" if task.description else error_msg
                 await session.commit()
                 raise RuntimeError(f"Research workflow failed for task {task_id}: {e}") from e
     finally:
+        if heartbeat is not None:
+            heartbeat.cancel()
+            try:
+                await heartbeat
+            except asyncio.CancelledError:
+                pass
         from app.core.database import engine
         await engine.dispose()
 

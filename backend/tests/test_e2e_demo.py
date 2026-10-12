@@ -11,9 +11,9 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.agents import graph as graph_module
-from app.api.v1.endpoints import research as research_endpoint
 from app.main import app
 from app import worker
+from app.services import task_dispatcher
 
 
 @pytest.mark.asyncio
@@ -50,7 +50,7 @@ async def test_demo_path_persists_report(monkeypatch: pytest.MonkeyPatch) -> Non
     }))
     monkeypatch.setattr(worker, "research_graph", graph_module.build_research_graph())
     monkeypatch.setattr(
-        research_endpoint,
+        task_dispatcher,
         "execute_research_workflow",
         SimpleNamespace(delay=lambda task_id: queued.append(task_id)),
     )
@@ -78,7 +78,9 @@ async def test_demo_path_persists_report(monkeypatch: pytest.MonkeyPatch) -> Non
         assert created.status_code == 201, created.text
         task_id = created.json()["id"]
         started = await client.post(f"/api/v1/research/{task_id}/start", headers=headers)
-        assert started.status_code == 200, started.text
+        assert started.status_code == 202, started.text
+        assert started.json()["status"] == "QUEUED"
+        assert await task_dispatcher.dispatch_one_outbox_event()
         assert queued == [task_id]
 
         completed = await worker.run_langgraph_workflow(task_id)

@@ -11,7 +11,7 @@ from app.models.user import User
 from app.models.report import ResearchReport
 from app.schemas.task import ResearchTaskCreate, ResearchTaskResponse
 from app.schemas.report import ResearchReportResponse
-from app.worker import execute_research_workflow
+from app.models.task import TaskDispatchOutbox
 
 router = APIRouter()
 
@@ -85,7 +85,7 @@ async def get_research_task(
     return task
 
 
-@router.post("/{task_id}/start", status_code=status.HTTP_200_OK)
+@router.post("/{task_id}/start", status_code=status.HTTP_202_ACCEPTED)
 async def start_research_task(
     task_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -103,13 +103,11 @@ async def start_research_task(
     if task.status != "PENDING":
         raise HTTPException(status_code=409, detail="Research task has already been started")
     
-    task.status = "PLANNING"
+    task.status = "QUEUED"
+    db.add(TaskDispatchOutbox(research_task_id=task.id, event_type="START_RESEARCH"))
     await db.commit()
-    
-    # Bắn task vào Celery Task Queue
-    execute_research_workflow.delay(str(task_id))
-    
-    return {"status": "PLANNING", "message": "Workflow started successfully", "task_id": str(task_id)}
+
+    return {"status": "QUEUED", "message": "Workflow accepted for dispatch", "task_id": str(task_id)}
 
 @router.get("/{task_id}/report", response_model=ResearchReportResponse)
 async def get_research_report(
