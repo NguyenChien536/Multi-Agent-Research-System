@@ -54,6 +54,12 @@ class Settings(BaseSettings):
 
     # Quotas & Guardrails
     MAX_CONCURRENT_TASKS_PER_USER: int = 2
+    OUTBOX_POLL_SECONDS: float = 1.0
+    OUTBOX_LOCK_SECONDS: int = 30
+    OUTBOX_RETRY_SECONDS: int = 2
+    OUTBOX_MAX_RETRY_SECONDS: int = 60
+    WORKER_LEASE_SECONDS: int = 300
+    WORKER_HEARTBEAT_SECONDS: int = 30
     DEFAULT_BUDGET_USD: float = 2.00
     DEFAULT_MAX_LLM_CALLS: int = 50
     DEFAULT_MAX_INPUT_TOKENS: int = 100000

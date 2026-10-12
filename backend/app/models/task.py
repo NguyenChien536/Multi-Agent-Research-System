@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, Integer, Numeric, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, String, Text, Integer, Numeric, DateTime, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
@@ -25,6 +25,7 @@ class ResearchTask(Base):
     max_iterations = Column(Integer, default=2, nullable=False)
     current_iteration = Column(Integer, default=0, nullable=False)
     attempt_number = Column(Integer, default=0, nullable=False)  # Crash recovery counter
+    worker_lease_until = Column(DateTime(timezone=True), nullable=True)
     
     budget_config = Column(JSONB, default=dict, nullable=False)  # max_cost_usd, max_llm_calls, max_tokens, timeout_s
     total_cost_usd = Column(Numeric(10, 4), default=0.0, nullable=False)
@@ -49,6 +50,27 @@ class ResearchTask(Base):
     evaluations = relationship("Evaluation", back_populates="task", cascade="all, delete-orphan")
     report = relationship("ResearchReport", back_populates="task", uselist=False, cascade="all, delete-orphan")
     artifacts = relationship("ExportArtifact", back_populates="task", cascade="all, delete-orphan")
+    dispatch_events = relationship("TaskDispatchOutbox", back_populates="task", cascade="all, delete-orphan")
+
+
+class TaskDispatchOutbox(Base):
+    """Durable handoff from the task transaction to Celery."""
+
+    __tablename__ = "task_dispatch_outbox"
+    # A research task is started once; retries reuse its durable event.
+    __table_args__ = (UniqueConstraint("research_task_id", "event_type", name="uq_task_dispatch_event"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    research_task_id = Column(UUID(as_uuid=True), ForeignKey("research_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type = Column(String(40), nullable=False, default="START_RESEARCH")
+    attempts = Column(Integer, nullable=False, default=0)
+    available_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+    dispatched_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    task = relationship("ResearchTask", back_populates="dispatch_events")
 
 
 class ResearchIteration(Base):
