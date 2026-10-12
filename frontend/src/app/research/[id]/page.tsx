@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useParams } from 'next/navigation';
 import { CheckCircle2, Circle, Clock, FileText, RefreshCw } from 'lucide-react';
 import { Badge, Card } from '@/components/ui/Components';
 import { api } from '@/lib/api';
@@ -38,7 +39,8 @@ function formatDate(value: string) {
   return Number.isNaN(date.getTime()) ? 'Không rõ' : new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
-export default function WorkspacePage({ params }: { params: { id: string } }) {
+export default function WorkspacePage() {
+  const params = useParams<{ id: string }>();
   const [task, setTask] = useState<ResearchTaskResponse | null>(null);
   const [report, setReport] = useState<ResearchReportResponse | null>(null);
   const [error, setError] = useState('');

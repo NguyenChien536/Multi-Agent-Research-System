@@ -1,6 +1,6 @@
 # Kế hoạch triển khai đã chốt — ATI
 
-**Cập nhật:** 09/10/2026 · **Hạn:** 10/11/2026 · **Baseline source:** `ebb525a`.<br>
+**Cập nhật:** 12/10/2026 · **Hạn:** 10/11/2026 · **Baseline source:** `ebb525a`.<br>
 Phạm vi theo [SRS v4.1](../requirements/SRS.md) và [User Journey](user-journey-and-outputs.md); lý do và findings ở [Product Assessment](product-assessment.md). Đây là backlog đề xuất, **chưa phải các GitHub issues đã tạo**.
 
 ## 1. Quy tắc thực hiện
@@ -18,15 +18,15 @@ Phạm vi theo [SRS v4.1](../requirements/SRS.md) và [User Journey](user-journe
 
 | Gói | Mốc mục tiêu | Giờ Chiến | Đầu ra | Gate |
 |---|---|---:|---|---|
-| P0 · baseline tái lập | 08–10/10 | 4–6 | Runtime/dependency thống nhất, DB sạch, test isolation | G0: dựng lại được, tests không gọi dịch vụ thật |
-| P1 · auth và lifecycle | 11–14/10 | 12–16 | Owner, nhiều task/user, ResearchRun, start/cancel/idempotency, outbox, events, quota RUNNING | G1: task A chờ không chặn B; không truy cập chéo/dispatch lặp |
-| P2 · research E2E có evidence | 15–19/10 | 16–20 | Web → persisted evidence → draft/critic → citations, budget | G2: một review chạy thật trong cap |
-| P3 · PDF và workspace UI | 20–23/10 | 11–14 | Upload/ingest, danh sách nhiều bài, evidence explorer, stage/event timeline | G3: web + PDF chung task, UI thấy trạng thái/việc cần làm |
-| P4 · plan/protocol/resume | 24–26/10 | 14–18 | Assisted/automatic, PostgreSQL checkpoint, protocol trung gian, durable waits | G4: A chờ vẫn chạy B, restart/resume đúng |
-| P5 · experiment và bài empirical | 27–30/10 | 24–34 | Routine CSV, metrics/charts, journal mọi attempt, rerun, kết quả human-led có provenance, empirical manuscript | G5: Results thật; cùng input/config tính toán tái lập được |
-| P6 · Q&A/revision và hoàn thiện | 31/10–02/11 | 9–12 | Hỏi đáp có nguồn, report versions, authorized export | G6: sửa giữ bản cũ, không dùng result lỗi thời |
-| P7 · evaluation và bản nộp | 03–07/11 | 14–20 | Baseline/ablation, QA, sửa blockers, evaluation report | G7: evidence đủ, failures/limits công khai |
-| Buffer / freeze | 08–10/11 | Ngoài ước lượng trên | Dry run, backup demo, đồng bộ báo cáo/AI disclosure | Không thêm feature |
+| P0 · baseline tái lập | **12/10 — Verified** | 4–6 | Runtime/dependency thống nhất, DB sạch, test isolation | G0 đạt trong Docker/local hiện có; xem [biên bản baseline](baseline-verification.md). |
+| P1 · auth và lifecycle | 13–16/10 | 12–16 | Owner, nhiều task/user, ResearchRun, start/cancel/idempotency, outbox, events, quota RUNNING | G1: task A chờ không chặn B; không truy cập chéo/dispatch lặp |
+| P2 · research E2E có evidence | 17–21/10 | 16–20 | Web → persisted evidence → draft/critic → citations, budget | G2: một review chạy thật trong cap |
+| P3 · PDF và workspace UI | 22–25/10 | 11–14 | Upload/ingest, danh sách nhiều bài, evidence explorer, stage/event timeline | G3: web + PDF chung task, UI thấy trạng thái/việc cần làm |
+| P4 · plan/protocol/resume | 26–28/10 | 14–18 | Assisted/automatic, PostgreSQL checkpoint, protocol trung gian, durable waits | G4: A chờ vẫn chạy B, restart/resume đúng |
+| P5 · experiment và bài empirical | 29/10–01/11 | 24–34 | Routine CSV, metrics/charts, journal mọi attempt, rerun, kết quả human-led có provenance, empirical manuscript | G5: Results thật; cùng input/config tính toán tái lập được |
+| P6 · Q&A/revision và hoàn thiện | 02–04/11 | 9–12 | Hỏi đáp có nguồn, report versions, authorized export | G6: sửa giữ bản cũ, không dùng result lỗi thời |
+| P7 · evaluation và bản nộp | 05–09/11 | 14–20 | Baseline/ablation, QA, sửa blockers, evaluation report | G7: evidence đủ, failures/limits công khai |
+| Buffer / freeze | 10/11 | Ngoài ước lượng trên | Dry run, backup demo, đồng bộ báo cáo/AI disclosure | Không thêm feature |
 
 ## 3. Nội dung từng gói
 

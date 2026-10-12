@@ -1,6 +1,6 @@
 # Roadmap và tiến độ — ATI
 
-**Cập nhật planning:** 09/10/2026 · **Kỳ hạn:** 10/09–10/11/2026.<br>
+**Cập nhật:** 12/10/2026 · **Kỳ hạn:** 10/09–10/11/2026.<br>
 Định hướng: Multi-Agent Research tạo bài báo có bằng chứng và thực nghiệm tái lập. Nguồn chi tiết: [User Journey](user-journey-and-outputs.md), [Implementation Plan](implementation-plan.md), [SRS v4.1](../requirements/SRS.md), [Evaluation Plan](evaluation-plan.md).
 
 ## 1. Mốc đã có bằng chứng
@@ -11,6 +11,7 @@
 | 27/09, biên bản 28/09 | Docker/DB/API/worker ping/graph compile và routing mẫu trong baseline log | Chỉ xác minh những lệnh đã ghi, chưa research E2E |
 | Source `ebb525a`, đọc 08/10 | Register, ClaimEvidence/Citation migration đã commit; graph/search/retrieval/Writer có source | DB hiện tại và feature runtime sau baseline chưa được xác minh |
 | 08–09/10 | Rà scope/code, chốt SRS v4.1, ADR-004, luồng nhiều bài và kế hoạch/evaluation | Planning đã được cập nhật; không phải implementation đã nghiệm thu |
+| 12/10 | P0: đồng bộ Python 3.11; lock dependencies; clean-DB migration đến `a1b2c3d4e5f6`; backend 2 tests pass; Celery `pong`; API health 200; frontend lint/build pass | G0 verified cho baseline. Research/provider E2E vẫn chưa được chạy; xem [biên bản kiểm tra](baseline-verification.md) |
 
 ## 2. Mục tiêu đến 10/11
 
@@ -20,23 +21,23 @@ Experiment không còn là phần “nếu kịp”. Nếu không đạt gate ph
 
 ## 3. Lịch còn lại
 
-Ước lượng dựa trên giả định Chiến dành 3–4 giờ tập trung/ngày; chưa phải cam kết năng lực đã đo. Chốt lại velocity sau P0/P1; điều chỉnh ngày/gói công việc bằng evidence.
+Ước lượng dựa trên giả định Chiến dành 3–4 giờ tập trung/ngày; chưa phải cam kết năng lực đã đo. P0 hoàn thành ngày 12/10, trễ hai ngày so với lịch cũ; các mốc sau đã dời tương ứng và cần chốt lại velocity sau P1.
 
 | Thời gian | Gói triển khai của Chiến | Gate |
 |---|---|---|
-| 08–10/10 | P0 — baseline tái lập, dependency/DB/test isolation | G0 |
-| 11–14/10 | P1 — auth, nhiều task/user, ResearchRun, lifecycle/outbox/events/quota | G1 |
-| 15–19/10 | P2 — web E2E, evidence, Writer/Critic/Validator, budget | G2 |
-| 20–23/10 | P3 — PDF, dashboard nhiều bài, evidence/progress | G3 |
-| 24–26/10 | P4 — plan/protocol trung gian, assisted/automatic, durable waits/resume | G4 |
-| 27–30/10 | P5 — experiment thật, human-led result intake, empirical manuscripts | G5 |
-| 31/10–02/11 | P6 — Q&A/revision, authorized export, delete/cleanup | G6 |
-| 03–07/11 | P7 — baseline/ablation, QA, sửa blockers, báo cáo | G7 |
-| 08–10/11 | Buffer, freeze, demo/backup/nộp bài | Không thêm feature |
+| 12/10 | P0 — baseline tái lập, dependency/DB/test isolation | **G0 Verified** |
+| 13–16/10 | P1 — auth, nhiều task/user, ResearchRun, lifecycle/outbox/events/quota | G1 |
+| 17–21/10 | P2 — web E2E, evidence, Writer/Critic/Validator, budget | G2 |
+| 22–25/10 | P3 — PDF, dashboard nhiều bài, evidence/progress | G3 |
+| 26–28/10 | P4 — plan/protocol trung gian, assisted/automatic, durable waits/resume | G4 |
+| 29/10–01/11 | P5 — experiment thật, human-led result intake, empirical manuscripts | G5 |
+| 02–04/11 | P6 — Q&A/revision, authorized export, delete/cleanup | G6 |
+| 05–09/11 | P7 — baseline/ablation, QA, sửa blockers, báo cáo | G7 |
+| 10/11 | Buffer, freeze, demo/backup/nộp bài | Không thêm feature |
 
 Thứ tự phụ thuộc và giờ ước lượng từng gói ở [Implementation Plan](implementation-plan.md). Không thể bỏ auth/provenance để “xong UI trước”. Khi trễ, cắt polish/ảnh/PDF đẹp; giữ kết quả thật và báo trung thực gate còn thiếu.
 
-G0–G7 có một định nghĩa thống nhất tại [SRS §8](../requirements/SRS.md#8-acceptance-gates); FR/NFR được nối sang gói triển khai ở mục 9. Tất cả gate hiện chưa đủ evidence trên revision hiện tại. Khi cập nhật tiến độ, dùng Planned / In progress / Implemented / Verified / Blocked kèm revision, ngày và link kết quả; không tự chuyển mốc kế hoạch thành ngày đã hoàn thành.
+G0–G7 có một định nghĩa thống nhất tại [SRS §8](../requirements/SRS.md#8-acceptance-gates); FR/NFR được nối sang gói triển khai ở mục 9. Hiện G0 đã Verified; G1–G7 chưa đủ evidence. Khi cập nhật tiến độ, dùng Planned / In progress / Implemented / Verified / Blocked kèm revision, ngày và link kết quả; không tự chuyển mốc kế hoạch thành ngày đã hoàn thành.
 
 ## 4. Việc chuẩn bị song song của Chiến
 
@@ -51,11 +52,11 @@ G0–G7 có một định nghĩa thống nhất tại [SRS §8](../requirements/
 
 | Hạng mục | Đọc source 08/10 | Evidence còn cần |
 |---|---|---|
-| API/DB/graph nền | Có scaffold và graph nodes | Chạy lại đúng revision, clean-DB migration |
-| Auth | Có register/helpers, research dùng dummy user | Login/current_user, ownership negative cases |
-| Web/PDF evidence | Web tools có; PDF chưa có đủ luồng | Provider E2E, ingest PDF và claim anchors |
+| API/DB/graph nền | 12/10: image build từ lock; clean-DB migration đến head; API health 200; Celery ping `pong`; 2 backend tests pass | Provider E2E, retry/recovery và full graph với input thật |
+| Auth | 12/10: test register/login/current user, task ownership, list/get/start/report và chặn đọc chéo user | Security review sâu, session expiry/rate limits và dispatch failure |
+| Web/PDF evidence | Web source có trong code; PDF chưa có đủ luồng | Provider E2E, ingest PDF và claim anchors |
 | Writer/Critic/Validator | Writer/Critic có; validator placeholder | Full-report review, persisted lineage, bounded loops |
-| Budget/idempotency | Chưa thực thi đầy đủ | Reserve/reconcile, start/redelivery/restart gates |
+| Budget/idempotency | Chưa thực thi đầy đủ; start hiện gửi Celery sau DB commit | Reserve/reconcile, outbox, redelivery/restart và start idempotency gates |
 | Protocol/wait/resume | Target mới; graph chưa checkpointer | Protocol trung gian, durable checkpoint + upload READY + đúng version; A chờ/B chạy |
 | Routine/experiment | Chưa có đủ implementation | Actual CSV run, journal mọi attempt/kết quả âm, manifest + rerun có sai khác; human-led result provenance và bài hoàn chỉnh sau upload |
 | UI/Q&A/report versions | Starter/polling; phiên bản/Q&A còn thiếu | Tương tác và feedback/end states thực tế |
