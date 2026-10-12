@@ -2,8 +2,10 @@
 
 import asyncio
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.orm import aliased
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
@@ -49,27 +51,47 @@ async def recover_expired_worker_claims(now: datetime | None = None) -> int:
     return recovered
 
 
-async def dispatch_one_outbox_event() -> bool:
-    """Publish one due event. Returns False when there is nothing ready."""
+async def dispatch_one_outbox_event(user_id: uuid.UUID | None = None) -> bool:
+    """Publish one due event for a user with running capacity. Returns False when nothing is ready."""
     now = datetime.now(timezone.utc)
     await recover_expired_worker_claims(now)
     async with AsyncSessionLocal() as session:
         async with session.begin():
-            result = await session.execute(
+            task_alias = aliased(ResearchTask)
+            active_running_tasks = (
+                select(func.count(task_alias.id))
+                .where(
+                    task_alias.user_id == ResearchTask.user_id,
+                    task_alias.status == "RUNNING",
+                )
+                .scalar_subquery()
+            )
+
+            query = (
                 select(TaskDispatchOutbox)
+                .join(ResearchTask, TaskDispatchOutbox.research_task_id == ResearchTask.id)
                 .where(
                     TaskDispatchOutbox.dispatched_at.is_(None),
                     TaskDispatchOutbox.available_at <= now,
                     (TaskDispatchOutbox.locked_until.is_(None) | (TaskDispatchOutbox.locked_until <= now)),
+                    ResearchTask.status == "QUEUED",
+                    active_running_tasks < settings.MAX_CONCURRENT_TASKS_PER_USER,
                 )
-                .order_by(TaskDispatchOutbox.created_at)
-                .limit(1)
-                .with_for_update(skip_locked=True)
             )
+            if user_id is not None:
+                query = query.where(ResearchTask.user_id == user_id)
+
+            query = (
+                query.order_by(TaskDispatchOutbox.created_at)
+                .limit(1)
+                .with_for_update(of=TaskDispatchOutbox, skip_locked=True)
+            )
+            result = await session.execute(query)
             event = result.scalar_one_or_none()
             if event is None:
                 return False
-            event.locked_until = now + timedelta(seconds=settings.OUTBOX_LOCK_SECONDS)
+            claim_lease = now + timedelta(seconds=settings.OUTBOX_LOCK_SECONDS)
+            event.locked_until = claim_lease
             event.attempts += 1
             event_id = event.id
             task_id = event.research_task_id
@@ -82,7 +104,7 @@ async def dispatch_one_outbox_event() -> bool:
         async with AsyncSessionLocal() as session:
             async with session.begin():
                 event = await session.get(TaskDispatchOutbox, event_id, with_for_update=True)
-                if event and event.dispatched_at is None:
+                if event and event.dispatched_at is None and event.locked_until == claim_lease:
                     event.available_at = datetime.now(timezone.utc) + timedelta(seconds=retry_after)
                     event.locked_until = None
                     event.last_error = str(exc)[:2000]
@@ -92,7 +114,7 @@ async def dispatch_one_outbox_event() -> bool:
     async with AsyncSessionLocal() as session:
         async with session.begin():
             event = await session.get(TaskDispatchOutbox, event_id, with_for_update=True)
-            if event and event.dispatched_at is None:
+            if event and event.dispatched_at is None and event.locked_until == claim_lease:
                 event.dispatched_at = datetime.now(timezone.utc)
                 event.locked_until = None
                 event.last_error = None

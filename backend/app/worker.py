@@ -1,12 +1,16 @@
 import asyncio
+import logging
 from datetime import datetime, timedelta, timezone
 from celery import Celery
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
-from app.models.task import ResearchTask
+from app.models.task import ResearchTask, TaskDispatchOutbox
+from app.models.user import User
 from app.agents.graph import research_graph
 from app.agents.state import ResearchState
+
+logger = logging.getLogger(__name__)
 
 # Khởi tạo Celery Application
 celery_app = Celery(
@@ -67,10 +71,53 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             if task.status != "QUEUED":
                 return {"status": "IGNORED", "task_id": task_id, "message": f"Task is {task.status}"}
 
+            # Atomically serialize capacity checks for this user across concurrent workers.
+            if task.user_id:
+                await session.execute(
+                    select(User.id)
+                    .where(User.id == task.user_id)
+                    .with_for_update()
+                )
+
+            # Enforce the per-user running job limit.
+            # Queued and WAITING_* states do not consume running slots.
+            active_count_res = await session.execute(
+                select(func.count(ResearchTask.id))
+                .where(
+                    ResearchTask.user_id == task.user_id,
+                    ResearchTask.status == "RUNNING",
+                )
+            )
+            active_count = active_count_res.scalar_one()
+            if active_count >= settings.MAX_CONCURRENT_TASKS_PER_USER:
+                # User has reached concurrent running job limit.
+                # Task remains QUEUED; reset outbox event so it is dispatched when capacity frees.
+                event_result = await session.execute(
+                    select(TaskDispatchOutbox)
+                    .where(
+                        TaskDispatchOutbox.research_task_id == task.id,
+                        TaskDispatchOutbox.event_type == "START_RESEARCH",
+                    )
+                    .with_for_update()
+                )
+                outbox_event = event_result.scalar_one_or_none()
+                if outbox_event is not None:
+                    outbox_event.dispatched_at = None
+                    outbox_event.available_at = datetime.now(timezone.utc)
+                    outbox_event.locked_until = None
+                    outbox_event.last_error = "User at concurrent running job limit; waiting for capacity"
+                await session.commit()
+                return {
+                    "status": "QUEUED",
+                    "task_id": task_id,
+                    "message": "User has reached concurrent running job limit; task remains QUEUED",
+                }
+
             task.status = "RUNNING"
             task.attempt_number += 1
             task.worker_lease_until = datetime.now(timezone.utc) + timedelta(seconds=settings.WORKER_LEASE_SECONDS)
             claim_attempt = task.attempt_number
+            user_id = task.user_id
             await session.commit()
             heartbeat = asyncio.create_task(renew_worker_lease(task_id, claim_attempt))
 
@@ -113,6 +160,12 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 task.worker_lease_until = None
                 await session.commit()
 
+                try:
+                    from app.services.task_dispatcher import dispatch_one_outbox_event
+                    await dispatch_one_outbox_event(user_id=user_id)
+                except Exception as dispatch_err:
+                    logger.warning("Failed to dispatch next queued task after completion: %s", dispatch_err)
+
                 return {
                     "status": "SUCCESS",
                     "task_id": task_id,
@@ -128,6 +181,13 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 error_msg = f"ERROR: {str(e)}"
                 task.description = f"{task.description}\n\n{error_msg}" if task.description else error_msg
                 await session.commit()
+
+                try:
+                    from app.services.task_dispatcher import dispatch_one_outbox_event
+                    await dispatch_one_outbox_event(user_id=user_id)
+                except Exception as dispatch_err:
+                    logger.warning("Failed to dispatch next queued task after failure: %s", dispatch_err)
+
                 raise RuntimeError(f"Research workflow failed for task {task_id}: {e}") from e
     finally:
         if heartbeat is not None:
@@ -136,8 +196,6 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 await heartbeat
             except asyncio.CancelledError:
                 pass
-        from app.core.database import engine
-        await engine.dispose()
 
 
 @celery_app.task(bind=True, name="app.worker.execute_research_workflow")

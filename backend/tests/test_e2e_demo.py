@@ -96,3 +96,6 @@ async def test_demo_path_persists_report(monkeypatch: pytest.MonkeyPatch) -> Non
     assert visited == [
         "supervisor", "researcher", "curator", "analyst", "writer", "critic", "post_processor",
     ]
+
+    from app.core.database import engine
+    await engine.dispose()
