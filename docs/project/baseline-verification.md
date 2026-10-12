@@ -7,7 +7,40 @@
 
 > **Ghi chú 08/10/2026:** Bảng dưới giữ nguyên evidence lịch sử. Lượt rà soát planning mới chỉ đọc source và sửa tài liệu; chưa chạy lại Docker/DB/provider. Migration head trong source nay khác baseline; không hiểu kết quả cũ là trạng thái DB hiện tại.
 
-## Kết quả
+> **Lượt xác minh mới 12/10/2026:** Đã chạy lại trên Docker Desktop sau khi người dùng bật Docker. Kết quả bên dưới là evidence mới nhất cho baseline P0; các kết quả ngày 27/09 chỉ còn giá trị lịch sử.
+
+## Kết quả xác minh ngày 12/10/2026
+
+| Hạng mục | Kết quả thực tế | Giới hạn |
+|---|---|---|
+| Docker Compose | `docker compose config --quiet` đạt; PostgreSQL, Redis, API và worker chạy ổn định. | Chưa kiểm tra tải hoặc cấu hình triển khai production. |
+| PostgreSQL/pgvector | Chạy migration trên PostgreSQL tạm, database rỗng đến `a1b2c3d4e5f6 (head)`; DB dự án hiện tại cũng ở head. | Database tạm chỉ dùng để kiểm tra migration và đã dừng; không xóa volume dự án. |
+| API | `GET /api/v1/health` trả HTTP 200 sau khi thay image. | Health chỉ xác nhận API có phản hồi. |
+| Celery | `celery -A app.worker inspect ping --timeout=10` nhận `pong` từ worker sau khi rebuild từ lockfile. | Chưa chứng minh dispatch/retry của một workflow dùng provider thật. |
+| Backend tests | `python -m pytest -q tests`: **2 passed**, 3 deprecation warnings. | Cả 2 bài test dùng provider/node giả; suite hiện còn nhỏ và không phải provider-backed E2E. |
+| Backend image | Build thành công từ `backend/requirements.lock.txt`; API và worker khởi động với image mới. | Lockfile mới khóa phiên bản hiện được resolver chọn; cần tiếp tục pin/cập nhật có kiểm soát khi đổi dependency. |
+| Python local và Docker | Đã đồng bộ `.python-version`/`requires-python` về 3.11; `uv lock --check --python 3.11` đạt; `uv run --locked --python 3.11 python --version` trả `Python 3.11.16`. | Máy Windows gọi `python` trực tiếp vẫn bị Microsoft Store alias; dùng `uv run` hoặc Docker theo hướng dẫn. |
+| Frontend | `npm ci`, `npm run lint`, `npm run build` đều đạt với Next.js 15.5.27. `npm audit --omit=dev` báo 0 vulnerabilities. | `npm audit` toàn bộ vẫn cảnh báo ở dependency phát triển (Tailwind/ESLint); không ép nâng Tailwind major trong P0. FE hiện vẫn là mẫu, chưa xác minh tích hợp API. |
+
+Các chỉnh sửa cần thiết để khép P0: đồng bộ Python root/backend về 3.11; thêm lockfile backend và dùng nó trong Docker/CI; tạo `frontend/package-lock.json` để `npm ci` tái lập được; nâng Next.js/ESLint config lên 15.5.27 để production build hoạt động với API route params hiện tại; bỏ tải font Google trong build để không phụ thuộc mạng ngoài. Những thay đổi này chưa chứng minh chất lượng luồng nghiên cứu.
+
+Các lệnh chính đã chạy:
+
+```powershell
+docker compose config --quiet
+docker compose build backend
+docker compose up -d backend worker
+docker compose exec -T backend alembic current
+docker compose exec -T -e LANGSMITH_TRACING=false -e LANGCHAIN_TRACING_V2=false backend python -m pytest -q tests
+docker compose exec -T worker celery -A app.worker inspect ping --timeout=10
+Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8000/api/v1/health
+cd frontend; npm ci; npm run lint; npm run build; npm audit --omit=dev
+cd ..; uv lock --check --python 3.11; uv run --locked --python 3.11 python --version
+```
+
+**P0 status: Verified for Python/dependency alignment, reproducible builds, clean DB migration, and current baseline tests.** Chưa đạt các gate của P1/P2 và chưa chạy một research workflow thật với provider.
+
+## Kết quả lịch sử ngày 27/09/2026
 
 | Hạng mục | Kết quả | Giới hạn |
 |---|---|---|
@@ -52,21 +85,20 @@ Invoke-WebRequest -UseBasicParsing http://localhost:8000/api/v1/openapi.json
 
 Đã smoke-test POST/GET task qua `/api/v1/research`, rồi xóa task kiểm tra. Routing smoke-test chạy trong backend container với các state mẫu; các trường hợp được kiểm tra gồm `PASS → post_processor`, `REVISE → writer`, `NEED_MORE_DATA → macro_routing/researcher`, và dừng research khi đạt `max_iterations`.
 
-## Chưa xác minh
+## Các mục còn chưa xác minh tính đến 12/10/2026
 
-- Chưa chạy research task end-to-end. Workflow có thể gọi LLM/Tavily và phát sinh chi phí; cần chốt provider, API key và trần chi phí trước khi chạy.
-- Chưa xác minh citation/evidence lineage, độ đúng ngữ nghĩa, macro-loop có dữ liệu thật, retry/idempotency và trạng thái lỗi.
-- Chưa kiểm tra auth/ownership; API hiện còn dùng `dummy_user_id`, chưa phù hợp cho người dùng thật.
-- Chưa kiểm tra giao diện frontend, luồng SSE thật, hiệu năng, bảo mật production hoặc khởi tạo DB từ volume rỗng.
-- Python local/root project đang khác backend Docker (3.14 so với 3.11); dependencies backend chưa được khóa đầy đủ để tái lập chính xác.
+- Chưa chạy research task end-to-end với LLM/Tavily thật. Cần xác nhận provider, API key và ngân sách trước khi gọi dịch vụ có thể tính phí.
+- Chưa xác minh citation/evidence lineage, chất lượng nội dung, research loop có dữ liệu thật, Celery retry/redelivery, cancellation, idempotency/outbox hoặc xử lý lỗi lúc dispatch.
+- Auth, ownership cơ bản, đăng nhập, task start và chặn đọc chéo owner đã được kiểm tra trong backend suite hiện có; chưa coi đây là nghiệm thu toàn bộ bảo mật.
+- Frontend mới qua lint/build; chưa chạy trình duyệt, chưa kết nối API. SSE, tải file, hiệu năng và hardening production chưa xác minh.
+- Migration từ database rỗng đã được kiểm tra trong PostgreSQL tạm. Chưa kiểm thử upgrade từ mọi phiên bản DB đang được sử dụng hoặc downgrade.
 
 ## Bước tiếp theo
 
-1. Rà soát thay đổi theo từng phạm vi và dùng commit riêng cho implementation với documentation; tài liệu dự án được version cùng mã nguồn.
-2. Chốt Python/dependency baseline có thể tái lập giữa local và Docker.
-3. Ưu tiên auth/ownership và trạng thái task trước khi mở cho người dùng khác.
-4. Viết/hoàn thiện kiểm thử không gọi provider ngoài cho state, routing, lỗi và citation validator.
-5. Chạy một workflow end-to-end có giới hạn chi phí, lưu bằng chứng command/result, rồi mới đánh dấu search → evidence → report hoàn tất.
+1. Sang P1: hoàn thiện lifecycle/run và dispatch bền vững; tập trung vào lỗi commit task thành công nhưng enqueue thất bại, duplicate delivery, cancel và quota RUNNING.
+2. Tăng backend tests cho các chuyển trạng thái, dispatch failure/redelivery, worker restart và task A chờ trong lúc task B chạy.
+3. Chỉ sau khi các test P1 đạt mới mở P2 để hoàn thiện research path; provider-backed run cần có cap chi phí riêng.
+4. Ghi lệnh và kết quả vào biên bản này sau mỗi gate; không đánh dấu provider E2E đạt dựa trên test dùng fake node/provider.
 
 ## An toàn thông tin
 
