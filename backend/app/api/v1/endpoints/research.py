@@ -6,14 +6,16 @@ from sqlalchemy import select
 
 from app.core.database import get_db
 from app.api.deps import get_current_user
-from app.models.task import ResearchTask
+from app.models.task import ResearchTask, TaskDispatchOutbox
 from app.models.user import User
 from app.models.report import ResearchReport
+from app.models.grounding import Citation
+from app.models.source import DocumentChunk, ResearchSource
 from app.schemas.task import ResearchTaskCreate, ResearchTaskResponse
-from app.schemas.report import ResearchReportResponse
-from app.models.task import TaskDispatchOutbox
+from app.schemas.report import CitationItemResponse, ResearchReportResponse
 
 router = APIRouter()
+
 
 
 @router.post("", response_model=ResearchTaskResponse, status_code=status.HTTP_201_CREATED)
@@ -125,3 +127,43 @@ async def get_research_report(
     if not report:
         raise HTTPException(status_code=404, detail="Report not found for this task")
     return report
+
+
+@router.get("/{task_id}/citations", response_model=List[CitationItemResponse])
+async def get_research_citations(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lấy danh sách trích dẫn và bằng chứng đã xác minh của Research Task."""
+    task_res = await db.execute(
+        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+    )
+    if not task_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+    result = await db.execute(
+        select(Citation, ResearchSource, DocumentChunk)
+        .outerjoin(ResearchSource, Citation.source_id == ResearchSource.id)
+        .outerjoin(DocumentChunk, Citation.chunk_id == DocumentChunk.id)
+        .where(Citation.research_task_id == task_id)
+        .order_by(Citation.citation_number.asc().nulls_last(), Citation.id.asc())
+    )
+    rows = result.all()
+    citations = []
+    for cit, src, chk in rows:
+        citations.append(
+            CitationItemResponse(
+                id=cit.id,
+                citation_number=cit.citation_number,
+                citation_label=cit.citation_label,
+                claim_text=cit.claim_text,
+                source_id=cit.source_id,
+                source_title=src.title if src else None,
+                source_url=src.url if src else "",
+                chunk_id=cit.chunk_id,
+                chunk_content=chk.content if chk else None,
+            )
+        )
+    return citations
+

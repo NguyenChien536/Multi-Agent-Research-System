@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { CheckCircle2, Circle, Clock, FileText, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Circle, Clock, ExternalLink, FileText, Link2, RefreshCw } from 'lucide-react';
 import { Badge, Card } from '@/components/ui/Components';
 import { api } from '@/lib/api';
-import type { ResearchReportResponse, ResearchTaskResponse } from '@/types';
+import type { CitationResponse, ResearchReportResponse, ResearchTaskResponse } from '@/types';
+
 
 const STAGES = [
   { title: 'Lập kế hoạch', steps: ['SUPERVISOR'], statuses: ['PLANNING', 'WAITING_APPROVAL'] },
@@ -54,9 +55,11 @@ export default function WorkspacePage() {
   const params = useParams<{ id: string }>();
   const [task, setTask] = useState<ResearchTaskResponse | null>(null);
   const [report, setReport] = useState<ResearchReportResponse | null>(null);
+  const [citations, setCitations] = useState<CitationResponse[]>([]);
   const [error, setError] = useState('');
   const [reportError, setReportError] = useState('');
-  const [activeTab, setActiveTab] = useState<'report' | 'details'>('report');
+  const [citationsError, setCitationsError] = useState('');
+  const [activeTab, setActiveTab] = useState<'report' | 'citations' | 'details'>('report');
   const [reloadKey, setReloadKey] = useState(0);
 
   const loadReport = useCallback(async () => {
@@ -70,12 +73,24 @@ export default function WorkspacePage() {
     }
   }, [params.id]);
 
+  const loadCitations = useCallback(async () => {
+    setCitationsError('');
+    try {
+      const list = await api.tasks.getCitations(params.id);
+      setCitations(list);
+    } catch (err) {
+      setCitationsError(err instanceof Error ? err.message : 'Không thể tải trích dẫn.');
+    }
+  }, [params.id]);
+
   useEffect(() => {
     let active = true;
     setTask(null);
     setReport(null);
+    setCitations([]);
     setError('');
     setReportError('');
+    setCitationsError('');
 
     const poll = async () => {
       try {
@@ -83,7 +98,10 @@ export default function WorkspacePage() {
         if (!active) return;
         setTask(value);
         setError('');
-        if (['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(value.status)) void loadReport();
+        if (['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(value.status)) {
+          void loadReport();
+          void loadCitations();
+        }
         if (TERMINAL.has(value.status)) clearInterval(timer);
       } catch (err) {
         if (!active) return;
@@ -95,7 +113,7 @@ export default function WorkspacePage() {
     const timer = setInterval(() => { void poll(); }, 5000);
     void poll();
     return () => { active = false; clearInterval(timer); };
-  }, [params.id, loadReport, reloadKey]);
+  }, [params.id, loadReport, loadCitations, reloadKey]);
 
   if (error) {
     return <div className="p-8 text-center text-red-700" role="alert">{error}<div className="mt-4"><button className="underline" onClick={() => setReloadKey(value => value + 1)}>Thử lại</button></div></div>;
@@ -111,9 +129,10 @@ export default function WorkspacePage() {
       <div className="min-h-16 px-6 py-3 border-b border-zinc-200 bg-white flex flex-wrap items-center justify-between gap-3 shrink-0">
         <div>
           <h1 className="font-semibold text-lg line-clamp-1">{task.title}</h1>
-          <div className="flex items-center gap-2 mt-0.5 text-xs text-zinc-500">
+          <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-zinc-500">
             <span className="flex items-center gap-1">{isWorking && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}{statusLabel(task.status)}{isWorking && task.current_step ? ` · ${STEP_LABELS[task.current_step] ?? task.current_step}` : ''}</span>
             <span>•</span><span>Task ID: {task.id}</span>
+            <span>•</span><span className="text-zinc-400">Theo dõi: Polling định kỳ từ API (SSE streaming đang tắt)</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -144,18 +163,85 @@ export default function WorkspacePage() {
         <main className="flex-1 flex flex-col bg-white overflow-hidden">
           <div className="flex border-b border-zinc-200 px-2 bg-zinc-50 shrink-0">
             <button onClick={() => setActiveTab('report')} className={`px-4 py-3 text-sm font-medium border-b-2 ${activeTab === 'report' ? 'border-zinc-900 text-zinc-900' : 'border-transparent text-zinc-500'}`}>Bài báo</button>
+            <button onClick={() => setActiveTab('citations')} className={`px-4 py-3 text-sm font-medium border-b-2 ${activeTab === 'citations' ? 'border-zinc-900 text-zinc-900' : 'border-transparent text-zinc-500'}`}>Nguồn dẫn & Trích dẫn ({citations.length})</button>
             <button onClick={() => setActiveTab('details')} className={`px-4 py-3 text-sm font-medium border-b-2 ${activeTab === 'details' ? 'border-zinc-900 text-zinc-900' : 'border-transparent text-zinc-500'}`}>Thông tin nhiệm vụ</button>
             <button className="ml-auto px-4 text-zinc-500 hover:text-zinc-900" onClick={() => setReloadKey(value => value + 1)} aria-label="Làm mới"><RefreshCw size={16} /></button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-6 md:p-10">
-            {activeTab === 'report' ? <div className="max-w-3xl mx-auto">
-              {['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(task.status) ? report?.research_task_id === params.id ? <>{task.status !== 'COMPLETED' && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{statusLabel(task.status)} — nội dung này chưa phải bài báo hoàn chỉnh.</p>}<div className="flex items-center gap-2 mb-6"><FileText size={20} /><h2 className="text-xl font-semibold">{report.title}</h2></div><pre className="whitespace-pre-wrap font-sans text-sm leading-7 text-zinc-800">{report.content_markdown}</pre></> : <div className="text-zinc-600">{reportError || 'Đang tải bài báo...'}{reportError && <button className="underline ml-2" onClick={() => void loadReport()}>Thử lại</button>}</div>
-                : <Card className="p-6 text-sm text-zinc-600">{task.status === 'FAILED' || task.status === 'CANCELLED' ? 'Bài nghiên cứu đã dừng và chưa có bài báo hoàn chỉnh.' : task.status === 'WAITING_APPROVAL' || task.status === 'WAITING_USER_DATA' ? 'Bài nghiên cứu đang chờ thao tác của bạn. Chưa có bài báo hoàn chỉnh.' : 'Bài báo sẽ xuất hiện khi workflow hoàn thành. Trạng thái hiện tại được lấy từ API.'}</Card>}
-            </div> : <div className="max-w-3xl mx-auto"><Card className="p-6 space-y-4"><h2 className="text-lg font-semibold">Thông tin nhiệm vụ</h2><div><span className="font-medium text-sm">Câu hỏi nghiên cứu</span><p className="text-zinc-600 mt-1">{task.research_question}</p></div>{task.description && <div><span className="font-medium text-sm">Mô tả</span><p className="text-zinc-600 mt-1">{task.description}</p></div>}<div className="text-sm text-zinc-500">Tạo lúc {formatDate(task.created_at)}</div><Link className="inline-block text-sm underline" href="/dashboard">Quay lại danh sách bài</Link></Card></div>}
+            {activeTab === 'report' && (
+              <div className="max-w-3xl mx-auto">
+                {['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(task.status) ? report?.research_task_id === params.id ? (
+                  <>
+                    {task.status !== 'COMPLETED' && <p className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">{statusLabel(task.status)} — nội dung này chưa phải bài báo hoàn chỉnh.</p>}
+                    <div className="flex items-center gap-2 mb-6"><FileText size={20} /><h2 className="text-xl font-semibold">{report.title}</h2></div>
+                    <pre className="whitespace-pre-wrap font-sans text-sm leading-7 text-zinc-800">{report.content_markdown}</pre>
+                  </>
+                ) : (
+                  <div className="text-zinc-600">{reportError || 'Đang tải bài báo...'}{reportError && <button className="underline ml-2" onClick={() => void loadReport()}>Thử lại</button>}</div>
+                ) : (
+                  <Card className="p-6 text-sm text-zinc-600">{task.status === 'FAILED' || task.status === 'CANCELLED' ? 'Bài nghiên cứu đã dừng và chưa có bài báo hoàn chỉnh.' : task.status === 'WAITING_APPROVAL' || task.status === 'WAITING_USER_DATA' ? 'Bài nghiên cứu đang chờ thao tác của bạn. Chưa có bài báo hoàn chỉnh.' : 'Bài báo sẽ xuất hiện khi workflow hoàn thành. Trạng thái hiện tại được lấy từ API.'}</Card>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'citations' && (
+              <div className="max-w-3xl mx-auto space-y-4">
+                <div className="mb-4">
+                  <h2 className="text-lg font-semibold text-zinc-900">Bằng chứng & Trích dẫn nguồn đã xác minh</h2>
+                  <p className="text-xs text-zinc-500 mt-1">Các luận điểm được trích xuất từ tài liệu nguồn và liên kết với vị trí tham chiếu trong báo cáo.</p>
+                </div>
+                {citationsError && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-xl">{citationsError} <button className="underline ml-2" onClick={() => void loadCitations()}>Thử lại</button></div>}
+                {citations.length === 0 ? (
+                  <Card className="p-6 text-sm text-zinc-600">{['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(task.status) ? 'Chưa có trích dẫn đã xác minh cho bài này.' : 'Trích dẫn sẽ xuất hiện khi workflow thu thập và hoàn thành báo cáo.'}</Card>
+                ) : (
+                  <div className="space-y-3">
+                    {citations.map((citation) => (
+                      <Card key={citation.id} className="p-4 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <Badge variant="outline">{citation.citation_label || `[${citation.citation_number ?? '?'}]`}</Badge>
+                          {citation.source_url ? (
+                            <a href={citation.source_url} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-blue-600 hover:underline inline-flex items-center gap-1 max-w-md truncate">
+                              <span className="truncate">{citation.source_title || citation.source_url}</span>
+                              <ExternalLink size={12} className="shrink-0" />
+                            </a>
+                          ) : (
+                            <span className="text-xs text-zinc-400">Không có liên kết nguồn</span>
+                          )}
+                        </div>
+                        {citation.claim_text && (
+                          <div className="text-sm text-zinc-900 font-medium">
+                            <span className="text-zinc-500 font-normal">Luận điểm: </span>
+                            {citation.claim_text}
+                          </div>
+                        )}
+                        {citation.chunk_content && (
+                          <blockquote className="text-xs text-zinc-600 border-l-2 border-zinc-300 pl-3 italic bg-zinc-50 py-1.5 rounded-r">
+                            &ldquo;{citation.chunk_content}&rdquo;
+                          </blockquote>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'details' && (
+              <div className="max-w-3xl mx-auto">
+                <Card className="p-6 space-y-4">
+                  <h2 className="text-lg font-semibold">Thông tin nhiệm vụ</h2>
+                  <div><span className="font-medium text-sm">Câu hỏi nghiên cứu</span><p className="text-zinc-600 mt-1">{task.research_question}</p></div>
+                  {task.description && <div><span className="font-medium text-sm">Mô tả</span><p className="text-zinc-600 mt-1">{task.description}</p></div>}
+                  <div className="text-sm text-zinc-500">Tạo lúc {formatDate(task.created_at)}</div>
+                  <Link className="inline-block text-sm underline" href="/dashboard">Quay lại danh sách bài</Link>
+                </Card>
+              </div>
+            )}
           </div>
         </main>
       </div>
     </div>
   );
 }
+
