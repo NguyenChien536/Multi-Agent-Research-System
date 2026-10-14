@@ -10,6 +10,17 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+
+async def _record_progress(state: ResearchState, step: str, iteration: int | None = None) -> None:
+    from app.services.progress import record_agent_progress
+
+    await record_agent_progress(
+        state.get("task_id"),
+        state.get("attempt_number"),
+        step,
+        iteration,
+    )
+
 # ---------------------------------------------------------------------------
 # Caching Configuration
 # ---------------------------------------------------------------------------
@@ -113,6 +124,7 @@ async def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     """
     Supervisor Agent: Đóng vai trò lập kế hoạch và định hướng ban đầu.
     """
+    await _record_progress(state, "SUPERVISOR")
     llm = get_fast_llm().with_structured_output(SupervisorPlan)
 
     prompt = f"""
@@ -140,6 +152,7 @@ async def researcher_node(state: ResearchState) -> Dict[str, Any]:
     """
     Researcher Agent: Sử dụng Tavily API để tìm kiếm và cào web song song.
     """
+    await _record_progress(state, "RESEARCHER")
     from app.tools.search import execute_parallel_searches
     from app.tools.scraper import fetch_urls_parallel
 
@@ -179,6 +192,7 @@ async def researcher_node(state: ResearchState) -> Dict[str, Any]:
         })
 
     current_iter = state.get("current_iteration", 0) + 1
+    await _record_progress(state, "RESEARCHER", current_iter)
 
     return {
         "current_agent": "researcher",
@@ -192,6 +206,7 @@ async def curator_node(state: ResearchState) -> Dict[str, Any]:
     Curator Module: Lọc URL trùng lặp, chia nhỏ (Chunking) và nạp vào pgvector.
     Module này chạy code Python 100%, không dùng LLM.
     """
+    await _record_progress(state, "CURATOR")
     import uuid
     from app.core.database import AsyncSessionLocal
     from app.models.source import ResearchSource
@@ -255,6 +270,7 @@ async def analyst_node(state: ResearchState) -> Dict[str, Any]:
     """
     Analyst Agent: Dùng Semantic Search RAG để trích xuất Claims + Evidence từ pgvector.
     """
+    await _record_progress(state, "ANALYST")
     import uuid
     from sqlalchemy import select
     from app.core.database import AsyncSessionLocal
@@ -338,6 +354,7 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     """
     Writer Agent: Viết bản nháp dựa trên Claims & Evidences. (Dùng mô hình xịn)
     """
+    await _record_progress(state, "WRITER")
     llm = get_smart_llm()
     plan = state.get("plan", {})
     claims = [
@@ -368,6 +385,7 @@ async def critic_node(state: ResearchState) -> Dict[str, Any]:
     """
     Critic Agent: Đóng vai 'Devil's Advocate' kiểm chứng logic và fact. Trả về JSON ngắn.
     """
+    await _record_progress(state, "CRITIC")
     llm = get_fast_llm().with_structured_output(CriticVerdict)
     draft = state.get("draft_report_markdown", "")
 
@@ -393,6 +411,7 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
     """
     Post Processor: Module Regex code để định dạng Markdown cuối cùng và đánh số trích dẫn.
     """
+    await _record_progress(state, "POST_PROCESSOR")
     draft = state.get("draft_report_markdown", "")
 
     import re

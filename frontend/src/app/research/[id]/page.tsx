@@ -9,15 +9,26 @@ import { api } from '@/lib/api';
 import type { ResearchReportResponse, ResearchTaskResponse } from '@/types';
 
 const STAGES = [
-  { title: 'Lập kế hoạch', statuses: ['PLANNING', 'WAITING_APPROVAL'] },
-  { title: 'Thu thập và phân tích nguồn', statuses: ['RESEARCHING', 'INDEXING', 'ANALYZING'] },
-  { title: 'Viết và phản biện', statuses: ['WRITING', 'REVIEWING', 'FINALIZING'] },
+  { title: 'Lập kế hoạch', steps: ['SUPERVISOR'], statuses: ['PLANNING', 'WAITING_APPROVAL'] },
+  { title: 'Thu thập và phân tích nguồn', steps: ['RESEARCHER', 'CURATOR', 'ANALYST'], statuses: ['RESEARCHING', 'INDEXING', 'ANALYZING'] },
+  { title: 'Viết và phản biện', steps: ['WRITER', 'CRITIC', 'POST_PROCESSOR'], statuses: ['WRITING', 'REVIEWING', 'FINALIZING'] },
 ];
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW', 'PARTIAL']);
+const STEP_LABELS: Record<string, string> = {
+  SUPERVISOR: 'Agent lập kế hoạch',
+  RESEARCHER: 'Agent tìm kiếm nguồn',
+  CURATOR: 'Agent xử lý nguồn',
+  ANALYST: 'Agent phân tích bằng chứng',
+  WRITER: 'Agent viết báo cáo',
+  CRITIC: 'Agent phản biện',
+  POST_PROCESSOR: 'Đang hoàn thiện báo cáo',
+};
 
-function stageState(index: number, status: string): 'done' | 'active' | 'waiting' {
+function stageState(index: number, status: string, currentStep?: string | null): 'done' | 'active' | 'waiting' {
   if (status === 'COMPLETED') return 'done';
-  const current = STAGES.findIndex(stage => stage.statuses.includes(status));
+  const current = currentStep
+    ? STAGES.findIndex(stage => stage.steps.includes(currentStep))
+    : STAGES.findIndex(stage => stage.statuses.includes(status));
   if (current < 0) return 'waiting';
   return index < current ? 'done' : index === current ? 'active' : 'waiting';
 }
@@ -101,7 +112,7 @@ export default function WorkspacePage() {
         <div>
           <h1 className="font-semibold text-lg line-clamp-1">{task.title}</h1>
           <div className="flex items-center gap-2 mt-0.5 text-xs text-zinc-500">
-            <span className="flex items-center gap-1">{isWorking && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}{statusLabel(task.status)}</span>
+            <span className="flex items-center gap-1">{isWorking && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}{statusLabel(task.status)}{isWorking && task.current_step ? ` · ${STEP_LABELS[task.current_step] ?? task.current_step}` : ''}</span>
             <span>•</span><span>Task ID: {task.id}</span>
           </div>
         </div>
@@ -117,7 +128,7 @@ export default function WorkspacePage() {
           <div className="p-4">
             <div className="relative border-l-2 border-zinc-200 ml-3 space-y-6">
               {STAGES.map((stage, index) => {
-                const state = stageState(index, task.status);
+                const state = stageState(index, task.status, task.current_step);
                 const Icon = state === 'done' ? CheckCircle2 : state === 'active' ? Clock : Circle;
                 return <div key={stage.title} className="relative pl-6"><span className={`absolute -left-3.5 top-0.5 p-1 rounded-full border border-zinc-200 bg-white ${state === 'done' ? 'text-emerald-500' : state === 'active' ? 'text-blue-500' : 'text-zinc-300'}`}><Icon size={14} /></span><span className={`text-sm ${state === 'waiting' ? 'text-zinc-400' : 'font-medium text-zinc-900'}`}>{stage.title}</span></div>;
               })}
