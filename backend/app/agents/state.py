@@ -70,13 +70,13 @@ class ResearchState(TypedDict, total=False):
     analysis_results: Dict[str, Any]  # Luận điểm, mâu thuẫn, phát hiện chính (kèm chunk_id)
     
     # === Viết & Phản biện (Ủy quyền cho Subgraph) ===
-    draft_report_markdown: str        # Bản nháp từ Writer (có tag @src_xx)
+    draft_report_markdown: str        # Bản nháp từ Writer (có marker claim để tạo citation đã kiểm chứng)
     critic_verdict: str               # 'PASS' | 'REVISE' | 'NEED_MORE_DATA'
     critic_feedback: List[str]        # Feedback chi tiết: câu nào sai, thiếu gì
     critic_missing_areas: List[str]   # Danh sách knowledge gaps -> sinh Delta Queries
     citation_validation: Dict[str, Any] # Kết quả Citation Validator: valid/invalid counts
     
     # === Kết quả cuối cùng ===
-    final_report_markdown: str        # Báo cáo sau Post-Processor (citation đã đánh số [1], [2])
+    final_report_markdown: str        # Báo cáo sau Post-Processor (citation khớp claim/evidence đã lưu)
     citations: List[Dict[str, Any]]   # Danh sách trích dẫn hoàn chỉnh
     errors: Annotated[List[str], operator.add] # Lỗi phát sinh trong quá trình

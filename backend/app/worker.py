@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import uuid
 from datetime import datetime, timedelta, timezone
 from celery import Celery
 from sqlalchemy import func, select, update
@@ -156,6 +157,59 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     word_count=len(report_content.split()),
                 )
                 session.add(report)
+                await session.flush()
+
+                # Citation rows are created only from persisted, verified
+                # claim/evidence links owned by this task. This keeps report
+                # references traceable and rejects graph-state tampering.
+                from app.models.grounding import Citation, ClaimEvidence, Evidence, ResearchClaim
+                from app.models.source import DocumentChunk, ResearchSource
+
+                for number, item in enumerate(final_state.get("citations", []), start=1):
+                    try:
+                        claim_id = uuid.UUID(str(item["claim_id"]))
+                        evidence_id = uuid.UUID(str(item["evidence_id"]))
+                        source_id = uuid.UUID(str(item["source_id"]))
+                        chunk_id = uuid.UUID(str(item["chunk_id"]))
+                    except (KeyError, TypeError, ValueError):
+                        logger.warning("Skipping malformed citation metadata for task %s", task_id)
+                        continue
+
+                    lineage = await session.execute(
+                        select(ResearchClaim.id, ResearchClaim.claim_text)
+                        .join(ClaimEvidence, ClaimEvidence.claim_id == ResearchClaim.id)
+                        .join(Evidence, Evidence.id == ClaimEvidence.evidence_id)
+                        .join(DocumentChunk, DocumentChunk.id == Evidence.chunk_id)
+                        .join(ResearchSource, ResearchSource.id == DocumentChunk.source_id)
+                        .where(
+                            ResearchClaim.id == claim_id,
+                            ResearchClaim.research_task_id == task.id,
+                            ResearchClaim.is_verified.is_(True),
+                            Evidence.id == evidence_id,
+                            Evidence.research_task_id == task.id,
+                            Evidence.source_id == source_id,
+                            Evidence.chunk_id == chunk_id,
+                            DocumentChunk.research_task_id == task.id,
+                            DocumentChunk.source_id == source_id,
+                            ResearchSource.id == source_id,
+                            ResearchSource.research_task_id == task.id,
+                        )
+                    )
+                    lineage_row = lineage.one_or_none()
+                    if lineage_row is None:
+                        logger.warning("Skipping unverified/cross-task citation for task %s", task_id)
+                        continue
+
+                    session.add(Citation(
+                        research_task_id=task.id,
+                        report_id=report.id,
+                        source_id=source_id,
+                        chunk_id=chunk_id,
+                        claim_id=claim_id,
+                        citation_number=number,
+                        citation_label=f"[{number}]",
+                        claim_text=lineage_row.claim_text,
+                    ))
                 task.status = "COMPLETED"
                 task.worker_lease_until = None
                 await session.commit()

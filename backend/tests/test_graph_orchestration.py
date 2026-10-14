@@ -30,6 +30,7 @@ Coverage
 
 import asyncio
 import ipaddress
+import re
 import uuid
 from types import SimpleNamespace
 from typing import Any
@@ -50,10 +51,12 @@ from app.agents.state import ResearchState
 from app.core.database import AsyncSessionLocal, engine
 from app.main import app
 from app.models.report import ResearchReport
+from app.models.grounding import Citation, ClaimEvidence, Evidence, ResearchClaim
 from app.models.task import ResearchTask
 from app.models.source import DocumentChunk, ResearchSource
 from app.tools.search import SearchResult
 from app.services import task_dispatcher
+from app.services.grounding import persist_grounded_claims
 from app import worker as worker_module
 from app.worker import run_langgraph_workflow
 from app.tools.scraper import ScraperTool, SSRFError
@@ -166,6 +169,38 @@ def test_macro_routing_pass_verdict_goes_to_post_processor():
     # If critic_verdict is PASS, macro routing always goes to post_processor.
     state: ResearchState = {"critic_verdict": "PASS", "current_iteration": 0, "max_iterations": 2}
     assert should_continue_research(state) == "post_processor"
+
+
+@pytest.mark.asyncio
+async def test_post_processor_keeps_only_known_claim_citations():
+    claim_id = str(uuid.uuid4())
+    unknown_id = str(uuid.uuid4())
+    state = {
+        "draft_report_markdown": (
+            f"# Findings\n\nValid claim [[@claim:{claim_id}]]. "
+            f"Untrusted [99] [[@claim:{unknown_id}]].\n\n"
+            "## References\n\n[1] Model-invented reference"
+        ),
+        "claims": [{
+            "claim_id": claim_id,
+            "claim": "A supported claim",
+            "evidence_id": str(uuid.uuid4()),
+            "source_tag": "src_01",
+            "source_title": "Verified source",
+            "source_url": "https://example.org/source",
+            "source_id": str(uuid.uuid4()),
+            "chunk_id": str(uuid.uuid4()),
+        }],
+    }
+
+    result = await nodes_module.post_processor_node(state)
+
+    assert "Valid claim [1]." in result["final_report_markdown"]
+    assert "[99]" not in result["final_report_markdown"]
+    assert "Model-invented reference" not in result["final_report_markdown"]
+    assert "[@claim:" not in result["final_report_markdown"]
+    assert "## References\n\n[1] Verified source. https://example.org/source" in result["final_report_markdown"]
+    assert [item["claim_id"] for item in result["citations"]] == [claim_id]
 
 
 # ---------------------------------------------------------------------------
@@ -716,10 +751,7 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
     API, worker, and PostgreSQL writes are real.
     """
     writer_prompts: list[str] = []
-    report_markdown = (
-        "# Findings\n\nThe source supports the finding [1].\n\n"
-        "# References\n\n[1] Example source, https://example.org/paper."
-    )
+    report_markdown = "# Findings\n\nThe source supports the finding."
 
     class FakeStructuredLLM:
         def with_structured_output(self, schema):
@@ -752,8 +784,11 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
             return self
 
         async def ainvoke(self, messages):
-            writer_prompts.append(str(messages))
-            return SimpleNamespace(content=report_markdown)
+            prompt = str(messages)
+            writer_prompts.append(prompt)
+            claim_id_match = re.search(r"'claim_id': '([0-9a-f-]{36})'", prompt)
+            assert claim_id_match, f"Writer must receive a persisted claim ID: {prompt}"
+            return SimpleNamespace(content=f"{report_markdown} [[@claim:{claim_id_match.group(1)}]]")
 
     monkeypatch.setattr(nodes_module, "get_fast_llm", FakeStructuredLLM)
     monkeypatch.setattr(nodes_module, "get_smart_llm", FakeWriterLLM)
@@ -812,7 +847,8 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
         report = await client.get(f"/api/v1/research/{task_id}/report", headers=headers)
         assert task.status_code == 200 and task.json()["status"] == "COMPLETED"
         assert report.status_code == 200
-        assert report_markdown in report.json()["content_markdown"]
+        assert "The source supports the finding. [1]" in report.json()["content_markdown"]
+        assert "## References" in report.json()["content_markdown"]
 
     assert len(writer_prompts) == 1
     assert "The source supports the finding." in writer_prompts[0]
@@ -830,6 +866,74 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
         assert len(chunks) == 1
         assert chunks[0].source_id == sources[0].id
         assert chunks[0].content == "The source provides supporting evidence."
+        claims = (await db.execute(
+            select(ResearchClaim).where(ResearchClaim.research_task_id == uuid.UUID(task_id))
+        )).scalars().all()
+        evidences = (await db.execute(
+            select(Evidence).where(Evidence.research_task_id == uuid.UUID(task_id))
+        )).scalars().all()
+        links = (await db.execute(
+            select(ClaimEvidence).where(ClaimEvidence.claim_id == claims[0].id)
+        )).scalars().all()
+        citations = (await db.execute(
+            select(Citation).where(Citation.research_task_id == uuid.UUID(task_id))
+        )).scalars().all()
+        assert len(claims) == len(evidences) == len(links) == len(citations) == 1
+        assert claims[0].is_verified is True
+        assert evidences[0].content == "The source provides supporting evidence."
+        assert evidences[0].chunk_id == chunks[0].id
+        assert citations[0].claim_id == claims[0].id
+        assert citations[0].source_id == sources[0].id
+        assert citations[0].chunk_id == chunks[0].id
+        assert citations[0].report_id == uuid.UUID(report.json()["id"])
+
+        # Reprocessing the same extraction is idempotent; unsupported quotes
+        # and chunks owned by another task cannot create trusted claims.
+        persisted_again = await persist_grounded_claims(
+            db,
+            uuid.UUID(task_id),
+            [{
+                "claim": "The source supports the finding.",
+                "evidence_quote": "The source provides supporting evidence.",
+            }],
+            chunks,
+        )
+        assert len(persisted_again) == 1
+        assert persisted_again[0]["claim_id"] == str(claims[0].id)
+        unsupported = await persist_grounded_claims(
+            db,
+            uuid.UUID(task_id),
+            [{"claim": "Unsupported claim", "evidence_quote": "Not in the source."}],
+            chunks,
+        )
+        assert unsupported == []
+
+        task_row = await db.get(ResearchTask, uuid.UUID(task_id))
+        other_task = ResearchTask(
+            user_id=task_row.user_id,
+            title="Different task",
+            research_question="A separate research question",
+        )
+        db.add(other_task)
+        await db.flush()
+        cross_task = await persist_grounded_claims(
+            db,
+            other_task.id,
+            [{
+                "claim": "Cross-task claim",
+                "evidence_quote": "The source provides supporting evidence.",
+            }],
+            chunks,
+        )
+        assert cross_task == []
+        await db.commit()
+
+        assert len((await db.execute(
+            select(ResearchClaim).where(ResearchClaim.research_task_id == uuid.UUID(task_id))
+        )).scalars().all()) == 1
+        assert len((await db.execute(
+            select(Evidence).where(Evidence.research_task_id == uuid.UUID(task_id))
+        )).scalars().all()) == 1
 
     await engine.dispose()
 

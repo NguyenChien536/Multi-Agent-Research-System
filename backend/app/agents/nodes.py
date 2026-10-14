@@ -256,7 +256,9 @@ async def analyst_node(state: ResearchState) -> Dict[str, Any]:
     Analyst Agent: Dùng Semantic Search RAG để trích xuất Claims + Evidence từ pgvector.
     """
     import uuid
+    from sqlalchemy import select
     from app.core.database import AsyncSessionLocal
+    from app.models.source import ResearchSource
     from app.tools.embedder import EmbedderTool
 
     llm = get_fast_llm().with_structured_output(AnalystExtraction)
@@ -271,19 +273,36 @@ async def analyst_node(state: ResearchState) -> Dict[str, Any]:
     if not queries:
         queries = [state.get("research_question")]
 
-    all_claims = []
+    all_claims: list[Dict[str, Any]] = []
 
     # Dùng asyncio.gather để xử lý song song các queries
-    async def process_query(query: str) -> List[Dict]:
+    async def process_query(query: str) -> tuple[List[Dict], List[Any]]:
         async with AsyncSessionLocal() as db:
             # RAG: Lấy top 3 chunks liên quan nhất cho query
             similar_chunks = await embedder.search_similar_chunks(db, task_id, query, limit=3)
 
             if not similar_chunks:
-                return []
+                return [], []
+
+            retrieved_chunks = [chunk for chunk, _distance in similar_chunks]
+            chunk_context = []
+            for chunk in retrieved_chunks:
+                source = await db.scalar(
+                    select(ResearchSource).where(
+                        ResearchSource.id == chunk.source_id,
+                        ResearchSource.research_task_id == task_id,
+                    )
+                )
+                if source is not None:
+                    chunk_context.append(
+                        f"Source tag: {source.source_tag}\n"
+                        f"Chunk ID: {chunk.id}\n"
+                        f"Source: {source.title or source.url}\n"
+                        f"Content: {chunk.content}"
+                    )
 
             # Ghép nội dung
-            context_text = "\n\n".join([f"Source: Chunk {c[0].chunk_index}\nContent: {c[0].content}" for c in similar_chunks])
+            context_text = "\n\n".join(chunk_context)
 
             prompt = f"""
             Dựa vào các tài liệu sau, hãy trích xuất các luận điểm và bằng chứng liên quan đến truy vấn: '{query}'
@@ -293,21 +312,26 @@ async def analyst_node(state: ResearchState) -> Dict[str, Any]:
 
             try:
                 extraction = await llm.ainvoke([HumanMessage(content=prompt)])
-                return [c.model_dump() for c in extraction.claims]
+                return [c.model_dump() for c in extraction.claims], retrieved_chunks
             except Exception as e:
                 print(f"Lỗi khi trích xuất claims: {e}")
-                return []
+                return [], []
 
     # Chạy song song tất cả các queries
     tasks = [process_query(q) for q in queries]
     results = await asyncio.gather(*tasks)
+    from app.services.grounding import persist_grounded_claims
 
-    for res_list in results:
-        all_claims.extend(res_list)
+    async with AsyncSessionLocal() as db:
+        for extracted, retrieved_chunks in results:
+            all_claims.extend(
+                await persist_grounded_claims(db, task_id, extracted, retrieved_chunks)
+            )
+        await db.commit()
 
     return {
         "current_agent": "analyst",
-        "claims": all_claims  # Annotated[list, operator.add]
+        "claims": all_claims  # Only source-verified claims with persisted IDs.
     }
 
 async def writer_node(state: ResearchState) -> Dict[str, Any]:
@@ -316,7 +340,10 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     """
     llm = get_smart_llm()
     plan = state.get("plan", {})
-    claims = state.get("claims", [])
+    claims = [
+        claim for claim in state.get("claims", [])
+        if claim.get("claim_id") and claim.get("evidence_id")
+    ]
     feedback = state.get("critic_feedback", [])
 
     prompt = f"""
@@ -324,10 +351,10 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     Ngôn ngữ: {state.get('language')}
 
     Cấu trúc bắt buộc: {plan.get('required_sections', [])}
-    Dữ liệu đã trích xuất: {claims}
+    Dữ liệu đã trích xuất (chỉ luận điểm có bằng chứng khớp chính xác với đoạn nguồn): {claims}
     Lưu ý từ vòng sửa trước (nếu có): {feedback}
 
-    Yêu cầu: Viết theo định dạng Markdown.
+    Yêu cầu: Viết theo định dạng Markdown. Khi sử dụng một luận điểm, hãy chèn marker chính xác [[@claim:CLAIM_ID]] với CLAIM_ID lấy từ dữ liệu trên. Không tự tạo nguồn, số citation hoặc URL. Nếu không có luận điểm phù hợp, hãy nêu rõ chưa đủ bằng chứng.
     """
 
     response = await llm.ainvoke([SystemMessage(content=prompt)])
@@ -368,11 +395,51 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
     """
     draft = state.get("draft_report_markdown", "")
 
-    # Xử lý regex citation...
-    final_md = draft
+    import re
+
+    claims_by_id = {
+        str(item.get("claim_id")): item
+        for item in state.get("claims", [])
+        if item.get("claim_id") and item.get("evidence_id")
+    }
+    marker_pattern = re.compile(r"\[\[@claim:([0-9a-fA-F-]{36})\]\]")
+    used_ids: list[str] = []
+    for match in marker_pattern.finditer(draft):
+        claim_id = match.group(1)
+        if claim_id in claims_by_id and claim_id not in used_ids:
+            used_ids.append(claim_id)
+
+    citation_numbers = {claim_id: index for index, claim_id in enumerate(used_ids, start=1)}
+
+    def replace_marker(match: re.Match[str]) -> str:
+        number = citation_numbers.get(match.group(1))
+        return f"@@VALID_CITATION_{number}@@" if number is not None else ""
+
+    final_md = marker_pattern.sub(replace_marker, draft)
+    # Remove all model-authored numbered citations, then restore only markers
+    # that resolved to validated claim/evidence records.
+    final_md = re.sub(r"\[\d+\]", "", final_md)
+    for claim_id, number in citation_numbers.items():
+        final_md = final_md.replace(f"@@VALID_CITATION_{number}@@", f"[{number}]")
+    final_md = re.sub(r"\[\[@claim:[^\]]+\]\]", "", final_md)
+    # Discard a model-authored bibliography and construct it from validated sources.
+    final_md = re.sub(
+        r"(?ims)^#{1,3}\s*(references|bibliography|works cited)\s*$.*\Z",
+        "",
+        final_md,
+    ).rstrip()
+    citation_records = [claims_by_id[claim_id] for claim_id in used_ids]
+    if citation_records:
+        references = ["", "## References", ""]
+        for number, item in enumerate(citation_records, start=1):
+            label = item.get("source_title") or item.get("source_url") or item["source_tag"]
+            url = item.get("source_url")
+            references.append(f"[{number}] {label}" + (f". {url}" if url else "."))
+        final_md += "\n".join(references)
 
     return {
         "current_agent": "post_processor",
         "final_report_markdown": final_md,
+        "citations": citation_records,
         "status": "COMPLETED"
     }
