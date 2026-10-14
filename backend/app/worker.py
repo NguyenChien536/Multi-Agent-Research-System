@@ -115,6 +115,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 }
 
             task.status = "RUNNING"
+            task.current_step = None
             task.attempt_number += 1
             task.worker_lease_until = datetime.now(timezone.utc) + timedelta(seconds=settings.WORKER_LEASE_SECONDS)
             claim_attempt = task.attempt_number

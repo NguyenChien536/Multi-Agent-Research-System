@@ -35,6 +35,7 @@ class ResearchTaskResponse(BaseModel):
     research_depth: str
     language: str
     status: str
+    current_step: Optional[str] = None
     require_plan_approval: bool
     max_sources: int
     max_iterations: int

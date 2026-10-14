@@ -29,6 +29,7 @@ export interface ResearchTaskResponse {
   research_depth: string;
   language: string;
   status: string; // PENDING, QUEUED, PLANNING, WAITING_APPROVAL, RESEARCHING, etc.
+  current_step?: string | null;
   require_plan_approval: boolean;
   max_sources: number;
   max_iterations: number;

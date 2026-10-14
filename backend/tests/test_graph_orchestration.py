@@ -751,6 +751,16 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
     API, worker, and PostgreSQL writes are real.
     """
     writer_prompts: list[str] = []
+    from app.services import progress as progress_service
+
+    progress_steps: list[str] = []
+    record_progress = progress_service.record_agent_progress
+
+    async def track_progress(task_id, attempt_number, current_step, current_iteration=None):
+        progress_steps.append(current_step)
+        return await record_progress(task_id, attempt_number, current_step, current_iteration)
+
+    monkeypatch.setattr(progress_service, "record_agent_progress", track_progress)
     report_markdown = "# Findings\n\nThe source supports the finding."
 
     class FakeStructuredLLM:
@@ -846,11 +856,15 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
         task = await client.get(f"/api/v1/research/{task_id}", headers=headers)
         report = await client.get(f"/api/v1/research/{task_id}/report", headers=headers)
         assert task.status_code == 200 and task.json()["status"] == "COMPLETED"
+        assert task.json()["current_step"] == "POST_PROCESSOR"
         assert report.status_code == 200
         assert "The source supports the finding. [1]" in report.json()["content_markdown"]
         assert "## References" in report.json()["content_markdown"]
 
     assert len(writer_prompts) == 1
+    assert list(dict.fromkeys(progress_steps)) == [
+        "SUPERVISOR", "RESEARCHER", "CURATOR", "ANALYST", "WRITER", "CRITIC", "POST_PROCESSOR",
+    ]
     assert "The source supports the finding." in writer_prompts[0]
     assert "The source provides supporting evidence." in writer_prompts[0]
 
