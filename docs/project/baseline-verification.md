@@ -7,7 +7,35 @@
 
 > **Ghi chú 08/10/2026:** Bảng dưới giữ nguyên evidence lịch sử. Lượt rà soát planning mới chỉ đọc source và sửa tài liệu; chưa chạy lại Docker/DB/provider. Migration head trong source nay khác baseline; không hiểu kết quả cũ là trạng thái DB hiện tại.
 
-> **Lượt xác minh mới 12/10/2026:** Đã chạy lại trên Docker Desktop sau khi người dùng bật Docker. Kết quả bên dưới là evidence mới nhất cho baseline P0; các kết quả ngày 27/09 chỉ còn giá trị lịch sử.
+> **Lượt xác minh 14/10/2026 (Issue #2):** Đã kiểm thử và xác minh lát cắt dọc research workflow (Issue #2) gồm pipeline đa tác tử, trích xuất và liên kết bằng chứng/trích dẫn (Source → Chunk → Evidence → Claim → Citation → Report), theo dõi tiến độ agent, và giao diện workspace với tab trích dẫn. Toàn bộ 36 bài test backend và frontend build đều đạt.
+>
+> **Lượt xác minh trước đó (12/10/2026):** Evidence baseline P0; các kết quả ngày 27/09 chỉ còn giá trị lịch sử.
+
+## Kết quả xác minh ngày 14/10/2026 — Research Workflow Vertical Slice (Issue #2)
+
+| Hạng mục | Kết quả thực tế | Giới hạn |
+|---|---|---|
+| Backend syntax | `python -m compileall -q backend/app backend/alembic` đạt 100%. | Không thay thế test tích hợp. |
+| Backend test suite | `pytest -q tests`: **36 passed**, 3 deprecation warnings trong 12.97s. | Toàn bộ boundary nhà cung cấp ngoài (LLM, Tavily, Embedding) được giả lập để đảm bảo tính tất định và không phụ thuộc mạng ngoài. |
+| Graph orchestration & routing | 27 bài test kiểm tra routing thẳng (Supervisor → Researcher → Curator → Analyst → Writer → Critic → PostProcessor), micro-loop (REVISE), macro-loop (NEED_MORE_DATA), cạn budget, và pipeline real-node. | Kiểm thử với provider boundary mocks; chưa kích hoạt model bên ngoài trên live network. |
+| Lineage & Trích dẫn | Liên kết đầy đủ giữa Source, DocumentChunk, Evidence, ResearchClaim, ClaimEvidence, Citation và ResearchReport được ghi nhận bền vững vào PostgreSQL; endpoint `/citations` trả dữ liệu đã xác thực. | Kiểm tra tính toàn vẹn tham chiếu chuỗi chứng cứ; chưa đánh giá độ chính xác ngữ nghĩa bằng human review. |
+| SSRF Guard | Đạt 10/10 test SSRF: chặn dải IPv4 non-public, loopback, IPv6 literal `[::1]`, IPv4-mapped loopback/private (`::ffff:`), IPv6 link-local (`fe80::`), unique-local (`fd00::`), non-HTTP scheme, và chặn follow redirect. | Áp dụng cho scraper HTTP client; không áp dụng cho các cuộc gọi nội bộ giữa API và Redis/DB. |
+| Quota & Job limits | Đạt toàn bộ test tranh chấp claim giữa các worker, tối đa 2 RUNNING jobs/user, phục hồi worker hết hạn lease, và outbox dispatch retry khi broker gặp sự cố. | Giới hạn đo trên mức user và worker container đơn. |
+| Frontend | `npm run lint` và `npm run build` hoàn thành với Next.js 15.5.27; workspace hiển thị tiến trình agent (`current_step`), báo cáo kết quả và tab trích dẫn có trích đoạn nguồn. | Sử dụng polling API (`GET /api/v1/research/{id}`) có kiểm soát; real-time SSE stream tạm thời tắt để tránh giả lập tiến độ. |
+| Docker Compose | `docker compose config --quiet` đạt; PostgreSQL 16 + pgvector, Redis 7, backend và worker hoạt động đồng bộ. | Chưa đo benchmark tải cao nhiều người dùng đồng thời. |
+
+Các lệnh xác minh đã chạy:
+
+```powershell
+docker compose config --quiet
+docker compose exec -T backend python -m compileall -q app alembic
+docker compose exec -T backend python -m pytest -q tests
+cd frontend; npm run lint; npm run build
+```
+
+**Known Limitations & Tiêu chí còn lại của Issue #2:**
+1. Luồng end-to-end với provider thật (Tavily search và LLM trả phí) chưa được kiểm thử trong CI tự động do giới hạn quota/credentials bên thứ ba; do đó Issue #2 tiếp tục duy trì trạng thái **Open** cho đến khi có lượt chạy kiểm chứng bằng tài khoản provider thật.
+2. SSE streaming sự kiện thời gian thực hiện bị tắt, thay thế bằng cơ chế polling trạng thái chính xác theo đúng khuyến nghị của Issue #2.
 
 ## Kết quả xác minh ngày 12/10/2026
 
