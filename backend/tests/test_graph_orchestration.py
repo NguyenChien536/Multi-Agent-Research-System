@@ -683,7 +683,11 @@ async def test_report_retrieval_and_ownership(monkeypatch):
         assert report_resp.json()["research_task_id"] == task_id
         assert "Owner-scoped report" in report_resp.json()["content_markdown"]
 
-        # Other user must receive 404 for both task and report
+        cit_resp = await client.get(f"/api/v1/research/{task_id}/citations", headers=owner_headers)
+        assert cit_resp.status_code == 200
+        assert isinstance(cit_resp.json(), list)
+
+        # Other user must receive 404 for task, report, and citations
         assert (
             await client.get(f"/api/v1/research/{task_id}", headers=other_headers)
         ).status_code == 404
@@ -692,7 +696,12 @@ async def test_report_retrieval_and_ownership(monkeypatch):
             await client.get(f"/api/v1/research/{task_id}/report", headers=other_headers)
         ).status_code == 404
 
+        assert (
+            await client.get(f"/api/v1/research/{task_id}/citations", headers=other_headers)
+        ).status_code == 404
+
     await engine.dispose()
+
 
 
 @pytest.mark.asyncio
@@ -861,7 +870,18 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
         assert "The source supports the finding. [1]" in report.json()["content_markdown"]
         assert "## References" in report.json()["content_markdown"]
 
+        cit_resp = await client.get(f"/api/v1/research/{task_id}/citations", headers=headers)
+        assert cit_resp.status_code == 200, cit_resp.text
+        cit_data = cit_resp.json()
+        assert len(cit_data) == 1
+        assert cit_data[0]["citation_number"] == 1
+        assert cit_data[0]["citation_label"] == "[1]"
+        assert cit_data[0]["claim_text"] == "The source supports the finding."
+        assert cit_data[0]["source_url"] == "https://example.org/paper"
+        assert cit_data[0]["chunk_content"] == "The source provides supporting evidence."
+
     assert len(writer_prompts) == 1
+
     assert list(dict.fromkeys(progress_steps)) == [
         "SUPERVISOR", "RESEARCHER", "CURATOR", "ANALYST", "WRITER", "CRITIC", "POST_PROCESSOR",
     ]

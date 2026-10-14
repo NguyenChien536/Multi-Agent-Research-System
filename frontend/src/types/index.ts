@@ -75,3 +75,16 @@ export interface ResearchReportResponse {
   created_at: string;
   updated_at: string;
 }
+
+export interface CitationResponse {
+  id: string;
+  citation_number?: number | null;
+  citation_label: string;
+  claim_text?: string | null;
+  source_id: string;
+  source_title?: string | null;
+  source_url: string;
+  chunk_id?: string | null;
+  chunk_content?: string | null;
+}
+

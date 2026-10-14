@@ -68,6 +68,7 @@ services:
       - ENVIRONMENT=development
       - DEBUG=True
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-research_user}:${POSTGRES_PASSWORD:-research_secure_password}@postgres:5432/${POSTGRES_DB:-research_db}
+      - POSTGRES_SYNC_URL=postgresql://${POSTGRES_USER:-research_user}:${POSTGRES_PASSWORD:-research_secure_password}@postgres:5432/${POSTGRES_DB:-research_db}
       - REDIS_URL=redis://redis:6379/0
       - TAVILY_API_KEY=${TAVILY_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
@@ -101,6 +102,7 @@ services:
       - ENVIRONMENT=development
       - DEBUG=True
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-research_user}:${POSTGRES_PASSWORD:-research_secure_password}@postgres:5432/${POSTGRES_DB:-research_db}
+      - POSTGRES_SYNC_URL=postgresql://${POSTGRES_USER:-research_user}:${POSTGRES_PASSWORD:-research_secure_password}@postgres:5432/${POSTGRES_DB:-research_db}
       - REDIS_URL=redis://redis:6379/0
       - TAVILY_API_KEY=${TAVILY_API_KEY}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}

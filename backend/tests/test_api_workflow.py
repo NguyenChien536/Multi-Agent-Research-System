@@ -142,6 +142,12 @@ async def test_auth_and_research_ownership(monkeypatch: pytest.MonkeyPatch) -> N
         assert report.json()["research_task_id"] == author_id
         assert (await client.get(f"/api/v1/research/{author_id}/report", headers=reader_headers)).status_code == 404
 
+        citations = await client.get(f"/api/v1/research/{author_id}/citations", headers=author_headers)
+        assert citations.status_code == 200, citations.text
+        assert isinstance(citations.json(), list)
+        assert (await client.get(f"/api/v1/research/{author_id}/citations", headers=reader_headers)).status_code == 404
+
+
     # pytest-asyncio gives each test a new loop; pooled asyncpg connections
     # cannot be reused by the next test's loop.
     await engine.dispose()

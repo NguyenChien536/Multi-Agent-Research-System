@@ -69,6 +69,15 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @model_validator(mode="after")
+    def sync_postgres_url(self) -> "Settings":
+        if (
+            self.POSTGRES_SYNC_URL == "postgresql://research_user:research_secure_password@localhost:5432/research_db"
+            and self.DATABASE_URL != "postgresql+asyncpg://research_user:research_secure_password@localhost:5432/research_db"
+        ):
+            self.POSTGRES_SYNC_URL = self.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+        return self
+
+    @model_validator(mode="after")
     def require_production_secret(self) -> "Settings":
         if self.ENVIRONMENT != "development" and (
             len(self.APP_SECRET_KEY) < 32
@@ -79,6 +88,7 @@ class Settings(BaseSettings):
         ):
             raise ValueError("APP_SECRET_KEY must be a unique secret of at least 32 characters outside development")
         return self
+
 
 
 settings = Settings()
