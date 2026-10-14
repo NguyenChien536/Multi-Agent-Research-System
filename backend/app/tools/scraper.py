@@ -38,8 +38,33 @@ class ScraperTool:
         except socket.gaierror:
             raise SSRFError(f"Không thể phân giải hostname: {hostname}")
 
+    @staticmethod
+    def _assert_public_ip(ip_obj: ipaddress.IPv4Address | ipaddress.IPv6Address, label: str) -> None:
+        """Raise SSRFError if ip_obj resolves to a non-public address.
+
+        Handles IPv4-mapped IPv6 addresses (::ffff:127.0.0.1 etc.) by unwrapping
+        them to their underlying IPv4 form before applying is_global.
+        """
+        # Unwrap IPv4-mapped / IPv4-compatible IPv6 addresses (e.g. ::ffff:10.0.0.1)
+        effective: ipaddress.IPv4Address | ipaddress.IPv6Address = ip_obj
+        if isinstance(ip_obj, ipaddress.IPv6Address):
+            if ip_obj.ipv4_mapped is not None:
+                effective = ip_obj.ipv4_mapped
+            elif ip_obj.sixtofour is not None:
+                effective = ip_obj.sixtofour
+
+        # Explicitly block the any/unspecified address (0.0.0.0 / ::) regardless of
+        # is_global's behaviour across Python minor versions.
+        if effective.is_unspecified or effective.is_loopback or effective.is_link_local:
+            raise SSRFError(f"Bị chặn truy cập địa chỉ IP không public: {ip_obj} ({label})")
+
+        if not effective.is_global:
+            raise SSRFError(f"Bị chặn truy cập địa chỉ IP không public: {ip_obj} ({label})")
+
+
+
     async def _check_ssrf(self, url: str) -> None:
-        """Kiểm tra URL để ngăn chặn SSRF."""
+        """Kiểm tra URL để ngăn chặn SSRF (bao gồm IPv6 và IPv4-mapped addresses)."""
         parsed = urlparse(url)
 
         # 1. Chặn schema nguy hiểm
@@ -50,16 +75,26 @@ class ScraperTool:
         if not hostname:
             raise SSRFError("URL không có hostname")
 
-        # 2. Chặn localhost bằng text
-        if hostname.lower() in ["localhost", "127.0.0.1", "0.0.0.0"]:
+        # 2. Chặn localhost bằng text (nhanh, không cần DNS)
+        if hostname.lower() in ["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"]:
             raise SSRFError(f"Bị chặn truy cập localhost: {hostname}")
 
-        # 3. Phân giải DNS và chặn IP private/reserved
+        # 3. Nếu hostname là địa chỉ IP literal, kiểm tra ngay — bỏ qua DNS lookup
+        try:
+            ip_literal = ipaddress.ip_address(hostname)
+            self._assert_public_ip(ip_literal, hostname)
+            return  # Literal IP đã được xác nhận — không cần DNS
+        except ValueError:
+            pass  # hostname không phải IP literal, thực hiện DNS lookup
+
+        # 4. Phân giải DNS và chặn IP private/reserved
         resolved_ips = await self._resolve_ips(hostname)
         for ip_str in resolved_ips:
             ip_obj = ipaddress.ip_address(ip_str)
-            if not ip_obj.is_global:
-                raise SSRFError(f"Bị chặn truy cập địa chỉ IP không public: {ip_str} ({hostname})")
+            self._assert_public_ip(ip_obj, hostname)
+        # Redirect following is disabled on the httpx client below, so we do not
+        # need a second pre-flight check after the HTTP response.
+
 
     async def fetch_and_extract(self, url: str) -> Optional[str]:
         """Tải trang HTML và trích xuất nội dung chính (bỏ quảng cáo, menu)."""

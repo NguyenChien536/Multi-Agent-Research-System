@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import Dict, Any, List
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
@@ -7,19 +8,29 @@ from pydantic import BaseModel, Field
 from app.agents.state import ResearchState
 from app.core.config import settings
 
+logger = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------
 # Caching Configuration
 # ---------------------------------------------------------------------------
 from langchain_core.globals import set_llm_cache
-from langchain_community.cache import RedisCache
-from redis import Redis
-
+from redis import Redis as _Redis
 try:
-    redis_client = Redis.from_url(settings.REDIS_URL)
-    set_llm_cache(RedisCache(redis_=redis_client))
-    print("LLM Redis Cache enabled successfully!")
-except Exception as e:
-    print(f"Warning: Could not connect to Redis for LLM Cache: {e}")
+    from langchain_community.cache import RedisCache  # type: ignore[import]
+except ModuleNotFoundError as exc:
+    if exc.name != "langchain_community":
+        raise
+    RedisCache = None  # type: ignore[assignment,misc]
+
+if RedisCache is not None:
+    try:
+        _redis_client = _Redis.from_url(settings.REDIS_URL)
+        set_llm_cache(RedisCache(redis_=_redis_client))
+        logger.info("LLM Redis cache enabled")
+    except Exception as exc:
+        logger.warning("Could not connect to Redis for the LLM cache: %s", exc)
+else:
+    logger.warning("langchain_community is not installed; LLM Redis cache is disabled")
 # 1. TIERED LLM CONFIGURATION (Theo Kiến trúc Tối ưu Hiệu năng)
 # ---------------------------------------------------------------------------
 
