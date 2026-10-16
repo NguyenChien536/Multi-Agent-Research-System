@@ -1,4 +1,4 @@
-import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, TokenResponse, UserCreate, UserResponse } from '../types';
+import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, TokenResponse, UserCreate, UserResponse } from '../types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -101,6 +101,20 @@ export const api = {
 
     getCitations: (id: string) =>
       fetcher<CitationResponse[]>(`/research/${id}/citations`),
+
+    getSources: (id: string) =>
+      fetcher<ResearchSourceResponse[]>(`/research/${id}/sources`),
+
+    cancel: (id: string) =>
+      fetcher<{ status: string; message: string; task_id: string }>(`/research/${id}/cancel`, {
+        method: 'POST',
+      }),
+
+    delete: (id: string) =>
+      fetcher<{ message: string; task_id: string }>(`/research/${id}`, {
+        method: 'DELETE',
+      }),
   }
 };
+
 

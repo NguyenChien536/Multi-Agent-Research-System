@@ -1,13 +1,17 @@
 import React from 'react';
 
-export const Button = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'outline' | 'ghost', isLoading?: boolean }>(
+export const Button = React.forwardRef<HTMLButtonElement, React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'outline' | 'ghost' | 'danger' | 'danger-outline' | 'success', isLoading?: boolean }>(
   ({ className = '', variant = 'primary', isLoading, children, disabled, ...props }, ref) => {
     const baseStyle = "inline-flex items-center justify-center rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-950 disabled:pointer-events-none disabled:opacity-50";
     const variants = {
       primary: "bg-zinc-900 text-zinc-50 hover:bg-zinc-900/90 shadow",
       outline: "border border-zinc-200 bg-white hover:bg-zinc-100 hover:text-zinc-900",
       ghost: "hover:bg-zinc-100 hover:text-zinc-900",
+      danger: "bg-red-600 text-white hover:bg-red-700 shadow",
+      'danger-outline': "border border-red-200 text-red-600 bg-white hover:bg-red-50",
+      success: "bg-emerald-600 text-white hover:bg-emerald-700 shadow",
     };
+
 
     return (
       <button

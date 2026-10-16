@@ -29,3 +29,23 @@ class CitationItemResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class ResearchSourceItemResponse(BaseModel):
+    id: uuid.UUID
+    source_tag: str
+    title: Optional[str] = None
+    url: str
+    source_type: str = "WEBSITE"
+    author: Optional[str] = None
+    publication_date: Optional[str] = None
+    content_snippet: Optional[str] = None
+    summary: Optional[str] = None
+    relevance_score: float = 0.0
+    attribution: Optional[str] = None
+    provider_name: Optional[str] = None
+    license_name: Optional[str] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
