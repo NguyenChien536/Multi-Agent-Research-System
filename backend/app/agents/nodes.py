@@ -374,7 +374,7 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     Yêu cầu: Viết theo định dạng Markdown. Khi sử dụng một luận điểm, hãy chèn marker chính xác [[@claim:CLAIM_ID]] với CLAIM_ID lấy từ dữ liệu trên. Không tự tạo nguồn, số citation hoặc URL. Nếu không có luận điểm phù hợp, hãy nêu rõ chưa đủ bằng chứng.
     """
 
-    response = await llm.ainvoke([SystemMessage(content=prompt)])
+    response = await llm.ainvoke([HumanMessage(content=prompt)])
 
     return {
         "current_agent": "writer",
