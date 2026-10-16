@@ -41,6 +41,8 @@ class ResearchTaskResponse(BaseModel):
     max_iterations: int
     current_iteration: int
     attempt_number: int
+    report_length: str = "MEDIUM"
+    citation_style: str = "IEEE"
     total_cost_usd: float
     total_tokens_used: int
     created_at: datetime

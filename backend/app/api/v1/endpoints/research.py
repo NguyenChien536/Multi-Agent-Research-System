@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,9 +13,10 @@ from app.models.report import ResearchReport
 from app.models.grounding import Citation
 from app.models.source import DocumentChunk, ResearchSource
 from app.schemas.task import ResearchTaskCreate, ResearchTaskResponse
-from app.schemas.report import CitationItemResponse, ResearchReportResponse
+from app.schemas.report import CitationItemResponse, ResearchReportResponse, ResearchSourceItemResponse
 
 router = APIRouter()
+
 
 
 
@@ -166,4 +168,93 @@ async def get_research_citations(
             )
         )
     return citations
+
+
+@router.get("/{task_id}/sources", response_model=List[ResearchSourceItemResponse])
+async def get_research_sources(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lấy danh sách các nguồn tài liệu đã thu thập của Research Task."""
+    task_res = await db.execute(
+        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+    )
+    if not task_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+    result = await db.execute(
+        select(ResearchSource)
+        .where(ResearchSource.research_task_id == task_id)
+        .order_by(ResearchSource.relevance_score.desc(), ResearchSource.created_at.asc())
+    )
+    return result.scalars().all()
+
+
+@router.post("/{task_id}/cancel", status_code=status.HTTP_200_OK)
+async def cancel_research_task(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Hủy một Research Task đang chờ hoặc đang chạy."""
+    result = await db.execute(
+        select(ResearchTask)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .with_for_update()
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+    terminal_statuses = {"COMPLETED", "FAILED", "CANCELLED", "PARTIAL", "NEEDS_REVIEW"}
+    if task.status in terminal_statuses:
+        return {"status": task.status, "message": f"Task is already {task.status}", "task_id": str(task_id)}
+
+    task.status = "CANCELLED"
+    task.completed_at = datetime.now(timezone.utc)
+    task.worker_lease_until = None
+
+    # Cancel any pending outbox entry to prevent dispatch
+    outbox_res = await db.execute(
+        select(TaskDispatchOutbox).where(
+            TaskDispatchOutbox.research_task_id == task_id,
+            TaskDispatchOutbox.dispatched_at.is_(None),
+        )
+    )
+    for outbox_item in outbox_res.scalars().all():
+        outbox_item.dispatched_at = datetime.now(timezone.utc)
+        outbox_item.last_error = "Cancelled by user"
+
+    await db.commit()
+
+    # If capacity freed up, trigger next queued task for this user
+    try:
+        from app.services.task_dispatcher import dispatch_one_outbox_event
+        await dispatch_one_outbox_event(user_id=current_user.id)
+    except Exception:
+        pass
+
+    return {"status": "CANCELLED", "message": "Research task cancelled successfully", "task_id": str(task_id)}
+
+
+@router.delete("/{task_id}", status_code=status.HTTP_200_OK)
+async def delete_research_task(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Xóa một Research Task."""
+    result = await db.execute(
+        select(ResearchTask)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+    await db.delete(task)
+    await db.commit()
+    return {"message": "Research task deleted successfully", "task_id": str(task_id)}
+
 
