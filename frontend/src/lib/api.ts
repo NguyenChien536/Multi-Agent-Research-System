@@ -1,4 +1,4 @@
-import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, TokenResponse, UserCreate, UserResponse } from '../types';
+import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, TokenResponse, UserCreate, UserResponse } from '../types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -117,6 +117,31 @@ export const api = {
       fetcher<{ message: string; task_id: string }>(`/research/${id}`, {
         method: 'DELETE',
       }),
+
+    uploadPdf: async (id: string, file: File): Promise<PdfUploadResponse> => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const url = `${API_BASE_URL}/research/${id}/upload`;
+      const token = getAccessToken();
+      const headers = new Headers();
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+      const response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new APIError(response.status, data || { detail: 'Upload failed' });
+      }
+      return data as PdfUploadResponse;
+    },
+
+    getArtifacts: (id: string) =>
+      fetcher<ArtifactItemResponse[]>(`/research/${id}/artifacts`),
+
+    getArtifactDownloadUrl: (taskId: string, artifactId: string) =>
+      `${API_BASE_URL}/research/${taskId}/artifacts/${artifactId}/download`,
   }
 };
 

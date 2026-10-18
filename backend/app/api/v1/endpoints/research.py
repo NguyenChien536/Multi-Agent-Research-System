@@ -1,21 +1,34 @@
+import os
 import uuid
 from datetime import datetime, timezone
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.api.deps import get_current_user
 from app.models.task import ResearchTask, TaskDispatchOutbox
 from app.models.user import User
-from app.models.report import ResearchReport
+from app.models.report import ExportArtifact, ResearchReport
 from app.models.grounding import Citation
 from app.models.source import DocumentChunk, ResearchSource
 from app.models.agent_run import AgentRun
 from app.schemas.task import ResearchTaskCreate, ResearchTaskResponse
 from app.schemas.report import CitationItemResponse, ResearchReportResponse, ResearchSourceItemResponse
 from app.schemas.agent_run import AgentRunItemResponse
+from app.schemas.artifact import ArtifactItemResponse, PdfUploadResponse
+from app.services.artifact_store import artifact_store
+from app.services.pdf_parser import (
+    extract_text_from_pdf,
+    PdfSizeLimitError,
+    PdfPageLimitError,
+    PdfOcrRequiredError,
+    PdfValidationError,
+)
+from app.tools.embedder import EmbedderTool
 
 router = APIRouter()
 
@@ -276,6 +289,11 @@ async def delete_research_task(
 
     await db.delete(task)
     await db.commit()
+    # Cleanup task artifacts on disk (SRS FR-02 & Tombstone cleanup)
+    try:
+        artifact_store.delete_task_artifacts(task_id)
+    except Exception:
+        pass
     return {"message": "Research task deleted successfully", "task_id": str(task_id)}
 
 
@@ -298,6 +316,180 @@ async def get_task_agent_runs(
         .order_by(AgentRun.started_at.asc(), AgentRun.id.asc())
     )
     return result.scalars().all()
+
+
+@router.post("/{task_id}/upload", response_model=PdfUploadResponse, status_code=status.HTTP_201_CREATED)
+async def upload_task_pdf(
+    task_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Tải lên tài liệu PDF riêng tư (Private Artifact), trích xuất văn bản và băm nhỏ thành DocumentChunk.
+    """
+    # 1. Kiểm tra quyền sở hữu task
+    task_res = await db.execute(
+        select(ResearchTask).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+    )
+    task = task_res.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+    if task.status in {"CANCELLED", "COMPLETED", "FAILED"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Không thể tải lên tài liệu cho bài nghiên cứu ở trạng thái {task.status}",
+        )
+
+    # 2. Kiểm tra giới hạn số file per task (tối đa 5 file theo SRS FR-02)
+    existing_pdfs_res = await db.execute(
+        select(func.count(ResearchSource.id)).where(
+            ResearchSource.research_task_id == task_id,
+            ResearchSource.source_type == "PDF",
+        )
+    )
+    existing_pdf_count = existing_pdfs_res.scalar_one()
+    if existing_pdf_count >= settings.MAX_UPLOAD_FILES_PER_TASK:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Vượt quá số lượng file tối đa cho một nghiên cứu (tối đa {settings.MAX_UPLOAD_FILES_PER_TASK} file/task).",
+        )
+
+    # 3. Đọc dữ liệu file
+    try:
+        content = await file.read()
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Lỗi khi đọc file tải lên: {e}")
+
+    # 4. Phân tích cú pháp và trích xuất text
+    try:
+        parsed_doc = extract_text_from_pdf(content)
+    except PdfSizeLimitError as e:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(e))
+    except PdfOcrRequiredError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+    except (PdfPageLimitError, PdfValidationError) as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Lỗi phân tích file PDF: {e}")
+
+    # 5. Lưu file vật lý an toàn vào ArtifactStore
+    filename = file.filename or "document.pdf"
+    artifact_meta = artifact_store.save_artifact(task_id=task.id, filename=filename, content=content)
+
+    # 6. Tạo bản ghi ExportArtifact
+    artifact = ExportArtifact(
+        research_task_id=task.id,
+        export_type="PDF_UPLOAD",
+        file_path=artifact_meta["file_path"],
+        file_size_bytes=artifact_meta["file_size_bytes"],
+        download_url=f"/api/v1/research/{task.id}/artifacts/placeholder/download",
+    )
+    db.add(artifact)
+    await db.flush()
+    artifact.download_url = f"/api/v1/research/{task.id}/artifacts/{artifact.id}/download"
+
+    # 7. Tạo bản ghi ResearchSource
+    all_sources_res = await db.execute(
+        select(func.count(ResearchSource.id)).where(ResearchSource.research_task_id == task.id)
+    )
+    total_sources = all_sources_res.scalar_one()
+    source_tag = f"src_{total_sources + 1:02d}"
+
+    source_title = parsed_doc["title"] or filename
+    db_source = ResearchSource(
+        research_task_id=task.id,
+        source_tag=source_tag,
+        title=source_title,
+        url=f"file://{artifact_meta['file_name']}",
+        source_type="PDF",
+        author=parsed_doc.get("author"),
+        content_snippet=parsed_doc["text"][:500],
+        summary=f"Tài liệu PDF tải lên ({parsed_doc['page_count']} trang, {artifact_meta['file_size_bytes']} bytes). SHA256: {artifact_meta['sha256_hash'][:16]}...",
+        relevance_score=1.0,
+    )
+    db.add(db_source)
+    await db.flush()
+
+    # 8. Chia nhỏ (Chunking) và tạo Vector Embedding trong pgvector
+    embedder = EmbedderTool()
+    chunks_count = await embedder.embed_and_store(
+        db=db,
+        task_id=task.id,
+        source_id=db_source.id,
+        text_content=parsed_doc["text"],
+    )
+
+    await db.commit()
+
+    return PdfUploadResponse(
+        artifact_id=artifact.id,
+        source_id=db_source.id,
+        source_tag=source_tag,
+        file_name=artifact_meta["file_name"],
+        file_size_bytes=artifact_meta["file_size_bytes"],
+        page_count=parsed_doc["page_count"],
+        chunks_count=chunks_count,
+        sha256_hash=artifact_meta["sha256_hash"],
+        message="Tải lên và nạp dữ liệu PDF thành công",
+    )
+
+
+@router.get("/{task_id}/artifacts", response_model=List[ArtifactItemResponse])
+async def list_task_artifacts(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lấy danh sách các tệp tin / tài liệu riêng tư của Research Task."""
+    task_res = await db.execute(
+        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+    )
+    if not task_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+    result = await db.execute(
+        select(ExportArtifact)
+        .where(ExportArtifact.research_task_id == task_id)
+        .order_by(ExportArtifact.created_at.desc())
+    )
+    return result.scalars().all()
+
+
+@router.get("/{task_id}/artifacts/{artifact_id}/download")
+async def download_task_artifact(
+    task_id: uuid.UUID,
+    artifact_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Tải xuống tệp tin riêng tư của Research Task (chỉ dành cho chủ sở hữu)."""
+    task_res = await db.execute(
+        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+    )
+    if not task_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+    artifact_res = await db.execute(
+        select(ExportArtifact).where(
+            ExportArtifact.id == artifact_id,
+            ExportArtifact.research_task_id == task_id,
+        )
+    )
+    artifact = artifact_res.scalar_one_or_none()
+    if not artifact:
+        raise HTTPException(status_code=404, detail="Artifact not found")
+
+    file_path = artifact_store.get_artifact_path(task_id, artifact.file_path)
+    if not file_path:
+        raise HTTPException(status_code=404, detail="Artifact file does not exist on disk")
+
+    return FileResponse(
+        path=str(file_path),
+        media_type="application/pdf",
+        filename=os.path.basename(artifact.file_path),
+    )
 
 
 

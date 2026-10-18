@@ -7,6 +7,9 @@ from sqlalchemy import func, select, update
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.task import ResearchTask, TaskDispatchOutbox
+from app.models.source import DocumentChunk, ResearchSource
+from app.models.report import ResearchReport
+from app.models.grounding import Citation, ClaimEvidence, Evidence, ResearchClaim
 from app.models.user import User
 from app.agents.graph import research_graph
 from app.agents.state import ResearchState
@@ -123,6 +126,26 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             await session.commit()
             heartbeat = asyncio.create_task(renew_worker_lease(task_id, claim_attempt))
 
+            # Preload existing sources (e.g. uploaded private PDFs) into initial state
+            existing_sources_res = await session.execute(
+                select(ResearchSource)
+                .where(ResearchSource.research_task_id == task.id)
+                .order_by(ResearchSource.created_at.asc())
+            )
+            existing_sources = existing_sources_res.scalars().all()
+            preloaded_sources = []
+            visited_urls = set()
+            for src in existing_sources:
+                preloaded_sources.append({
+                    "db_id": str(src.id),
+                    "source_tag": src.source_tag,
+                    "title": src.title,
+                    "url": src.url,
+                    "content": src.content_snippet or "",
+                    "source_type": src.source_type,
+                })
+                visited_urls.add(src.url)
+
             # 2. Khởi tạo State ban đầu
             initial_state = {
                 "task_id": str(task.id),
@@ -137,6 +160,8 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 "max_iterations": task.max_iterations,
                 "max_micro_revisions": 2,
                 "attempt_number": task.attempt_number,
+                "collected_sources": preloaded_sources,
+                "visited_urls": visited_urls,
             }
 
             # 3. Kích hoạt (Invoke) Graph
@@ -150,7 +175,6 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 if task.status != "RUNNING" or task.attempt_number != claim_attempt:
                     return {"status": "SUPERSEDED", "task_id": task_id}
 
-                from app.models.report import ResearchReport
                 report = ResearchReport(
                     research_task_id=task.id,
                     title=f"Báo cáo: {task.title}",
@@ -163,9 +187,6 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 # Citation rows are created only from persisted, verified
                 # claim/evidence links owned by this task. This keeps report
                 # references traceable and rejects graph-state tampering.
-                from app.models.grounding import Citation, ClaimEvidence, Evidence, ResearchClaim
-                from app.models.source import DocumentChunk, ResearchSource
-
                 for number, item in enumerate(final_state.get("citations", []), start=1):
                     try:
                         claim_id = uuid.UUID(str(item["claim_id"]))

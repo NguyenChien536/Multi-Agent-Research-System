@@ -1,18 +1,18 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, CheckCircle2, Circle, Clock, Copy, Check, Download, 
   ExternalLink, FileText, Globe, Layers, Play, RefreshCw, 
-  Trash2, XCircle, Search, Activity, Cpu
+  Trash2, XCircle, Search, Activity, Cpu, UploadCloud, FileUp
 } from 'lucide-react';
 import { Badge, Card } from '@/components/ui/Components';
 import { Button } from '@/components/ui/Button';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { api } from '@/lib/api';
-import type { CitationResponse, ResearchReportResponse, ResearchSourceResponse, ResearchTaskResponse, AgentRunResponse } from '@/types';
+import type { CitationResponse, ResearchReportResponse, ResearchSourceResponse, ResearchTaskResponse, AgentRunResponse, ArtifactItemResponse } from '@/types';
 
 const STAGES = [
   { title: 'Lập kế hoạch', steps: ['SUPERVISOR'], statuses: ['PLANNING', 'WAITING_APPROVAL'] },
@@ -84,6 +84,12 @@ export default function WorkspacePage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
 
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [artifacts, setArtifacts] = useState<ArtifactItemResponse[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const loadReport = useCallback(async () => {
     setReportError('');
     try {
@@ -108,8 +114,12 @@ export default function WorkspacePage() {
   const loadSources = useCallback(async () => {
     setSourcesError('');
     try {
-      const list = await api.tasks.getSources(params.id);
+      const [list, arts] = await Promise.all([
+        api.tasks.getSources(params.id),
+        api.tasks.getArtifacts(params.id).catch(() => []),
+      ]);
       setSources(list);
+      setArtifacts(arts);
     } catch (err) {
       setSourcesError(err instanceof Error ? err.message : 'Không thể tải danh sách nguồn.');
     }
@@ -207,6 +217,55 @@ export default function WorkspacePage() {
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Không thể xóa bài nghiên cứu.');
       setIsDeleting(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !task) return;
+    if (!file.name.toLowerCase().endsWith('.pdf') && file.type !== 'application/pdf') {
+      setUploadError('Chỉ hỗ trợ định dạng tệp tin PDF (.pdf).');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('Dung lượng tệp vượt quá giới hạn 10 MiB theo quy định hệ thống.');
+      return;
+    }
+    setIsUploading(true);
+    setUploadError('');
+    setUploadSuccess(null);
+    try {
+      const res = await api.tasks.uploadPdf(task.id, file);
+      setUploadSuccess(`Đã nạp thành công "${res.file_name}" (${res.page_count} trang, ${res.chunks_count} đoạn trích và nhúng vector).`);
+      await loadSources();
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Tải lên tài liệu PDF thất bại.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDownloadArtifact = async (artifactId: string, filename: string) => {
+    if (!task) return;
+    try {
+      const token = typeof window !== 'undefined' ? sessionStorage.getItem('synthia_access_token') : null;
+      const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+      const res = await fetch(`${API_BASE}/research/${task.id}/artifacts/${artifactId}/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error('Không thể tải xuống tài liệu');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Lỗi tải xuống');
     }
   };
 
@@ -474,6 +533,59 @@ export default function WorkspacePage() {
                   </div>
                 </div>
 
+                {/* PDF Ingestion Card (SRS FR-02 & Private Artifact Grounding) */}
+                <Card className="p-5 border-dashed border-2 border-zinc-200 bg-zinc-50/70 hover:border-zinc-300 transition-colors">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <UploadCloud size={20} className="text-zinc-700" />
+                        <h3 className="font-semibold text-sm text-zinc-900">Tải lên tài liệu PDF riêng tư (Private Grounding)</h3>
+                      </div>
+                      <p className="text-xs text-zinc-500 leading-relaxed">
+                        Hệ thống sẽ trích xuất văn bản, băm nhỏ chunk, lập chỉ mục pgvector và tích hợp làm bằng chứng tin cậy cho AI Agents (tối đa 5 file, &lt; 20MB, &lt; 100 trang).
+                      </p>
+                    </div>
+
+                    <div className="shrink-0 flex items-center gap-2">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        onChange={(e) => void handleFileUpload(e)}
+                        className="hidden"
+                        id="pdf-upload-input"
+                        disabled={isUploading || task.status === 'COMPLETED' || task.status === 'CANCELLED'}
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                        isLoading={isUploading}
+                        disabled={task.status === 'COMPLETED' || task.status === 'CANCELLED'}
+                      >
+                        <FileUp size={15} className="mr-1.5" />
+                        {isUploading ? 'Đang nạp PDF...' : 'Tải lên PDF'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {uploadError && (
+                    <div className="mt-3 text-xs text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200 flex items-center justify-between">
+                      <span>{uploadError}</span>
+                      <button onClick={() => setUploadError('')} className="text-red-400 hover:text-red-700 ml-2">✕</button>
+                    </div>
+                  )}
+
+                  {uploadSuccess && (
+                    <div className="mt-3 text-xs text-emerald-700 bg-emerald-50 p-2.5 rounded-lg border border-emerald-200 flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                        {uploadSuccess}
+                      </span>
+                      <button onClick={() => setUploadSuccess(null)} className="text-emerald-500 hover:text-emerald-800 ml-2">✕</button>
+                    </div>
+                  )}
+                </Card>
+
                 {sourcesError && (
                   <div className="text-sm text-red-600 bg-red-50 p-4 rounded-xl border border-red-200">
                     {sourcesError} <button className="underline ml-2" onClick={() => void loadSources()}>Thử lại</button>
@@ -508,15 +620,42 @@ export default function WorkspacePage() {
                         </div>
 
                         <div>
-                          <a 
-                            href={source.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="font-semibold text-base text-zinc-900 hover:text-blue-600 inline-flex items-center gap-1.5 transition-colors"
-                          >
-                            <span>{source.title || source.url}</span>
-                            <ExternalLink size={14} className="shrink-0 text-zinc-400" />
-                          </a>
+                          {source.source_type === 'PDF' ? (
+                            <div className="flex flex-col gap-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-base text-zinc-900">{source.title || 'Tài liệu PDF nội bộ'}</span>
+                                <Badge variant="purple">Tài liệu riêng</Badge>
+                              </div>
+                              {(() => {
+                                const matchingArt = artifacts.find(a => source.url.includes(a.file_path.split('/').pop() || '') || a.file_path.includes(source.title || ''));
+                                if (matchingArt) {
+                                  return (
+                                    <div className="pt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDownloadArtifact(matchingArt.id, matchingArt.file_path.split('/').pop() || 'document.pdf')}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-colors cursor-pointer"
+                                      >
+                                        <Download size={13} className="text-purple-600" />
+                                        <span>Tải PDF gốc ({(matchingArt.file_size_bytes / 1024 / 1024).toFixed(2)} MB)</span>
+                                      </button>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })()}
+                            </div>
+                          ) : (
+                            <a 
+                              href={source.url} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="font-semibold text-base text-zinc-900 hover:text-blue-600 inline-flex items-center gap-1.5 transition-colors"
+                            >
+                              <span>{source.title || source.url}</span>
+                              <ExternalLink size={14} className="shrink-0 text-zinc-400" />
+                            </a>
+                          )}
                           <div className="text-xs text-zinc-400 mt-1 truncate">{source.url}</div>
                         </div>
 

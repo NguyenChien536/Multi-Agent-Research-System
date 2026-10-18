@@ -127,4 +127,26 @@ export interface AgentRunResponse {
   completed_at?: string | null;
 }
 
+export interface ArtifactItemResponse {
+  id: string;
+  research_task_id: string;
+  export_type: string;
+  file_path: string;
+  file_size_bytes: number;
+  download_url?: string | null;
+  created_at: string;
+}
+
+export interface PdfUploadResponse {
+  artifact_id: string;
+  source_id: string;
+  source_tag: string;
+  file_name: string;
+  file_size_bytes: number;
+  page_count: number;
+  chunks_count: number;
+  sha256_hash: string;
+  message: string;
+}
+
 
