@@ -107,4 +107,24 @@ export interface ResearchSourceResponse {
   created_at: string;
 }
 
+export interface AgentRunResponse {
+  id: string;
+  research_task_id: string;
+  agent_name: string;
+  status: string;
+  iteration: number;
+  attempt_number: number;
+  model?: string | null;
+  duration_ms: number;
+  input_tokens: number;
+  output_tokens: number;
+  estimated_cost: number;
+  input_summary: Record<string, any>;
+  output_summary: Record<string, any>;
+  tool_calls: Array<Record<string, any>>;
+  error_message?: string | null;
+  started_at: string;
+  completed_at?: string | null;
+}
+
 

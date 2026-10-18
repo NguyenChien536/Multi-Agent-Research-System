@@ -1,4 +1,4 @@
-import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, TokenResponse, UserCreate, UserResponse } from '../types';
+import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, TokenResponse, UserCreate, UserResponse } from '../types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -104,6 +104,9 @@ export const api = {
 
     getSources: (id: string) =>
       fetcher<ResearchSourceResponse[]>(`/research/${id}/sources`),
+
+    getAgentRuns: (id: string) =>
+      fetcher<AgentRunResponse[]>(`/research/${id}/agent-runs`),
 
     cancel: (id: string) =>
       fetcher<{ status: string; message: string; task_id: string }>(`/research/${id}/cancel`, {
