@@ -6,15 +6,22 @@ import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, CheckCircle2, Circle, Clock, Copy, Check, Download, 
   ExternalLink, FileText, Globe, Layers, Play, RefreshCw, 
-  Trash2, XCircle, Search, Activity, Cpu, UploadCloud, FileUp
+  Trash2, XCircle, Search, Activity, Cpu, UploadCloud, FileUp, FlaskConical
 } from 'lucide-react';
 import { Badge, Card } from '@/components/ui/Components';
 import { Button } from '@/components/ui/Button';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { api } from '@/lib/api';
-import type { CitationResponse, ResearchReportResponse, ResearchSourceResponse, ResearchTaskResponse, AgentRunResponse, ArtifactItemResponse } from '@/types';
+import type { CitationResponse, ResearchReportResponse, ResearchSourceResponse, ResearchTaskResponse, AgentRunResponse, ArtifactItemResponse, ProtocolResponse } from '@/types';
 
-const STAGES = [
+const BASE_STAGES = [
+  { title: 'Lập kế hoạch', steps: ['SUPERVISOR'], statuses: ['PLANNING', 'WAITING_APPROVAL'] },
+  { title: 'Thu thập và phân tích nguồn', steps: ['RESEARCHER', 'CURATOR', 'ANALYST'], statuses: ['RESEARCHING', 'INDEXING', 'ANALYZING'] },
+  { title: 'Thiết kế phương pháp (Gate G4)', steps: ['METHODOLOGIST'], statuses: ['WAITING_USER_DATA'] },
+  { title: 'Viết và phản biện', steps: ['WRITER', 'CRITIC', 'POST_PROCESSOR'], statuses: ['WRITING', 'REVIEWING', 'FINALIZING'] },
+];
+
+const REVIEW_STAGES = [
   { title: 'Lập kế hoạch', steps: ['SUPERVISOR'], statuses: ['PLANNING', 'WAITING_APPROVAL'] },
   { title: 'Thu thập và phân tích nguồn', steps: ['RESEARCHER', 'CURATOR', 'ANALYST'], statuses: ['RESEARCHING', 'INDEXING', 'ANALYZING'] },
   { title: 'Viết và phản biện', steps: ['WRITER', 'CRITIC', 'POST_PROCESSOR'], statuses: ['WRITING', 'REVIEWING', 'FINALIZING'] },
@@ -27,16 +34,17 @@ const STEP_LABELS: Record<string, string> = {
   RESEARCHER: 'Agent tìm kiếm nguồn',
   CURATOR: 'Agent xử lý nguồn',
   ANALYST: 'Agent phân tích bằng chứng',
+  METHODOLOGIST: 'Agent phương pháp luận & đề cương',
   WRITER: 'Agent viết báo cáo',
   CRITIC: 'Agent phản biện',
   POST_PROCESSOR: 'Đang hoàn thiện báo cáo',
 };
 
-function stageState(index: number, status: string, currentStep?: string | null): 'done' | 'active' | 'waiting' {
+function stageState(stages: Array<{ title: string; steps: string[]; statuses: string[] }>, index: number, status: string, currentStep?: string | null): 'done' | 'active' | 'waiting' {
   if (status === 'COMPLETED') return 'done';
   const current = currentStep
-    ? STAGES.findIndex(stage => stage.steps.includes(currentStep))
-    : STAGES.findIndex(stage => stage.statuses.includes(status));
+    ? stages.findIndex(stage => stage.steps.includes(currentStep))
+    : stages.findIndex(stage => stage.statuses.includes(status));
   if (current < 0) return 'waiting';
   return index < current ? 'done' : index === current ? 'active' : 'waiting';
 }
@@ -74,7 +82,7 @@ export default function WorkspacePage() {
   const [sourcesError, setSourcesError] = useState('');
   const [runsError, setRunsError] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'report' | 'sources' | 'citations' | 'runs' | 'details'>('report');
+  const [activeTab, setActiveTab] = useState<'report' | 'sources' | 'citations' | 'runs' | 'details' | 'protocol'>('report');
   const [sourceSearch, setSourceSearch] = useState('');
   const [highlightedRef, setHighlightedRef] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -95,6 +103,24 @@ export default function WorkspacePage() {
   const [editableQueries, setEditableQueries] = useState<string[]>([]);
   const [newQueryInput, setNewQueryInput] = useState('');
   const [planFeedback, setPlanFeedback] = useState('');
+
+  const [protocol, setProtocol] = useState<ProtocolResponse | null>(null);
+  const [protocolError, setProtocolError] = useState('');
+  const [isResumingData, setIsResumingData] = useState(false);
+  const [sampleSize, setSampleSize] = useState('');
+  const [methodNotes, setMethodNotes] = useState('');
+  const [resultsSummary, setResultsSummary] = useState('');
+  const [dataProvenance, setDataProvenance] = useState('');
+
+  const loadProtocol = useCallback(async () => {
+    setProtocolError('');
+    try {
+      const res = await api.tasks.getProtocol(params.id);
+      setProtocol(res);
+    } catch (err) {
+      setProtocolError(err instanceof Error ? err.message : 'Không thể tải đề cương nghiên cứu.');
+    }
+  }, [params.id]);
 
   const loadReport = useCallback(async () => {
     setReportError('');
@@ -166,9 +192,13 @@ export default function WorkspacePage() {
           void loadCitations();
           void loadSources();
           void loadRuns();
+          if (value.protocol_artifact_id) void loadProtocol();
         } else if (value.status !== 'PENDING') {
           void loadSources();
           void loadRuns();
+          if (value.status === 'WAITING_USER_DATA' || value.protocol_artifact_id) {
+            void loadProtocol();
+          }
         }
 
         if (TERMINAL.has(value.status)) {
@@ -184,7 +214,7 @@ export default function WorkspacePage() {
     const timer = setInterval(() => { void poll(); }, 4000);
     void poll();
     return () => { active = false; clearInterval(timer); };
-  }, [params.id, loadReport, loadCitations, loadSources, loadRuns, reloadKey]);
+  }, [params.id, loadReport, loadCitations, loadSources, loadRuns, loadProtocol, reloadKey]);
 
   const handleStartTask = async () => {
     if (!task) return;
@@ -343,6 +373,38 @@ export default function WorkspacePage() {
     }
   };
 
+  const handleResumeWithData = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!task) return;
+    const parsedSize = parseInt(sampleSize.trim(), 10);
+    if (isNaN(parsedSize) || parsedSize < 1) {
+      alert('Vui lòng nhập cỡ mẫu thực tế hợp lệ (số nguyên lớn hơn hoặc bằng 1).');
+      return;
+    }
+    if (methodNotes.trim().length < 10) {
+      alert('Vui lòng mô tả phương pháp và quy trình thu thập dữ liệu (tối thiểu 10 ký tự).');
+      return;
+    }
+    if (resultsSummary.trim().length < 10) {
+      alert('Vui lòng nhập tóm tắt kết quả thực nghiệm / thực địa (tối thiểu 10 ký tự).');
+      return;
+    }
+    setIsResumingData(true);
+    try {
+      await api.tasks.resumeWithData(task.id, {
+        sample_size: parsedSize,
+        method_notes: methodNotes.trim(),
+        results_summary: resultsSummary.trim(),
+        data_provenance: dataProvenance.trim() || undefined,
+      });
+      setReloadKey(v => v + 1);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Không thể tiếp tục bài nghiên cứu.');
+    } finally {
+      setIsResumingData(false);
+    }
+  };
+
   if (error) {
     return (
       <div className="p-8 text-center text-red-700" role="alert">
@@ -438,24 +500,33 @@ export default function WorkspacePage() {
           </div>
           <div className="p-4">
             <div className="relative border-l-2 border-zinc-200 ml-3 space-y-6">
-              {STAGES.map((stage, index) => {
-                const state = stageState(index, task.status, task.current_step);
-                const Icon = state === 'done' ? CheckCircle2 : state === 'active' ? Clock : Circle;
-                return (
-                  <div key={stage.title} className="relative pl-6">
-                    <span className={`absolute -left-3.5 top-0.5 p-1 rounded-full border border-zinc-200 bg-white ${state === 'done' ? 'text-emerald-500' : state === 'active' ? 'text-blue-500' : 'text-zinc-300'}`}>
-                      <Icon size={14} />
-                    </span>
-                    <span className={`text-sm ${state === 'waiting' ? 'text-zinc-400' : 'font-medium text-zinc-900'}`}>
-                      {stage.title}
-                    </span>
-                  </div>
-                );
-              })}
+              {(() => {
+                const currentStages = task.research_type === 'REVIEW' ? REVIEW_STAGES : BASE_STAGES;
+                return currentStages.map((stage, index) => {
+                  const state = stageState(currentStages, index, task.status, task.current_step);
+                  const Icon = state === 'done' ? CheckCircle2 : state === 'active' ? Clock : Circle;
+                  return (
+                    <div key={stage.title} className="relative pl-6">
+                      <span className={`absolute -left-3.5 top-0.5 p-1 rounded-full border border-zinc-200 bg-white ${state === 'done' ? 'text-emerald-500' : state === 'active' ? 'text-blue-500' : 'text-zinc-300'}`}>
+                        <Icon size={14} />
+                      </span>
+                      <span className={`text-sm ${state === 'waiting' ? 'text-zinc-400' : 'font-medium text-zinc-900'}`}>
+                        {stage.title}
+                      </span>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
 
           <div className="p-4 border-t border-zinc-200 mt-auto bg-white text-xs text-zinc-600 space-y-2.5">
+            <div className="flex justify-between">
+              <span className="text-zinc-500">Loại nghiên cứu:</span>
+              <Badge variant="outline">
+                {task.research_type === 'EMPIRICAL_HUMAN' ? 'Thực địa (G4)' : task.research_type === 'EMPIRICAL_COMPUTATIONAL' ? 'Tính toán' : 'Tổng quan'}
+              </Badge>
+            </div>
             <div className="flex justify-between">
               <span className="text-zinc-500">Tokens tiêu thụ:</span>
               <strong className="font-semibold text-zinc-800">{task.total_tokens_used.toLocaleString('vi-VN')}</strong>
@@ -576,6 +647,139 @@ export default function WorkspacePage() {
             </div>
           )}
 
+          {task.status === 'WAITING_USER_DATA' && (
+            <div className="p-4 bg-indigo-50/80 border-b border-indigo-200 overflow-y-auto max-h-[32rem] shrink-0">
+              <div className="max-w-4xl mx-auto space-y-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="p-1.5 rounded-lg bg-indigo-200 text-indigo-900 shrink-0">
+                      <FlaskConical size={18} />
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="font-semibold text-sm text-indigo-950">Đề cương nghiên cứu sẵn sàng & Chờ dữ liệu thực nghiệm (Gate G4)</h2>
+                        <Badge variant="outline" className="border-indigo-300 bg-indigo-100 text-indigo-900 text-[11px]">Chờ dữ liệu người dùng</Badge>
+                      </div>
+                      <p className="text-xs text-indigo-800/90 mt-0.5">
+                        Agent Methodologist đã hoàn thành đề cương phương pháp. Hãy tải file <code className="bg-indigo-100 px-1 rounded font-mono">study_protocol.md</code>, tiến hành khảo sát hoặc đo đạc, sau đó cung cấp dữ liệu tóm tắt bên dưới để tiếp tục viết báo cáo.
+                      </p>
+                    </div>
+                  </div>
+                  {task.protocol_artifact_id && (
+                    <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                      <Button
+                        variant="outline"
+                        onClick={() => void handleDownloadArtifact(task.protocol_artifact_id!, 'study_protocol.md')}
+                        className="h-8 px-3 text-xs border-indigo-300 text-indigo-900 hover:bg-indigo-100/70"
+                      >
+                        <Download size={13} className="mr-1.5" /> Tải đề cương (.md)
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => setActiveTab('protocol')}
+                        className="h-8 px-3 text-xs border-indigo-300 text-indigo-900 hover:bg-indigo-100/70"
+                      >
+                        <FileText size={13} className="mr-1.5" /> Xem đề cương chi tiết
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {protocol?.content_markdown && (
+                  <div className="p-3 bg-white rounded-xl border border-indigo-200/80 text-xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-indigo-950">Trích đoạn đề cương nghiên cứu:</span>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('protocol')}
+                        className="text-indigo-600 hover:underline font-medium text-[11px]"
+                      >
+                        Xem toàn bộ đề cương &rarr;
+                      </button>
+                    </div>
+                    <div className="max-h-36 overflow-y-auto p-2.5 bg-zinc-50 rounded-lg text-zinc-700 font-mono text-[11px] whitespace-pre-wrap leading-relaxed">
+                      {protocol.content_markdown.slice(0, 500)}...
+                    </div>
+                  </div>
+                )}
+
+                <form onSubmit={handleResumeWithData} className="p-4 bg-white rounded-xl border border-indigo-200/80 text-xs space-y-3 shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
+                    <span className="font-semibold text-indigo-950 text-sm">Cung cấp dữ liệu thực địa / thực nghiệm</span>
+                    <span className="text-[11px] text-zinc-400">* Bắt buộc tóm tắt kết quả</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-medium text-zinc-600 mb-1">
+                        Cỡ mẫu thực tế thu thập được <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={sampleSize}
+                        onChange={e => setSampleSize(e.target.value)}
+                        placeholder="VD: 150"
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-indigo-900"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-medium text-zinc-600 mb-1">Nguồn gốc / Xuất xứ dữ liệu (Data Provenance)</label>
+                      <input
+                        type="text"
+                        value={dataProvenance}
+                        onChange={e => setDataProvenance(e.target.value)}
+                        placeholder="VD: Khảo sát thực địa sinh viên Đại học Bách Khoa, 10/2026"
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-indigo-900"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-zinc-600 mb-1">
+                      Phương pháp & quy trình thu thập <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      minLength={10}
+                      value={methodNotes}
+                      onChange={e => setMethodNotes(e.target.value)}
+                      placeholder="VD: Bảng hỏi trực tuyến Google Forms, thang đo Likert 5 mức, xử lý dữ liệu với SPSS/Python"
+                      className="w-full px-3 py-1.5 text-xs rounded-lg border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-indigo-900"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-zinc-600 mb-1">
+                      Tóm tắt kết quả thực nghiệm / dữ liệu thu thập <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      rows={3}
+                      required
+                      value={resultsSummary}
+                      onChange={e => setResultsSummary(e.target.value)}
+                      placeholder="VD: Kết quả phân tích cho thấy 84.5% đối tượng phản hồi ghi nhận mức độ cải thiện rõ rệt (p < 0.01). Hệ số tương quan r = 0.68 chứng minh mối quan hệ đồng biến giữa thời lượng sử dụng và hiệu quả công việc..."
+                      className="w-full px-3 py-2 text-xs rounded-lg border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-indigo-900 leading-relaxed"
+                    />
+                  </div>
+
+                  <div className="flex justify-end pt-1">
+                    <Button
+                      type="submit"
+                      variant="primary"
+                      isLoading={isResumingData}
+                      className="h-8 px-4 text-xs bg-indigo-900 hover:bg-indigo-950 text-white"
+                    >
+                      <Check size={14} className="mr-1.5" /> Gửi dữ liệu & Tiếp tục nghiên cứu
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
           <div className="flex border-b border-zinc-200 px-4 bg-zinc-50/80 shrink-0 gap-1 overflow-x-auto">
             <button 
               onClick={() => setActiveTab('report')} 
@@ -584,6 +788,15 @@ export default function WorkspacePage() {
               <FileText size={15} className="inline mr-1.5 opacity-70" />
               Bài báo {report ? `(${report.word_count} từ)` : ''}
             </button>
+            {(task.protocol_artifact_id || protocol) && (
+              <button 
+                onClick={() => setActiveTab('protocol')} 
+                className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === 'protocol' ? 'border-zinc-900 text-zinc-900 bg-white' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}
+              >
+                <FlaskConical size={15} className="inline mr-1.5 opacity-70" />
+                Đề cương nghiên cứu (G4)
+              </button>
+            )}
             <button 
               onClick={() => setActiveTab('sources')} 
               className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === 'sources' ? 'border-zinc-900 text-zinc-900 bg-white' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}
@@ -1051,6 +1264,45 @@ export default function WorkspacePage() {
               </div>
             )}
 
+            {/* TAB: ĐỀ CƯƠNG PHƯƠNG PHÁP NGHIÊN CỨU (GATE G4) */}
+            {activeTab === 'protocol' && (
+              <div className="max-w-4xl mx-auto space-y-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-zinc-200 pb-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
+                      <FlaskConical size={18} className="text-indigo-600" />
+                      Đề cương nghiên cứu (Study Protocol)
+                    </h2>
+                    <p className="text-xs text-zinc-500 mt-0.5">
+                      Văn bản trung gian (Intermediate Artifact) được thiết kế bởi Agent Methodologist
+                    </p>
+                  </div>
+                  {task.protocol_artifact_id && (
+                    <Button
+                      variant="outline"
+                      onClick={() => void handleDownloadArtifact(task.protocol_artifact_id!, 'study_protocol.md')}
+                    >
+                      <Download size={14} className="mr-1.5" /> Tải về (.md)
+                    </Button>
+                  )}
+                </div>
+
+                {protocolError && (
+                  <div className="p-4 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200">
+                    {protocolError}
+                  </div>
+                )}
+
+                {protocol?.content_markdown ? (
+                  <Card className="p-6">
+                    <MarkdownViewer content={protocol.content_markdown} />
+                  </Card>
+                ) : (
+                  <div className="p-8 text-center text-zinc-400">Đang tải nội dung đề cương nghiên cứu...</div>
+                )}
+              </div>
+            )}
+
             {/* TAB 4: THÔNG TIN & CẤU HÌNH */}
             {activeTab === 'details' && (
               <div className="max-w-4xl mx-auto space-y-6">
@@ -1075,6 +1327,12 @@ export default function WorkspacePage() {
 
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm border-t border-zinc-100 pt-4">
                     <div>
+                      <span className="text-xs text-zinc-500">Loại nghiên cứu</span>
+                      <div className="font-semibold text-zinc-800 mt-0.5">
+                        {task.research_type === 'EMPIRICAL_HUMAN' ? 'Thực địa (Gate G4)' : task.research_type === 'EMPIRICAL_COMPUTATIONAL' ? 'Tính toán' : 'Tổng quan'}
+                      </div>
+                    </div>
+                    <div>
                       <span className="text-xs text-zinc-500">Độ sâu nghiên cứu</span>
                       <div className="font-semibold text-zinc-800 mt-0.5">{task.research_depth}</div>
                     </div>
@@ -1085,10 +1343,6 @@ export default function WorkspacePage() {
                     <div>
                       <span className="text-xs text-zinc-500">Kiểu trích dẫn</span>
                       <div className="font-semibold text-zinc-800 mt-0.5">{task.citation_style}</div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-zinc-500">Ngôn ngữ xuất bản</span>
-                      <div className="font-semibold text-zinc-800 mt-0.5">{task.language.toUpperCase()}</div>
                     </div>
                   </div>
 
@@ -1110,6 +1364,39 @@ export default function WorkspacePage() {
                       <div className="font-semibold text-zinc-800 mt-0.5">{task.attempt_number}</div>
                     </div>
                   </div>
+
+                  {task.user_data_submission && (
+                    <div className="border-t border-zinc-100 pt-4">
+                      <h3 className="font-semibold text-zinc-900 text-sm mb-2 flex items-center gap-1.5">
+                        <FlaskConical size={14} className="text-indigo-600" />
+                        Dữ liệu thực nghiệm đã cung cấp (Gate G4)
+                      </h3>
+                      <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200 text-xs space-y-2">
+                        {task.user_data_submission.sample_size != null && (
+                          <div className="flex justify-between">
+                            <span className="text-zinc-500">Cỡ mẫu thực tế:</span>
+                            <span className="font-semibold text-zinc-800">{task.user_data_submission.sample_size}</span>
+                          </div>
+                        )}
+                        {task.user_data_submission.data_provenance && (
+                          <div className="flex justify-between">
+                            <span className="text-zinc-500">Xuất xứ / Nguồn:</span>
+                            <span className="font-semibold text-zinc-800">{task.user_data_submission.data_provenance}</span>
+                          </div>
+                        )}
+                        {task.user_data_submission.method_notes && (
+                          <div>
+                            <span className="text-zinc-500 font-medium">Phương pháp & công cụ:</span>
+                            <p className="text-zinc-700 mt-0.5">{task.user_data_submission.method_notes}</p>
+                          </div>
+                        )}
+                        <div>
+                          <span className="text-zinc-500 font-medium">Tóm tắt kết quả:</span>
+                          <p className="text-zinc-800 font-medium mt-0.5 whitespace-pre-wrap">{task.user_data_submission.results_summary}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="border-t border-zinc-100 pt-4 flex flex-wrap items-center justify-between text-xs text-zinc-500 gap-2">
                     <span>Tạo lúc: {formatDate(task.created_at)}</span>

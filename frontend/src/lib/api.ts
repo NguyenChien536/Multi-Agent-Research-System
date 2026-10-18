@@ -1,4 +1,4 @@
-import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, TokenResponse, UserCreate, UserResponse } from '../types';
+import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, UserDataResumeRequest, ProtocolResponse, TokenResponse, UserCreate, UserResponse } from '../types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -156,6 +156,15 @@ export const api = {
       fetcher<ResearchTaskResponse>(`/research/${id}/plan/reject`, {
         method: 'POST',
         body: JSON.stringify(payload || {}),
+      }),
+
+    getProtocol: (id: string) =>
+      fetcher<ProtocolResponse>(`/research/${id}/protocol`),
+
+    resumeWithData: (id: string, payload: UserDataResumeRequest) =>
+      fetcher<ResearchTaskResponse>(`/research/${id}/data/resume`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
       }),
   }
 };

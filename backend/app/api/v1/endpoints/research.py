@@ -22,6 +22,8 @@ from app.schemas.task import (
     PlanReviewResponse,
     PlanApprovalRequest,
     PlanRejectRequest,
+    UserDataResumeRequest,
+    ProtocolResponse,
 )
 from app.schemas.report import CitationItemResponse, ResearchReportResponse, ResearchSourceItemResponse
 from app.schemas.agent_run import AgentRunItemResponse
@@ -62,6 +64,7 @@ async def create_research_task(
         title=task_in.title,
         research_question=task_in.research_question,
         description=task_in.description,
+        research_type=task_in.research_type,
         research_depth=task_in.research_depth,
         language=task_in.language,
         max_sources=task_in.max_sources,
@@ -635,5 +638,94 @@ async def reject_research_plan(
     return task
 
 
+@router.get("/{task_id}/protocol", response_model=ProtocolResponse)
+async def get_task_protocol(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Xem đề cương nghiên cứu khoa học (Study Protocol) của task."""
+    result = await db.execute(
+        select(ResearchTask).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+    content_md = None
+    download_url = None
+    if task.protocol_artifact_id:
+        art = await db.scalar(
+            select(ExportArtifact).where(
+                ExportArtifact.id == task.protocol_artifact_id,
+                ExportArtifact.research_task_id == task.id,
+            )
+        )
+        if art:
+            download_url = art.download_url
+            file_p = artifact_store.get_artifact_path(task.id, art.file_path)
+            if file_p and file_p.is_file():
+                try:
+                    content_md = file_p.read_text(encoding="utf-8")
+                except Exception:
+                    pass
+
+    return ProtocolResponse(
+        task_id=task.id,
+        research_type=task.research_type,
+        status=task.status,
+        protocol_artifact_id=task.protocol_artifact_id,
+        download_url=download_url,
+        content_markdown=content_md,
+    )
 
 
+@router.post("/{task_id}/data/resume", response_model=ResearchTaskResponse)
+async def resume_research_with_data(
+    task_id: uuid.UUID,
+    payload: UserDataResumeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Nạp kết quả thực nghiệm/khảo sát thực tế và tiếp tục workflow (Gate G4)."""
+    result = await db.execute(
+        select(ResearchTask)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .with_for_update()
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Research task not found")
+    if task.status != "WAITING_USER_DATA":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Chỉ có thể nạp dữ liệu khi task ở trạng thái WAITING_USER_DATA (hiện tại: {task.status})",
+        )
+
+    # Lưu thông tin dữ liệu thực địa
+    task.user_data_submission = payload.model_dump()
+    task.status = "QUEUED"
+    task.current_step = None
+    task.queued_at = datetime.now(timezone.utc)
+    task.worker_lease_until = None
+
+    # Tái kích hoạt outbox dispatch
+    outbox_res = await db.execute(
+        select(TaskDispatchOutbox).where(
+            TaskDispatchOutbox.research_task_id == task.id,
+            TaskDispatchOutbox.event_type == "START_RESEARCH",
+        )
+    )
+    outbox_item = outbox_res.scalar_one_or_none()
+    if outbox_item:
+        outbox_item.dispatched_at = None
+        outbox_item.locked_until = None
+        outbox_item.last_error = None
+        outbox_item.available_at = datetime.now(timezone.utc)
+        outbox_item.attempts = 0
+    else:
+        db.add(TaskDispatchOutbox(research_task_id=task.id, event_type="START_RESEARCH"))
+
+    await db.commit()
+    await db.refresh(task)
+    return task

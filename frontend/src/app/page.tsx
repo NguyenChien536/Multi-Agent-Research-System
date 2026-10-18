@@ -6,13 +6,15 @@ import { Button } from '@/components/ui/Button';
 import { 
   Sparkles, FileText, Search, ArrowRight, Settings2, 
   ShieldCheck, ChevronDown, ChevronUp, LayoutDashboard, LogOut,
-  Zap, Compass, Microscope, FileUp, X
+  Zap, Compass, Microscope, FileUp, X, Cpu, FlaskConical
 } from 'lucide-react';
 import { api } from '@/lib/api';
+import type { ResearchType } from '@/types';
 
 export default function Home() {
   const router = useRouter();
   const [topic, setTopic] = useState('');
+  const [researchType, setResearchType] = useState<ResearchType>('REVIEW');
   const [researchDepth, setResearchDepth] = useState<'SHALLOW' | 'STANDARD' | 'DEEP'>('STANDARD');
   const [reportLength, setReportLength] = useState<'SHORT' | 'MEDIUM' | 'LONG'>('MEDIUM');
   const [citationStyle, setCitationStyle] = useState<'IEEE' | 'APA' | 'HARVARD'>('IEEE');
@@ -81,6 +83,7 @@ export default function Home() {
       const task = await api.tasks.create({
         title: question.slice(0, 255),
         research_question: question,
+        research_type: researchType,
         research_depth: researchDepth,
         report_length: reportLength,
         citation_style: citationStyle,
@@ -173,8 +176,12 @@ export default function Home() {
               <div className="flex flex-wrap items-center justify-between border-t border-zinc-100 px-3 py-2.5 bg-zinc-50/60 -mx-3 -mb-3 rounded-b-3xl gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-zinc-200 text-xs font-medium text-zinc-700 shadow-sm">
-                    <FileText size={13} className="text-zinc-500" />
-                    <span>Tổng quan tài liệu</span>
+                    {researchType === 'REVIEW' && <FileText size={13} className="text-zinc-500" />}
+                    {researchType === 'EMPIRICAL_COMPUTATIONAL' && <Cpu size={13} className="text-purple-500" />}
+                    {researchType === 'EMPIRICAL_HUMAN' && <FlaskConical size={13} className="text-emerald-500" />}
+                    <span>
+                      {researchType === 'REVIEW' ? 'Tổng quan tài liệu' : researchType === 'EMPIRICAL_COMPUTATIONAL' ? 'Thực nghiệm tính toán' : 'Thực nghiệm thực địa (Gate G4)'}
+                    </span>
                   </span>
 
                   <button
@@ -211,6 +218,54 @@ export default function Home() {
                 <div>
                   <h3 className="font-semibold text-sm text-zinc-900">Tùy chọn cấu hình nghiên cứu</h3>
                   <p className="text-xs text-zinc-500 mt-0.5">Tùy biến các tham số cho pipeline đa tác tử</p>
+                </div>
+
+                {/* 0. Research Type */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500">Loại hình nghiên cứu</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setResearchType('REVIEW')}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${researchType === 'REVIEW' ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm ring-2 ring-zinc-900/10' : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-800'}`}
+                    >
+                      <div className="flex items-center gap-2 font-semibold text-sm">
+                        <FileText size={15} className={researchType === 'REVIEW' ? 'text-blue-400' : 'text-zinc-600'} />
+                        Tổng quan tài liệu
+                      </div>
+                      <div className={`text-xs mt-1 ${researchType === 'REVIEW' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                        Review học thuật & tổng hợp lý thuyết từ tài liệu
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setResearchType('EMPIRICAL_COMPUTATIONAL')}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${researchType === 'EMPIRICAL_COMPUTATIONAL' ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm ring-2 ring-zinc-900/10' : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-800'}`}
+                    >
+                      <div className="flex items-center gap-2 font-semibold text-sm">
+                        <Cpu size={15} className={researchType === 'EMPIRICAL_COMPUTATIONAL' ? 'text-purple-400' : 'text-zinc-600'} />
+                        Thực nghiệm tính toán
+                      </div>
+                      <div className={`text-xs mt-1 ${researchType === 'EMPIRICAL_COMPUTATIONAL' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                        Methodologist thiết kế đề cương mô phỏng & phân tích dữ liệu
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setResearchType('EMPIRICAL_HUMAN')}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${researchType === 'EMPIRICAL_HUMAN' ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm ring-2 ring-zinc-900/10' : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-800'}`}
+                    >
+                      <div className="flex items-center gap-2 font-semibold text-sm">
+                        <FlaskConical size={15} className={researchType === 'EMPIRICAL_HUMAN' ? 'text-emerald-400' : 'text-zinc-600'} />
+                        Thực nghiệm / Thực địa (Gate G4)
+                      </div>
+                      <div className={`text-xs mt-1 ${researchType === 'EMPIRICAL_HUMAN' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                        Xuất đề cương phương pháp, dừng chờ nhập kết quả thực địa
+                      </div>
+                    </button>
+                  </div>
                 </div>
 
                 {/* 1. Research Depth (Cards) */}

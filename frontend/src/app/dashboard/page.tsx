@@ -309,7 +309,14 @@ export default function DashboardPage() {
                         </td>
 
                         <td className="px-6 py-4">
-                          <Badge variant="outline">{task.research_depth}</Badge>
+                          <div className="flex flex-col gap-1 items-start">
+                            <Badge variant="outline">{task.research_depth}</Badge>
+                            {task.research_type && task.research_type !== 'REVIEW' && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                                {task.research_type === 'EMPIRICAL_HUMAN' ? 'Thực địa (G4)' : 'Tính toán'}
+                              </span>
+                            )}
+                          </div>
                         </td>
 
                         <td className="px-6 py-4">

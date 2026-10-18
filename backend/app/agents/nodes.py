@@ -1,8 +1,10 @@
 import asyncio
 import logging
 import time
+import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any, List
+from sqlalchemy import select
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -132,6 +134,17 @@ class ExtractedClaim(BaseModel):
 class AnalystExtraction(BaseModel):
     claims: List[ExtractedClaim] = Field(description="Danh sách các luận điểm và bằng chứng")
 
+
+class MethodologistProtocol(BaseModel):
+    research_questions: List[str] = Field(description="Các câu hỏi nghiên cứu cụ thể cần giải quyết")
+    hypotheses: List[str] = Field(description="Các giả thuyết nghiên cứu có thể kiểm định (H1, H2,...)")
+    variables: Dict[str, List[str]] = Field(description="Các nhóm biến số nghiên cứu (independent, dependent, control)")
+    study_design: str = Field(description="Thiết kế nghiên cứu, đối tượng khảo sát/thực nghiệm, cỡ mẫu dự kiến")
+    data_collection_procedure: str = Field(description="Quy trình thu thập dữ liệu chi tiết")
+    analysis_plan: str = Field(description="Kế hoạch phân tích thống kê và kiểm định giả thuyết")
+    ethical_considerations: str = Field(description="Các lưu ý về đạo đức nghiên cứu và bảo mật dữ liệu")
+    protocol_markdown: str = Field(description="Bản đề cương nghiên cứu hoàn chỉnh định dạng Markdown")
+
 # ---------------------------------------------------------------------------
 # 3. NODE FUNCTIONS (100% Async, Không Placeholder)
 # ---------------------------------------------------------------------------
@@ -158,6 +171,7 @@ async def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     model_name = get_active_model_name(is_smart=False)
     llm = get_fast_llm().with_structured_output(SupervisorPlan)
 
+    research_type = state.get("research_type", "REVIEW")
     feedback_section = ""
     if state.get("plan_feedback"):
         feedback_section = f"\n    Lưu ý/Góp ý điều chỉnh từ người dùng: {state.get('plan_feedback')}\n"
@@ -165,6 +179,7 @@ async def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     prompt = f"""
     Bạn là một Research Supervisor (Chuyên gia hướng dẫn nghiên cứu).
     Đề tài: {state.get('research_question')}
+    Loại nghiên cứu: {research_type}
     Độ sâu: {state.get('research_depth')}
     Ngôn ngữ: {state.get('language')}{feedback_section}
 
@@ -537,6 +552,112 @@ async def analyst_node(state: ResearchState) -> Dict[str, Any]:
         )
         raise
 
+async def methodologist_node(state: ResearchState) -> Dict[str, Any]:
+    """
+    Methodologist Agent:
+    - Thiết lập Đề cương nghiên cứu khoa học (Study Protocol): giả thuyết, biến số, cỡ mẫu, quy trình thu thập.
+    - Lưu đề cương thành file Markdown trong ArtifactStore làm tài liệu trung gian (intermediate artifact).
+    - Tạo bản ghi ExportArtifact (export_type='PROTOCOL') trong CSDL gắn với task.
+    - Nếu research_type == 'EMPIRICAL_HUMAN' và chưa có user_data_submission:
+      trạng thái workflow chuyển thành WAITING_USER_DATA để người dùng tiến hành khảo sát/lab thực tế.
+    """
+    await _record_progress(state, "METHODOLOGIST")
+    start_ts = time.monotonic()
+    started_at = datetime.now(timezone.utc)
+    model_name = get_active_model_name(is_smart=True)
+
+    task_id_str = state.get("task_id")
+    task_uuid = uuid.UUID(task_id_str) if task_id_str else uuid.uuid4()
+    research_type = state.get("research_type", "EMPIRICAL_HUMAN")
+    user_data = state.get("user_data_submission")
+
+    # Nếu đã có protocol trong state từ trước, tái sử dụng để tiết kiệm chi phí
+    existing_protocol = state.get("protocol")
+    if existing_protocol and existing_protocol.get("hypotheses"):
+        logger.info("Methodologist: Reusing existing study protocol for task %s", task_id_str)
+        status = "WAITING_USER_DATA" if (research_type == "EMPIRICAL_HUMAN" and not user_data) else "RUNNING"
+        return {
+            "current_agent": "methodologist",
+            "protocol": existing_protocol,
+            "protocol_artifact_id": state.get("protocol_artifact_id"),
+            "status": status,
+        }
+
+    claims = state.get("claims", [])
+    prompt = f"""
+    Bạn là một Nhà phương pháp học khoa học (Methodologist Agent) chuyên nghiệp.
+    Hãy xây dựng Đề cương nghiên cứu khoa học (Study Protocol) chi tiết cho đề tài sau:
+    Câu hỏi nghiên cứu: {state.get('research_question')}
+    Loại nghiên cứu: {research_type}
+    Ngôn ngữ: {state.get('language', 'vi')}
+
+    Bối cảnh từ các tài liệu đã tổng hợp:
+    {[c.get('claim_text', '') for c in claims[:10]]}
+
+    Yêu cầu:
+    1. Xác định các câu hỏi nghiên cứu cụ thể.
+    2. Đưa ra ít nhất 2 giả thuyết nghiên cứu có thể kiểm định (H1, H2,...).
+    3. Phân loại rõ biến độc lập (independent), biến phụ thuộc (dependent), biến kiểm soát (control).
+    4. Thiết kế nghiên cứu và xác định cỡ mẫu tối thiểu hợp lý.
+    5. Hướng dẫn quy trình thu thập dữ liệu chi tiết (bảng câu hỏi hoặc thao tác thực nghiệm).
+    6. Kế hoạch phân tích dữ liệu và các kiểm định thống kê.
+    7. Lưu ý về đạo đức nghiên cứu và bảo mật dữ liệu.
+    8. Viết toàn bộ văn bản đề cương hoàn chỉnh dưới dạng Markdown đầy đủ, chuẩn mực.
+    """
+
+    try:
+        llm = get_smart_llm().with_structured_output(MethodologistProtocol)
+        proto_result: MethodologistProtocol = await llm.ainvoke([HumanMessage(content=prompt)])
+        protocol_dict = proto_result.model_dump()
+        markdown_content = proto_result.protocol_markdown or ""
+
+        duration_ms = int((time.monotonic() - start_ts) * 1000)
+        completed_at = datetime.now(timezone.utc)
+        in_tok, out_tok = extract_tokens(proto_result, prompt_str=prompt, output_str=markdown_content)
+        cost = estimate_cost(model_name, in_tok, out_tok)
+
+        await record_agent_run(
+            task_id=task_id_str,
+            agent_name="Methodologist",
+            status="SUCCESS",
+            iteration=state.get("current_iteration", 0),
+            attempt_number=state.get("attempt_number", 1),
+            model=model_name,
+            started_at=started_at,
+            completed_at=completed_at,
+            duration_ms=duration_ms,
+            input_tokens=in_tok,
+            output_tokens=out_tok,
+            estimated_cost=cost,
+            input_summary={"claims_considered": len(claims)},
+            output_summary={
+                "hypotheses_count": len(proto_result.hypotheses),
+            },
+            tool_calls=[{"tool": "generate_protocol"}],
+        )
+
+        status = "WAITING_USER_DATA" if (research_type == "EMPIRICAL_HUMAN" and not user_data) else "RUNNING"
+        return {
+            "current_agent": "methodologist",
+            "protocol": protocol_dict,
+            "status": status,
+        }
+    except Exception as exc:
+        duration_ms = int((time.monotonic() - start_ts) * 1000)
+        await record_agent_run(
+            task_id=task_id_str,
+            agent_name="Methodologist",
+            status="FAILED",
+            iteration=state.get("current_iteration", 0),
+            attempt_number=state.get("attempt_number", 1),
+            model=model_name,
+            started_at=started_at,
+            completed_at=datetime.now(timezone.utc),
+            duration_ms=duration_ms,
+            error_message=str(exc),
+        )
+        raise
+
 async def writer_node(state: ResearchState) -> Dict[str, Any]:
     """
     Writer Agent: Viết bản nháp dựa trên Claims & Evidences. (Dùng mô hình xịn)
@@ -553,13 +674,39 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     ]
     feedback = state.get("critic_feedback", [])
 
+    research_type = state.get("research_type", "REVIEW")
+    protocol = state.get("protocol") or {}
+    user_data = state.get("user_data_submission")
+
+    empirical_section = ""
+    if research_type == "EMPIRICAL_HUMAN" and user_data:
+        empirical_section = f"""
+    LƯU Ý NGHIÊN CỨU THỰC NGHIỆM (EMPIRICAL_HUMAN):
+    Đề cương phương pháp:
+    - Giả thuyết: {protocol.get('hypotheses', [])}
+    - Biến số: {protocol.get('variables', {})}
+    - Thiết kế nghiên cứu: {protocol.get('study_design', '')}
+
+    Dữ liệu thực tế do người dùng cung cấp (USER-SUPPLIED FIELDWORK DATA):
+    - Cỡ mẫu: {user_data.get('sample_size')}
+    - Quy trình thu thập: {user_data.get('method_notes')}
+    - Tóm tắt kết quả/số liệu: {user_data.get('results_summary')}
+    - Xuất xứ dữ liệu (Provenance): {user_data.get('data_provenance', 'Khảo sát/thực nghiệm do người nghiên cứu thực hiện')}
+
+    Yêu cầu đặc biệt:
+    1. Bắt buộc có các phần: Title, Abstract, Introduction, Research Questions & Hypotheses, Methods, Results, Discussion, Limitations, Conclusion, References.
+    2. Trong phần Results, BẮT BUỘC ghi rõ provenance: kết quả nào dựa trên dữ liệu người dùng nạp vào và kết quả nào từ tổng quan phân tích.
+    """
+
     prompt = f"""
     Bạn là một Nhà văn học thuật chuyên nghiệp. Hãy viết báo cáo nghiên cứu về đề tài: {state.get('research_question')}
+    Loại nghiên cứu: {research_type}
     Ngôn ngữ: {state.get('language')}
 
     Cấu trúc bắt buộc: {plan.get('required_sections', [])}
     Dữ liệu đã trích xuất (chỉ luận điểm có bằng chứng khớp chính xác với đoạn nguồn): {claims}
     Lưu ý từ vòng sửa trước (nếu có): {feedback}
+    {empirical_section}
 
     Yêu cầu: Viết theo định dạng Markdown. Khi sử dụng một luận điểm, hãy chèn marker chính xác [[@claim:CLAIM_ID]] với CLAIM_ID lấy từ dữ liệu trên. Không tự tạo nguồn, số citation hoặc URL. Nếu không có luận điểm phù hợp, hãy nêu rõ chưa đủ bằng chứng.
     """
