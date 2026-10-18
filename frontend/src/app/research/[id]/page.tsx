@@ -6,18 +6,31 @@ import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, CheckCircle2, Circle, Clock, Copy, Check, Download, 
   ExternalLink, FileText, Globe, Layers, Play, RefreshCw, 
-  Trash2, XCircle, Search, Activity, Cpu, UploadCloud, FileUp, FlaskConical
+  Trash2, XCircle, Search, Activity, Cpu, UploadCloud, FileUp, FlaskConical,
+  AlertTriangle, Database
 } from 'lucide-react';
 import { Badge, Card } from '@/components/ui/Components';
 import { Button } from '@/components/ui/Button';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { api } from '@/lib/api';
-import type { CitationResponse, ResearchReportResponse, ResearchSourceResponse, ResearchTaskResponse, AgentRunResponse, ArtifactItemResponse, ProtocolResponse } from '@/types';
+import type { 
+  CitationResponse, ResearchReportResponse, ResearchSourceResponse, 
+  ResearchTaskResponse, AgentRunResponse, ArtifactItemResponse, ProtocolResponse,
+  AnalysisRunResponse, ExperimentJournalEntryResponse
+} from '@/types';
 
 const BASE_STAGES = [
   { title: 'Lập kế hoạch', steps: ['SUPERVISOR'], statuses: ['PLANNING', 'WAITING_APPROVAL'] },
   { title: 'Thu thập và phân tích nguồn', steps: ['RESEARCHER', 'CURATOR', 'ANALYST'], statuses: ['RESEARCHING', 'INDEXING', 'ANALYZING'] },
   { title: 'Thiết kế phương pháp (Gate G4)', steps: ['METHODOLOGIST'], statuses: ['WAITING_USER_DATA'] },
+  { title: 'Viết và phản biện', steps: ['WRITER', 'CRITIC', 'POST_PROCESSOR'], statuses: ['WRITING', 'REVIEWING', 'FINALIZING'] },
+];
+
+const COMPUTATIONAL_STAGES = [
+  { title: 'Lập kế hoạch', steps: ['SUPERVISOR'], statuses: ['PLANNING', 'WAITING_APPROVAL'] },
+  { title: 'Thu thập và phân tích nguồn', steps: ['RESEARCHER', 'CURATOR', 'ANALYST'], statuses: ['RESEARCHING', 'INDEXING', 'ANALYZING'] },
+  { title: 'Thiết kế phương pháp', steps: ['METHODOLOGIST'], statuses: ['RUNNING'] },
+  { title: 'Thực nghiệm tính toán', steps: ['EXPERIMENT_RUNNER'], statuses: ['RUNNING'] },
   { title: 'Viết và phản biện', steps: ['WRITER', 'CRITIC', 'POST_PROCESSOR'], statuses: ['WRITING', 'REVIEWING', 'FINALIZING'] },
 ];
 
@@ -35,6 +48,7 @@ const STEP_LABELS: Record<string, string> = {
   CURATOR: 'Agent xử lý nguồn',
   ANALYST: 'Agent phân tích bằng chứng',
   METHODOLOGIST: 'Agent phương pháp luận & đề cương',
+  EXPERIMENT_RUNNER: 'Agent thực nghiệm tính toán (Ridge & Baseline)',
   WRITER: 'Agent viết báo cáo',
   CRITIC: 'Agent phản biện',
   POST_PROCESSOR: 'Đang hoàn thiện báo cáo',
@@ -82,7 +96,7 @@ export default function WorkspacePage() {
   const [sourcesError, setSourcesError] = useState('');
   const [runsError, setRunsError] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'report' | 'sources' | 'citations' | 'runs' | 'details' | 'protocol'>('report');
+  const [activeTab, setActiveTab] = useState<'report' | 'sources' | 'citations' | 'runs' | 'details' | 'protocol' | 'experiments'>('report');
   const [sourceSearch, setSourceSearch] = useState('');
   const [highlightedRef, setHighlightedRef] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -98,6 +112,13 @@ export default function WorkspacePage() {
   const [artifacts, setArtifacts] = useState<ArtifactItemResponse[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [experiments, setExperiments] = useState<AnalysisRunResponse[]>([]);
+  const [journal, setJournal] = useState<ExperimentJournalEntryResponse[]>([]);
+  const [isUploadingDataset, setIsUploadingDataset] = useState(false);
+  const [datasetUploadError, setDatasetUploadError] = useState('');
+  const [datasetUploadSuccess, setDatasetUploadSuccess] = useState<string | null>(null);
+  const datasetFileInputRef = useRef<HTMLInputElement>(null);
+
   const [isApprovingPlan, setIsApprovingPlan] = useState(false);
   const [isRejectingPlan, setIsRejectingPlan] = useState(false);
   const [editableQueries, setEditableQueries] = useState<string[]>([]);
@@ -111,6 +132,48 @@ export default function WorkspacePage() {
   const [methodNotes, setMethodNotes] = useState('');
   const [resultsSummary, setResultsSummary] = useState('');
   const [dataProvenance, setDataProvenance] = useState('');
+
+  const loadExperiments = useCallback(async () => {
+    try {
+      const list = await api.tasks.getExperiments(params.id);
+      setExperiments(list);
+    } catch {
+      // ignore
+    }
+  }, [params.id]);
+
+  const loadJournal = useCallback(async () => {
+    try {
+      const list = await api.tasks.getJournal(params.id);
+      setJournal(list);
+    } catch {
+      // ignore
+    }
+  }, [params.id]);
+
+  const handleUploadDataset = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      setDatasetUploadError('Chỉ chấp nhận tệp định dạng .csv');
+      return;
+    }
+    setIsUploadingDataset(true);
+    setDatasetUploadError('');
+    setDatasetUploadSuccess(null);
+    try {
+      const res = await api.tasks.uploadDataset(params.id, file);
+      setDatasetUploadSuccess(`Đã tải lên thành công: ${res.file_name} (${res.rows_count} dòng, ${res.columns_count} cột)`);
+      void loadSources();
+      void loadExperiments();
+      setReloadKey(v => v + 1);
+    } catch (err) {
+      setDatasetUploadError(err instanceof Error ? err.message : 'Tải lên dataset thất bại');
+    } finally {
+      setIsUploadingDataset(false);
+      if (datasetFileInputRef.current) datasetFileInputRef.current.value = '';
+    }
+  };
 
   const loadProtocol = useCallback(async () => {
     setProtocolError('');
@@ -193,12 +256,24 @@ export default function WorkspacePage() {
           void loadSources();
           void loadRuns();
           if (value.protocol_artifact_id) void loadProtocol();
+          if (value.research_type === 'EMPIRICAL_COMPUTATIONAL') {
+            void loadExperiments();
+            void loadJournal();
+          }
         } else if (value.status !== 'PENDING') {
           void loadSources();
           void loadRuns();
           if (value.status === 'WAITING_USER_DATA' || value.protocol_artifact_id) {
             void loadProtocol();
           }
+          if (value.research_type === 'EMPIRICAL_COMPUTATIONAL') {
+            void loadExperiments();
+            void loadJournal();
+          }
+        } else if (value.research_type === 'EMPIRICAL_COMPUTATIONAL') {
+          void loadSources();
+          void loadExperiments();
+          void loadJournal();
         }
 
         if (TERMINAL.has(value.status)) {
@@ -214,7 +289,7 @@ export default function WorkspacePage() {
     const timer = setInterval(() => { void poll(); }, 4000);
     void poll();
     return () => { active = false; clearInterval(timer); };
-  }, [params.id, loadReport, loadCitations, loadSources, loadRuns, loadProtocol, reloadKey]);
+  }, [params.id, loadReport, loadCitations, loadSources, loadRuns, loadProtocol, loadExperiments, loadJournal, reloadKey]);
 
   const handleStartTask = async () => {
     if (!task) return;
@@ -501,7 +576,11 @@ export default function WorkspacePage() {
           <div className="p-4">
             <div className="relative border-l-2 border-zinc-200 ml-3 space-y-6">
               {(() => {
-                const currentStages = task.research_type === 'REVIEW' ? REVIEW_STAGES : BASE_STAGES;
+                const currentStages = task.research_type === 'REVIEW'
+                  ? REVIEW_STAGES
+                  : task.research_type === 'EMPIRICAL_COMPUTATIONAL'
+                  ? COMPUTATIONAL_STAGES
+                  : BASE_STAGES;
                 return currentStages.map((stage, index) => {
                   const state = stageState(currentStages, index, task.status, task.current_step);
                   const Icon = state === 'done' ? CheckCircle2 : state === 'active' ? Clock : Circle;
@@ -795,6 +874,15 @@ export default function WorkspacePage() {
               >
                 <FlaskConical size={15} className="inline mr-1.5 opacity-70" />
                 Đề cương nghiên cứu (G4)
+              </button>
+            )}
+            {task.research_type === 'EMPIRICAL_COMPUTATIONAL' && (
+              <button 
+                onClick={() => setActiveTab('experiments')} 
+                className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === 'experiments' ? 'border-zinc-900 text-zinc-900 bg-white' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}
+              >
+                <Cpu size={15} className="inline mr-1.5 opacity-70" />
+                Thực nghiệm & Nhật ký {experiments.length > 0 ? `(${experiments.length})` : ''}
               </button>
             )}
             <button 
@@ -1415,6 +1503,293 @@ export default function WorkspacePage() {
                     <Trash2 size={15} className="mr-1.5" /> Xóa bài nghiên cứu
                   </Button>
                 </div>
+              </div>
+            )}
+
+            {/* TAB: THỰC NGHIỆM TÍNH TOÁN & NHẬT KÝ (PHASE 5) */}
+            {activeTab === 'experiments' && (
+              <div className="max-w-4xl mx-auto space-y-6">
+                {/* 1. DATASET MANAGEMENT CARD */}
+                <Card className="p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-100 pb-4">
+                    <div>
+                      <h2 className="font-semibold text-zinc-900 text-base flex items-center gap-2">
+                        <Database size={18} className="text-blue-600" />
+                        Tập dữ liệu thực nghiệm (Dataset CSV)
+                      </h2>
+                      <p className="text-xs text-zinc-500 mt-1">
+                        Cung cấp tệp CSV dữ liệu số phục vụ routine tính toán <code className="px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-800 font-mono">tabular_regression_v1</code>.
+                      </p>
+                    </div>
+                    <div>
+                      <input
+                        ref={datasetFileInputRef}
+                        type="file"
+                        accept=".csv"
+                        onChange={handleUploadDataset}
+                        className="hidden"
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() => datasetFileInputRef.current?.click()}
+                        disabled={isUploadingDataset || task.status === 'RUNNING'}
+                        className="text-xs"
+                      >
+                        <UploadCloud size={14} className="mr-1.5" />
+                        {isUploadingDataset ? 'Đang tải lên...' : 'Tải lên tập dữ liệu (.csv)'}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {datasetUploadError && (
+                    <div className="mt-3 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center gap-2">
+                      <XCircle size={14} className="shrink-0" />
+                      <span>{datasetUploadError}</span>
+                    </div>
+                  )}
+
+                  {datasetUploadSuccess && (
+                    <div className="mt-3 p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-lg flex items-center gap-2">
+                      <CheckCircle2 size={14} className="shrink-0 text-emerald-600" />
+                      <span>{datasetUploadSuccess}</span>
+                    </div>
+                  )}
+
+                  {/* Artifacts with DATASET_CSV */}
+                  {(() => {
+                    const dsArtifact = artifacts.find(a => a.export_type === 'DATASET_CSV');
+                    return (
+                      <div className="mt-4 p-4 rounded-xl bg-zinc-50 border border-zinc-200/80 text-xs">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <span className="font-semibold text-zinc-800">
+                              {dsArtifact ? `Tập dữ liệu: ${dsArtifact.file_path.split('/').pop()}` : 'Chế độ dữ liệu: Tự động sinh tập benchmark số đối chuẩn (50 mẫu, seed 42)'}
+                            </span>
+                            <p className="text-zinc-500 text-[11px] mt-0.5">
+                              {dsArtifact
+                                ? `Dung lượng: ${(dsArtifact.file_size_bytes / 1024).toFixed(1)} KB`
+                                : 'Hệ thống tự động sử dụng tập dữ liệu chuẩn hóa nếu bạn không tải lên tệp tùy chỉnh.'}
+                            </p>
+                          </div>
+                          {dsArtifact && (
+                            <a
+                              href={api.tasks.getArtifactDownloadUrl(task.id, dsArtifact.id)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-100 font-medium text-xs self-start sm:self-auto"
+                            >
+                              <Download size={13} /> Tải CSV
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </Card>
+
+                {/* 2. LATEST EXPERIMENT RUN & METRICS COMPARISON */}
+                {experiments.length > 0 ? (
+                  experiments.map((exp, idx) => {
+                    const m = exp.metrics || {};
+                    const baseM = m.baseline || {};
+                    const modelM = m.model || {};
+                    const comp = m.comparison || {};
+                    const verdict = comp.verdict;
+                    const reproStatus = exp.reproducibility_status;
+
+                    return (
+                      <Card key={exp.id || idx} className="p-6 space-y-5">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-100 pb-4">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h2 className="font-semibold text-zinc-900 text-base">
+                                Routine: <code className="font-mono text-indigo-700">{exp.routine_name}</code>
+                              </h2>
+                              <Badge variant="outline" className="text-xs">
+                                {exp.status}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-zinc-500 mt-1 font-mono">
+                              Checksum: {exp.input_checksum ? exp.input_checksum.slice(0, 16) + '...' : 'N/A'} • {exp.manifest.valid_rows || exp.manifest.dataset_rows || 50} mẫu • Split 80/20 (seed 42)
+                            </p>
+                          </div>
+                          <div>
+                            {reproStatus === 'PASSED' ? (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-medium border border-emerald-200">
+                                <CheckCircle2 size={13} className="text-emerald-600" />
+                                Tái lập kiểm chứng ĐẠT (abs diff ≤ 10⁻⁸)
+                              </span>
+                            ) : reproStatus === 'FAILED' ? (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 text-red-800 text-xs font-medium border border-red-200">
+                                <XCircle size={13} className="text-red-600" />
+                                Tái lập kiểm chứng THẤT BẠI
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-100 text-zinc-600 text-xs font-medium">
+                                Chưa kiểm tái lập
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Comparative Metrics Table */}
+                        <div>
+                          <h3 className="text-xs font-semibold text-zinc-700 uppercase tracking-wider mb-2">
+                            Bảng đo lường đối chứng khoa học (Empirical Benchmarks)
+                          </h3>
+                          <div className="overflow-x-auto rounded-xl border border-zinc-200">
+                            <table className="w-full text-xs text-left">
+                              <thead className="bg-zinc-50 text-zinc-700 border-b border-zinc-200 font-medium">
+                                <tr>
+                                  <th className="py-2.5 px-4">Mô hình</th>
+                                  <th className="py-2.5 px-4">MAE (Chỉ số chính)</th>
+                                  <th className="py-2.5 px-4">RMSE (Chỉ số phụ)</th>
+                                  <th className="py-2.5 px-4">Hệ số xác định R²</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-zinc-200">
+                                <tr className="hover:bg-zinc-50/50">
+                                  <td className="py-2.5 px-4 font-medium text-zinc-800">
+                                    Mean Baseline <span className="text-zinc-400 font-normal">(Nghiệm trung bình)</span>
+                                  </td>
+                                  <td className="py-2.5 px-4 font-mono">{baseM.mae != null ? baseM.mae.toFixed(6) : '—'}</td>
+                                  <td className="py-2.5 px-4 font-mono">{baseM.rmse != null ? baseM.rmse.toFixed(6) : '—'}</td>
+                                  <td className="py-2.5 px-4 font-mono">{baseM.r2 != null ? baseM.r2.toFixed(6) : '—'}</td>
+                                </tr>
+                                <tr className="hover:bg-zinc-50/50 bg-indigo-50/20">
+                                  <td className="py-2.5 px-4 font-medium text-indigo-900">
+                                    Ridge Regression <span className="text-indigo-600 font-normal">(alpha=1.0)</span>
+                                  </td>
+                                  <td className="py-2.5 px-4 font-mono font-semibold text-indigo-900">{modelM.mae != null ? modelM.mae.toFixed(6) : '—'}</td>
+                                  <td className="py-2.5 px-4 font-mono text-indigo-900">{modelM.rmse != null ? modelM.rmse.toFixed(6) : '—'}</td>
+                                  <td className="py-2.5 px-4 font-mono text-indigo-900">{modelM.r2 != null ? modelM.r2.toFixed(6) : '—'}</td>
+                                </tr>
+                                <tr className="bg-zinc-50/80 font-medium">
+                                  <td className="py-2.5 px-4 text-zinc-700">Chênh lệch (Delta: Ridge - Baseline)</td>
+                                  <td className={`py-2.5 px-4 font-mono ${comp.delta_mae != null && comp.delta_mae < 0 ? 'text-emerald-700 font-semibold' : 'text-zinc-700'}`}>
+                                    {comp.delta_mae != null ? (comp.delta_mae > 0 ? `+${comp.delta_mae.toFixed(6)}` : comp.delta_mae.toFixed(6)) : '—'}
+                                  </td>
+                                  <td className="py-2.5 px-4 font-mono text-zinc-700">
+                                    {comp.delta_rmse != null ? (comp.delta_rmse > 0 ? `+${comp.delta_rmse.toFixed(6)}` : comp.delta_rmse.toFixed(6)) : '—'}
+                                  </td>
+                                  <td className="py-2.5 px-4 text-zinc-500">—</td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* Verdict Card */}
+                        {verdict && (
+                          <div className={`p-4 rounded-xl border text-xs ${verdict === 'IMPROVEMENT' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-amber-50 border-amber-200 text-amber-900'}`}>
+                            <div className="flex items-center gap-2 font-semibold">
+                              {verdict === 'IMPROVEMENT' ? (
+                                <>
+                                  <CheckCircle2 size={16} className="text-emerald-600" />
+                                  <span>Kết luận: CẢI THIỆN (IMPROVEMENT) — Ridge Regression giảm sai số MAE ({comp.pct_improvement ?? 0}% so với baseline).</span>
+                                </>
+                              ) : (
+                                <>
+                                  <AlertTriangle size={16} className="text-amber-600" />
+                                  <span>Kết luận: KHÔNG CẢI THIỆN (NO_IMPROVEMENT) — Kết quả âm hợp lệ (Negative Result Integrity). Ridge regression không vượt trội hơn nghiệm trung bình đơn giản.</span>
+                                </>
+                              )}
+                            </div>
+                            <p className="mt-1 text-[11px] opacity-80">
+                              Nguyên tắc tính toàn vẹn khoa học: Mọi kết quả đo lường (dù tốt hơn hay không cải thiện) đều được báo cáo minh bạch và đưa vào bản thảo bài báo.
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Non-causal Disclaimer */}
+                        <div className="p-3 bg-zinc-50 rounded-xl border border-zinc-200 text-[11px] text-zinc-600">
+                          <strong>Giới hạn khoa học:</strong> Mô hình hồi quy đo lường mối tương quan và hiệu năng dự đoán trên tập kiểm thử (predictive/exploratory). Kết quả tuyệt đối không được suy luận thành quan hệ nhân quả (non-causal).
+                        </div>
+
+                        {/* Experiment Artifacts */}
+                        <div className="pt-2">
+                          <h4 className="text-xs font-semibold text-zinc-700 mb-2">Tệp dữ liệu thực nghiệm đã lưu (Artifacts)</h4>
+                          <div className="flex flex-wrap gap-2">
+                            {artifacts
+                              .filter(a => ['METRICS_JSON', 'MANIFEST_JSON', 'CHART_DATA_JSON', 'REPRO_README'].includes(a.export_type))
+                              .map(art => (
+                                <a
+                                  key={art.id}
+                                  href={api.tasks.getArtifactDownloadUrl(task.id, art.id)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 text-xs font-mono"
+                                >
+                                  <Download size={12} />
+                                  {art.file_path.split('/').pop()}
+                                </a>
+                              ))}
+                          </div>
+                        </div>
+                      </Card>
+                    );
+                  })
+                ) : (
+                  <Card className="p-8 text-center text-zinc-500">
+                    <FlaskConical size={32} className="mx-auto text-zinc-400 mb-2" />
+                    <p className="text-sm font-medium text-zinc-700">Chưa có kết quả thực nghiệm tính toán</p>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      {task.status === 'PENDING'
+                        ? 'Nhấn Bắt đầu nghiên cứu để khởi chạy pipeline tính toán đối chuẩn.'
+                        : 'Routine tabular_regression_v1 sẽ tự động chạy trong luồng nghiên cứu.'}
+                    </p>
+                  </Card>
+                )}
+
+                {/* 3. SCIENTIFIC AUDIT JOURNAL TIMELINE */}
+                {journal.length > 0 && (
+                  <Card className="p-6">
+                    <h3 className="font-semibold text-zinc-900 text-sm mb-4 flex items-center gap-2">
+                      <Clock size={16} className="text-zinc-600" />
+                      Sổ nhật ký thí nghiệm nghiên cứu (Immutable Append-Only Journal)
+                    </h3>
+                    <div className="relative border-l-2 border-zinc-200 ml-3 space-y-6">
+                      {journal.map(entry => {
+                        const kindColors: Record<string, string> = {
+                          PLAN_FROZEN: 'border-blue-300 bg-blue-50 text-blue-800',
+                          STARTED: 'border-zinc-300 bg-zinc-50 text-zinc-800',
+                          EXECUTION_RESULT: 'border-purple-300 bg-purple-50 text-purple-800',
+                          OBSERVATION: 'border-emerald-300 bg-emerald-50 text-emerald-800',
+                          REPRODUCTION_CHECK: 'border-teal-300 bg-teal-50 text-teal-800',
+                          INTERPRETATION: 'border-indigo-300 bg-indigo-50 text-indigo-800',
+                        };
+                        const colorClass = kindColors[entry.kind] || 'border-zinc-200 bg-white text-zinc-800';
+
+                        return (
+                          <div key={entry.id} className="relative pl-6">
+                            <span className="absolute -left-3 top-1 w-5 h-5 rounded-full border border-zinc-300 bg-white flex items-center justify-center text-[10px] font-bold text-zinc-700">
+                              {entry.sequence}
+                            </span>
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${colorClass}`}>
+                                  {entry.kind}
+                                </span>
+                                <span className="text-xs text-zinc-400 font-mono">
+                                  Tác tử: <strong className="text-zinc-700">{entry.actor}</strong> • {formatDate(entry.created_at)}
+                                </span>
+                              </div>
+                              {entry.payload && (
+                                <div className="p-3 bg-zinc-50 rounded-lg text-xs font-mono text-zinc-700 overflow-x-auto mt-1 border border-zinc-200/60 leading-relaxed">
+                                  {entry.payload.summary ? (
+                                    <p className="font-sans text-zinc-800">{entry.payload.summary}</p>
+                                  ) : (
+                                    <pre className="text-[11px]">{JSON.stringify(entry.payload, null, 2)}</pre>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </Card>
+                )}
               </div>
             )}
           </div>

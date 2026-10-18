@@ -28,6 +28,13 @@ from app.schemas.task import (
 from app.schemas.report import CitationItemResponse, ResearchReportResponse, ResearchSourceItemResponse
 from app.schemas.agent_run import AgentRunItemResponse
 from app.schemas.artifact import ArtifactItemResponse, PdfUploadResponse
+from app.models.experiment import AnalysisRun, ExperimentJournalEntry
+from app.schemas.experiment import (
+    AnalysisRunResponse,
+    ExperimentJournalEntryResponse,
+    DatasetUploadResponse,
+)
+from app.services.experiment_runner import parse_csv_dataset, InvalidInputError
 from app.services.artifact_store import artifact_store
 from app.services.pdf_parser import (
     extract_text_from_pdf,
@@ -494,9 +501,20 @@ async def download_task_artifact(
     if not file_path:
         raise HTTPException(status_code=404, detail="Artifact file does not exist on disk")
 
+    media_type = "application/octet-stream"
+    fp_lower = artifact.file_path.lower()
+    if fp_lower.endswith(".pdf"):
+        media_type = "application/pdf"
+    elif fp_lower.endswith(".json"):
+        media_type = "application/json"
+    elif fp_lower.endswith(".csv"):
+        media_type = "text/csv"
+    elif fp_lower.endswith(".md"):
+        media_type = "text/markdown"
+
     return FileResponse(
         path=str(file_path),
-        media_type="application/pdf",
+        media_type=media_type,
         filename=os.path.basename(artifact.file_path),
     )
 
@@ -729,3 +747,108 @@ async def resume_research_with_data(
     await db.commit()
     await db.refresh(task)
     return task
+
+
+@router.get("/{task_id}/experiments", response_model=List[AnalysisRunResponse])
+async def get_task_experiments(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lấy danh sách các lần chạy thực nghiệm tính toán (AnalysisRun) của task."""
+    task_res = await db.execute(
+        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+    )
+    if not task_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+    result = await db.execute(
+        select(AnalysisRun)
+        .where(AnalysisRun.research_task_id == task_id)
+        .order_by(AnalysisRun.created_at.desc())
+    )
+    return result.scalars().all()
+
+
+@router.get("/{task_id}/journal", response_model=List[ExperimentJournalEntryResponse])
+async def get_task_experiment_journal(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lấy toàn bộ các mục nhật ký thí nghiệm (ExperimentJournalEntry, append-only) của task."""
+    task_res = await db.execute(
+        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+    )
+    if not task_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+    result = await db.execute(
+        select(ExperimentJournalEntry)
+        .where(ExperimentJournalEntry.research_task_id == task_id)
+        .order_by(ExperimentJournalEntry.created_at.asc(), ExperimentJournalEntry.sequence.asc())
+    )
+    return result.scalars().all()
+
+
+@router.post("/{task_id}/dataset", response_model=DatasetUploadResponse, status_code=status.HTTP_201_CREATED)
+async def upload_task_dataset(
+    task_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Tải lên tập dữ liệu định dạng CSV cho bài nghiên cứu thực nghiệm tính toán (EMPIRICAL_COMPUTATIONAL)."""
+    task = await db.scalar(
+        select(ResearchTask).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+    filename = file.filename or "dataset.csv"
+    if not filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Chỉ chấp nhận tệp định dạng .csv")
+
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=400, detail="Tệp CSV trống (0 bytes)")
+    if len(content) > 10 * 1024 * 1024:  # 10MB limit
+        raise HTTPException(status_code=413, detail="Dung lượng tệp vượt quá giới hạn cho phép (tối đa 10MB)")
+
+    try:
+        csv_text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            csv_text = content.decode("latin-1")
+        except Exception:
+            raise HTTPException(status_code=400, detail="Không thể giải mã nội dung văn bản tệp CSV (hỗ trợ UTF-8)")
+
+    try:
+        headers, rows = parse_csv_dataset(csv_text)
+    except InvalidInputError as err:
+        raise HTTPException(status_code=400, detail=f"Dữ liệu CSV không hợp lệ: {str(err)}")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Lỗi phân tích tệp CSV: {str(exc)}")
+
+    saved = artifact_store.save_artifact(task.id, filename, content)
+    art = ExportArtifact(
+        research_task_id=task.id,
+        export_type="DATASET_CSV",
+        file_path=saved["file_path"],
+        file_size_bytes=saved["file_size_bytes"],
+        download_url=f"/api/v1/research/{task.id}/artifacts/placeholder/download",
+    )
+    db.add(art)
+    await db.flush()
+    art.download_url = f"/api/v1/research/{task.id}/artifacts/{art.id}/download"
+    await db.commit()
+
+    return DatasetUploadResponse(
+        artifact_id=art.id,
+        file_name=saved["file_name"],
+        rows_count=len(rows),
+        columns_count=len(headers),
+        columns=headers,
+        checksum=saved["sha256_hash"],
+    )
+

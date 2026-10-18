@@ -5,6 +5,7 @@ from app.models.source import ResearchSource, DocumentChunk
 from app.models.grounding import ClaimEvidence, Evidence, ResearchClaim, Citation
 from app.models.report import ResearchReport, ExportArtifact
 from app.models.agent_run import AgentRun, Evaluation
+from app.models.experiment import AnalysisRun, ExperimentJournalEntry
 
 __all__ = [
     "Base",
@@ -22,4 +23,6 @@ __all__ = [
     "ExportArtifact",
     "AgentRun",
     "Evaluation",
+    "AnalysisRun",
+    "ExperimentJournalEntry",
 ]

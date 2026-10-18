@@ -49,6 +49,9 @@ class ResearchState(TypedDict, total=False):
     protocol: Optional[Dict[str, Any]] # Phương pháp và đề cương nghiên cứu (Methodologist)
     protocol_artifact_id: Optional[str] # UUID của artifact protocol
     user_data_submission: Optional[Dict[str, Any]] # Dữ liệu/kết quả thực địa do người dùng cung cấp
+    dataset_csv: Optional[str]        # Nội dung dataset CSV cho thực nghiệm tính toán
+    analysis_run: Optional[Dict[str, Any]] # Kết quả thực thi routine thực nghiệm tính toán
+    experiment_journal: Optional[List[Dict[str, Any]]] # Các entry nhật ký thí nghiệm (append-only)
     max_micro_revisions: int          # Giới hạn Micro-loop Writer ⟷ Critic (mặc định: 2)
     current_iteration: int
     current_micro_revision: int       # Đếm số lần Writer chỉnh sửa trong vòng hiện tại

@@ -658,6 +658,154 @@ async def methodologist_node(state: ResearchState) -> Dict[str, Any]:
         )
         raise
 
+async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
+    """
+    Experiment Runner Node (Phase 5):
+    - Chạy routine tính toán chuẩn tabular_regression_v1 cho bài nghiên cứu dạng EMPIRICAL_COMPUTATIONAL.
+    - Sử dụng dataset_csv do người dùng nạp, hoặc tự sinh tập benchmark dữ liệu số đối chuẩn phù hợp.
+    - Thực hiện kiểm tái lập (repeatability verification) tự động bằng lần chạy thứ hai từ cùng manifest.
+    - Sinh các mục sổ nhật ký thí nghiệm ExperimentJournalEntry (append-only) theo chuẩn ADR-005.
+    """
+    await _record_progress(state, "EXPERIMENT_RUNNER")
+    start_ts = time.monotonic()
+    started_at = datetime.now(timezone.utc)
+    model_name = "tabular_regression_v1_engine"
+
+    task_id_str = state.get("task_id")
+    dataset_csv = state.get("dataset_csv")
+
+    if not dataset_csv:
+        import random
+        # Tự sinh tập dữ liệu số chuẩn hóa (50 mẫu, 3 đặc trưng, 1 mục tiêu hồi quy)
+        header = "feature_1,feature_2,feature_3,target_metric\n"
+        rng = random.Random(42)
+        rows_str = []
+        for _ in range(50):
+            x1 = round(rng.uniform(10.0, 50.0), 2)
+            x2 = round(rng.uniform(1.0, 10.0), 2)
+            x3 = round(rng.uniform(100.0, 500.0), 2)
+            y = round(2.5 * x1 - 1.2 * x2 + 0.05 * x3 + rng.uniform(-5.0, 5.0), 2)
+            rows_str.append(f"{x1},{x2},{x3},{y}")
+        dataset_csv = header + "\n".join(rows_str)
+
+    from app.services.experiment_runner import run_tabular_regression_v1, verify_repeatability
+
+    try:
+        run_result = run_tabular_regression_v1(dataset_csv, seed=42)
+        passed, diff = verify_repeatability(dataset_csv, run_result)
+
+        analysis_run = {
+            "routine_name": "tabular_regression_v1",
+            "status": "COMPLETED",
+            "input_checksum": run_result["input_checksum"],
+            "manifest": run_result["manifest"],
+            "metrics": run_result["metrics"],
+            "chart_data": run_result["chart_data"],
+            "reproducibility_status": "PASSED" if passed else "FAILED",
+            "reproducibility_diff": diff,
+            "readme_markdown": run_result["readme_markdown"],
+        }
+
+        journal_entries = [
+            {
+                "sequence": 1,
+                "kind": "PLAN_FROZEN",
+                "actor": "METHODOLOGIST",
+                "payload": {
+                    "routine_name": "tabular_regression_v1",
+                    "manifest": run_result["manifest"],
+                },
+            },
+            {
+                "sequence": 2,
+                "kind": "STARTED",
+                "actor": "SYSTEM",
+                "payload": {
+                    "routine_name": "tabular_regression_v1",
+                    "input_checksum": run_result["input_checksum"],
+                },
+            },
+            {
+                "sequence": 3,
+                "kind": "EXECUTION_RESULT",
+                "actor": "SYSTEM",
+                "payload": {
+                    "status": "COMPLETED",
+                    "metrics": run_result["metrics"],
+                },
+            },
+            {
+                "sequence": 4,
+                "kind": "OBSERVATION",
+                "actor": "SYSTEM",
+                "payload": {
+                    "verdict": run_result["verdict"],
+                    "comparison": run_result["metrics"]["comparison"],
+                },
+            },
+            {
+                "sequence": 5,
+                "kind": "REPRODUCTION_CHECK",
+                "actor": "SYSTEM",
+                "payload": {
+                    "status": "PASSED" if passed else "FAILED",
+                    "tolerance": diff["tolerance"],
+                    "diff": diff,
+                },
+            },
+            {
+                "sequence": 6,
+                "kind": "INTERPRETATION",
+                "actor": "DATA_ANALYST",
+                "payload": {
+                    "summary": f"Routine tabular_regression_v1 hoàn thành với kết luận {run_result['verdict']}. Ridge MAE: {run_result['metrics']['model']['mae']} so với Baseline MAE: {run_result['metrics']['baseline']['mae']}. Phép kiểm tái lập: {'ĐẠT (PASSED)' if passed else 'KHÔNG ĐẠT (FAILED)'}. Kết quả mang tính chất dự đoán và thăm dò, không suy luận quan hệ nhân quả.",
+                },
+            },
+        ]
+
+        duration_ms = int((time.monotonic() - start_ts) * 1000)
+        completed_at = datetime.now(timezone.utc)
+
+        await record_agent_run(
+            task_id=task_id_str,
+            agent_name="ExperimentRunner",
+            status="SUCCESS",
+            iteration=state.get("current_iteration", 0),
+            attempt_number=state.get("attempt_number", 1),
+            model=model_name,
+            started_at=started_at,
+            completed_at=completed_at,
+            duration_ms=duration_ms,
+            input_tokens=0,
+            output_tokens=0,
+            estimated_cost=0.0,
+            input_summary={"rows": run_result["manifest"]["dataset_rows"]},
+            output_summary={"verdict": run_result["verdict"], "repeatability": "PASSED" if passed else "FAILED"},
+            tool_calls=[{"tool": "tabular_regression_v1"}],
+        )
+
+        return {
+            "current_agent": "experiment_runner",
+            "dataset_csv": dataset_csv,
+            "analysis_run": analysis_run,
+            "experiment_journal": journal_entries,
+        }
+    except Exception as exc:
+        duration_ms = int((time.monotonic() - start_ts) * 1000)
+        await record_agent_run(
+            task_id=task_id_str,
+            agent_name="ExperimentRunner",
+            status="FAILED",
+            iteration=state.get("current_iteration", 0),
+            attempt_number=state.get("attempt_number", 1),
+            model=model_name,
+            started_at=started_at,
+            completed_at=datetime.now(timezone.utc),
+            duration_ms=duration_ms,
+            error_message=str(exc),
+        )
+        raise
+
 async def writer_node(state: ResearchState) -> Dict[str, Any]:
     """
     Writer Agent: Viết bản nháp dựa trên Claims & Evidences. (Dùng mô hình xịn)
@@ -677,6 +825,7 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     research_type = state.get("research_type", "REVIEW")
     protocol = state.get("protocol") or {}
     user_data = state.get("user_data_submission")
+    analysis_run = state.get("analysis_run")
 
     empirical_section = ""
     if research_type == "EMPIRICAL_HUMAN" and user_data:
@@ -696,6 +845,33 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     Yêu cầu đặc biệt:
     1. Bắt buộc có các phần: Title, Abstract, Introduction, Research Questions & Hypotheses, Methods, Results, Discussion, Limitations, Conclusion, References.
     2. Trong phần Results, BẮT BUỘC ghi rõ provenance: kết quả nào dựa trên dữ liệu người dùng nạp vào và kết quả nào từ tổng quan phân tích.
+    """
+    elif research_type == "EMPIRICAL_COMPUTATIONAL" and analysis_run:
+        m = analysis_run.get("metrics", {})
+        base_m = m.get("baseline", {})
+        model_m = m.get("model", {})
+        comp = m.get("comparison", {})
+        verdict = comp.get("verdict", "INCONCLUSIVE")
+        repro_status = analysis_run.get("reproducibility_status", "NOT_RUN")
+
+        empirical_section = f"""
+    KẾT QUẢ THỰC NGHIỆM TÍNH TOÁN (COMPUTATIONAL EXPERIMENT RESULTS):
+    Routine thực thi: {analysis_run.get('routine_name', 'tabular_regression_v1')}
+    Tập dữ liệu: {analysis_run.get('manifest', {}).get('valid_rows')} mẫu hợp lệ, split 80/20, seed 42.
+    Biến mục tiêu: {analysis_run.get('manifest', {}).get('target_column')}
+    Biến đặc trưng: {analysis_run.get('manifest', {}).get('feature_columns')}
+    Số liệu đo lường đối chứng:
+    - Mean Baseline: MAE = {base_m.get('mae')}, RMSE = {base_m.get('rmse')}, R² = {base_m.get('r2')}
+    - Ridge Regression (alpha=1.0): MAE = {model_m.get('mae')}, RMSE = {model_m.get('rmse')}, R² = {model_m.get('r2')}
+    - Chênh lệch sai số (Delta MAE): {comp.get('delta_mae')}
+    - Kết luận khoa học: {verdict} ({'Ridge cải thiện sai số so với baseline' if verdict == 'IMPROVEMENT' else 'Ridge không vượt trội hơn baseline (kết quả âm hợp lệ)'})
+    - Phép kiểm tái lập độc lập (Repeatability Check): {repro_status} (dung sai tolerance <= 1e-8)
+
+    Yêu cầu cấu trúc bắt buộc:
+    1. Bắt buộc có các phần: Title, Abstract, Introduction, Research Questions, Methods, Results, Discussion, Limitations, Conclusion, References.
+    2. Trong Methods & Results: BẮT BUỘC trình bày cả hai bộ số liệu (Baseline VÀ Ridge) một cách minh bạch, tuyệt đối không chọn lọc chỉ báo cáo mô hình tốt hơn.
+    3. Trình bày trung thực kết luận {verdict} và kiểm tra tính tái lập {repro_status}.
+    4. Giới hạn khoa học: Kết quả mang tính chất mô tả và dự đoán (predictive/exploratory), tuyệt đối không suy diễn quan hệ nhân quả (non-causal).
     """
 
     prompt = f"""
