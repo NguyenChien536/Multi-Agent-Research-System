@@ -66,6 +66,12 @@ class Settings(BaseSettings):
     DEFAULT_MAX_OUTPUT_TOKENS: int = 50000
     DEFAULT_TIMEOUT_SECONDS: int = 300
 
+    # Artifact Storage & Upload Limits (SRS FR-02 & P3)
+    ARTIFACTS_DIR: str = "storage/artifacts"
+    MAX_UPLOAD_SIZE_BYTES: int = 10 * 1024 * 1024  # 10 MiB per file
+    MAX_PDF_PAGES: int = 100  # Max 100 pages per file
+    MAX_UPLOAD_FILES_PER_TASK: int = 5  # Max 5 files per task
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @model_validator(mode="after")

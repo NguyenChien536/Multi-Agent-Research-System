@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { 
   Sparkles, FileText, Search, ArrowRight, Settings2, 
   ShieldCheck, ChevronDown, ChevronUp, LayoutDashboard, LogOut,
-  Zap, Compass, Microscope
+  Zap, Compass, Microscope, FileUp, X
 } from 'lucide-react';
 import { api } from '@/lib/api';
 
@@ -18,6 +18,7 @@ export default function Home() {
   const [citationStyle, setCitationStyle] = useState<'IEEE' | 'APA' | 'HARVARD'>('IEEE');
   const [requirePlanApproval, setRequirePlanApproval] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [pdfFiles, setPdfFiles] = useState<File[]>([]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
@@ -27,6 +28,41 @@ export default function Home() {
   useEffect(() => {
     setHasSession(api.auth.hasSession());
   }, []);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const selected = Array.from(e.target.files);
+    const validPdfs: File[] = [];
+    let err = '';
+
+    for (const f of selected) {
+      if (!f.name.toLowerCase().endsWith('.pdf') && f.type !== 'application/pdf') {
+        err = 'Chỉ chấp nhận tệp định dạng PDF.';
+        continue;
+      }
+      if (f.size > 10 * 1024 * 1024) {
+        err = `Tệp ${f.name} vượt quá dung lượng 10 MiB cho phép.`;
+        continue;
+      }
+      validPdfs.push(f);
+    }
+
+    if (err) setError(err);
+
+    setPdfFiles(prev => {
+      const combined = [...prev, ...validPdfs];
+      if (combined.length > 5) {
+        setError('Tối đa 5 tài liệu PDF cho một bài nghiên cứu.');
+        return combined.slice(0, 5);
+      }
+      return combined;
+    });
+    e.target.value = '';
+  };
+
+  const removePdfFile = (index: number) => {
+    setPdfFiles(prev => prev.filter((_, i) => i !== index));
+  };
 
   const handleStartResearch = async (e: FormEvent) => {
     e.preventDefault();
@@ -51,6 +87,14 @@ export default function Home() {
         language: 'vi',
         require_plan_approval: requirePlanApproval,
       });
+
+      // Tải lên các file PDF riêng tư nếu có trước khi bắt đầu workflow
+      if (pdfFiles.length > 0) {
+        for (const file of pdfFiles) {
+          await api.tasks.uploadPdf(task.id, file);
+        }
+      }
+
       await api.tasks.start(task.id);
       router.push(`/research/${task.id}`);
     } catch (err) {
@@ -278,6 +322,61 @@ export default function Home() {
                       </div>
                     </div>
                   </button>
+                </div>
+
+                {/* 5. Private PDF Upload (SRS FR-02 & P3) */}
+                <div className="border-t border-zinc-100 pt-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="font-semibold text-xs text-zinc-900 flex items-center gap-1.5">
+                        <FileUp size={14} className="text-purple-600" />
+                        Nạp tài liệu PDF riêng tư (Tùy chọn)
+                      </h4>
+                      <p className="text-xs text-zinc-500 mt-0.5">
+                        Tài liệu riêng sẽ được trích xuất text, băm nhỏ và nhúng vector vào tri thức nghiên cứu của task
+                      </p>
+                    </div>
+                    <span className="text-[11px] text-zinc-400 shrink-0">Tối đa 5 file, 10 MiB, 100 trang</span>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-zinc-50 hover:bg-zinc-100 border border-dashed border-zinc-300 text-xs font-medium text-zinc-700 cursor-pointer transition-colors">
+                      <FileUp size={14} className="text-zinc-500" />
+                      <span>Chọn file PDF tải lên</span>
+                      <input
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        multiple
+                        className="hidden"
+                        onChange={handleFileSelect}
+                      />
+                    </label>
+                    <span className="text-xs text-zinc-400">
+                      {pdfFiles.length === 0 ? 'Chưa chọn file nào' : `Đã đính kèm ${pdfFiles.length}/5 file PDF`}
+                    </span>
+                  </div>
+
+                  {pdfFiles.length > 0 && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      {pdfFiles.map((file, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-2.5 rounded-xl bg-purple-50/50 border border-purple-200 text-xs">
+                          <div className="flex items-center gap-2 truncate pr-2">
+                            <FileText size={14} className="text-purple-600 shrink-0" />
+                            <span className="truncate font-medium text-zinc-800">{file.name}</span>
+                            <span className="text-[10px] text-zinc-500 shrink-0">({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removePdfFile(idx)}
+                            className="text-zinc-400 hover:text-red-500 p-1 rounded transition-colors cursor-pointer"
+                            title="Xóa tệp"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
