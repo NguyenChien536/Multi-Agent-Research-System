@@ -1,9 +1,13 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
-import { Sparkles, FileText, Search, ArrowRight, Settings2, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react';
+import { 
+  Sparkles, FileText, Search, ArrowRight, Settings2, 
+  ShieldCheck, ChevronDown, ChevronUp, LayoutDashboard, LogOut,
+  Zap, Compass, Microscope
+} from 'lucide-react';
 import { api } from '@/lib/api';
 
 export default function Home() {
@@ -18,6 +22,11 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [error, setError] = useState('');
+  const [hasSession, setHasSession] = useState(false);
+
+  useEffect(() => {
+    setHasSession(api.auth.hasSession());
+  }, []);
 
   const handleStartResearch = async (e: FormEvent) => {
     e.preventDefault();
@@ -50,20 +59,38 @@ export default function Home() {
     }
   };
 
+  const handleLogout = () => {
+    api.auth.logout();
+    setHasSession(false);
+    router.push('/login');
+  };
+
   return (
     <div className="min-h-screen bg-[#fcfcfc] flex flex-col text-zinc-900 relative">
       {/* Header */}
-      <header className="w-full px-6 py-5 flex justify-between items-center z-10">
+      <header className="w-full px-6 py-4 flex justify-between items-center z-20 border-b border-zinc-100 bg-white/70 backdrop-blur-md">
         <div className="flex items-center gap-2.5 font-bold text-xl tracking-tight">
           <div className="w-8 h-8 rounded-xl bg-zinc-900 text-white flex items-center justify-center text-sm shadow-md font-sans">S</div>
           <span>Synthia</span>
           <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200">ATI</span>
         </div>
-        <div className="flex gap-3">
-          <Button variant="ghost" onClick={() => router.push('/dashboard')}>Dashboard</Button>
-          <Button variant="outline" onClick={() => router.push(api.auth.hasSession() ? '/dashboard' : '/login')}>
-            {api.auth.hasSession() ? 'Không gian của bạn' : 'Đăng nhập'}
-          </Button>
+
+        {/* Clean, Non-redundant Navbar */}
+        <div className="flex items-center gap-2">
+          {hasSession ? (
+            <>
+              <Button variant="outline" onClick={() => router.push('/dashboard')}>
+                <LayoutDashboard size={15} className="mr-1.5 text-zinc-600" /> Dashboard
+              </Button>
+              <Button variant="ghost" onClick={handleLogout} title="Đăng xuất khỏi hệ thống">
+                <LogOut size={15} className="mr-1 text-zinc-500" /> Đăng xuất
+              </Button>
+            </>
+          ) : (
+            <Button variant="primary" onClick={() => router.push('/login')}>
+              Đăng nhập / Đăng ký
+            </Button>
+          )}
         </div>
       </header>
 
@@ -79,10 +106,11 @@ export default function Home() {
             </p>
           </div>
 
-          <form onSubmit={handleStartResearch} className="w-full relative group text-left">
-            <div className={`absolute inset-0 bg-zinc-900/5 rounded-3xl blur-xl transition-opacity duration-500 ${isFocused ? 'opacity-100' : 'opacity-0'}`} />
+          <form onSubmit={handleStartResearch} className="w-full relative text-left">
+            {/* Background focus blur - MUST have pointer-events-none so it never blocks clicks */}
+            <div className={`absolute inset-0 bg-zinc-900/5 rounded-3xl blur-xl transition-opacity duration-500 pointer-events-none -z-10 ${isFocused ? 'opacity-100' : 'opacity-0'}`} />
 
-            <div className="relative bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-zinc-200 p-3 transition-all duration-300 focus-within:shadow-[0_8px_30px_rgb(0,0,0,0.08)] focus-within:border-zinc-300 flex flex-col gap-2">
+            <div className="relative bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-zinc-200 p-3 transition-all duration-300 focus-within:shadow-[0_8px_30px_rgb(0,0,0,0.08)] focus-within:border-zinc-300 flex flex-col gap-2 z-10">
               <div className="flex items-start px-3 pt-2">
                 <Search className="text-zinc-400 shrink-0 mr-3 mt-3.5" size={22} />
                 <textarea
@@ -108,9 +136,9 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => setShowAdvanced(!showAdvanced)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-zinc-200 text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition-colors shadow-sm"
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-medium transition-colors shadow-sm cursor-pointer ${showAdvanced ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-white text-zinc-700 border-zinc-200 hover:bg-zinc-100'}`}
                   >
-                    <Settings2 size={13} className="text-zinc-500" />
+                    <Settings2 size={13} className={showAdvanced ? 'text-white' : 'text-zinc-500'} />
                     <span>Cấu hình nghiên cứu</span>
                     {showAdvanced ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                   </button>
@@ -119,7 +147,7 @@ export default function Home() {
                 <button
                   type="submit"
                   disabled={isLoading || topic.trim().length < 10}
-                  className="flex items-center gap-2 bg-zinc-900 text-white px-5 py-2.5 rounded-full font-medium hover:bg-zinc-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm ml-auto"
+                  className="flex items-center gap-2 bg-zinc-900 text-white px-5 py-2.5 rounded-full font-medium hover:bg-zinc-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm ml-auto cursor-pointer"
                 >
                   {isLoading ? (
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -133,69 +161,123 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Advanced Options Drawer */}
+            {/* Advanced Options Drawer with Interactive Clickable Cards */}
             {showAdvanced && (
-              <div className="mt-3 bg-white rounded-2xl border border-zinc-200 p-5 shadow-sm space-y-4 animate-in fade-in duration-200">
-                <h3 className="font-semibold text-xs uppercase tracking-wider text-zinc-500">Tùy chọn nghiên cứu chuyên sâu</h3>
-                
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                  {/* Research Depth */}
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-700 mb-1.5">Độ sâu nghiên cứu</label>
-                    <select
-                      value={researchDepth}
-                      onChange={(e) => setResearchDepth(e.target.value as any)}
-                      className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-900"
-                    >
-                      <option value="SHALLOW">Tổng quan nhanh (1 vòng, ~5 nguồn)</option>
-                      <option value="STANDARD">Tiêu chuẩn (2 vòng, ~10 nguồn)</option>
-                      <option value="DEEP">Chuyên sâu (3 vòng, ~20 nguồn)</option>
-                    </select>
-                  </div>
+              <div className="mt-4 bg-white rounded-2xl border border-zinc-200 p-6 shadow-sm space-y-6 animate-in fade-in duration-200 z-10 relative">
+                <div>
+                  <h3 className="font-semibold text-sm text-zinc-900">Tùy chọn cấu hình nghiên cứu</h3>
+                  <p className="text-xs text-zinc-500 mt-0.5">Tùy biến các tham số cho pipeline đa tác tử</p>
+                </div>
 
-                  {/* Report Length */}
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-700 mb-1.5">Độ dài bài báo</label>
-                    <select
-                      value={reportLength}
-                      onChange={(e) => setReportLength(e.target.value as any)}
-                      className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-900"
+                {/* 1. Research Depth (Cards) */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500">Độ sâu nghiên cứu</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setResearchDepth('SHALLOW')}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${researchDepth === 'SHALLOW' ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm ring-2 ring-zinc-900/10' : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-800'}`}
                     >
-                      <option value="SHORT">Ngắn gọn (~1.500 từ)</option>
-                      <option value="MEDIUM">Vừa phải (~3.000 từ)</option>
-                      <option value="LONG">Chi tiết (~5.000 từ)</option>
-                    </select>
-                  </div>
+                      <div className="flex items-center gap-2 font-semibold text-sm">
+                        <Zap size={15} className={researchDepth === 'SHALLOW' ? 'text-amber-400' : 'text-zinc-600'} />
+                        Nhanh (SHALLOW)
+                      </div>
+                      <div className={`text-xs mt-1 ${researchDepth === 'SHALLOW' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                        1 vòng nghiên cứu, tối đa ~5 nguồn
+                      </div>
+                    </button>
 
-                  {/* Citation Style */}
-                  <div>
-                    <label className="block text-xs font-medium text-zinc-700 mb-1.5">Kiểu trích dẫn</label>
-                    <select
-                      value={citationStyle}
-                      onChange={(e) => setCitationStyle(e.target.value as any)}
-                      className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm text-zinc-800 outline-none focus:border-zinc-900"
+                    <button
+                      type="button"
+                      onClick={() => setResearchDepth('STANDARD')}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${researchDepth === 'STANDARD' ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm ring-2 ring-zinc-900/10' : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-800'}`}
                     >
-                      <option value="IEEE">IEEE [1] (Kỹ thuật / CS)</option>
-                      <option value="APA">APA (Tác giả, Năm)</option>
-                      <option value="HARVARD">Harvard</option>
-                    </select>
+                      <div className="flex items-center gap-2 font-semibold text-sm">
+                        <Compass size={15} className={researchDepth === 'STANDARD' ? 'text-blue-400' : 'text-zinc-600'} />
+                        Tiêu chuẩn (STANDARD)
+                      </div>
+                      <div className={`text-xs mt-1 ${researchDepth === 'STANDARD' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                        2 vòng nghiên cứu, tối đa ~10 nguồn
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setResearchDepth('DEEP')}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${researchDepth === 'DEEP' ? 'border-zinc-900 bg-zinc-900 text-white shadow-sm ring-2 ring-zinc-900/10' : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100 text-zinc-800'}`}
+                    >
+                      <div className="flex items-center gap-2 font-semibold text-sm">
+                        <Microscope size={15} className={researchDepth === 'DEEP' ? 'text-emerald-400' : 'text-zinc-600'} />
+                        Chuyên sâu (DEEP)
+                      </div>
+                      <div className={`text-xs mt-1 ${researchDepth === 'DEEP' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                        3 vòng nghiên cứu, tối đa ~20 nguồn
+                      </div>
+                    </button>
                   </div>
                 </div>
 
-                {/* HITL Plan Review */}
-                <div className="border-t border-zinc-100 pt-3">
-                  <label className="flex items-center gap-2.5 cursor-pointer text-xs font-medium text-zinc-700">
-                    <input
-                      type="checkbox"
-                      checked={requirePlanApproval}
-                      onChange={(e) => setRequirePlanApproval(e.target.checked)}
-                      className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 w-4 h-4"
-                    />
-                    <span className="flex items-center gap-1.5">
-                      <ShieldCheck size={14} className="text-zinc-500" />
-                      Yêu cầu dừng lại để người dùng xem và phê duyệt kế hoạch trước khi nghiên cứu (Human-in-the-Loop)
-                    </span>
-                  </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2 border-t border-zinc-100">
+                  {/* 2. Report Length */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500">Độ dài bài báo</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['SHORT', 'MEDIUM', 'LONG'] as const).map((len) => (
+                        <button
+                          key={len}
+                          type="button"
+                          onClick={() => setReportLength(len)}
+                          className={`py-2 px-3 rounded-xl border text-xs font-medium text-center transition-all cursor-pointer ${reportLength === len ? 'bg-zinc-900 text-white border-zinc-900 font-semibold' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'}`}
+                        >
+                          {len === 'SHORT' ? 'Ngắn (~1.5k từ)' : len === 'MEDIUM' ? 'Vừa (~3k từ)' : 'Dài (~5k từ)'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 3. Citation Style */}
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500">Kiểu trích dẫn</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['IEEE', 'APA', 'HARVARD'] as const).map((style) => (
+                        <button
+                          key={style}
+                          type="button"
+                          onClick={() => setCitationStyle(style)}
+                          className={`py-2 px-3 rounded-xl border text-xs font-medium text-center transition-all cursor-pointer ${citationStyle === style ? 'bg-zinc-900 text-white border-zinc-900 font-semibold' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'}`}
+                        >
+                          {style}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. HITL Plan Review */}
+                <div className="border-t border-zinc-100 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setRequirePlanApproval(!requirePlanApproval)}
+                    className={`w-full p-4 rounded-xl border text-left flex items-start gap-3 transition-colors cursor-pointer ${requirePlanApproval ? 'bg-blue-50/60 border-blue-300 ring-1 ring-blue-300' : 'bg-zinc-50 border-zinc-200 hover:bg-zinc-100'}`}
+                  >
+                    <div className="mt-0.5">
+                      <input
+                        type="checkbox"
+                        checked={requirePlanApproval}
+                        onChange={() => {}} // Controlled by button click
+                        className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 w-4 h-4 cursor-pointer"
+                      />
+                    </div>
+                    <div>
+                      <div className="font-semibold text-xs text-zinc-900 flex items-center gap-1.5">
+                        <ShieldCheck size={14} className="text-blue-600" />
+                        Chế độ có hướng dẫn (Human-in-the-Loop)
+                      </div>
+                      <div className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                        Agent lập kế hoạch sẽ tạm dừng sau giai đoạn Supervisor để bạn xem và duyệt đề cương nghiên cứu trước khi tìm kiếm nguồn.
+                      </div>
+                    </div>
+                  </button>
                 </div>
               </div>
             )}
@@ -221,7 +303,7 @@ export default function Home() {
         </div>
       </main>
 
-      {/* Decorative background blur elements */}
+      {/* Decorative background blur elements with pointer-events-none */}
       <div className="fixed top-[20%] right-[10%] w-96 h-96 bg-blue-100/30 rounded-full blur-3xl -z-10 pointer-events-none" />
       <div className="fixed bottom-[10%] left-[5%] w-[30rem] h-[30rem] bg-amber-50/40 rounded-full blur-3xl -z-10 pointer-events-none" />
     </div>

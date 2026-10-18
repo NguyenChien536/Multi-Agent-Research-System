@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { 
-  CheckCircle2, Circle, Clock, Copy, Check, Download, 
+  ArrowLeft, CheckCircle2, Circle, Clock, Copy, Check, Download, 
   ExternalLink, FileText, Globe, Layers, Play, RefreshCw, 
   Trash2, XCircle, Search
 } from 'lucide-react';
@@ -241,26 +241,39 @@ export default function WorkspacePage() {
     <div className="flex h-full flex-col overflow-hidden bg-zinc-50">
       {/* Top Header Bar */}
       <div className="min-h-16 px-6 py-3 border-b border-zinc-200 bg-white flex flex-wrap items-center justify-between gap-3 shrink-0">
-        <div className="flex-1 min-w-[280px]">
-          <h1 className="font-semibold text-lg line-clamp-1 text-zinc-900">{task.title}</h1>
-          <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-zinc-500">
-            <span className="flex items-center gap-1.5 font-medium">
-              {isWorking && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
-              {statusLabel(task.status)}
-              {isWorking && task.current_step ? ` · ${STEP_LABELS[task.current_step] ?? task.current_step}` : ''}
-            </span>
-            <span>•</span>
-            <span className="text-zinc-400">Độ sâu: {task.research_depth}</span>
-            <span>•</span>
-            <span className="text-zinc-400">Vòng: {task.current_iteration}/{task.max_iterations}</span>
+        <div className="flex items-center gap-3 flex-1 min-w-[280px]">
+          <Link
+            href="/dashboard"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 transition-colors shrink-0"
+            title="Quay lại Dashboard"
+          >
+            <ArrowLeft size={18} />
+          </Link>
+          <div>
+            <h1 className="font-semibold text-lg line-clamp-1 text-zinc-900">{task.title}</h1>
+            <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs text-zinc-500">
+              <span className="flex items-center gap-1.5 font-medium">
+                {isWorking && <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />}
+                {statusLabel(task.status)}
+                {isWorking && task.current_step ? ` · ${STEP_LABELS[task.current_step] ?? task.current_step}` : ''}
+              </span>
+              <span>•</span>
+              <span className="text-zinc-400">Độ sâu: {task.research_depth}</span>
+              <span>•</span>
+              <span className="text-zinc-400">Vòng: {task.current_iteration}/{task.max_iterations}</span>
+            </div>
           </div>
         </div>
 
         {/* Action Controls */}
         <div className="flex items-center gap-2">
-          {task.status === 'PENDING' && (
-            <Button variant="success" onClick={() => void handleStartTask()} isLoading={isStarting}>
-              <Play size={15} className="mr-1.5" /> Bắt đầu nghiên cứu
+          {(task.status === 'PENDING' || task.status === 'CANCELLED') && (
+            <Button
+              variant={task.status === 'CANCELLED' ? 'primary' : 'success'}
+              onClick={() => void handleStartTask()}
+              isLoading={isStarting}
+            >
+              <Play size={15} className="mr-1.5" /> {task.status === 'CANCELLED' ? 'Chạy lại nghiên cứu' : 'Bắt đầu nghiên cứu'}
             </Button>
           )}
 
@@ -400,16 +413,18 @@ export default function WorkspacePage() {
                     <div>
                       <h3 className="font-semibold text-zinc-900 text-base">Bản thảo bài báo đang được xây dựng</h3>
                       <p className="text-sm text-zinc-500 mt-1">
-                        {task.status === 'FAILED' || task.status === 'CANCELLED' 
-                          ? 'Bài nghiên cứu đã dừng và không có bản thảo bài báo hoàn chỉnh.' 
+                        {task.status === 'FAILED'
+                          ? 'Bài nghiên cứu đã dừng do lỗi và không có bản thảo bài báo hoàn chỉnh.' 
+                          : task.status === 'CANCELLED'
+                          ? 'Bài nghiên cứu này đã được hủy. Bạn có thể bấm "Chạy lại nghiên cứu" để hệ thống tiếp tục thu thập và viết báo cáo.'
                           : task.status === 'PENDING'
                           ? 'Nhiệm vụ chưa bắt đầu. Nhấn "Bắt đầu nghiên cứu" ở góc trên để chạy pipeline.'
                           : 'Các agent đang thu thập tài liệu, phân tích bằng chứng và tổng hợp bài viết.'}
                       </p>
                     </div>
-                    {task.status === 'PENDING' && (
+                    {(task.status === 'PENDING' || task.status === 'CANCELLED') && (
                       <Button variant="primary" onClick={() => void handleStartTask()} isLoading={isStarting} className="mx-auto">
-                        <Play size={16} className="mr-2" /> Bắt đầu nghiên cứu ngay
+                        <Play size={16} className="mr-2" /> {task.status === 'CANCELLED' ? 'Chạy lại nghiên cứu ngay' : 'Bắt đầu nghiên cứu ngay'}
                       </Button>
                     )}
                   </Card>

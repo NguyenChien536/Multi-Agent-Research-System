@@ -95,7 +95,7 @@ async def start_research_task(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Bắt đầu chạy workflow nghiên cứu đa tác tử trong Celery background."""
+    """Bắt đầu hoặc chạy lại workflow nghiên cứu đa tác tử trong Celery background."""
     result = await db.execute(
         select(ResearchTask)
         .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
@@ -104,11 +104,30 @@ async def start_research_task(
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Research task not found")
-    if task.status != "PENDING":
-        raise HTTPException(status_code=409, detail="Research task has already been started")
+    if task.status not in ("PENDING", "CANCELLED"):
+        raise HTTPException(status_code=409, detail=f"Research task cannot be started from status {task.status}")
     
     task.status = "QUEUED"
-    db.add(TaskDispatchOutbox(research_task_id=task.id, event_type="START_RESEARCH"))
+    task.completed_at = None
+    task.worker_lease_until = None
+
+    # Check if outbox item already exists (e.g. from previously cancelled task)
+    outbox_res = await db.execute(
+        select(TaskDispatchOutbox).where(
+            TaskDispatchOutbox.research_task_id == task.id,
+            TaskDispatchOutbox.event_type == "START_RESEARCH"
+        )
+    )
+    outbox_item = outbox_res.scalar_one_or_none()
+    if outbox_item:
+        outbox_item.dispatched_at = None
+        outbox_item.locked_until = None
+        outbox_item.last_error = None
+        outbox_item.available_at = datetime.now(timezone.utc)
+        outbox_item.attempts = 0
+    else:
+        db.add(TaskDispatchOutbox(research_task_id=task.id, event_type="START_RESEARCH"))
+
     await db.commit()
 
     return {"status": "QUEUED", "message": "Workflow accepted for dispatch", "task_id": str(task_id)}

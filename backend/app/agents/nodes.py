@@ -53,11 +53,19 @@ def build_llm_chain(is_smart: bool = False):
     for provider in providers:
         if provider == "gemini" and getattr(settings, "GEMINI_API_KEY", None) and "your_" not in settings.GEMINI_API_KEY:
             from langchain_google_genai import ChatGoogleGenerativeAI
-            models.append(ChatGoogleGenerativeAI(
-                model="gemini-3.8-flash", 
+            model_name = "gemini-3.5-flash" if is_smart else "gemini-3.5-flash-lite"
+            fallback_name = "gemini-3.5-flash-lite" if is_smart else "gemini-3.5-flash"
+            primary_gemini = ChatGoogleGenerativeAI(
+                model=model_name, 
                 temperature=0.7 if is_smart else 0.2, 
                 google_api_key=settings.GEMINI_API_KEY
-            ))
+            )
+            fallback_gemini = ChatGoogleGenerativeAI(
+                model=fallback_name, 
+                temperature=0.7 if is_smart else 0.2, 
+                google_api_key=settings.GEMINI_API_KEY
+            )
+            models.append(primary_gemini.with_fallbacks([fallback_gemini]))
         elif provider == "openai" and getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
             from langchain_openai import ChatOpenAI
             models.append(ChatOpenAI(
@@ -375,10 +383,18 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     """
 
     response = await llm.ainvoke([HumanMessage(content=prompt)])
+    content = response.content
+    if isinstance(content, list):
+        draft_markdown = "".join(
+            item if isinstance(item, str) else item.get("text", "") if isinstance(item, dict) else str(item)
+            for item in content
+        )
+    else:
+        draft_markdown = str(content)
 
     return {
         "current_agent": "writer",
-        "draft_report_markdown": str(response.content)
+        "draft_report_markdown": draft_markdown
     }
 
 async def critic_node(state: ResearchState) -> Dict[str, Any]:
