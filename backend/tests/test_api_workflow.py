@@ -147,7 +147,43 @@ async def test_auth_and_research_ownership(monkeypatch: pytest.MonkeyPatch) -> N
         assert isinstance(citations.json(), list)
         assert (await client.get(f"/api/v1/research/{author_id}/citations", headers=reader_headers)).status_code == 404
 
+        # Sources endpoint
+        sources = await client.get(f"/api/v1/research/{author_id}/sources", headers=author_headers)
+        assert sources.status_code == 200, sources.text
+        assert isinstance(sources.json(), list)
+        assert (await client.get(f"/api/v1/research/{author_id}/sources", headers=reader_headers)).status_code == 404
+
+        # Cancel endpoint
+        new_task = await client.post("/api/v1/research", json={
+            "title": "Task to be cancelled",
+            "research_question": "Can this task be cancelled safely?",
+        }, headers=author_headers)
+        assert new_task.status_code == 201
+        cancel_id = new_task.json()["id"]
+
+        # Reader cannot cancel author's task
+        assert (await client.post(f"/api/v1/research/{cancel_id}/cancel", headers=reader_headers)).status_code == 404
+
+        # Author can cancel task
+        cancel_res = await client.post(f"/api/v1/research/{cancel_id}/cancel", headers=author_headers)
+        assert cancel_res.status_code == 200, cancel_res.text
+        assert cancel_res.json()["status"] == "CANCELLED"
+
+        # Idempotent cancel
+        cancel_res2 = await client.post(f"/api/v1/research/{cancel_id}/cancel", headers=author_headers)
+        assert cancel_res2.status_code == 200
+        assert cancel_res2.json()["status"] == "CANCELLED"
+
+        # Delete endpoint
+        # Reader cannot delete author's task
+        assert (await client.delete(f"/api/v1/research/{cancel_id}", headers=reader_headers)).status_code == 404
+
+        # Author can delete task
+        delete_res = await client.delete(f"/api/v1/research/{cancel_id}", headers=author_headers)
+        assert delete_res.status_code == 200
+        assert (await client.get(f"/api/v1/research/{cancel_id}", headers=author_headers)).status_code == 404
 
     # pytest-asyncio gives each test a new loop; pooled asyncpg connections
     # cannot be reused by the next test's loop.
     await engine.dispose()
+

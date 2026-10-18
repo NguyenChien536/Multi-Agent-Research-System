@@ -52,6 +52,15 @@ async def create_and_start_task(client: AsyncClient, headers: dict, title: str) 
     return task_id
 
 
+async def wait_for_status(task_ids: list[str], expected_status: str = "RUNNING", timeout_steps: int = 60) -> None:
+    for _ in range(timeout_steps):
+        async with AsyncSessionLocal() as db:
+            tasks = [await db.get(ResearchTask, uuid.UUID(tid)) for tid in task_ids]
+            if all(t is not None and t.status == expected_status for t in tasks):
+                return
+        await asyncio.sleep(0.05)
+
+
 async def register_user(client: AsyncClient, username: str) -> dict:
     email = f"{username}@example.com"
     registered = await client.post(
@@ -159,7 +168,7 @@ async def test_separate_users_independent_capacity(monkeypatch: pytest.MonkeyPat
         # Worker claims User A's tasks
         claim_a1 = asyncio.create_task(run_langgraph_workflow(ua_t1))
         claim_a2 = asyncio.create_task(run_langgraph_workflow(ua_t2))
-        await asyncio.sleep(0.05)
+        await wait_for_status([ua_t1, ua_t2], "RUNNING")
 
         # Verify User A has 2 running tasks
         async with AsyncSessionLocal() as db:
@@ -171,7 +180,7 @@ async def test_separate_users_independent_capacity(monkeypatch: pytest.MonkeyPat
         # User B starts a task: User B must NOT be blocked by User A's running tasks
         ub_t1 = await create_and_start_task(client, user_b_headers, "User B Task 1")
         ub_claim = asyncio.create_task(run_langgraph_workflow(ub_t1))
-        await asyncio.sleep(0.05)
+        await wait_for_status([ub_t1], "RUNNING")
 
         async with AsyncSessionLocal() as db:
             tb1_db = await db.get(ResearchTask, uuid.UUID(ub_t1))
@@ -266,7 +275,7 @@ async def test_non_running_states_do_not_consume_running_slots(monkeypatch: pyte
 
         run_t1 = asyncio.create_task(run_langgraph_workflow(t1))
         run_t2 = asyncio.create_task(run_langgraph_workflow(t2))
-        await asyncio.sleep(0.05)
+        await wait_for_status([t1, t2], "RUNNING")
 
         async with AsyncSessionLocal() as db:
             t1_db = await db.get(ResearchTask, uuid.UUID(t1))
@@ -293,7 +302,7 @@ async def test_duplicate_delivery_does_not_consume_extra_slot(monkeypatch: pytes
         t1 = await create_and_start_task(client, headers, "Task 1")
 
         run_task = asyncio.create_task(run_langgraph_workflow(t1))
-        await asyncio.sleep(0.05)
+        await wait_for_status([t1], "RUNNING")
 
         # Duplicate delivery while already RUNNING
         dup_result = await run_langgraph_workflow(t1)

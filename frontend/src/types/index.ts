@@ -35,6 +35,8 @@ export interface ResearchTaskResponse {
   max_iterations: number;
   current_iteration: number;
   attempt_number: number;
+  report_length?: string;
+  citation_style?: string;
   total_cost_usd: number;
   total_tokens_used: number;
   created_at: string;
@@ -87,4 +89,22 @@ export interface CitationResponse {
   chunk_id?: string | null;
   chunk_content?: string | null;
 }
+
+export interface ResearchSourceResponse {
+  id: string;
+  source_tag: string;
+  title?: string | null;
+  url: string;
+  source_type: string;
+  author?: string | null;
+  publication_date?: string | null;
+  content_snippet?: string | null;
+  summary?: string | null;
+  relevance_score: number;
+  attribution?: string | null;
+  provider_name?: string | null;
+  license_name?: string | null;
+  created_at: string;
+}
+
 
