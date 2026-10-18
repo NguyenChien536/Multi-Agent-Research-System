@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { 
   AlertCircle, CheckCircle2, Clock, FileText, 
-  Play, Plus, RefreshCw, Search, Trash2, XCircle, ArrowUpRight 
+  LogOut, Play, Plus, RefreshCw, Search, Trash2, XCircle, ArrowUpRight 
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Components';
@@ -125,6 +125,11 @@ export default function DashboardPage() {
     }
   };
 
+  const handleLogout = () => {
+    api.auth.logout();
+    window.location.assign('/login');
+  };
+
   const filtered = useMemo(() => {
     return tasks.filter(task => {
       const matchQuery = `${task.title} ${task.research_question}`.toLocaleLowerCase('vi').includes(query.trim().toLocaleLowerCase('vi'));
@@ -141,7 +146,30 @@ export default function DashboardPage() {
   const completedCount = tasks.filter(task => task.status === 'COMPLETED').length;
 
   return (
-    <div className="flex-1 overflow-y-auto p-6 md:p-10">
+    <div className="flex flex-col min-h-screen bg-zinc-50">
+      {/* Top Navbar */}
+      <header className="w-full px-6 py-4 flex justify-between items-center z-20 border-b border-zinc-200 bg-white">
+        <Link href="/" className="flex items-center gap-2.5 font-bold text-xl tracking-tight text-zinc-900">
+          <div className="w-8 h-8 rounded-xl bg-zinc-900 text-white flex items-center justify-center text-sm shadow-md font-sans">S</div>
+          <span>Synthia</span>
+          <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 border border-zinc-200">ATI</span>
+        </Link>
+
+        <div className="flex items-center gap-2">
+          <Link 
+            href="/" 
+            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 text-xs font-semibold text-white hover:bg-zinc-800 transition-colors shadow-sm"
+          >
+            <Plus size={14} /> Nghiên cứu mới
+          </Link>
+          <Button variant="ghost" className="h-9 text-xs" onClick={handleLogout} title="Đăng xuất khỏi hệ thống">
+            <LogOut size={14} className="mr-1 text-zinc-500" /> Đăng xuất
+          </Button>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto p-6 md:p-10">
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -294,14 +322,14 @@ export default function DashboardPage() {
 
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            {task.status === 'PENDING' && (
+                            {(task.status === 'PENDING' || task.status === 'CANCELLED') && (
                               <button
                                 onClick={(e) => void handleStartTask(task.id, e)}
                                 disabled={actionLoadingId === task.id}
                                 className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
-                                title="Bắt đầu nghiên cứu"
+                                title={task.status === 'CANCELLED' ? "Chạy lại nghiên cứu" : "Bắt đầu nghiên cứu"}
                               >
-                                <Play size={12} /> Bắt đầu
+                                <Play size={12} /> {task.status === 'CANCELLED' ? "Chạy lại" : "Bắt đầu"}
                               </button>
                             )}
 
@@ -345,6 +373,7 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
+    </div>
     </div>
   );
 }

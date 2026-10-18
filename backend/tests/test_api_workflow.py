@@ -174,6 +174,15 @@ async def test_auth_and_research_ownership(monkeypatch: pytest.MonkeyPatch) -> N
         assert cancel_res2.status_code == 200
         assert cancel_res2.json()["status"] == "CANCELLED"
 
+        # Restart CANCELLED task
+        restart_res = await client.post(f"/api/v1/research/{cancel_id}/start", headers=author_headers)
+        assert restart_res.status_code == 202, restart_res.text
+        assert restart_res.json()["status"] == "QUEUED"
+
+        # Re-cancel before deleting
+        await client.post(f"/api/v1/research/{cancel_id}/cancel", headers=author_headers)
+
+
         # Delete endpoint
         # Reader cannot delete author's task
         assert (await client.delete(f"/api/v1/research/{cancel_id}", headers=reader_headers)).status_code == 404

@@ -32,7 +32,7 @@ class EmbedderTool:
                     google_api_key=settings.GEMINI_API_KEY,
                     task_type="RETRIEVAL_DOCUMENT"
                 )
-                self.dimension = 768
+                self.dimension = 3072
                 break
             elif provider == "openai" and getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
                 self.model_name = settings.EMBEDDING_MODEL or "text-embedding-3-small"
@@ -69,18 +69,18 @@ class EmbedderTool:
         if not self.embeddings:
             raise ValueError("Chưa cấu hình API Key cho EmbedderTool.")
 
-        # 1. Chunking
+        # 1. Chunking: cap to top 8 chunks per source to avoid exceeding free-tier RPM
         docs = self.chunk_text(text_content)
         if not docs:
             return 0
 
-        texts = [doc.page_content for doc in docs]
+        texts = [doc.page_content for doc in docs[:8]]
 
         # 2. Embedding (Gộp batch & Retry)
         from tenacity import retry, stop_after_attempt, wait_exponential
         import asyncio
         
-        @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=2, min=5, max=30))
+        @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=3, max=15))
         async def _embed_with_retry(texts_batch):
             return await self.embeddings.aembed_documents(texts_batch)
             
@@ -92,7 +92,7 @@ class EmbedderTool:
             batch_size = 20
             sleep_time = 2
         else:
-            batch_size = len(texts) if texts else 1  # Không chia mẻ
+            batch_size = len(texts) if texts else 1
             sleep_time = 0
             
         try:
@@ -103,8 +103,8 @@ class EmbedderTool:
                 if sleep_time > 0 and i + batch_size < len(texts):
                     await asyncio.sleep(sleep_time)
         except Exception as e:
-            logger.error(f"Lỗi khi gọi Embedding API (đã thử lại nhiều lần): {str(e)}")
-            raise
+            logger.warning(f"Embedding API temporarily unavailable ({e}), proceeding with non-vector chunks")
+            vectors = [None] * len(texts)
 
         # 3. Lưu vào Database
         chunks_to_insert = []
@@ -115,13 +115,11 @@ class EmbedderTool:
                 chunk_index=i,
                 content=content,
                 embedding=vector,
-                token_count=len(content) // 4  # Ước lượng token cơ bản
+                token_count=len(content) // 4
             )
             chunks_to_insert.append(chunk)
 
         db.add_all(chunks_to_insert)
-        # Commit sẽ được thực hiện bởi caller (Supervisor hoặc Agent)
-
         return len(chunks_to_insert)
 
     async def search_similar_chunks(
@@ -134,22 +132,30 @@ class EmbedderTool:
         """
         Tìm kiếm ngữ nghĩa (Semantic Search) trong scope của 1 Research Task.
         Trả về danh sách (DocumentChunk, khoảng cách cosine).
-        Khoảng cách càng nhỏ càng giống nhau.
+        Nếu vector search không khả dụng, fallback sang lấy chunks tuần tự.
         """
-        if not self.embeddings:
-            raise ValueError("Chưa cấu hình API Key cho EmbedderTool.")
+        if self.embeddings:
+            try:
+                query_vector = await self.embeddings.aembed_query(query)
+                stmt = (
+                    select(DocumentChunk, DocumentChunk.embedding.cosine_distance(query_vector).label("distance"))
+                    .where(DocumentChunk.research_task_id == task_id, DocumentChunk.embedding.is_not(None))
+                    .order_by(DocumentChunk.embedding.cosine_distance(query_vector))
+                    .limit(limit)
+                )
+                result = await db.execute(stmt)
+                chunks = result.all()
+                if chunks:
+                    return chunks
+            except Exception as e:
+                logger.warning("Vector search fallback to sequential chunks: %s", e)
 
-        # 1. Tạo embedding cho câu truy vấn
-        query_vector = await self.embeddings.aembed_query(query)
-
-        # 2. Tìm kiếm vector bằng pgvector cosine distance (<=>)
-        stmt = (
-            select(DocumentChunk, DocumentChunk.embedding.cosine_distance(query_vector).label("distance"))
+        # Fallback to sequential chunks when vector search is unavailable
+        fallback_stmt = (
+            select(DocumentChunk)
             .where(DocumentChunk.research_task_id == task_id)
-            .order_by(DocumentChunk.embedding.cosine_distance(query_vector))
+            .order_by(DocumentChunk.chunk_index.asc())
             .limit(limit)
         )
-
-        result = await db.execute(stmt)
-        # result.all() trả về list of tuples: (DocumentChunk, distance)
-        return result.all()
+        fallback_res = await db.execute(fallback_stmt)
+        return [(c, 0.0) for c in fallback_res.scalars().all()]

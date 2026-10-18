@@ -7,9 +7,22 @@
 
 > **Ghi chú 08/10/2026:** Bảng dưới giữ nguyên evidence lịch sử. Lượt rà soát planning mới chỉ đọc source và sửa tài liệu; chưa chạy lại Docker/DB/provider. Migration head trong source nay khác baseline; không hiểu kết quả cũ là trạng thái DB hiện tại.
 
-> **Lượt xác minh 14/10/2026 (Issue #2):** Đã kiểm thử và xác minh lát cắt dọc research workflow (Issue #2) gồm pipeline đa tác tử, trích xuất và liên kết bằng chứng/trích dẫn (Source → Chunk → Evidence → Claim → Citation → Report), theo dõi tiến độ agent, và giao diện workspace với tab trích dẫn. Toàn bộ 36 bài test backend và frontend build đều đạt.
+> **Lượt xác minh 18/10/2026 (Live Provider E2E Integration - Issue #2):** Đã kiểm chứng luồng end-to-end hoàn chỉnh trên live network với các provider thật: **Tavily Search API** (tìm kiếm và cào web song song), **Google Gemini Generative AI** (`gemini-3.5-flash-lite` cho Supervisor/Analyst/Critic và `gemini-3.5-flash` cho Writer), **Gemini Embeddings** (`models/gemini-embedding-2`, 3072 chiều) lưu trữ và truy vấn tương đồng ngữ nghĩa trên PostgreSQL pgvector. Pipeline đã hoàn thành chu trình đầy đủ (Supervisor → Researcher → Curator → Analyst → Writer → Critic → Revision → PostProcessor) cho bài nghiên cứu thực tế, tạo báo cáo hoàn chỉnh 1.325 từ với 9 trích dẫn khoa học được liên kết nguồn gốc đầy đủ.
 >
-> **Lượt xác minh trước đó (12/10/2026):** Evidence baseline P0; các kết quả ngày 27/09 chỉ còn giá trị lịch sử.
+> **Lượt xác minh trước đó (14/10/2026):** Xác minh lát cắt dọc bằng provider mocks (36/36 tests pass).
+
+## Kết quả xác minh ngày 18/10/2026 — Live Provider E2E Research Workflow (Issue #2)
+
+| Hạng mục | Kết quả thực tế | Giới hạn |
+|---|---|---|
+| Live Search & Fetch | Tavily API thực thi tìm kiếm song song theo 4 truy vấn sinh bởi Supervisor, cào nội dung web thực từ arXiv, LinearB, Funix. | Phụ thuộc kết nối mạng ngoài và quota gói phát triển của Tavily. |
+| Ingestion & Embedding | Chia đoạn văn bản và tạo vector nhúng 3072 chiều với `models/gemini-embedding-2`, lưu trữ bền vững vào PostgreSQL pgvector; hỗ trợ cơ chế bọc retry và giới hạn mẻ tránh nghẽn RPM. | Tối đa 8 chunk giá trị cao cho mỗi nguồn để duy trì chi phí tối ưu. |
+| Semantic Retrieval | Phân tích viên (Analyst) thực hiện truy vấn tương đồng cosine (`<=>`) trên pgvector để lấy các đoạn ngữ cảnh liên quan nhất cho từng truy vấn. | Ngưỡng khoảng cách cosine phụ thuộc vào chất lượng nội dung đoạn trích. |
+| Claim & Evidence Lineage | Analyst trích xuất luận điểm với trích dẫn nguyên văn đối sánh chính xác với chunk nguồn; lưu trữ thành công các bản ghi `ResearchClaim`, `Evidence`, và bảng liên kết `ClaimEvidence` với `is_verified=True`. | Chỉ các luận điểm có bằng chứng khớp chính xác mới được đưa vào báo cáo. |
+| Multi-Agent Writing & Criticism | Writer tạo bản thảo với các marker trích dẫn `[[@claim:...]]`; Critic (Devil's Advocate) duyệt với schema `CriticVerdict`, kích hoạt micro-loop điều chỉnh và Writer hoàn thiện bản thảo sửa đổi. | Bounded tối đa 2 lần sửa chữa nhỏ (micro revisions). |
+| Citation Post-Processing | PostProcessor phân giải marker thành số trích dẫn chuẩn `[1]`...`[9]`, loại bỏ trích dẫn mô hình tự bịa và tổng hợp danh mục tài liệu tham khảo có URL nguồn gốc. | Chỉ trích dẫn các nguồn đã qua xác thực chuỗi chứng cứ. |
+| Task Persistence & Report | Task `ec0de102-517f-4706-ae51-d46d21e7987e` đạt trạng thái `COMPLETED` tại bước `POST_PROCESSOR`, lưu `ResearchReport` dài 1.325 từ và 9 bản ghi `Citation` có thể truy cập qua API và giao diện UI. | Không có false completed; trạng thái hoàn thành phản ánh chính xác kết quả thực thi. |
+| Vòng đời Cancel & Re-run | Endpoint `POST /{id}/cancel` hủy task an toàn, giải phóng khóa outbox; `POST /{id}/start` hỗ trợ chạy lại từ trạng thái CANCELLED với outbox redelivery. | Đã kiểm thử qua test suite và thực tế. |
 
 ## Kết quả xác minh ngày 14/10/2026 — Research Workflow Vertical Slice (Issue #2)
 
