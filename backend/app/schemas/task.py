@@ -45,8 +45,29 @@ class ResearchTaskResponse(BaseModel):
     citation_style: str = "IEEE"
     total_cost_usd: float
     total_tokens_used: int
+    plan: Optional[Dict[str, Any]] = None
+    plan_approved: bool = False
+    plan_feedback: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class PlanReviewResponse(BaseModel):
+    task_id: uuid.UUID
+    status: str
+    require_plan_approval: bool
+    plan_approved: bool
+    plan: Optional[Dict[str, Any]] = None
+    plan_feedback: Optional[str] = None
+
+
+class PlanApprovalRequest(BaseModel):
+    approved_queries: Optional[List[str]] = Field(default=None, description="Optional updated or curated search queries")
+    feedback: Optional[str] = Field(default=None, description="Optional feedback notes for the research run")
+
+
+class PlanRejectRequest(BaseModel):
+    reason: Optional[str] = Field(default=None, description="Reason for rejection or requested changes")

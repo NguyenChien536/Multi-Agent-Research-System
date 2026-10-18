@@ -142,15 +142,31 @@ async def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     """
     await _record_progress(state, "SUPERVISOR")
     start_ts = time.monotonic()
+    # Nếu kế hoạch đã được người dùng phê duyệt trước đó, tái sử dụng trực tiếp mà không cần gọi lại LLM
+    if state.get("plan_approved") and state.get("plan"):
+        logger.info("Task %s: Reusing approved plan without re-planning.", state.get("task_id"))
+        approved_plan = state["plan"]
+        search_queries = approved_plan.get("search_queries", [])
+        return {
+            "current_agent": "supervisor",
+            "plan": approved_plan,
+            "delta_queries": search_queries,
+            "current_queries": search_queries,
+        }
+
     started_at = datetime.now(timezone.utc)
     model_name = get_active_model_name(is_smart=False)
     llm = get_fast_llm().with_structured_output(SupervisorPlan)
+
+    feedback_section = ""
+    if state.get("plan_feedback"):
+        feedback_section = f"\n    Lưu ý/Góp ý điều chỉnh từ người dùng: {state.get('plan_feedback')}\n"
 
     prompt = f"""
     Bạn là một Research Supervisor (Chuyên gia hướng dẫn nghiên cứu).
     Đề tài: {state.get('research_question')}
     Độ sâu: {state.get('research_depth')}
-    Ngôn ngữ: {state.get('language')}
+    Ngôn ngữ: {state.get('language')}{feedback_section}
 
     Hãy lập một kế hoạch nghiên cứu bao gồm góc nhìn, các câu lệnh tìm kiếm Google (search_queries),
     và các cấu trúc mục bắt buộc (required_sections).

@@ -43,6 +43,8 @@ class ResearchState(TypedDict, total=False):
     language: str
     budget: ResearchBudget            # Giới hạn tài nguyên toàn bộ task
     require_plan_approval: bool       # Bật chế độ Human-in-the-Loop (mặc định: False)
+    plan_approved: bool               # Người dùng đã duyệt kế hoạch hay chưa
+    plan_feedback: Optional[str]      # Góp ý hoặc yêu cầu điều chỉnh của người dùng
     max_micro_revisions: int          # Giới hạn Micro-loop Writer ⟷ Critic (mặc định: 2)
     current_iteration: int
     current_micro_revision: int       # Đếm số lần Writer chỉnh sửa trong vòng hiện tại

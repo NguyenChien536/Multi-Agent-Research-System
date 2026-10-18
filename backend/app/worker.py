@@ -155,6 +155,9 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 "language": task.language,
                 "status": "RUNNING",
                 "require_plan_approval": task.require_plan_approval,
+                "plan_approved": task.plan_approved,
+                "plan": task.plan or {},
+                "plan_feedback": task.plan_feedback,
                 "current_iteration": task.current_iteration,
                 "current_micro_revision": 0,
                 "max_iterations": task.max_iterations,
@@ -167,6 +170,22 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             # 3. Kích hoạt (Invoke) Graph
             try:
                 final_state = await research_graph.ainvoke(initial_state)
+
+                # Kiểm tra nếu graph dừng tại điểm duyệt kế hoạch (HITL)
+                if final_state and final_state.get("status") == "WAITING_APPROVAL":
+                    await session.refresh(task)
+                    if task.status != "RUNNING" or task.attempt_number != claim_attempt:
+                        return {"status": "SUPERSEDED", "task_id": task_id}
+
+                    task.status = "WAITING_APPROVAL"
+                    task.current_step = "Supervisor"
+                    task.plan = final_state.get("plan")
+                    task.plan_approved = False
+                    task.worker_lease_until = None
+                    await session.commit()
+                    logger.info("Task %s: Paused at WAITING_APPROVAL. Worker lease released.", task_id)
+                    return {"status": "WAITING_APPROVAL", "task_id": task_id}
+
                 report_content = final_state.get("final_report_markdown") if final_state else None
                 if not report_content:
                     raise RuntimeError("Research graph completed without producing a report")

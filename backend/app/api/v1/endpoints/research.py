@@ -2,7 +2,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Body, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -16,7 +16,13 @@ from app.models.report import ExportArtifact, ResearchReport
 from app.models.grounding import Citation
 from app.models.source import DocumentChunk, ResearchSource
 from app.models.agent_run import AgentRun
-from app.schemas.task import ResearchTaskCreate, ResearchTaskResponse
+from app.schemas.task import (
+    ResearchTaskCreate,
+    ResearchTaskResponse,
+    PlanReviewResponse,
+    PlanApprovalRequest,
+    PlanRejectRequest,
+)
 from app.schemas.report import CitationItemResponse, ResearchReportResponse, ResearchSourceItemResponse
 from app.schemas.agent_run import AgentRunItemResponse
 from app.schemas.artifact import ArtifactItemResponse, PdfUploadResponse
@@ -490,6 +496,144 @@ async def download_task_artifact(
         media_type="application/pdf",
         filename=os.path.basename(artifact.file_path),
     )
+
+
+@router.get("/{task_id}/plan", response_model=PlanReviewResponse)
+async def get_research_plan(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Xem kế hoạch nghiên cứu do Supervisor tạo ra."""
+    result = await db.execute(
+        select(ResearchTask).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+    return PlanReviewResponse(
+        task_id=task.id,
+        status=task.status,
+        require_plan_approval=task.require_plan_approval,
+        plan_approved=task.plan_approved,
+        plan=task.plan,
+        plan_feedback=task.plan_feedback,
+    )
+
+
+@router.post("/{task_id}/plan/approve", response_model=ResearchTaskResponse)
+async def approve_research_plan(
+    task_id: uuid.UUID,
+    payload: PlanApprovalRequest = Body(default_factory=PlanApprovalRequest),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Người dùng duyệt kế hoạch nghiên cứu và tiếp tục workflow."""
+    result = await db.execute(
+        select(ResearchTask)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .with_for_update()
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Research task not found")
+    if task.status != "WAITING_APPROVAL":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Kế hoạch chỉ có thể duyệt khi task ở trạng thái WAITING_APPROVAL (hiện tại: {task.status})",
+        )
+
+    # Nếu người dùng có chỉnh sửa search queries
+    if payload.approved_queries and task.plan:
+        updated_plan = dict(task.plan)
+        updated_plan["search_queries"] = payload.approved_queries
+        task.plan = updated_plan
+
+    task.plan_approved = True
+    if payload.feedback:
+        task.plan_feedback = payload.feedback
+
+    task.status = "QUEUED"
+    task.current_step = None
+    task.queued_at = datetime.now(timezone.utc)
+    task.worker_lease_until = None
+
+    # Tái kích hoạt outbox để worker tiếp tục chạy
+    outbox_res = await db.execute(
+        select(TaskDispatchOutbox).where(
+            TaskDispatchOutbox.research_task_id == task.id,
+            TaskDispatchOutbox.event_type == "START_RESEARCH",
+        )
+    )
+    outbox_item = outbox_res.scalar_one_or_none()
+    if outbox_item:
+        outbox_item.dispatched_at = None
+        outbox_item.locked_until = None
+        outbox_item.last_error = None
+        outbox_item.available_at = datetime.now(timezone.utc)
+        outbox_item.attempts = 0
+    else:
+        db.add(TaskDispatchOutbox(research_task_id=task.id, event_type="START_RESEARCH"))
+
+    await db.commit()
+    await db.refresh(task)
+    return task
+
+
+@router.post("/{task_id}/plan/reject", response_model=ResearchTaskResponse)
+async def reject_research_plan(
+    task_id: uuid.UUID,
+    payload: PlanRejectRequest = Body(default_factory=PlanRejectRequest),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Người dùng từ chối kế hoạch và yêu cầu Supervisor lập kế hoạch lại với góp ý mới."""
+    result = await db.execute(
+        select(ResearchTask)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .with_for_update()
+    )
+    task = result.scalar_one_or_none()
+    if not task:
+        raise HTTPException(status_code=404, detail="Research task not found")
+    if task.status != "WAITING_APPROVAL":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Kế hoạch chỉ có thể từ chối khi task ở trạng thái WAITING_APPROVAL (hiện tại: {task.status})",
+        )
+
+    task.plan_approved = False
+    task.plan = None
+    if payload.reason:
+        task.plan_feedback = payload.reason
+
+    task.status = "QUEUED"
+    task.current_step = None
+    task.queued_at = datetime.now(timezone.utc)
+    task.worker_lease_until = None
+
+    # Tái kích hoạt outbox
+    outbox_res = await db.execute(
+        select(TaskDispatchOutbox).where(
+            TaskDispatchOutbox.research_task_id == task.id,
+            TaskDispatchOutbox.event_type == "START_RESEARCH",
+        )
+    )
+    outbox_item = outbox_res.scalar_one_or_none()
+    if outbox_item:
+        outbox_item.dispatched_at = None
+        outbox_item.locked_until = None
+        outbox_item.last_error = None
+        outbox_item.available_at = datetime.now(timezone.utc)
+        outbox_item.attempts = 0
+    else:
+        db.add(TaskDispatchOutbox(research_task_id=task.id, event_type="START_RESEARCH"))
+
+    await db.commit()
+    await db.refresh(task)
+    return task
+
 
 
 

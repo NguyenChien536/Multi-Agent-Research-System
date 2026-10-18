@@ -11,6 +11,23 @@ from app.agents.nodes import (
 )
 
 
+async def plan_approval_wait_node(state: ResearchState) -> dict:
+    """Tạm dừng workflow tại mốc duyệt kế hoạch của người dùng (Human-in-the-Loop)."""
+    return {
+        "current_agent": "supervisor",
+        "status": "WAITING_APPROVAL",
+    }
+
+def should_pause_for_plan_approval(state: ResearchState) -> str:
+    """
+    Định tuyến sau Supervisor:
+    - Nếu require_plan_approval=True và chưa duyệt (plan_approved != True): Tạm dừng chờ duyệt.
+    - Ngược lại: Chuyển thẳng sang Researcher.
+    """
+    if state.get("require_plan_approval") and not state.get("plan_approved"):
+        return "plan_approval_wait"
+    return "researcher"
+
 async def macro_routing_node(state: ResearchState) -> dict:
     """Điểm định tuyến tường minh trước khi quyết định có tìm thêm nguồn hay không."""
     return {"current_agent": "macro_routing", "current_micro_revision": 0}
@@ -49,6 +66,7 @@ def build_research_graph() -> StateGraph:
 
     # 1. Khai báo các Nodes
     workflow.add_node("supervisor", supervisor_node)
+    workflow.add_node("plan_approval_wait", plan_approval_wait_node)
     workflow.add_node("researcher", researcher_node)
     workflow.add_node("curator", curator_node)
     workflow.add_node("analyst", analyst_node)
@@ -60,8 +78,16 @@ def build_research_graph() -> StateGraph:
     # 2. Định nghĩa các Edges (Luồng đi)
     workflow.set_entry_point("supervisor")
 
-    # Supervisor -> Researcher (Bỏ qua nhánh HITL tạm thời)
-    workflow.add_edge("supervisor", "researcher")
+    # Supervisor -> Rẽ nhánh: Chờ duyệt (HITL) hoặc Tiếp tục nghiên cứu
+    workflow.add_conditional_edges(
+        "supervisor",
+        should_pause_for_plan_approval,
+        {
+            "plan_approval_wait": "plan_approval_wait",
+            "researcher": "researcher",
+        }
+    )
+    workflow.add_edge("plan_approval_wait", END)
 
     # Researcher -> Curator -> Analyst -> Writer
     workflow.add_edge("researcher", "curator")

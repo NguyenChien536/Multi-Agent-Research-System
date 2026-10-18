@@ -39,6 +39,14 @@ export interface ResearchTaskResponse {
   citation_style?: string;
   total_cost_usd: number;
   total_tokens_used: number;
+  plan?: {
+    research_angle?: string;
+    search_queries?: string[];
+    required_sections?: string[];
+    [key: string]: any;
+  } | null;
+  plan_approved?: boolean;
+  plan_feedback?: string | null;
   created_at: string;
   updated_at: string;
   completed_at?: string;
@@ -148,5 +156,29 @@ export interface PdfUploadResponse {
   sha256_hash: string;
   message: string;
 }
+
+export interface PlanReviewResponse {
+  task_id: string;
+  status: string;
+  require_plan_approval: boolean;
+  plan_approved: boolean;
+  plan?: {
+    research_angle?: string;
+    search_queries?: string[];
+    required_sections?: string[];
+    [key: string]: any;
+  } | null;
+  plan_feedback?: string | null;
+}
+
+export interface PlanApprovalRequest {
+  approved_queries?: string[];
+  feedback?: string;
+}
+
+export interface PlanRejectRequest {
+  reason?: string;
+}
+
 
 
