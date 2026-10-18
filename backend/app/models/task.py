@@ -20,6 +20,9 @@ class ResearchTask(Base):
     status = Column(String(30), default="PENDING", nullable=False, index=True)  # PENDING, QUEUED, PLANNING, WAITING_APPROVAL, RESEARCHING, INDEXING, ANALYZING, WRITING, REVIEWING, FINALIZING, COMPLETED, RETRYING, FAILED, CANCELLED
     current_step = Column(String(30), nullable=True)  # Current agent/module; status remains RUNNING during execution
     require_plan_approval = Column(Boolean, default=False, nullable=False)  # Human-in-the-Loop flag
+    plan = Column(JSONB, nullable=True)  # Generated supervisor research plan
+    plan_approved = Column(Boolean, default=False, nullable=False)  # Approval status
+    plan_feedback = Column(Text, nullable=True)  # User feedback or adjustment notes
     
     # Resource Limits & Accrual
     max_sources = Column(Integer, default=10, nullable=False)

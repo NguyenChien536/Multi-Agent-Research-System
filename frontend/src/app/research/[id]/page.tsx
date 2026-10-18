@@ -90,6 +90,12 @@ export default function WorkspacePage() {
   const [artifacts, setArtifacts] = useState<ArtifactItemResponse[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [isApprovingPlan, setIsApprovingPlan] = useState(false);
+  const [isRejectingPlan, setIsRejectingPlan] = useState(false);
+  const [editableQueries, setEditableQueries] = useState<string[]>([]);
+  const [newQueryInput, setNewQueryInput] = useState('');
+  const [planFeedback, setPlanFeedback] = useState('');
+
   const loadReport = useCallback(async () => {
     setReportError('');
     try {
@@ -290,6 +296,53 @@ export default function WorkspacePage() {
     URL.revokeObjectURL(url);
   };
 
+  useEffect(() => {
+    if (task?.plan?.search_queries && editableQueries.length === 0) {
+      setEditableQueries(task.plan.search_queries);
+    }
+  }, [task?.plan, editableQueries.length]);
+
+  const handleAddQuery = () => {
+    if (!newQueryInput.trim()) return;
+    setEditableQueries(prev => [...prev, newQueryInput.trim()]);
+    setNewQueryInput('');
+  };
+
+  const handleRemoveQuery = (index: number) => {
+    setEditableQueries(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleApprovePlan = async () => {
+    if (!task) return;
+    setIsApprovingPlan(true);
+    try {
+      await api.tasks.approvePlan(task.id, {
+        approved_queries: editableQueries.filter(q => q.trim().length > 0),
+        feedback: planFeedback.trim() || undefined,
+      });
+      setReloadKey(v => v + 1);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Không thể duyệt kế hoạch.');
+    } finally {
+      setIsApprovingPlan(false);
+    }
+  };
+
+  const handleRejectPlan = async () => {
+    if (!task) return;
+    const reason = prompt('Nhập lý do từ chối hoặc hướng dẫn điều chỉnh cho Supervisor:') || '';
+    if (!reason.trim()) return;
+    setIsRejectingPlan(true);
+    try {
+      await api.tasks.rejectPlan(task.id, { reason: reason.trim() });
+      setReloadKey(v => v + 1);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Không thể từ chối kế hoạch.');
+    } finally {
+      setIsRejectingPlan(false);
+    }
+  };
+
   if (error) {
     return (
       <div className="p-8 text-center text-red-700" role="alert">
@@ -424,6 +477,105 @@ export default function WorkspacePage() {
 
         {/* Content Tabs Area */}
         <main className="flex-1 flex flex-col bg-white overflow-hidden">
+          {task.status === 'WAITING_APPROVAL' && (
+            <div className="p-4 bg-amber-50/80 border-b border-amber-200 overflow-y-auto max-h-96 shrink-0">
+              <div className="max-w-4xl mx-auto space-y-3.5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="p-1.5 rounded-lg bg-amber-200 text-amber-900 shrink-0">
+                      <Clock size={18} />
+                    </span>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="font-semibold text-sm text-amber-950">Phê duyệt kế hoạch nghiên cứu (Human-in-the-Loop)</h2>
+                        <Badge variant="outline" className="border-amber-300 bg-amber-100 text-amber-900 text-[11px]">Đang chờ phê duyệt</Badge>
+                      </div>
+                      <p className="text-xs text-amber-800/90 mt-0.5">
+                        Supervisor Agent đã hoàn thành đề cương. Bạn có thể kiểm tra góc nhìn, tinh chỉnh từ khóa tìm kiếm trước khi các Agent thu thập dữ liệu.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                    <Button
+                      variant="outline"
+                      onClick={() => void handleRejectPlan()}
+                      isLoading={isRejectingPlan}
+                      className="h-8 px-3 text-xs border-amber-300 text-amber-900 hover:bg-amber-100/70"
+                    >
+                      Yêu cầu lập lại
+                    </Button>
+                    <Button
+                      variant="primary"
+                      onClick={() => void handleApprovePlan()}
+                      isLoading={isApprovingPlan}
+                      className="h-8 px-3 text-xs bg-amber-900 hover:bg-amber-950 text-white"
+                    >
+                      <Check size={14} className="mr-1.5" /> Duyệt kế hoạch & Chạy tiếp
+                    </Button>
+                  </div>
+                </div>
+
+                {task.plan && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                    {task.plan.research_angle && (
+                      <div className="p-3 bg-white rounded-xl border border-amber-200/80 shadow-2xs">
+                        <span className="font-medium text-amber-950 block mb-1">Góc nhìn & Hướng tiếp cận:</span>
+                        <p className="text-zinc-700 leading-relaxed">{task.plan.research_angle}</p>
+                      </div>
+                    )}
+                    {task.plan.required_sections && Array.isArray(task.plan.required_sections) && (
+                      <div className="p-3 bg-white rounded-xl border border-amber-200/80 shadow-2xs">
+                        <span className="font-medium text-amber-950 block mb-1.5">Cấu trúc báo cáo dự kiến:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {task.plan.required_sections.map((sec: string, idx: number) => (
+                            <span key={idx} className="px-2 py-0.5 rounded bg-amber-100/70 text-amber-900 font-medium text-[11px]">
+                              {sec}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="p-3 bg-white rounded-xl border border-amber-200/80 text-xs space-y-2 shadow-2xs">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-amber-950">Các truy vấn tìm kiếm Web ({editableQueries.length}):</span>
+                    <span className="text-[11px] text-zinc-400">Nhấn dấu × để xóa, hoặc thêm từ khóa mới</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    {editableQueries.map((query, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-100 text-zinc-800 border border-zinc-200 text-xs">
+                        <span>{query}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveQuery(idx)}
+                          className="text-zinc-400 hover:text-red-600 font-bold ml-1 text-xs"
+                          title="Xóa truy vấn"
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2 pt-1.5">
+                    <input
+                      type="text"
+                      value={newQueryInput}
+                      onChange={e => setNewQueryInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleAddQuery(); } }}
+                      placeholder="Thêm từ khóa tìm kiếm mới..."
+                      className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-zinc-900"
+                    />
+                    <Button variant="outline" className="h-8 px-3 text-xs" onClick={handleAddQuery}>
+                      Thêm
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex border-b border-zinc-200 px-4 bg-zinc-50/80 shrink-0 gap-1 overflow-x-auto">
             <button 
               onClick={() => setActiveTab('report')} 

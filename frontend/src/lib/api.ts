@@ -1,4 +1,4 @@
-import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, TokenResponse, UserCreate, UserResponse } from '../types';
+import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, TokenResponse, UserCreate, UserResponse } from '../types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -142,6 +142,21 @@ export const api = {
 
     getArtifactDownloadUrl: (taskId: string, artifactId: string) =>
       `${API_BASE_URL}/research/${taskId}/artifacts/${artifactId}/download`,
+
+    getPlan: (id: string) =>
+      fetcher<PlanReviewResponse>(`/research/${id}/plan`),
+
+    approvePlan: (id: string, payload?: PlanApprovalRequest) =>
+      fetcher<ResearchTaskResponse>(`/research/${id}/plan/approve`, {
+        method: 'POST',
+        body: JSON.stringify(payload || {}),
+      }),
+
+    rejectPlan: (id: string, payload?: PlanRejectRequest) =>
+      fetcher<ResearchTaskResponse>(`/research/${id}/plan/reject`, {
+        method: 'POST',
+        body: JSON.stringify(payload || {}),
+      }),
   }
 };
 
