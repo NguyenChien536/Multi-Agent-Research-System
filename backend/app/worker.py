@@ -211,6 +211,19 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                         citation_label=f"[{number}]",
                         claim_text=lineage_row.claim_text,
                     ))
+
+                from app.models.agent_run import AgentRun
+                totals_res = await session.execute(
+                    select(
+                        func.coalesce(func.sum(AgentRun.input_tokens + AgentRun.output_tokens), 0),
+                        func.coalesce(func.sum(AgentRun.estimated_cost), 0.0),
+                    ).where(AgentRun.research_task_id == task.id)
+                )
+                total_tokens, total_cost = totals_res.one()
+
+                task.total_tokens_used = int(total_tokens)
+                task.total_cost_usd = round(float(total_cost), 4)
+                task.completed_at = datetime.now(timezone.utc)
                 task.status = "COMPLETED"
                 task.worker_lease_until = None
                 await session.commit()
@@ -232,9 +245,21 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 if task.status != "RUNNING" or task.attempt_number != claim_attempt:
                     return {"status": "SUPERSEDED", "task_id": task_id}
                 task.status = "FAILED"
+                task.completed_at = datetime.now(timezone.utc)
                 task.worker_lease_until = None
                 error_msg = f"ERROR: {str(e)}"
                 task.description = f"{task.description}\n\n{error_msg}" if task.description else error_msg
+
+                from app.models.agent_run import AgentRun
+                totals_res = await session.execute(
+                    select(
+                        func.coalesce(func.sum(AgentRun.input_tokens + AgentRun.output_tokens), 0),
+                        func.coalesce(func.sum(AgentRun.estimated_cost), 0.0),
+                    ).where(AgentRun.research_task_id == task.id)
+                )
+                total_tokens, total_cost = totals_res.one()
+                task.total_tokens_used = int(total_tokens)
+                task.total_cost_usd = round(float(total_cost), 4)
                 await session.commit()
 
                 try:

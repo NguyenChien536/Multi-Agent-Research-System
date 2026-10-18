@@ -12,8 +12,10 @@ from app.models.user import User
 from app.models.report import ResearchReport
 from app.models.grounding import Citation
 from app.models.source import DocumentChunk, ResearchSource
+from app.models.agent_run import AgentRun
 from app.schemas.task import ResearchTaskCreate, ResearchTaskResponse
 from app.schemas.report import CitationItemResponse, ResearchReportResponse, ResearchSourceItemResponse
+from app.schemas.agent_run import AgentRunItemResponse
 
 router = APIRouter()
 
@@ -275,5 +277,27 @@ async def delete_research_task(
     await db.delete(task)
     await db.commit()
     return {"message": "Research task deleted successfully", "task_id": str(task_id)}
+
+
+@router.get("/{task_id}/agent-runs", response_model=List[AgentRunItemResponse])
+async def get_task_agent_runs(
+    task_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Lấy lịch sử thực thi của các Agent trong Research Task."""
+    task_res = await db.execute(
+        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+    )
+    if not task_res.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Research task not found")
+
+    result = await db.execute(
+        select(AgentRun)
+        .where(AgentRun.research_task_id == task_id)
+        .order_by(AgentRun.started_at.asc(), AgentRun.id.asc())
+    )
+    return result.scalars().all()
+
 
 

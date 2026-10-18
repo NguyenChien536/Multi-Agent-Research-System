@@ -153,6 +153,13 @@ async def test_auth_and_research_ownership(monkeypatch: pytest.MonkeyPatch) -> N
         assert isinstance(sources.json(), list)
         assert (await client.get(f"/api/v1/research/{author_id}/sources", headers=reader_headers)).status_code == 404
 
+        # Agent Runs endpoint
+        runs = await client.get(f"/api/v1/research/{author_id}/agent-runs", headers=author_headers)
+        assert runs.status_code == 200, runs.text
+        assert isinstance(runs.json(), list)
+        assert (await client.get(f"/api/v1/research/{author_id}/agent-runs", headers=reader_headers)).status_code == 404
+        assert (await client.get(f"/api/v1/research/{author_id}/agent-runs")).status_code == 401
+
         # Cancel endpoint
         new_task = await client.post("/api/v1/research", json={
             "title": "Task to be cancelled",
@@ -188,6 +195,7 @@ async def test_auth_and_research_ownership(monkeypatch: pytest.MonkeyPatch) -> N
         assert (await client.delete(f"/api/v1/research/{cancel_id}", headers=reader_headers)).status_code == 404
 
         # Author can delete task
+        # Author can delete task
         delete_res = await client.delete(f"/api/v1/research/{cancel_id}", headers=author_headers)
         assert delete_res.status_code == 200
         assert (await client.get(f"/api/v1/research/{cancel_id}", headers=author_headers)).status_code == 404
@@ -195,4 +203,119 @@ async def test_auth_and_research_ownership(monkeypatch: pytest.MonkeyPatch) -> N
     # pytest-asyncio gives each test a new loop; pooled asyncpg connections
     # cannot be reused by the next test's loop.
     await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_agent_run_persistence_and_cost_accounting(monkeypatch):
+    """Verify that agent run metadata is accurately persisted, tokens counted, cost calculated, and task totals reconciled."""
+    from app.services.agent_run import estimate_cost, extract_tokens, get_active_model_name, record_agent_run
+    from app.models.agent_run import AgentRun
+    from app.worker import run_langgraph_workflow
+
+    # 1. Test cost estimation helper
+    cost_lite = estimate_cost("gemini-3.5-flash-lite", 10000, 2000)
+    assert cost_lite > 0
+    cost_smart = estimate_cost("gemini-3.5-flash", 10000, 2000)
+    assert cost_smart > cost_lite
+
+    # 2. Test token extraction
+    in_tok, out_tok = extract_tokens(None, prompt_str="Hello world test", output_str="Output response")
+    assert in_tok >= 1
+    assert out_tok >= 1
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from app.core.config import settings
+
+    engine = create_async_engine(settings.DATABASE_URL)
+    async_session = async_sessionmaker(engine, expire_on_commit=False)
+    monkeypatch.setattr("app.core.database.AsyncSessionLocal", async_session)
+
+    suffix = uuid.uuid4().hex[:8]
+    user_cred = {
+        "username": f"cost_tracker_{suffix}",
+        "email": f"cost_tracker_{suffix}@example.com",
+        "password": "SecurePassword123!",
+    }
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        reg_res = await client.post("/api/v1/auth/register", json=user_cred)
+        assert reg_res.status_code == 201, reg_res.text
+        login_res = await client.post("/api/v1/auth/login", json={"email": user_cred["email"], "password": user_cred["password"]})
+        assert login_res.status_code == 200, login_res.text
+        token = login_res.json()["access_token"]
+        author_headers = {"Authorization": f"Bearer {token}"}
+        # Create research task
+        task_res = await client.post("/api/v1/research", json={
+            "title": "Cost & Agent Run Accounting Test",
+            "research_question": "How are LLM tokens and costs reconciled across multiple agents?",
+        }, headers=author_headers)
+        assert task_res.status_code == 201
+        task_id = task_res.json()["id"]
+
+        # Record individual agent runs directly
+        run1_id = await record_agent_run(
+            task_id=task_id,
+            agent_name="Supervisor",
+            status="SUCCESS",
+            iteration=0,
+            attempt_number=1,
+            model="gemini-3.5-flash-lite",
+            duration_ms=450,
+            input_tokens=1500,
+            output_tokens=300,
+            estimated_cost=0.000203,
+            input_summary={"question": "sample"},
+            output_summary={"queries_count": 3},
+        )
+        assert run1_id is not None
+
+        run2_id = await record_agent_run(
+            task_id=task_id,
+            agent_name="Writer",
+            status="SUCCESS",
+            iteration=0,
+            attempt_number=1,
+            model="gemini-3.5-flash",
+            duration_ms=1200,
+            input_tokens=3500,
+            output_tokens=1200,
+            estimated_cost=0.001245,
+            input_summary={"claims_count": 5},
+            output_summary={"draft_words": 650},
+        )
+        assert run2_id is not None
+
+        # Fetch runs via API
+        api_runs = await client.get(f"/api/v1/research/{task_id}/agent-runs", headers=author_headers)
+        assert api_runs.status_code == 200
+        runs_data = api_runs.json()
+        assert len(runs_data) == 2
+        assert runs_data[0]["agent_name"] == "Supervisor"
+        assert runs_data[0]["input_tokens"] == 1500
+        assert runs_data[1]["agent_name"] == "Writer"
+        assert runs_data[1]["output_tokens"] == 1200
+
+        # Start task and run workflow to test reconciliation
+        start_res = await client.post(f"/api/v1/research/{task_id}/start", headers=author_headers)
+        assert start_res.status_code == 202
+
+        class MockCompletedGraph:
+            async def ainvoke(self, _state: dict) -> dict:
+                return {"final_report_markdown": "# Reconciled Report\n\nContent here.", "current_agent": "Writer"}
+
+        monkeypatch.setattr("app.worker.research_graph", MockCompletedGraph())
+        workflow_res = await run_langgraph_workflow(task_id)
+        assert workflow_res["status"] == "SUCCESS"
+
+        # Verify task completed_at, total_tokens_used, and total_cost_usd
+        updated_task = await client.get(f"/api/v1/research/{task_id}", headers=author_headers)
+        assert updated_task.status_code == 200
+        data = updated_task.json()
+        assert data["status"] == "COMPLETED"
+        assert data["completed_at"] is not None
+        assert data["total_tokens_used"] == (1500 + 300 + 3500 + 1200)
+        assert data["total_cost_usd"] > 0
+
+    await engine.dispose()
+
 

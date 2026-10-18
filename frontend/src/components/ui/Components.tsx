@@ -17,11 +17,13 @@ export function Card({ className = '', children }: { className?: string, childre
   return <div className={`rounded-xl border border-zinc-200 bg-white text-zinc-950 shadow-sm ${className}`}>{children}</div>;
 }
 
-export function Badge({ className = '', children, variant = 'default' }: { className?: string, children: React.ReactNode, variant?: 'default'|'outline' }) {
+export function Badge({ className = '', children, variant = 'default' }: { className?: string, children: React.ReactNode, variant?: 'default'|'outline'|'success'|'danger' }) {
   const base = "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-950 focus:ring-offset-2";
   const variants = {
     default: "bg-zinc-900 text-zinc-50 hover:bg-zinc-900/80",
-    outline: "text-zinc-950 border border-zinc-200"
+    outline: "text-zinc-950 border border-zinc-200",
+    success: "bg-emerald-100 text-emerald-800 border border-emerald-200",
+    danger: "bg-red-100 text-red-800 border border-red-200",
   };
   return <div className={`${base} ${variants[variant]} ${className}`}>{children}</div>;
 }

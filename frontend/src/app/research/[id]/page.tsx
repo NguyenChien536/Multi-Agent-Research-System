@@ -6,13 +6,13 @@ import { useParams, useRouter } from 'next/navigation';
 import { 
   ArrowLeft, CheckCircle2, Circle, Clock, Copy, Check, Download, 
   ExternalLink, FileText, Globe, Layers, Play, RefreshCw, 
-  Trash2, XCircle, Search
+  Trash2, XCircle, Search, Activity, Cpu
 } from 'lucide-react';
 import { Badge, Card } from '@/components/ui/Components';
 import { Button } from '@/components/ui/Button';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import { api } from '@/lib/api';
-import type { CitationResponse, ResearchReportResponse, ResearchSourceResponse, ResearchTaskResponse } from '@/types';
+import type { CitationResponse, ResearchReportResponse, ResearchSourceResponse, ResearchTaskResponse, AgentRunResponse } from '@/types';
 
 const STAGES = [
   { title: 'Lập kế hoạch', steps: ['SUPERVISOR'], statuses: ['PLANNING', 'WAITING_APPROVAL'] },
@@ -66,13 +66,15 @@ export default function WorkspacePage() {
   const [report, setReport] = useState<ResearchReportResponse | null>(null);
   const [citations, setCitations] = useState<CitationResponse[]>([]);
   const [sources, setSources] = useState<ResearchSourceResponse[]>([]);
+  const [runs, setRuns] = useState<AgentRunResponse[]>([]);
 
   const [error, setError] = useState('');
   const [reportError, setReportError] = useState('');
   const [citationsError, setCitationsError] = useState('');
   const [sourcesError, setSourcesError] = useState('');
+  const [runsError, setRunsError] = useState('');
 
-  const [activeTab, setActiveTab] = useState<'report' | 'sources' | 'citations' | 'details'>('report');
+  const [activeTab, setActiveTab] = useState<'report' | 'sources' | 'citations' | 'runs' | 'details'>('report');
   const [sourceSearch, setSourceSearch] = useState('');
   const [highlightedRef, setHighlightedRef] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -113,16 +115,28 @@ export default function WorkspacePage() {
     }
   }, [params.id]);
 
+  const loadRuns = useCallback(async () => {
+    setRunsError('');
+    try {
+      const list = await api.tasks.getAgentRuns(params.id);
+      setRuns(list);
+    } catch (err) {
+      setRunsError(err instanceof Error ? err.message : 'Không thể tải lịch sử chạy của agent.');
+    }
+  }, [params.id]);
+
   useEffect(() => {
     let active = true;
     setTask(null);
     setReport(null);
     setCitations([]);
     setSources([]);
+    setRuns([]);
     setError('');
     setReportError('');
     setCitationsError('');
     setSourcesError('');
+    setRunsError('');
 
     const poll = async () => {
       try {
@@ -135,8 +149,10 @@ export default function WorkspacePage() {
           void loadReport();
           void loadCitations();
           void loadSources();
+          void loadRuns();
         } else if (value.status !== 'PENDING') {
           void loadSources();
+          void loadRuns();
         }
 
         if (TERMINAL.has(value.status)) {
@@ -152,7 +168,7 @@ export default function WorkspacePage() {
     const timer = setInterval(() => { void poll(); }, 4000);
     void poll();
     return () => { active = false; clearInterval(timer); };
-  }, [params.id, loadReport, loadCitations, loadSources, reloadKey]);
+  }, [params.id, loadReport, loadCitations, loadSources, loadRuns, reloadKey]);
 
   const handleStartTask = async () => {
     if (!task) return;
@@ -372,6 +388,13 @@ export default function WorkspacePage() {
               Bằng chứng & Trích dẫn ({citations.length})
             </button>
             <button 
+              onClick={() => setActiveTab('runs')} 
+              className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === 'runs' ? 'border-zinc-900 text-zinc-900 bg-white' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}
+            >
+              <Activity size={15} className="inline mr-1.5 opacity-70" />
+              Tiến trình Agent & Chi phí ({runs.length})
+            </button>
+            <button 
               onClick={() => setActiveTab('details')} 
               className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === 'details' ? 'border-zinc-900 text-zinc-900 bg-white' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}
             >
@@ -581,6 +604,157 @@ export default function WorkspacePage() {
                         </Card>
                       );
                     })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB: TIẾN TRÌNH AGENT & CHI PHÍ */}
+            {activeTab === 'runs' && (
+              <div className="max-w-4xl mx-auto space-y-6">
+                {/* KPI Overview */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-xl border border-zinc-200 bg-white shadow-sm space-y-1">
+                    <span className="text-xs text-zinc-500 font-medium">Tổng chi phí</span>
+                    <div className="text-xl font-bold text-zinc-900 font-mono">${Number(task.total_cost_usd).toFixed(4)}</div>
+                    <span className="text-[11px] text-zinc-400">USD ước tính</span>
+                  </div>
+                  <div className="p-4 rounded-xl border border-zinc-200 bg-white shadow-sm space-y-1">
+                    <span className="text-xs text-zinc-500 font-medium">Tổng Tokens</span>
+                    <div className="text-xl font-bold text-zinc-900 font-mono">{task.total_tokens_used.toLocaleString('vi-VN')}</div>
+                    <span className="text-[11px] text-zinc-400">Input + Output</span>
+                  </div>
+                  <div className="p-4 rounded-xl border border-zinc-200 bg-white shadow-sm space-y-1">
+                    <span className="text-xs text-zinc-500 font-medium">Lượt chạy Agent</span>
+                    <div className="text-xl font-bold text-zinc-900">{runs.length}</div>
+                    <span className="text-[11px] text-zinc-400">Đã ghi nhận</span>
+                  </div>
+                  <div className="p-4 rounded-xl border border-zinc-200 bg-white shadow-sm space-y-1">
+                    <span className="text-xs text-zinc-500 font-medium">Thời gian hoàn tất</span>
+                    <div className="text-sm font-semibold text-zinc-800 line-clamp-1 mt-1">
+                      {task.completed_at ? formatDate(task.completed_at) : isWorking ? 'Đang thực thi...' : 'Chưa hoàn tất'}
+                    </div>
+                    <span className="text-[11px] text-zinc-400">Lần chạy #{task.attempt_number}</span>
+                  </div>
+                </div>
+
+                {runsError && (
+                  <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">
+                    {runsError}
+                  </div>
+                )}
+
+                {runs.length === 0 ? (
+                  <Card className="p-8 text-center text-zinc-600 max-w-xl mx-auto space-y-3">
+                    <Activity size={36} className="mx-auto text-zinc-400" />
+                    <div>
+                      <h3 className="font-semibold text-zinc-900 text-base">Chưa có lượt chạy agent nào</h3>
+                      <p className="text-sm text-zinc-500 mt-1">
+                        Khi bài nghiên cứu bắt đầu chạy, tiến trình từng agent cùng token và chi phí sẽ hiển thị chi tiết tại đây.
+                      </p>
+                    </div>
+                  </Card>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-base font-bold text-zinc-900">Chi tiết chuỗi thực thi tác tử</h2>
+                      <span className="text-xs text-zinc-500">{runs.length} tác tử</span>
+                    </div>
+
+                    <div className="relative border-l-2 border-zinc-200 ml-4 pl-6 space-y-6">
+                      {runs.map((run, index) => {
+                        const isSuccess = run.status === 'SUCCESS';
+                        const isRunning = run.status === 'RUNNING';
+                        return (
+                          <div key={run.id} className="relative">
+                            {/* Timeline bullet */}
+                            <span className={`absolute -left-[33px] top-1.5 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center ${
+                              isSuccess ? 'bg-emerald-500 ring-2 ring-emerald-200' : isRunning ? 'bg-blue-500 ring-2 ring-blue-200 animate-pulse' : 'bg-red-500 ring-2 ring-red-200'
+                            }`} />
+
+                            <Card className="p-5 space-y-3 hover:border-zinc-300 transition-all shadow-sm">
+                              {/* Run Header */}
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-100 pb-2.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-sm text-zinc-900">
+                                    #{index + 1} {run.agent_name}
+                                  </span>
+                                  <Badge variant={isSuccess ? 'success' : isRunning ? 'default' : 'danger'}>
+                                    {run.status}
+                                  </Badge>
+                                  {run.iteration > 0 && (
+                                    <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-100 text-zinc-600 font-mono">
+                                      Vòng {run.iteration}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-3 text-xs text-zinc-500 font-mono">
+                                  <span>{run.duration_ms >= 1000 ? `${(run.duration_ms / 1000).toFixed(2)}s` : `${run.duration_ms}ms`}</span>
+                                  {run.model && (
+                                    <span className="px-2 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200">
+                                      {run.model}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Token and Cost Metrics */}
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-zinc-50/70 p-2.5 rounded-lg border border-zinc-100">
+                                <div>
+                                  <span className="text-zinc-400">Tokens Input:</span>
+                                  <div className="font-semibold text-zinc-800 font-mono">{run.input_tokens.toLocaleString()}</div>
+                                </div>
+                                <div>
+                                  <span className="text-zinc-400">Tokens Output:</span>
+                                  <div className="font-semibold text-zinc-800 font-mono">{run.output_tokens.toLocaleString()}</div>
+                                </div>
+                                <div>
+                                  <span className="text-zinc-400">Tổng Tokens:</span>
+                                  <div className="font-semibold text-zinc-800 font-mono">{(run.input_tokens + run.output_tokens).toLocaleString()}</div>
+                                </div>
+                                <div>
+                                  <span className="text-zinc-400">Chi phí ước tính:</span>
+                                  <div className="font-semibold text-zinc-800 font-mono">${Number(run.estimated_cost).toFixed(6)}</div>
+                                </div>
+                              </div>
+
+                              {/* Summaries */}
+                              {(Object.keys(run.input_summary || {}).length > 0 || Object.keys(run.output_summary || {}).length > 0) && (
+                                <div className="space-y-1.5 text-xs">
+                                  {Object.keys(run.output_summary || {}).length > 0 && (
+                                    <div className="text-zinc-600">
+                                      <span className="font-semibold text-zinc-700">Kết quả đầu ra: </span>
+                                      <span className="font-mono text-zinc-800 bg-zinc-100 px-1.5 py-0.5 rounded">
+                                        {JSON.stringify(run.output_summary)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {run.tool_calls && run.tool_calls.length > 0 && (
+                                    <div className="text-zinc-600">
+                                      <span className="font-semibold text-zinc-700">Công cụ đã gọi: </span>
+                                      <span className="font-mono text-zinc-700">
+                                        {run.tool_calls.map((tc, idx) => (
+                                          <span key={idx} className="inline-block mr-1.5 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200">
+                                            {tc.tool || JSON.stringify(tc)}
+                                          </span>
+                                        ))}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+
+                              {run.error_message && (
+                                <div className="text-xs text-red-700 bg-red-50 p-2.5 rounded-lg border border-red-200">
+                                  <strong>Lỗi: </strong>{run.error_message}
+                                </div>
+                              )}
+                            </Card>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>
