@@ -58,6 +58,8 @@ class ResearchTask(Base):
     report = relationship("ResearchReport", back_populates="task", uselist=False, cascade="all, delete-orphan")
     artifacts = relationship("ExportArtifact", back_populates="task", cascade="all, delete-orphan", foreign_keys="[ExportArtifact.research_task_id]")
     protocol_artifact = relationship("ExportArtifact", foreign_keys=[protocol_artifact_id])
+    analysis_runs = relationship("AnalysisRun", back_populates="task", cascade="all, delete-orphan", order_by="AnalysisRun.created_at")
+    journal_entries = relationship("ExperimentJournalEntry", back_populates="task", cascade="all, delete-orphan", order_by="ExperimentJournalEntry.created_at")
     dispatch_events = relationship("TaskDispatchOutbox", back_populates="task", cascade="all, delete-orphan")
 
 

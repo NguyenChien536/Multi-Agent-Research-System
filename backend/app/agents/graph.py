@@ -6,6 +6,7 @@ from app.agents.nodes import (
     curator_node,
     analyst_node,
     methodologist_node,
+    experiment_runner_node,
     writer_node,
     critic_node,
     post_processor_node
@@ -57,11 +58,15 @@ def route_after_methodologist(state: ResearchState) -> str:
     Định tuyến sau Methodologist:
     - Nếu research_type == "EMPIRICAL_HUMAN" và chưa có user_data_submission:
       tạm dừng tại wait_user_data (trả về worker, giải phóng worker lease).
+    - Nếu research_type == "EMPIRICAL_COMPUTATIONAL":
+      chuyển sang Experiment Runner để chạy pipeline thực nghiệm tính toán.
     - Ngược lại (đã có user_data_submission hoặc là dạng bài khác):
       chuyển sang Writer để viết bài báo hoàn chỉnh.
     """
     if state.get("research_type") == "EMPIRICAL_HUMAN" and not state.get("user_data_submission"):
         return "wait_user_data"
+    if state.get("research_type") == "EMPIRICAL_COMPUTATIONAL":
+        return "experiment_runner"
     return "writer"
 
 
@@ -111,6 +116,7 @@ def build_research_graph() -> StateGraph:
     workflow.add_node("curator", curator_node)
     workflow.add_node("analyst", analyst_node)
     workflow.add_node("methodologist", methodologist_node)
+    workflow.add_node("experiment_runner", experiment_runner_node)
     workflow.add_node("wait_user_data", wait_user_data_node)
     workflow.add_node("writer", writer_node)
     workflow.add_node("critic", critic_node)
@@ -145,16 +151,18 @@ def build_research_graph() -> StateGraph:
         },
     )
 
-    # Methodologist -> Rẽ nhánh: Chờ dữ liệu thực tế hoặc Tiếp tục viết bài
+    # Methodologist -> Rẽ nhánh: Chờ dữ liệu thực tế, Thí nghiệm tính toán, hoặc Viết bài
     workflow.add_conditional_edges(
         "methodologist",
         route_after_methodologist,
         {
             "wait_user_data": "wait_user_data",
+            "experiment_runner": "experiment_runner",
             "writer": "writer",
         },
     )
     workflow.add_edge("wait_user_data", END)
+    workflow.add_edge("experiment_runner", "writer")
 
     # Writer -> Critic (Bắt đầu Micro-loop)
     workflow.add_edge("writer", "critic")

@@ -202,3 +202,85 @@ export interface ProtocolResponse {
   download_url?: string | null;
   content_markdown?: string | null;
 }
+
+export interface AnalysisRunResponse {
+  id: string;
+  research_task_id: string;
+  routine_name: string;
+  status: string;
+  dataset_artifact_id?: string | null;
+  input_checksum?: string | null;
+  manifest: {
+    manifest_version?: string;
+    routine_name?: string;
+    routine_version?: string;
+    input_checksum?: string;
+    dataset_rows?: number;
+    valid_rows?: number;
+    train_rows?: number;
+    test_rows?: number;
+    target_column?: string;
+    feature_columns?: string[];
+    parameters?: Record<string, any>;
+    [key: string]: any;
+  };
+  metrics?: {
+    baseline?: {
+      model_type?: string;
+      mae?: number;
+      rmse?: number;
+      r2?: number;
+    };
+    model?: {
+      model_type?: string;
+      alpha?: number;
+      mae?: number;
+      rmse?: number;
+      r2?: number;
+    };
+    comparison?: {
+      primary_metric?: string;
+      delta_mae?: number;
+      delta_rmse?: number;
+      verdict?: 'IMPROVEMENT' | 'NO_IMPROVEMENT' | string;
+      pct_improvement?: number;
+    };
+    coefficients?: Record<string, number>;
+    intercept?: number;
+    [key: string]: any;
+  } | null;
+  reproducibility_status: 'NOT_RUN' | 'PASSED' | 'FAILED' | string;
+  reproducibility_diff?: {
+    diff_mae?: number;
+    diff_rmse?: number;
+    diff_r2?: number;
+    tolerance?: number;
+    status?: string;
+    [key: string]: any;
+  } | null;
+  error_message?: string | null;
+  created_at: string;
+  completed_at?: string | null;
+}
+
+export interface ExperimentJournalEntryResponse {
+  id: string;
+  research_task_id: string;
+  analysis_run_id: string;
+  sequence: number;
+  kind: string;
+  actor: string;
+  payload: Record<string, any>;
+  artifact_ids: string[];
+  created_at: string;
+}
+
+export interface DatasetUploadResponse {
+  artifact_id: string;
+  file_name: string;
+  rows_count: number;
+  columns_count: number;
+  columns: string[];
+  checksum: string;
+}
+

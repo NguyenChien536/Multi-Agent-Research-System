@@ -10,9 +10,12 @@ from app.models.task import ResearchTask, TaskDispatchOutbox
 from app.models.source import DocumentChunk, ResearchSource
 from app.models.report import ExportArtifact, ResearchReport
 from app.models.grounding import Citation, ClaimEvidence, Evidence, ResearchClaim
+from app.models.experiment import AnalysisRun, ExperimentJournalEntry
 from app.models.user import User
 from app.agents.graph import research_graph
 from app.agents.state import ResearchState
+from app.services.artifact_store import artifact_store
+import json
 
 logger = logging.getLogger(__name__)
 
@@ -146,6 +149,28 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 })
                 visited_urls.add(src.url)
 
+            # Preload dataset CSV if user uploaded one for empirical computational research
+            preloaded_dataset_csv = None
+            uploaded_dataset_art_id = None
+            if getattr(task, "research_type", "REVIEW") == "EMPIRICAL_COMPUTATIONAL":
+                dataset_art_res = await session.execute(
+                    select(ExportArtifact)
+                    .where(
+                        ExportArtifact.research_task_id == task.id,
+                        ExportArtifact.export_type == "DATASET_CSV",
+                    )
+                    .order_by(ExportArtifact.created_at.desc())
+                )
+                dataset_art = dataset_art_res.scalars().first()
+                if dataset_art and dataset_art.file_path:
+                    uploaded_dataset_art_id = dataset_art.id
+                    art_file_path = artifact_store.get_artifact_path(task.id, dataset_art.file_path)
+                    if art_file_path and art_file_path.is_file():
+                        try:
+                            preloaded_dataset_csv = art_file_path.read_text(encoding="utf-8")
+                        except Exception as e:
+                            logger.warning("Could not read uploaded dataset artifact for task %s: %s", task_id, e)
+
             # 2. Khởi tạo State ban đầu
             initial_state = {
                 "task_id": str(task.id),
@@ -161,6 +186,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 "plan_feedback": task.plan_feedback,
                 "protocol_artifact_id": str(task.protocol_artifact_id) if task.protocol_artifact_id else None,
                 "user_data_submission": task.user_data_submission or None,
+                "dataset_csv": preloaded_dataset_csv,
                 "current_iteration": task.current_iteration,
                 "current_micro_revision": 0,
                 "max_iterations": task.max_iterations,
@@ -201,7 +227,6 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     proto_info = final_state.get("protocol") or {}
                     markdown_content = proto_info.get("protocol_markdown") or ""
                     if markdown_content and not task.protocol_artifact_id:
-                        from app.services.artifact_store import artifact_store
                         saved_file = artifact_store.save_artifact(
                             task_id=task.id,
                             filename="study_protocol.md",
@@ -289,6 +314,105 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                         citation_label=f"[{number}]",
                         claim_text=lineage_row.claim_text,
                     ))
+
+                # Persist AnalysisRun, ExperimentJournalEntry, and experiment artifacts if routine ran
+                analysis_data = final_state.get("analysis_run")
+                if analysis_data:
+                    metrics_bytes = json.dumps(analysis_data.get("metrics", {}), indent=2).encode("utf-8")
+                    manifest_bytes = json.dumps(analysis_data.get("manifest", {}), indent=2).encode("utf-8")
+                    chart_bytes = json.dumps(analysis_data.get("chart_data", {}), indent=2).encode("utf-8")
+                    readme_bytes = (analysis_data.get("readme_markdown") or "").encode("utf-8")
+
+                    saved_metrics = artifact_store.save_artifact(task.id, "metrics.json", metrics_bytes)
+                    art_metrics = ExportArtifact(
+                        research_task_id=task.id,
+                        export_type="METRICS_JSON",
+                        file_path=saved_metrics["file_path"],
+                        file_size_bytes=saved_metrics["file_size_bytes"],
+                        download_url=f"/api/v1/research/{task.id}/artifacts/placeholder/download",
+                    )
+                    session.add(art_metrics)
+
+                    saved_manifest = artifact_store.save_artifact(task.id, "manifest.json", manifest_bytes)
+                    art_manifest = ExportArtifact(
+                        research_task_id=task.id,
+                        export_type="MANIFEST_JSON",
+                        file_path=saved_manifest["file_path"],
+                        file_size_bytes=saved_manifest["file_size_bytes"],
+                        download_url=f"/api/v1/research/{task.id}/artifacts/placeholder/download",
+                    )
+                    session.add(art_manifest)
+
+                    saved_chart = artifact_store.save_artifact(task.id, "chart_data.json", chart_bytes)
+                    art_chart = ExportArtifact(
+                        research_task_id=task.id,
+                        export_type="CHART_DATA_JSON",
+                        file_path=saved_chart["file_path"],
+                        file_size_bytes=saved_chart["file_size_bytes"],
+                        download_url=f"/api/v1/research/{task.id}/artifacts/placeholder/download",
+                    )
+                    session.add(art_chart)
+
+                    saved_readme = artifact_store.save_artifact(task.id, "reproducibility_readme.md", readme_bytes)
+                    art_readme = ExportArtifact(
+                        research_task_id=task.id,
+                        export_type="REPRO_README",
+                        file_path=saved_readme["file_path"],
+                        file_size_bytes=saved_readme["file_size_bytes"],
+                        download_url=f"/api/v1/research/{task.id}/artifacts/placeholder/download",
+                    )
+                    session.add(art_readme)
+                    await session.flush()
+
+                    art_metrics.download_url = f"/api/v1/research/{task.id}/artifacts/{art_metrics.id}/download"
+                    art_manifest.download_url = f"/api/v1/research/{task.id}/artifacts/{art_manifest.id}/download"
+                    art_chart.download_url = f"/api/v1/research/{task.id}/artifacts/{art_chart.id}/download"
+                    art_readme.download_url = f"/api/v1/research/{task.id}/artifacts/{art_readme.id}/download"
+
+                    dataset_artifact_id = uploaded_dataset_art_id
+                    if not dataset_artifact_id and final_state.get("dataset_csv"):
+                        saved_ds = artifact_store.save_artifact(
+                            task.id, "benchmark_dataset.csv", final_state["dataset_csv"].encode("utf-8")
+                        )
+                        art_ds = ExportArtifact(
+                            research_task_id=task.id,
+                            export_type="DATASET_CSV",
+                            file_path=saved_ds["file_path"],
+                            file_size_bytes=saved_ds["file_size_bytes"],
+                            download_url=f"/api/v1/research/{task.id}/artifacts/placeholder/download",
+                        )
+                        session.add(art_ds)
+                        await session.flush()
+                        art_ds.download_url = f"/api/v1/research/{task.id}/artifacts/{art_ds.id}/download"
+                        dataset_artifact_id = art_ds.id
+
+                    run_record = AnalysisRun(
+                        research_task_id=task.id,
+                        routine_name=analysis_data.get("routine_name", "tabular_regression_v1"),
+                        status=analysis_data.get("status", "COMPLETED"),
+                        dataset_artifact_id=dataset_artifact_id,
+                        input_checksum=analysis_data.get("input_checksum"),
+                        manifest=analysis_data.get("manifest", {}),
+                        metrics=analysis_data.get("metrics"),
+                        reproducibility_status=analysis_data.get("reproducibility_status", "NOT_RUN"),
+                        reproducibility_diff=analysis_data.get("reproducibility_diff"),
+                        completed_at=datetime.now(timezone.utc),
+                    )
+                    session.add(run_record)
+                    await session.flush()
+
+                    journal_art_ids = [str(art_metrics.id), str(art_manifest.id), str(art_chart.id), str(art_readme.id)]
+                    for entry in final_state.get("experiment_journal", []):
+                        j_entry = ExperimentJournalEntry(
+                            research_task_id=task.id,
+                            analysis_run_id=run_record.id,
+                            sequence=entry["sequence"],
+                            kind=entry["kind"],
+                            actor=entry["actor"],
+                            payload=entry.get("payload", {}),
+                            artifact_ids=journal_art_ids,
+                        )
+                        session.add(j_entry)
 
                 from app.models.agent_run import AgentRun
                 totals_res = await session.execute(

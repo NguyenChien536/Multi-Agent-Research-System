@@ -1,4 +1,4 @@
-import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, UserDataResumeRequest, ProtocolResponse, TokenResponse, UserCreate, UserResponse } from '../types';
+import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, UserDataResumeRequest, ProtocolResponse, AnalysisRunResponse, ExperimentJournalEntryResponse, DatasetUploadResponse, TokenResponse, UserCreate, UserResponse } from '../types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -166,6 +166,32 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+
+    getExperiments: (id: string) =>
+      fetcher<AnalysisRunResponse[]>(`/research/${id}/experiments`),
+
+    getJournal: (id: string) =>
+      fetcher<ExperimentJournalEntryResponse[]>(`/research/${id}/journal`),
+
+    uploadDataset: async (id: string, file: File) => {
+      const token = getAccessToken();
+      const headers = new Headers();
+      if (token) headers.set('Authorization', `Bearer ${token}`);
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(`${API_BASE_URL}/research/${id}/dataset`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new APIError(response.status, data || { detail: 'Upload dataset failed' });
+      }
+      return data as DatasetUploadResponse;
+    },
   }
 };
 
