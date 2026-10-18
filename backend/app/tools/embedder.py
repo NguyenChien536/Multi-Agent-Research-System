@@ -66,45 +66,46 @@ class EmbedderTool:
         text_content: str
     ) -> int:
         """Cắt chuỗi, tạo embedding và lưu vào pgvector thông qua SQLAlchemy."""
-        if not self.embeddings:
-            raise ValueError("Chưa cấu hình API Key cho EmbedderTool.")
-
         # 1. Chunking: cap to top 8 chunks per source to avoid exceeding free-tier RPM
         docs = self.chunk_text(text_content)
         if not docs:
             return 0
 
         texts = [doc.page_content for doc in docs[:8]]
+        vectors = [None] * len(texts)
 
-        # 2. Embedding (Gộp batch & Retry)
-        from tenacity import retry, stop_after_attempt, wait_exponential
-        import asyncio
-        
-        @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=3, max=15))
-        async def _embed_with_retry(texts_batch):
-            return await self.embeddings.aembed_documents(texts_batch)
+        if self.embeddings:
+            # 2. Embedding (Gộp batch & Retry)
+            from tenacity import retry, stop_after_attempt, wait_exponential
+            import asyncio
             
-        vectors = []
-        
-        # Nếu là Google Gemini (Free Tier), áp dụng Rate Limit (batch_size=20, sleep=2s)
-        # Nếu là OpenAI (Trả phí), bơm thẳng 1 lần để tối ưu tốc độ 100%
-        if "gemini" in self.model_name.lower() or "google" in str(type(self.embeddings)).lower():
-            batch_size = 20
-            sleep_time = 2
+            @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=3, max=15))
+            async def _embed_with_retry(texts_batch):
+                return await self.embeddings.aembed_documents(texts_batch)
+                
+            # Nếu là Google Gemini (Free Tier), áp dụng Rate Limit (batch_size=20, sleep=2s)
+            # Nếu là OpenAI (Trả phí), bơm thẳng 1 lần để tối ưu tốc độ 100%
+            if "gemini" in self.model_name.lower() or "google" in str(type(self.embeddings)).lower():
+                batch_size = 20
+                sleep_time = 2
+            else:
+                batch_size = len(texts) if texts else 1
+                sleep_time = 0
+                
+            try:
+                computed_vectors = []
+                for i in range(0, len(texts), batch_size):
+                    batch_texts = texts[i:i+batch_size]
+                    batch_vectors = await _embed_with_retry(batch_texts)
+                    computed_vectors.extend(batch_vectors)
+                    if sleep_time > 0 and i + batch_size < len(texts):
+                        await asyncio.sleep(sleep_time)
+                vectors = computed_vectors
+            except Exception as e:
+                logger.warning(f"Embedding API temporarily unavailable ({e}), proceeding with non-vector chunks")
+                vectors = [None] * len(texts)
         else:
-            batch_size = len(texts) if texts else 1
-            sleep_time = 0
-            
-        try:
-            for i in range(0, len(texts), batch_size):
-                batch_texts = texts[i:i+batch_size]
-                batch_vectors = await _embed_with_retry(batch_texts)
-                vectors.extend(batch_vectors)
-                if sleep_time > 0 and i + batch_size < len(texts):
-                    await asyncio.sleep(sleep_time)
-        except Exception as e:
-            logger.warning(f"Embedding API temporarily unavailable ({e}), proceeding with non-vector chunks")
-            vectors = [None] * len(texts)
+            logger.warning("Không có Embedding provider khả dụng, tiến hành lưu chunks văn bản thuần (non-vector)")
 
         # 3. Lưu vào Database
         chunks_to_insert = []
