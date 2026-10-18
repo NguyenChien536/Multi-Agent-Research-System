@@ -6,10 +6,13 @@ export interface BudgetConfig {
   timeout_seconds?: number;
 }
 
+export type ResearchType = "REVIEW" | "EMPIRICAL_COMPUTATIONAL" | "EMPIRICAL_HUMAN";
+
 export interface ResearchTaskCreate {
   title: string;
   research_question: string;
   description?: string;
+  research_type?: ResearchType;
   research_depth?: "SHALLOW" | "STANDARD" | "DEEP";
   language?: string;
   require_plan_approval?: boolean;
@@ -26,9 +29,10 @@ export interface ResearchTaskResponse {
   title: string;
   description?: string | null;
   research_question: string;
+  research_type?: ResearchType;
   research_depth: string;
   language: string;
-  status: string; // PENDING, QUEUED, PLANNING, WAITING_APPROVAL, RESEARCHING, etc.
+  status: string; // PENDING, QUEUED, PLANNING, WAITING_APPROVAL, WAITING_USER_DATA, RESEARCHING, etc.
   current_step?: string | null;
   require_plan_approval: boolean;
   max_sources: number;
@@ -47,6 +51,8 @@ export interface ResearchTaskResponse {
   } | null;
   plan_approved?: boolean;
   plan_feedback?: string | null;
+  protocol_artifact_id?: string | null;
+  user_data_submission?: Record<string, any> | null;
   created_at: string;
   updated_at: string;
   completed_at?: string;
@@ -180,5 +186,19 @@ export interface PlanRejectRequest {
   reason?: string;
 }
 
+export interface UserDataResumeRequest {
+  sample_size: number;
+  method_notes: string;
+  results_summary: string;
+  data_provenance?: string;
+  file_artifact_id?: string;
+}
 
-
+export interface ProtocolResponse {
+  task_id: string;
+  research_type: string;
+  status: string;
+  protocol_artifact_id?: string | null;
+  download_url?: string | null;
+  content_markdown?: string | null;
+}

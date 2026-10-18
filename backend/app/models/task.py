@@ -17,12 +17,15 @@ class ResearchTask(Base):
     description = Column(Text, nullable=True)
     research_depth = Column(String(20), default="STANDARD", nullable=False)  # SHALLOW | STANDARD | DEEP
     language = Column(String(10), default="vi", nullable=False)
-    status = Column(String(30), default="PENDING", nullable=False, index=True)  # PENDING, QUEUED, PLANNING, WAITING_APPROVAL, RESEARCHING, INDEXING, ANALYZING, WRITING, REVIEWING, FINALIZING, COMPLETED, RETRYING, FAILED, CANCELLED
+    research_type = Column(String(30), default="REVIEW", nullable=False)  # REVIEW | EMPIRICAL_COMPUTATIONAL | EMPIRICAL_HUMAN
+    status = Column(String(30), default="PENDING", nullable=False, index=True)  # PENDING, QUEUED, PLANNING, WAITING_APPROVAL, WAITING_USER_DATA, RESEARCHING, INDEXING, ANALYZING, WRITING, REVIEWING, FINALIZING, COMPLETED, RETRYING, FAILED, CANCELLED
     current_step = Column(String(30), nullable=True)  # Current agent/module; status remains RUNNING during execution
     require_plan_approval = Column(Boolean, default=False, nullable=False)  # Human-in-the-Loop flag
     plan = Column(JSONB, nullable=True)  # Generated supervisor research plan
     plan_approved = Column(Boolean, default=False, nullable=False)  # Approval status
     plan_feedback = Column(Text, nullable=True)  # User feedback or adjustment notes
+    protocol_artifact_id = Column(UUID(as_uuid=True), ForeignKey("export_artifacts.id", ondelete="SET NULL"), nullable=True)
+    user_data_submission = Column(JSONB, nullable=True)  # Fieldwork or user-provided data metadata
     
     # Resource Limits & Accrual
     max_sources = Column(Integer, default=10, nullable=False)
@@ -53,7 +56,8 @@ class ResearchTask(Base):
     agent_runs = relationship("AgentRun", back_populates="task", cascade="all, delete-orphan")
     evaluations = relationship("Evaluation", back_populates="task", cascade="all, delete-orphan")
     report = relationship("ResearchReport", back_populates="task", uselist=False, cascade="all, delete-orphan")
-    artifacts = relationship("ExportArtifact", back_populates="task", cascade="all, delete-orphan")
+    artifacts = relationship("ExportArtifact", back_populates="task", cascade="all, delete-orphan", foreign_keys="[ExportArtifact.research_task_id]")
+    protocol_artifact = relationship("ExportArtifact", foreign_keys=[protocol_artifact_id])
     dispatch_events = relationship("TaskDispatchOutbox", back_populates="task", cascade="all, delete-orphan")
 
 

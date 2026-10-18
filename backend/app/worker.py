@@ -8,7 +8,7 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.task import ResearchTask, TaskDispatchOutbox
 from app.models.source import DocumentChunk, ResearchSource
-from app.models.report import ResearchReport
+from app.models.report import ExportArtifact, ResearchReport
 from app.models.grounding import Citation, ClaimEvidence, Evidence, ResearchClaim
 from app.models.user import User
 from app.agents.graph import research_graph
@@ -152,12 +152,15 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 "user_id": str(task.user_id) if task.user_id else "anonymous",
                 "research_question": task.research_question,
                 "research_depth": task.research_depth,
+                "research_type": getattr(task, "research_type", "REVIEW") or "REVIEW",
                 "language": task.language,
                 "status": "RUNNING",
                 "require_plan_approval": task.require_plan_approval,
                 "plan_approved": task.plan_approved,
                 "plan": task.plan or {},
                 "plan_feedback": task.plan_feedback,
+                "protocol_artifact_id": str(task.protocol_artifact_id) if task.protocol_artifact_id else None,
+                "user_data_submission": task.user_data_submission or None,
                 "current_iteration": task.current_iteration,
                 "current_micro_revision": 0,
                 "max_iterations": task.max_iterations,
@@ -185,6 +188,41 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     await session.commit()
                     logger.info("Task %s: Paused at WAITING_APPROVAL. Worker lease released.", task_id)
                     return {"status": "WAITING_APPROVAL", "task_id": task_id}
+
+                # Kiểm tra nếu graph dừng tại điểm chờ dữ liệu thực địa của người dùng (Gate G4)
+                if final_state and final_state.get("status") == "WAITING_USER_DATA":
+                    await session.refresh(task)
+                    if task.status != "RUNNING" or task.attempt_number != claim_attempt:
+                        return {"status": "SUPERSEDED", "task_id": task_id}
+
+                    task.status = "WAITING_USER_DATA"
+                    task.current_step = "Methodologist"
+
+                    proto_info = final_state.get("protocol") or {}
+                    markdown_content = proto_info.get("protocol_markdown") or ""
+                    if markdown_content and not task.protocol_artifact_id:
+                        from app.services.artifact_store import artifact_store
+                        saved_file = artifact_store.save_artifact(
+                            task_id=task.id,
+                            filename="study_protocol.md",
+                            content=markdown_content.encode("utf-8"),
+                        )
+                        art = ExportArtifact(
+                            research_task_id=task.id,
+                            export_type="PROTOCOL",
+                            file_path=saved_file["file_path"],
+                            file_size_bytes=saved_file["file_size_bytes"],
+                            download_url=f"/api/v1/research/{task.id}/artifacts/placeholder/download",
+                        )
+                        session.add(art)
+                        await session.flush()
+                        art.download_url = f"/api/v1/research/{task.id}/artifacts/{art.id}/download"
+                        task.protocol_artifact_id = art.id
+
+                    task.worker_lease_until = None
+                    await session.commit()
+                    logger.info("Task %s: Paused at WAITING_USER_DATA. Worker lease released.", task_id)
+                    return {"status": "WAITING_USER_DATA", "task_id": task_id}
 
                 report_content = final_state.get("final_report_markdown") if final_state else None
                 if not report_content:

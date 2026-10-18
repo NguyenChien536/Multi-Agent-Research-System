@@ -40,11 +40,15 @@ class ResearchState(TypedDict, total=False):
     user_id: str
     research_question: str
     research_depth: str               # 'SHALLOW' | 'STANDARD' | 'DEEP'
+    research_type: str                # 'REVIEW' | 'EMPIRICAL_COMPUTATIONAL' | 'EMPIRICAL_HUMAN'
     language: str
     budget: ResearchBudget            # Giới hạn tài nguyên toàn bộ task
     require_plan_approval: bool       # Bật chế độ Human-in-the-Loop (mặc định: False)
     plan_approved: bool               # Người dùng đã duyệt kế hoạch hay chưa
     plan_feedback: Optional[str]      # Góp ý hoặc yêu cầu điều chỉnh của người dùng
+    protocol: Optional[Dict[str, Any]] # Phương pháp và đề cương nghiên cứu (Methodologist)
+    protocol_artifact_id: Optional[str] # UUID của artifact protocol
+    user_data_submission: Optional[Dict[str, Any]] # Dữ liệu/kết quả thực địa do người dùng cung cấp
     max_micro_revisions: int          # Giới hạn Micro-loop Writer ⟷ Critic (mặc định: 2)
     current_iteration: int
     current_micro_revision: int       # Đếm số lần Writer chỉnh sửa trong vòng hiện tại

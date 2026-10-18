@@ -36,4 +36,4 @@ class ExportArtifact(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
-    task = relationship("ResearchTask", back_populates="artifacts")
+    task = relationship("ResearchTask", back_populates="artifacts", foreign_keys=[research_task_id])

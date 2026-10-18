@@ -16,6 +16,7 @@ class ResearchTaskCreate(BaseModel):
     title: str = Field(..., min_length=5, max_length=255)
     research_question: str = Field(..., min_length=10)
     description: Optional[str] = None
+    research_type: str = Field(default="REVIEW", pattern="^(REVIEW|EMPIRICAL_COMPUTATIONAL|EMPIRICAL_HUMAN)$")
     research_depth: str = Field(default="STANDARD", pattern="^(SHALLOW|STANDARD|DEEP)$")
     language: str = Field(default="vi", max_length=10)
     require_plan_approval: bool = Field(default=False, description="Enable Human-in-the-Loop plan review")
@@ -32,6 +33,7 @@ class ResearchTaskResponse(BaseModel):
     title: str
     description: Optional[str] = None
     research_question: str
+    research_type: str = "REVIEW"
     research_depth: str
     language: str
     status: str
@@ -48,6 +50,8 @@ class ResearchTaskResponse(BaseModel):
     plan: Optional[Dict[str, Any]] = None
     plan_approved: bool = False
     plan_feedback: Optional[str] = None
+    protocol_artifact_id: Optional[uuid.UUID] = None
+    user_data_submission: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime] = None
@@ -71,3 +75,20 @@ class PlanApprovalRequest(BaseModel):
 
 class PlanRejectRequest(BaseModel):
     reason: Optional[str] = Field(default=None, description="Reason for rejection or requested changes")
+
+
+class UserDataResumeRequest(BaseModel):
+    sample_size: int = Field(..., ge=1, description="Sample size or observation count from fieldwork/lab")
+    method_notes: str = Field(..., min_length=10, description="Fieldwork/lab execution notes and procedure")
+    results_summary: str = Field(..., min_length=10, description="Summary of collected observations, metrics, or raw results")
+    data_provenance: Optional[str] = Field(default=None, description="Origin and provenance information")
+    file_artifact_id: Optional[uuid.UUID] = Field(default=None, description="Optional linked data artifact ID")
+
+
+class ProtocolResponse(BaseModel):
+    task_id: uuid.UUID
+    research_type: str
+    status: str
+    protocol_artifact_id: Optional[uuid.UUID] = None
+    download_url: Optional[str] = None
+    content_markdown: Optional[str] = None
