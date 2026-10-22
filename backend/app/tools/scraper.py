@@ -2,13 +2,14 @@ import asyncio
 import logging
 import ipaddress
 import socket
-from urllib.parse import urlparse
 from typing import Optional
+from urllib.parse import urlparse, urlunsplit
 
 import httpx
 import trafilatura
 
 logger = logging.getLogger(__name__)
+MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 
 class SSRFError(Exception):
     """Lỗi khi phát hiện URL có dấu hiệu SSRF."""
@@ -63,51 +64,96 @@ class ScraperTool:
 
 
 
-    async def _check_ssrf(self, url: str) -> None:
-        """Kiểm tra URL để ngăn chặn SSRF (bao gồm IPv6 và IPv4-mapped addresses)."""
+    async def _validated_target(self, url: str) -> tuple[str, str, dict[str, bytes]]:
+        """Validate and pin a public destination so the HTTP client cannot re-resolve DNS."""
         parsed = urlparse(url)
 
-        # 1. Chặn schema nguy hiểm
         if parsed.scheme not in ["http", "https"]:
             raise SSRFError(f"Schema không được phép: {parsed.scheme}")
-
         hostname = parsed.hostname
         if not hostname:
             raise SSRFError("URL không có hostname")
+        if parsed.username is not None or parsed.password is not None:
+            raise SSRFError("URL có thông tin đăng nhập không được phép")
+        try:
+            port = parsed.port
+        except ValueError as exc:
+            raise SSRFError("URL có cổng không hợp lệ") from exc
 
-        # 2. Chặn localhost bằng text (nhanh, không cần DNS)
         if hostname.lower() in ["localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"]:
             raise SSRFError(f"Bị chặn truy cập localhost: {hostname}")
 
-        # 3. Nếu hostname là địa chỉ IP literal, kiểm tra ngay — bỏ qua DNS lookup
         try:
             ip_literal = ipaddress.ip_address(hostname)
             self._assert_public_ip(ip_literal, hostname)
-            return  # Literal IP đã được xác nhận — không cần DNS
+            connect_ip = str(ip_literal)
+            host_header = f"[{hostname}]" if isinstance(ip_literal, ipaddress.IPv6Address) else hostname
+            sni_hostname = None
         except ValueError:
-            pass  # hostname không phải IP literal, thực hiện DNS lookup
+            resolved_ips = await self._resolve_ips(hostname)
+            if not resolved_ips:
+                raise SSRFError(f"Hostname không phân giải ra địa chỉ IP: {hostname}")
+            for ip_str in resolved_ips:
+                self._assert_public_ip(ipaddress.ip_address(ip_str), hostname)
+            # The request URL uses the checked IP literal, preventing the HTTP
+            # client from resolving the original hostname a second time.
+            connect_ip = sorted(resolved_ips)[0]
+            host_header = hostname.encode("idna").decode("ascii")
+            sni_hostname = host_header.encode("ascii") if parsed.scheme == "https" else None
 
-        # 4. Phân giải DNS và chặn IP private/reserved
-        resolved_ips = await self._resolve_ips(hostname)
-        for ip_str in resolved_ips:
-            ip_obj = ipaddress.ip_address(ip_str)
-            self._assert_public_ip(ip_obj, hostname)
-        # Redirect following is disabled on the httpx client below, so we do not
-        # need a second pre-flight check after the HTTP response.
+        authority = f"[{connect_ip}]" if ":" in connect_ip else connect_ip
+        host_authority = host_header
+        if port is not None:
+            authority = f"{authority}:{port}"
+            host_authority = f"{host_authority}:{port}"
+        pinned_url = urlunsplit((parsed.scheme, authority, parsed.path or "/", parsed.query, ""))
+        extensions = {"sni_hostname": sni_hostname} if sni_hostname else {}
+        return pinned_url, host_authority, extensions
+
+    async def _check_ssrf(self, url: str) -> None:
+        """Compatibility helper for callers/tests that only need validation."""
+        await self._validated_target(url)
+
+    @staticmethod
+    def _hostname_for_log(url: str) -> str:
+        try:
+            return urlparse(url).hostname or "<invalid>"
+        except ValueError:
+            return "<invalid>"
 
 
     async def fetch_and_extract(self, url: str) -> Optional[str]:
         """Tải trang HTML và trích xuất nội dung chính (bỏ quảng cáo, menu)."""
         try:
-            # Bước 1: Kiểm tra bảo mật
-            await self._check_ssrf(url)
+            pinned_url, host_header, extensions = await self._validated_target(url)
+            request_headers = {**self.headers, "Host": host_header}
 
-            # Bước 2: Tải HTML bằng httpx (Bất đồng bộ)
-            # Không tự follow redirect để tránh URL public chuyển hướng sang địa chỉ nội bộ.
-            async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=False) as client:
-                response = await client.get(url, headers=self.headers)
-                response.raise_for_status()
-                html_content = response.text
+            # Connect to the exact IP that passed validation. Disable environment
+            # proxies because they would resolve/route the original host elsewhere.
+            async with httpx.AsyncClient(
+                timeout=self.timeout,
+                follow_redirects=False,
+                trust_env=False,
+            ) as client:
+                async with client.stream(
+                    "GET",
+                    pinned_url,
+                    headers=request_headers,
+                    extensions=extensions,
+                ) as response:
+                    response.raise_for_status()
+                    content_length = response.headers.get("content-length")
+                    if content_length and content_length.isdigit() and int(content_length) > MAX_RESPONSE_BYTES:
+                        raise ValueError("Trang web vượt quá giới hạn dung lượng tải xuống")
+                    body = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
+                            raise ValueError("Trang web vượt quá giới hạn dung lượng tải xuống")
+                        body.extend(chunk)
+                    try:
+                        html_content = body.decode(response.encoding or "utf-8", errors="replace")
+                    except LookupError:
+                        html_content = body.decode("utf-8", errors="replace")
 
             # Bước 3: Trích xuất nội dung bằng trafilatura (Đồng bộ, nhưng chạy rất nhanh)
             # Nếu HTML quá lớn, có thể cân nhắc run_in_executor
@@ -120,19 +166,22 @@ class ScraperTool:
             )
 
             if not extracted_text:
-                logger.warning(f"Không trích xuất được văn bản từ: {url}")
+                logger.warning("Không trích xuất được văn bản từ host %s", self._hostname_for_log(url))
                 return None
 
             return extracted_text
 
         except SSRFError as e:
-            logger.error(f"SSRF Alert - URL {url}: {str(e)}")
+            logger.error("SSRF alert for host %s: %s", self._hostname_for_log(url), str(e))
+            return None
+        except ValueError as e:
+            logger.warning("Rejected page from host %s: %s", self._hostname_for_log(url), str(e))
             return None
         except httpx.HTTPError as e:
-            logger.warning(f"Lỗi HTTP khi tải {url}: {str(e)}")
+            logger.warning("HTTP error while fetching host %s: %s", self._hostname_for_log(url), str(e))
             return None
         except Exception as e:
-            logger.error(f"Lỗi không xác định khi cào {url}: {str(e)}")
+            logger.error("Unexpected scraper error for host %s: %s", self._hostname_for_log(url), str(e))
             return None
 
 async def fetch_urls_parallel(urls: list[str], max_concurrent: int = 5) -> dict[str, str]:

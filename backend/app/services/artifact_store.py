@@ -29,7 +29,7 @@ class ArtifactStore:
     def _get_task_dir(self, task_id: uuid.UUID) -> Path:
         task_dir = (self.base_dir / str(task_id)).resolve()
         # Đảm bảo không thoát khỏi base_dir
-        if not str(task_dir).startswith(str(self.base_dir)):
+        if task_dir == self.base_dir or self.base_dir not in task_dir.parents:
             raise ValueError("Invalid task ID path traversal attempt")
         task_dir.mkdir(parents=True, exist_ok=True)
         return task_dir
@@ -43,16 +43,24 @@ class ArtifactStore:
         """Lưu tệp tin vào thư mục riêng của task và tính mã băm SHA-256."""
         safe_name = sanitize_filename(filename)
         task_dir = self._get_task_dir(task_id)
-        target_path = (task_dir / safe_name).resolve()
-
-        if not str(target_path).startswith(str(task_dir)):
-            raise ValueError("Invalid filename path traversal attempt")
-
-        # Tính toán SHA-256
         sha256_hash = hashlib.sha256(content).hexdigest()
 
-        # Ghi file an toàn
-        target_path.write_bytes(content)
+        # Create atomically so concurrent uploads/retries cannot overwrite
+        # bytes referenced by an older artifact row.
+        source_name = Path(safe_name)
+        while True:
+            target_path = (task_dir / safe_name).resolve()
+            if target_path == task_dir or task_dir not in target_path.parents:
+                raise ValueError("Invalid filename path traversal attempt")
+            try:
+                with target_path.open("xb") as target_file:
+                    target_file.write(content)
+                break
+            except FileExistsError:
+                safe_name = f"{source_name.stem}_{uuid.uuid4().hex[:12]}{source_name.suffix}"
+            except Exception:
+                target_path.unlink(missing_ok=True)
+                raise
 
         relative_path = f"{task_id}/{safe_name}"
 
@@ -70,7 +78,7 @@ class ArtifactStore:
         task_dir = self._get_task_dir(task_id)
         target_path = (task_dir / safe_name).resolve()
 
-        if not str(target_path).startswith(str(task_dir)):
+        if target_path == task_dir or task_dir not in target_path.parents:
             raise ValueError("Path traversal attempt detected")
 
         if target_path.is_file():
@@ -89,7 +97,7 @@ class ArtifactStore:
         """Xóa toàn bộ artifacts của một task khi xóa task (Tombstone cleanup)."""
         import shutil
         task_dir = (self.base_dir / str(task_id)).resolve()
-        if not str(task_dir).startswith(str(self.base_dir)):
+        if task_dir == self.base_dir or self.base_dir not in task_dir.parents:
             return 0
         if task_dir.is_dir():
             count = len(list(task_dir.glob("*")))

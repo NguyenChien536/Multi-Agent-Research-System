@@ -76,6 +76,12 @@ async def test_artifact_store_operations(tmp_path):
     assert path is not None
     assert path.read_bytes() == content
 
+    # A retry with the same display name must not replace an artifact already
+    # referenced by its original database record.
+    replacement = store.save_artifact(task_id, "test document.pdf", b"replacement content")
+    assert replacement["file_name"] != res["file_name"]
+    assert path.read_bytes() == content
+
     # 3. Path traversal attack phải được xử lý an toàn
     evil_res = store.save_artifact(task_id, "../../etc/passwd.pdf", content)
     assert evil_res["file_name"] == "passwd.pdf"
@@ -83,7 +89,7 @@ async def test_artifact_store_operations(tmp_path):
 
     # 4. Xóa toàn bộ artifacts của task
     count = store.delete_task_artifacts(task_id)
-    assert count == 2
+    assert count == 3
     assert store.get_artifact_path(task_id, "test_document.pdf") is None
 
 

@@ -4,13 +4,16 @@ import io
 import random
 import re
 import uuid
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
+from sqlalchemy.exc import IntegrityError
 
 from app.agents import nodes as nodes_module
+from app.agents.graph import route_after_methodologist
 from app.core.database import AsyncSessionLocal
 from app.main import app
 from app.models.experiment import AnalysisRun, ExperimentJournalEntry
@@ -25,6 +28,7 @@ from app.services.experiment_runner import (
     run_tabular_regression_v1,
     verify_repeatability,
 )
+from app.services.upload_reader import UploadSizeLimitExceeded, read_upload_with_limit
 from app.tools.search import SearchResult
 from app.worker import run_langgraph_workflow
 
@@ -85,6 +89,24 @@ def test_parse_csv_dataset_insufficient_rows():
         parse_csv_dataset(csv_text)
 
 
+def test_parse_csv_dataset_rejects_duplicate_headers_and_dimension_overflow():
+    duplicate_header = "Feature, feature, target\n" + "1,2,3\n" * 10
+    with pytest.raises(InvalidInputError, match="duplicate column names"):
+        parse_csv_dataset(duplicate_header)
+
+    too_many_columns = ",".join([f"c{i}" for i in range(52)]) + "\n"
+    with pytest.raises(InvalidInputError, match="maximum supported"):
+        parse_csv_dataset(too_many_columns)
+
+    too_many_rows = "feature,target\n" + "1,2\n" * 10_001
+    with pytest.raises(InvalidInputError, match="maximum of 10000 rows"):
+        parse_csv_dataset(too_many_rows)
+
+    non_finite_values = "feature,target\n" + "1,2\n" * 9 + "inf,3\n"
+    with pytest.raises(InvalidInputError, match="non-finite numeric value"):
+        parse_csv_dataset(non_finite_values)
+
+
 def test_cholesky_solve():
     # 2x2 positive definite matrix: [[4, 2], [2, 3]] * [x1, x2] = [8, 7]
     # Solution: x1 = 1.25, x2 = 1.5
@@ -112,6 +134,12 @@ def test_run_tabular_regression_v1_improvement():
     assert ridge_mae < base_mae
     assert res["metrics"]["comparison"]["delta_mae"] < 0
     assert len(res["chart_data"]["samples"]) == 10
+    samples = res["chart_data"]["samples"]
+    test_mean = sum(row["actual"] for row in samples) / len(samples)
+    ss_total = sum((row["actual"] - test_mean) ** 2 for row in samples)
+    ss_res_baseline = sum((row["actual"] - row["predicted_baseline"]) ** 2 for row in samples)
+    expected_baseline_r2 = 1.0 - ss_res_baseline / ss_total
+    assert res["metrics"]["baseline"]["r2"] == pytest.approx(expected_baseline_r2, abs=1e-4)
 
 
 def test_run_tabular_regression_v1_no_improvement():
@@ -135,6 +163,22 @@ def test_target_leakage_detection():
         )
 
 
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"alpha": 0},
+        {"alpha": float("nan")},
+        {"test_size": 0},
+        {"test_size": 1},
+        {"test_size": float("inf")},
+        {"seed": 42.5},
+    ],
+)
+def test_regression_rejects_invalid_parameters(kwargs):
+    with pytest.raises(InvalidInputError):
+        run_tabular_regression_v1(_generate_synthetic_csv(50), **kwargs)
+
+
 def test_verify_repeatability_strict_tolerance():
     csv_text = _generate_synthetic_csv(50, correlated=True)
     orig_res = run_tabular_regression_v1(csv_text, seed=42)
@@ -145,6 +189,51 @@ def test_verify_repeatability_strict_tolerance():
     assert diff["diff_mae"] <= 1e-8
     assert diff["diff_rmse"] <= 1e-8
     assert diff["diff_r2"] <= 1e-8
+
+
+def test_repeatability_uses_raw_precision_and_rejects_changed_input():
+    csv_text = _generate_synthetic_csv(50, correlated=True)
+    original = run_tabular_regression_v1(csv_text, seed=42)
+    # Leave rounded API metrics unchanged. The prior implementation compared
+    # only these rounded values and incorrectly passed this tampered result.
+    original["raw_metrics"]["model"]["mae"] += 0.01
+    passed, report = verify_repeatability(csv_text, original)
+    assert passed is False
+    assert report["comparisons"]["model.mae"] is False
+
+    changed_data = csv_text.replace("f1,f2,f3,target", "x1,f2,f3,target", 1)
+    passed, report = verify_repeatability(changed_data, run_tabular_regression_v1(csv_text))
+    assert passed is False
+    assert report["reason"] == "INPUT_CHECKSUM_MISMATCH"
+
+
+def test_computational_task_waits_for_user_dataset():
+    assert route_after_methodologist({
+        "research_type": "EMPIRICAL_COMPUTATIONAL",
+        "dataset_csv": None,
+    }) == "wait_user_data"
+    assert route_after_methodologist({
+        "research_type": "EMPIRICAL_COMPUTATIONAL",
+        "dataset_csv": "x,target\n" + "1,2\n" * 10,
+    }) == "experiment_runner"
+
+
+@pytest.mark.asyncio
+async def test_upload_reader_stops_at_limit_plus_one_byte():
+    class FakeUpload:
+        def __init__(self, content: bytes):
+            self.content = content
+            self.read_sizes = []
+
+        async def read(self, size: int):
+            self.read_sizes.append(size)
+            chunk, self.content = self.content[:size], self.content[size:]
+            return chunk
+
+    upload = FakeUpload(b"x" * 100_000)
+    with pytest.raises(UploadSizeLimitExceeded):
+        await read_upload_with_limit(upload, max_size_bytes=10, chunk_size=64)
+    assert sum(upload.read_sizes) <= 11
 
 
 # =========================================================================
@@ -223,6 +312,141 @@ async def test_dataset_upload_validation_errors():
         )
         assert err_res2.status_code == 400
         assert "trống" in err_res2.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_dataset_upload_resumes_waiting_computational_task_and_enforces_owner_scope():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        suffix = uuid.uuid4().hex[:8]
+        owner_headers = await _register_and_login(client, suffix)
+        other_headers = await _register_and_login(client, f"other_{suffix}")
+
+        create_res = await client.post("/api/v1/research", headers=owner_headers, json={
+            "title": f"Resume Dataset {suffix}",
+            "research_question": "How does the model compare against a baseline?",
+            "research_type": "EMPIRICAL_COMPUTATIONAL",
+        })
+        assert create_res.status_code == 201
+        task_id = create_res.json()["id"]
+
+        async with AsyncSessionLocal() as session:
+            task = await session.scalar(select(ResearchTask).where(ResearchTask.id == uuid.UUID(task_id)))
+            task.status = "WAITING_USER_DATA"
+            task.current_step = "Waiting for dataset"
+            event = TaskDispatchOutbox(
+                research_task_id=task.id,
+                event_type="START_RESEARCH",
+                dispatched_at=datetime.now(timezone.utc),
+            )
+            session.add(event)
+            await session.commit()
+
+        csv_data = _generate_synthetic_csv(30, correlated=True)
+        upload = await client.post(
+            f"/api/v1/research/{task_id}/dataset",
+            headers=owner_headers,
+            files={"file": ("resume.csv", io.BytesIO(csv_data.encode("utf-8")), "text/csv")},
+        )
+        assert upload.status_code == 201
+
+        async with AsyncSessionLocal() as session:
+            task = await session.scalar(select(ResearchTask).where(ResearchTask.id == uuid.UUID(task_id)))
+            event = await session.scalar(select(TaskDispatchOutbox).where(
+                TaskDispatchOutbox.research_task_id == task.id,
+                TaskDispatchOutbox.event_type == "START_RESEARCH",
+            ))
+            assert task.status == "QUEUED"
+            assert task.current_step is None
+            assert event.dispatched_at is None
+
+        other_upload = await client.post(
+            f"/api/v1/research/{task_id}/dataset",
+            headers=other_headers,
+            files={"file": ("resume.csv", io.BytesIO(csv_data.encode("utf-8")), "text/csv")},
+        )
+        assert other_upload.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_dataset_upload_rejects_non_computational_tasks():
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        suffix = uuid.uuid4().hex[:8]
+        headers = await _register_and_login(client, suffix)
+        create_res = await client.post("/api/v1/research", headers=headers, json={
+            "title": f"Review Task {suffix}",
+            "research_question": "A literature review question with enough length",
+            "research_type": "REVIEW",
+        })
+        task_id = create_res.json()["id"]
+        response = await client.post(
+            f"/api/v1/research/{task_id}/dataset",
+            headers=headers,
+            files={"file": ("dataset.csv", io.BytesIO(_generate_synthetic_csv().encode("utf-8")), "text/csv")},
+        )
+        assert response.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_failed_experiment_is_recorded_as_technical_failure_not_negative_result():
+    suffix = uuid.uuid4().hex[:8]
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        headers = await _register_and_login(client, suffix)
+        create_res = await client.post("/api/v1/research", headers=headers, json={
+            "title": f"Failed Run Test {suffix}",
+            "research_question": "Does an invalid dataset produce a technical failure record?",
+            "research_type": "EMPIRICAL_COMPUTATIONAL",
+        })
+        assert create_res.status_code == 201
+        task_id = create_res.json()["id"]
+
+    async with AsyncSessionLocal() as session:
+        task = await session.scalar(select(ResearchTask).where(ResearchTask.id == uuid.UUID(task_id)))
+        task.status = "RUNNING"
+        task.attempt_number = 1
+        await session.commit()
+
+    with pytest.raises(InvalidInputError):
+        await nodes_module.experiment_runner_node({
+            "task_id": task_id,
+            "attempt_number": 1,
+            "current_iteration": 0,
+            "dataset_csv": "feature,target\n",
+        })
+
+    async with AsyncSessionLocal() as session:
+        run = await session.scalar(select(AnalysisRun).where(
+            AnalysisRun.research_task_id == uuid.UUID(task_id)
+        ))
+        assert run is not None
+        assert run.status == "FAILED"
+        assert run.reproducibility_status == "NOT_RUN"
+        journal = (await session.execute(
+            select(ExperimentJournalEntry)
+            .where(ExperimentJournalEntry.analysis_run_id == run.id)
+            .order_by(ExperimentJournalEntry.sequence)
+        )).scalars().all()
+        assert [entry.kind for entry in journal] == ["STARTED", "EXECUTION_RESULT"]
+        assert journal[1].payload["status"] == "TECHNICAL_FAILURE"
+        assert "NO_IMPROVEMENT" not in str(journal[1].payload)
+        first_entry_id = journal[0].id
+
+        with pytest.raises(IntegrityError, match="append-only"):
+            await session.execute(
+                update(ExperimentJournalEntry)
+                .where(ExperimentJournalEntry.id == first_entry_id)
+                .values(payload={"tampered": True})
+            )
+        await session.rollback()
+
+        with pytest.raises(IntegrityError, match="append-only"):
+            await session.execute(
+                delete(ExperimentJournalEntry)
+                .where(ExperimentJournalEntry.id == first_entry_id)
+            )
+        await session.rollback()
 
 
 # =========================================================================
