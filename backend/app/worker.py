@@ -112,6 +112,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     outbox_event.dispatched_at = None
                     outbox_event.available_at = datetime.now(timezone.utc)
                     outbox_event.locked_until = None
+                    outbox_event.unclaimed_retries = 0
                     outbox_event.last_error = "User at concurrent running job limit; waiting for capacity"
                 await session.commit()
                 return {
@@ -124,6 +125,18 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             task.current_step = None
             task.attempt_number += 1
             task.worker_lease_until = datetime.now(timezone.utc) + timedelta(seconds=settings.WORKER_LEASE_SECONDS)
+            dispatch_result = await session.execute(
+                select(TaskDispatchOutbox)
+                .where(
+                    TaskDispatchOutbox.research_task_id == task.id,
+                    TaskDispatchOutbox.event_type == "START_RESEARCH",
+                )
+                .with_for_update()
+            )
+            dispatch_event = dispatch_result.scalar_one_or_none()
+            if dispatch_event is not None:
+                dispatch_event.unclaimed_retries = 0
+                dispatch_event.last_error = None
             claim_attempt = task.attempt_number
             user_id = task.user_id
             await session.commit()

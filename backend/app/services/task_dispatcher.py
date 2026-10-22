@@ -4,7 +4,7 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import aliased
 
 from app.core.config import settings
@@ -13,6 +13,94 @@ from app.models.task import ResearchTask, TaskDispatchOutbox
 from app.worker import execute_research_workflow
 
 logger = logging.getLogger(__name__)
+
+
+async def recover_unclaimed_dispatches(
+    now: datetime | None = None,
+    user_id: uuid.UUID | None = None,
+) -> int:
+    """Redeliver recent queued tasks whose broker message was never claimed.
+
+    A dispatch is considered stale only after the acknowledgement grace period.
+    Automatic recovery is limited by both task age and retry count so this loop
+    cannot unexpectedly replay old work or redeliver forever.
+    """
+    now = now or datetime.now(timezone.utc)
+    stale_before = now - timedelta(seconds=settings.OUTBOX_DISPATCH_ACK_TIMEOUT_SECONDS)
+    recover_after = now - timedelta(seconds=settings.OUTBOX_AUTO_RECOVERY_MAX_AGE_SECONDS)
+    max_retries = settings.OUTBOX_MAX_UNCLAIMED_RETRIES
+    recovered = 0
+
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            query = (
+                select(ResearchTask, TaskDispatchOutbox)
+                .join(TaskDispatchOutbox, TaskDispatchOutbox.research_task_id == ResearchTask.id)
+                .where(
+                    ResearchTask.status == "QUEUED",
+                    TaskDispatchOutbox.event_type == "START_RESEARCH",
+                    TaskDispatchOutbox.dispatched_at <= stale_before,
+                    TaskDispatchOutbox.dispatched_at >= recover_after,
+                    TaskDispatchOutbox.unclaimed_retries < max_retries,
+                )
+                .order_by(TaskDispatchOutbox.dispatched_at)
+                .limit(100)
+                .with_for_update(of=(ResearchTask, TaskDispatchOutbox), skip_locked=True)
+            )
+            if user_id is not None:
+                query = query.where(ResearchTask.user_id == user_id)
+            result = await session.execute(query)
+
+            for task, event in result.all():
+                event.dispatched_at = None
+                event.available_at = now
+                event.locked_until = None
+                event.unclaimed_retries += 1
+                event.last_error = (
+                    "Worker did not claim dispatched task; scheduled bounded redelivery "
+                    f"({event.unclaimed_retries}/{max_retries})"
+                )
+                recovered += 1
+                logger.warning(
+                    "Requeued stale task dispatch event=%s task=%s unclaimed_retry=%s/%s",
+                    event.id,
+                    task.id,
+                    event.unclaimed_retries,
+                    max_retries,
+                )
+
+            diagnostic = "Automatic redelivery limit reached; manual retry required"
+            exhausted_query = (
+                select(ResearchTask, TaskDispatchOutbox)
+                .join(TaskDispatchOutbox, TaskDispatchOutbox.research_task_id == ResearchTask.id)
+                .where(
+                    ResearchTask.status == "QUEUED",
+                    TaskDispatchOutbox.event_type == "START_RESEARCH",
+                    TaskDispatchOutbox.dispatched_at <= stale_before,
+                    TaskDispatchOutbox.dispatched_at >= recover_after,
+                    TaskDispatchOutbox.unclaimed_retries >= max_retries,
+                    or_(
+                        TaskDispatchOutbox.last_error.is_(None),
+                        TaskDispatchOutbox.last_error != diagnostic,
+                    ),
+                )
+                .order_by(TaskDispatchOutbox.dispatched_at)
+                .limit(100)
+                .with_for_update(of=(ResearchTask, TaskDispatchOutbox), skip_locked=True)
+            )
+            if user_id is not None:
+                exhausted_query = exhausted_query.where(ResearchTask.user_id == user_id)
+            exhausted_result = await session.execute(exhausted_query)
+            for task, event in exhausted_result.all():
+                event.last_error = diagnostic
+                logger.error(
+                    "Stale task dispatch exhausted retries event=%s task=%s unclaimed_retries=%s",
+                    event.id,
+                    task.id,
+                    event.unclaimed_retries,
+                )
+
+    return recovered
 
 
 async def recover_expired_worker_claims(now: datetime | None = None) -> int:
@@ -55,6 +143,7 @@ async def dispatch_one_outbox_event(user_id: uuid.UUID | None = None) -> bool:
     """Publish one due event for a user with running capacity. Returns False when nothing is ready."""
     now = datetime.now(timezone.utc)
     await recover_expired_worker_claims(now)
+    await recover_unclaimed_dispatches(now, user_id=user_id)
     async with AsyncSessionLocal() as session:
         async with session.begin():
             task_alias = aliased(ResearchTask)
