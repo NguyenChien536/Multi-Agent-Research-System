@@ -78,6 +78,8 @@ jobs:
     env:
       DATABASE_URL: postgresql+asyncpg://research_test:ci_only_password@127.0.0.1:5432/research_test
       POSTGRES_SYNC_URL: postgresql://research_test:ci_only_password@127.0.0.1:5432/research_test
+      TEST_DATABASE_URL: postgresql+asyncpg://research_test:ci_only_password@127.0.0.1:5432/research_test
+      TEST_POSTGRES_SYNC_URL: postgresql://research_test:ci_only_password@127.0.0.1:5432/research_test
       APP_SECRET_KEY: ci-only-secret-not-used-outside-github-actions
       ENVIRONMENT: development
       MOCK_PROVIDERS: 'true'
