@@ -56,9 +56,9 @@ def route_after_analyst(state: ResearchState) -> str:
 def route_after_methodologist(state: ResearchState) -> str:
     """
     Định tuyến sau Methodologist:
-    - Nếu research_type == "EMPIRICAL_HUMAN" và chưa có user_data_submission:
+    - Nếu nghiên cứu thực nghiệm cần dữ liệu ngoài hệ thống mà chưa có:
       tạm dừng tại wait_user_data (trả về worker, giải phóng worker lease).
-    - Nếu research_type == "EMPIRICAL_COMPUTATIONAL":
+    - Nếu EMPIRICAL_COMPUTATIONAL có dataset CSV người dùng đã tải lên:
       chuyển sang Experiment Runner để chạy pipeline thực nghiệm tính toán.
     - Ngược lại (đã có user_data_submission hoặc là dạng bài khác):
       chuyển sang Writer để viết bài báo hoàn chỉnh.
@@ -66,6 +66,8 @@ def route_after_methodologist(state: ResearchState) -> str:
     if state.get("research_type") == "EMPIRICAL_HUMAN" and not state.get("user_data_submission"):
         return "wait_user_data"
     if state.get("research_type") == "EMPIRICAL_COMPUTATIONAL":
+        if not state.get("dataset_csv"):
+            return "wait_user_data"
         return "experiment_runner"
     return "writer"
 

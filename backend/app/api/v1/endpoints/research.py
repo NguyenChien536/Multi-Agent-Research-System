@@ -43,6 +43,7 @@ from app.services.pdf_parser import (
     PdfOcrRequiredError,
     PdfValidationError,
 )
+from app.services.upload_reader import read_upload_with_limit, UploadSizeLimitExceeded
 from app.tools.embedder import EmbedderTool
 
 router = APIRouter()
@@ -374,7 +375,12 @@ async def upload_task_pdf(
 
     # 3. Đọc dữ liệu file
     try:
-        content = await file.read()
+        content = await read_upload_with_limit(file, settings.MAX_UPLOAD_SIZE_BYTES)
+    except UploadSizeLimitExceeded:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Dung lượng file vượt quá giới hạn cho phép (tối đa {settings.MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)} MiB).",
+        )
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Lỗi khi đọc file tải lên: {e}")
 
@@ -800,20 +806,33 @@ async def upload_task_dataset(
 ):
     """Tải lên tập dữ liệu định dạng CSV cho bài nghiên cứu thực nghiệm tính toán (EMPIRICAL_COMPUTATIONAL)."""
     task = await db.scalar(
-        select(ResearchTask).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        select(ResearchTask)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .with_for_update()
     )
     if not task:
         raise HTTPException(status_code=404, detail="Research task not found")
+    if task.research_type != "EMPIRICAL_COMPUTATIONAL":
+        raise HTTPException(status_code=409, detail="CSV dataset chỉ dùng cho nghiên cứu thực nghiệm tính toán")
+    if task.status not in {"PENDING", "WAITING_APPROVAL", "WAITING_USER_DATA"}:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Không thể thay dataset khi task ở trạng thái {task.status}",
+        )
 
     filename = file.filename or "dataset.csv"
     if not filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="Chỉ chấp nhận tệp định dạng .csv")
 
-    content = await file.read()
+    try:
+        content = await read_upload_with_limit(file, settings.MAX_UPLOAD_SIZE_BYTES)
+    except UploadSizeLimitExceeded:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Dung lượng tệp vượt quá giới hạn cho phép (tối đa {settings.MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)} MiB)",
+        )
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Tệp CSV trống (0 bytes)")
-    if len(content) > 10 * 1024 * 1024:  # 10MB limit
-        raise HTTPException(status_code=413, detail="Dung lượng tệp vượt quá giới hạn cho phép (tối đa 10MB)")
 
     try:
         csv_text = content.decode("utf-8")
@@ -841,6 +860,33 @@ async def upload_task_dataset(
     db.add(art)
     await db.flush()
     art.download_url = f"/api/v1/research/{task.id}/artifacts/{art.id}/download"
+
+    # Uploading the required dataset resumes a computational study that paused
+    # at WAITING_USER_DATA. Reuse the durable outbox row to avoid losing the
+    # resume event if the broker is temporarily unavailable.
+    if task.status == "WAITING_USER_DATA":
+        task.status = "QUEUED"
+        task.current_step = None
+        task.queued_at = datetime.now(timezone.utc)
+        task.worker_lease_until = None
+        outbox_res = await db.execute(
+            select(TaskDispatchOutbox)
+            .where(
+                TaskDispatchOutbox.research_task_id == task.id,
+                TaskDispatchOutbox.event_type == "START_RESEARCH",
+            )
+            .with_for_update()
+        )
+        outbox_item = outbox_res.scalar_one_or_none()
+        if outbox_item:
+            outbox_item.dispatched_at = None
+            outbox_item.locked_until = None
+            outbox_item.last_error = None
+            outbox_item.available_at = datetime.now(timezone.utc)
+            outbox_item.attempts = 0
+        else:
+            db.add(TaskDispatchOutbox(research_task_id=task.id, event_type="START_RESEARCH"))
+
     await db.commit()
 
     return DatasetUploadResponse(

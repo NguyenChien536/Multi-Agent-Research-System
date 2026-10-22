@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import hashlib
 import time
 import uuid
 from datetime import datetime, timezone
@@ -662,7 +663,7 @@ async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
     """
     Experiment Runner Node (Phase 5):
     - Chạy routine tính toán chuẩn tabular_regression_v1 cho bài nghiên cứu dạng EMPIRICAL_COMPUTATIONAL.
-    - Sử dụng dataset_csv do người dùng nạp, hoặc tự sinh tập benchmark dữ liệu số đối chuẩn phù hợp.
+    - Chỉ sử dụng dataset_csv do người dùng nạp; không tạo dữ liệu giả cho bài nghiên cứu.
     - Thực hiện kiểm tái lập (repeatability verification) tự động bằng lần chạy thứ hai từ cùng manifest.
     - Sinh các mục sổ nhật ký thí nghiệm ExperimentJournalEntry (append-only) theo chuẩn ADR-005.
     """
@@ -674,23 +675,12 @@ async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
     task_id_str = state.get("task_id")
     dataset_csv = state.get("dataset_csv")
 
-    if not dataset_csv:
-        import random
-        # Tự sinh tập dữ liệu số chuẩn hóa (50 mẫu, 3 đặc trưng, 1 mục tiêu hồi quy)
-        header = "feature_1,feature_2,feature_3,target_metric\n"
-        rng = random.Random(42)
-        rows_str = []
-        for _ in range(50):
-            x1 = round(rng.uniform(10.0, 50.0), 2)
-            x2 = round(rng.uniform(1.0, 10.0), 2)
-            x3 = round(rng.uniform(100.0, 500.0), 2)
-            y = round(2.5 * x1 - 1.2 * x2 + 0.05 * x3 + rng.uniform(-5.0, 5.0), 2)
-            rows_str.append(f"{x1},{x2},{x3},{y}")
-        dataset_csv = header + "\n".join(rows_str)
-
     from app.services.experiment_runner import run_tabular_regression_v1, verify_repeatability
 
     try:
+        if not dataset_csv:
+            raise ValueError("A user-provided CSV dataset is required for computational empirical analysis")
+
         run_result = run_tabular_regression_v1(dataset_csv, seed=42)
         passed, diff = verify_repeatability(dataset_csv, run_result)
 
@@ -804,6 +794,74 @@ async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
             duration_ms=duration_ms,
             error_message=str(exc),
         )
+        # A failed execution is a technical failure, not a negative scientific
+        # result. Preserve a failed AnalysisRun and append-only journal entries
+        # even though the graph cannot continue to Writer.
+        if task_id_str:
+            try:
+                from app.core.database import AsyncSessionLocal
+                from app.models.experiment import AnalysisRun, ExperimentJournalEntry
+
+                checksum = (
+                    hashlib.sha256(dataset_csv.strip().encode("utf-8")).hexdigest()
+                    if dataset_csv
+                    else None
+                )
+                dataset_artifact_id = state.get("dataset_artifact_id")
+                try:
+                    parsed_dataset_artifact_id = (
+                        uuid.UUID(str(dataset_artifact_id)) if dataset_artifact_id else None
+                    )
+                except (TypeError, ValueError):
+                    logger.warning("Ignoring invalid dataset artifact ID for task %s", task_id_str)
+                    parsed_dataset_artifact_id = None
+                safe_error = f"{type(exc).__name__}: {str(exc)[:500]}"
+                async with AsyncSessionLocal() as session:
+                    failed_run = AnalysisRun(
+                        research_task_id=uuid.UUID(str(task_id_str)),
+                        routine_name="tabular_regression_v1",
+                        status="FAILED",
+                        dataset_artifact_id=parsed_dataset_artifact_id,
+                        input_checksum=checksum,
+                        manifest={
+                            "manifest_version": "1.0",
+                            "routine_name": "tabular_regression_v1",
+                            "input_checksum": checksum,
+                            "parameters": {"seed": 42},
+                        },
+                        reproducibility_status="NOT_RUN",
+                        error_message=safe_error,
+                        completed_at=datetime.now(timezone.utc),
+                    )
+                    session.add(failed_run)
+                    await session.flush()
+                    session.add_all([
+                        ExperimentJournalEntry(
+                            research_task_id=failed_run.research_task_id,
+                            analysis_run_id=failed_run.id,
+                            sequence=1,
+                            kind="STARTED",
+                            actor="SYSTEM",
+                            payload={"routine_name": "tabular_regression_v1", "input_checksum": checksum},
+                            artifact_ids=(
+                                [str(parsed_dataset_artifact_id)] if parsed_dataset_artifact_id else []
+                            ),
+                        ),
+                        ExperimentJournalEntry(
+                            research_task_id=failed_run.research_task_id,
+                            analysis_run_id=failed_run.id,
+                            sequence=2,
+                            kind="EXECUTION_RESULT",
+                            actor="SYSTEM",
+                            payload={"status": "TECHNICAL_FAILURE", "error": safe_error},
+                            artifact_ids=(
+                                [str(parsed_dataset_artifact_id)] if parsed_dataset_artifact_id else []
+                            ),
+                        ),
+                    ])
+                    await session.commit()
+            except Exception:
+                logger.exception("Failed to persist technical experiment failure for task %s", task_id_str)
         raise
 
 async def writer_node(state: ResearchState) -> Dict[str, Any]:

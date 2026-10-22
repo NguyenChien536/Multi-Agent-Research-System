@@ -5,6 +5,9 @@ import math
 import random
 from typing import Any, Dict, List, Optional, Tuple
 
+MAX_DATASET_ROWS = 10_000
+MAX_DATASET_COLUMNS = 51  # target + at most 50 features
+
 
 class ExperimentError(Exception):
     """Base exception for experiment routine errors."""
@@ -26,7 +29,8 @@ def parse_csv_dataset(csv_text: str) -> Tuple[List[str], List[Dict[str, Any]]]:
     if not csv_text or not csv_text.strip():
         raise InvalidInputError("CSV dataset is empty")
 
-    f = io.StringIO(csv_text.strip())
+    # UTF-8 CSV exports from spreadsheet tools commonly include a BOM.
+    f = io.StringIO(csv_text.lstrip("\ufeff").strip(), newline="")
     reader = csv.reader(f)
     try:
         header = next(reader)
@@ -36,6 +40,14 @@ def parse_csv_dataset(csv_text: str) -> Tuple[List[str], List[Dict[str, Any]]]:
     header = [col.strip() for col in header]
     if not header or any(len(c) == 0 for c in header):
         raise InvalidInputError("CSV header is invalid or has empty column names")
+    normalized_headers = [column.casefold() for column in header]
+    if len(set(normalized_headers)) != len(normalized_headers):
+        raise InvalidInputError("CSV header contains duplicate column names")
+    if len(header) > MAX_DATASET_COLUMNS:
+        raise InvalidInputError(
+            f"Dataset has {len(header)} columns; maximum supported is {MAX_DATASET_COLUMNS} "
+            "(one target and up to 50 features)"
+        )
 
     rows: List[Dict[str, Any]] = []
     for row_idx, raw_row in enumerate(reader, start=1):
@@ -52,10 +64,18 @@ def parse_csv_dataset(csv_text: str) -> Tuple[List[str], List[Dict[str, Any]]]:
                 row_dict[col_name] = None
             else:
                 try:
-                    row_dict[col_name] = float(v_str)
+                    numeric_value = float(v_str)
                 except ValueError:
                     row_dict[col_name] = v_str
+                else:
+                    if not math.isfinite(numeric_value):
+                        raise InvalidInputError(
+                            f"Row {row_idx} column '{col_name}' contains a non-finite numeric value"
+                        )
+                    row_dict[col_name] = numeric_value
         rows.append(row_dict)
+        if len(rows) > MAX_DATASET_ROWS:
+            raise InvalidInputError(f"Dataset exceeds the maximum of {MAX_DATASET_ROWS} rows")
 
     if len(rows) < 10:
         raise InvalidInputError(f"Dataset has only {len(rows)} rows; minimum 10 rows required for 80/20 train/test evaluation")
@@ -113,6 +133,18 @@ def run_tabular_regression_v1(
     input_checksum = hashlib.sha256(csv_text.strip().encode("utf-8")).hexdigest()
     headers, rows = parse_csv_dataset(csv_text)
 
+    try:
+        alpha = float(alpha)
+        test_size = float(test_size)
+    except (TypeError, ValueError) as exc:
+        raise InvalidInputError("alpha and test_size must be numeric") from exc
+    if not math.isfinite(alpha) or alpha <= 0:
+        raise InvalidInputError("alpha must be a finite number greater than zero")
+    if not math.isfinite(test_size) or not 0.0 < test_size < 1.0:
+        raise InvalidInputError("test_size must be a finite value strictly between 0 and 1")
+    if type(seed) is not int:
+        raise InvalidInputError("seed must be an integer")
+
     # 1. Determine numeric columns
     numeric_cols = []
     for col in headers:
@@ -134,7 +166,9 @@ def run_tabular_regression_v1(
         target_col = numeric_cols[-1]
 
     # 3. Select feature columns & guard against target leakage
-    if feature_columns:
+    if feature_columns is not None:
+        if len({column.casefold() for column in feature_columns}) != len(feature_columns):
+            raise InvalidInputError("Feature columns must not contain duplicates")
         for f in feature_columns:
             if f not in headers:
                 raise InvalidInputError(f"Specified feature column '{f}' not found in CSV headers")
@@ -171,6 +205,8 @@ def run_tabular_regression_v1(
     rng.shuffle(indices)
 
     train_count = int(len(clean_data) * (1.0 - test_size))
+    if train_count < 2 or len(clean_data) - train_count < 2:
+        raise InvalidInputError("Train and test partitions must each contain at least 2 valid rows")
     train_indices = indices[:train_count]
     test_indices = indices[train_count:]
 
@@ -220,7 +256,6 @@ def run_tabular_regression_v1(
     # Baseline
     base_mae = sum(abs(y_test[i] - y_pred_baseline[i]) for i in range(n_test)) / n_test
     base_rmse = math.sqrt(sum((y_test[i] - y_pred_baseline[i]) ** 2 for i in range(n_test)) / n_test)
-    base_r2 = 0.0
 
     # Ridge
     ridge_mae = sum(abs(y_test[i] - y_pred_ridge[i]) for i in range(n_test)) / n_test
@@ -228,7 +263,11 @@ def run_tabular_regression_v1(
 
     y_test_mean = sum(y_test) / n_test
     ss_tot = sum((y_test[i] - y_test_mean) ** 2 for i in range(n_test))
+    base_ss_res = sum((y_test[i] - y_pred_baseline[i]) ** 2 for i in range(n_test))
     ss_res = sum((y_test[i] - y_pred_ridge[i]) ** 2 for i in range(n_test))
+    # Match the common finite R² convention for a constant held-out target:
+    # return 0.0 because R² is undefined when total variance is zero.
+    base_r2 = 1.0 - (base_ss_res / ss_tot) if ss_tot > 1e-12 else 0.0
     ridge_r2 = 1.0 - (ss_res / ss_tot) if ss_tot > 1e-12 else 0.0
 
     delta_mae = ridge_mae - base_mae
@@ -285,6 +324,11 @@ def run_tabular_regression_v1(
         "intercept": round(y_train_mean, 6),
     }
 
+    raw_metrics = {
+        "baseline": {"mae": base_mae, "rmse": base_rmse, "r2": base_r2},
+        "model": {"mae": ridge_mae, "rmse": ridge_rmse, "r2": ridge_r2},
+    }
+
     chart_data = {
         "samples": [
             {
@@ -327,6 +371,9 @@ def run_tabular_regression_v1(
         "input_checksum": input_checksum,
         "manifest": manifest,
         "metrics": metrics,
+        # Kept separate so API/report artifacts remain rounded while the
+        # repeatability check compares full-precision calculation results.
+        "raw_metrics": raw_metrics,
         "chart_data": chart_data,
         "readme_markdown": readme_markdown,
         "verdict": verdict,
@@ -337,12 +384,37 @@ def verify_repeatability(
     csv_text: str,
     original_result: Dict[str, Any],
     tolerance: float = 1e-8,
+    relative_tolerance: float = 1e-6,
 ) -> Tuple[bool, Dict[str, Any]]:
     """
     Reruns the exact routine with identical manifest and input.
     Verifies repeatability tolerance (abs <= 1e-8 or rel <= 1e-6).
     """
     manifest = original_result.get("manifest", {})
+    input_checksum = hashlib.sha256(csv_text.strip().encode("utf-8")).hexdigest()
+    if original_result.get("input_checksum") != input_checksum:
+        return False, {
+            "status": "FAILED",
+            "reason": "INPUT_CHECKSUM_MISMATCH",
+            "expected_checksum": original_result.get("input_checksum"),
+            "actual_checksum": input_checksum,
+            "tolerance": tolerance,
+            "relative_tolerance": relative_tolerance,
+        }
+    if manifest.get("input_checksum") != input_checksum:
+        return False, {
+            "status": "FAILED",
+            "reason": "MANIFEST_CHECKSUM_MISMATCH",
+            "tolerance": tolerance,
+            "relative_tolerance": relative_tolerance,
+        }
+    if (
+        not math.isfinite(tolerance)
+        or tolerance < 0
+        or not math.isfinite(relative_tolerance)
+        or relative_tolerance < 0
+    ):
+        raise InvalidInputError("Repeatability tolerances must be finite non-negative numbers")
     params = manifest.get("parameters", {})
     target_col = manifest.get("target_column")
     feat_cols = manifest.get("feature_columns")
@@ -356,20 +428,61 @@ def verify_repeatability(
         seed=params.get("seed", 42),
     )
 
-    orig_m = original_result.get("metrics", {}).get("model", {})
-    rerun_m = rerun_result.get("metrics", {}).get("model", {})
+    if rerun_result.get("manifest") != manifest:
+        return False, {
+            "status": "FAILED",
+            "reason": "MANIFEST_MISMATCH",
+            "tolerance": tolerance,
+            "relative_tolerance": relative_tolerance,
+        }
 
-    diff_mae = abs(orig_m.get("mae", 0.0) - rerun_m.get("mae", 0.0))
-    diff_rmse = abs(orig_m.get("rmse", 0.0) - rerun_m.get("rmse", 0.0))
-    diff_r2 = abs(orig_m.get("r2", 0.0) - rerun_m.get("r2", 0.0))
+    original_metrics = original_result.get("raw_metrics")
+    rerun_metrics = rerun_result.get("raw_metrics")
+    if not isinstance(original_metrics, dict) or not isinstance(rerun_metrics, dict):
+        return False, {
+            "status": "FAILED",
+            "reason": "RAW_METRICS_MISSING",
+            "tolerance": tolerance,
+            "relative_tolerance": relative_tolerance,
+        }
 
-    passed = (diff_mae <= tolerance) and (diff_rmse <= tolerance) and (diff_r2 <= tolerance)
+    diffs: Dict[str, float] = {}
+    comparisons: Dict[str, bool] = {}
+    for group in ("baseline", "model"):
+        for metric in ("mae", "rmse", "r2"):
+            original_value = original_metrics.get(group, {}).get(metric)
+            rerun_value = rerun_metrics.get(group, {}).get(metric)
+            if (
+                not isinstance(original_value, (int, float))
+                or not isinstance(rerun_value, (int, float))
+                or not math.isfinite(original_value)
+                or not math.isfinite(rerun_value)
+            ):
+                return False, {
+                    "status": "FAILED",
+                    "reason": "INVALID_RAW_METRIC",
+                    "metric": f"{group}.{metric}",
+                    "tolerance": tolerance,
+                    "relative_tolerance": relative_tolerance,
+                }
+            key = f"{group}.{metric}"
+            diff = abs(original_value - rerun_value)
+            relative_limit = relative_tolerance * max(abs(original_value), abs(rerun_value))
+            diffs[key] = diff
+            comparisons[key] = diff <= tolerance or diff <= relative_limit
+
+    passed = all(comparisons.values())
 
     diff_report = {
-        "diff_mae": diff_mae,
-        "diff_rmse": diff_rmse,
-        "diff_r2": diff_r2,
+        "differences": diffs,
+        "comparisons": comparisons,
+        # Retain the former public keys for clients while the canonical report
+        # now includes baseline and model metrics at full precision.
+        "diff_mae": diffs.get("model.mae"),
+        "diff_rmse": diffs.get("model.rmse"),
+        "diff_r2": diffs.get("model.r2"),
         "tolerance": tolerance,
+        "relative_tolerance": relative_tolerance,
         "status": "PASSED" if passed else "FAILED",
     }
 

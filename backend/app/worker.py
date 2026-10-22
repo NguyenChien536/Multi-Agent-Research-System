@@ -167,7 +167,12 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     art_file_path = artifact_store.get_artifact_path(task.id, dataset_art.file_path)
                     if art_file_path and art_file_path.is_file():
                         try:
-                            preloaded_dataset_csv = art_file_path.read_text(encoding="utf-8")
+                            dataset_bytes = art_file_path.read_bytes()
+                            try:
+                                preloaded_dataset_csv = dataset_bytes.decode("utf-8-sig")
+                            except UnicodeDecodeError:
+                                # Match the upload validator's legacy Latin-1 fallback.
+                                preloaded_dataset_csv = dataset_bytes.decode("latin-1")
                         except Exception as e:
                             logger.warning("Could not read uploaded dataset artifact for task %s: %s", task_id, e)
 
@@ -187,6 +192,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 "protocol_artifact_id": str(task.protocol_artifact_id) if task.protocol_artifact_id else None,
                 "user_data_submission": task.user_data_submission or None,
                 "dataset_csv": preloaded_dataset_csv,
+                "dataset_artifact_id": str(uploaded_dataset_art_id) if uploaded_dataset_art_id else None,
                 "current_iteration": task.current_iteration,
                 "current_micro_revision": 0,
                 "max_iterations": task.max_iterations,
@@ -222,7 +228,11 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                         return {"status": "SUPERSEDED", "task_id": task_id}
 
                     task.status = "WAITING_USER_DATA"
-                    task.current_step = "Methodologist"
+                    task.current_step = (
+                        "Waiting for dataset"
+                        if getattr(task, "research_type", "REVIEW") == "EMPIRICAL_COMPUTATIONAL"
+                        else "Methodologist"
+                    )
 
                     proto_info = final_state.get("protocol") or {}
                     markdown_content = proto_info.get("protocol_markdown") or ""
@@ -449,7 +459,9 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 task.status = "FAILED"
                 task.completed_at = datetime.now(timezone.utc)
                 task.worker_lease_until = None
-                error_msg = f"ERROR: {str(e)}"
+                # Detailed provider/runtime exceptions stay in server logs;
+                # do not expose arbitrary exception text through task.description.
+                error_msg = f"ERROR: Research workflow failed ({type(e).__name__})."
                 task.description = f"{task.description}\n\n{error_msg}" if task.description else error_msg
 
                 from app.models.agent_run import AgentRun

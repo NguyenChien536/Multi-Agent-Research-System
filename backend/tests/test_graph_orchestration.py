@@ -1072,20 +1072,114 @@ async def test_ssrf_redirect_following_disabled(monkeypatch):
     public_url = "https://public.example.com/page"
     call_log: list[str] = []
 
-    async def _allow_public_target(_url: str) -> None:
-        return None
+    async def _allow_public_target(_url: str):
+        return "https://93.184.216.34/page", "public.example.com", {
+            "sni_hostname": b"public.example.com"
+        }
 
-    async def _fake_get(_client, url, **kwargs):
-        call_log.append(str(url))
-        return httpx.Response(
-            302,
-            headers={"Location": redirect_target},
-            request=httpx.Request("GET", str(url)),
-        )
+    class FakeResponse:
+        status_code = 302
+        headers = {"Location": redirect_target}
+        encoding = "utf-8"
 
-    monkeypatch.setattr(scraper, "_check_ssrf", _allow_public_target)
-    monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        def raise_for_status(self):
+            request = httpx.Request("GET", "https://93.184.216.34/page")
+            response = httpx.Response(302, headers=self.headers, request=request)
+            response.raise_for_status()
+
+        async def aiter_bytes(self):
+            yield b""
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            assert kwargs["follow_redirects"] is False
+            assert kwargs["trust_env"] is False
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        def stream(self, method, url, **kwargs):
+            call_log.append(str(url))
+            assert method == "GET"
+            assert kwargs["headers"]["Host"] == "public.example.com"
+            return FakeResponse()
+
+    monkeypatch.setattr(scraper, "_validated_target", _allow_public_target)
+    monkeypatch.setattr("app.tools.scraper.httpx.AsyncClient", FakeClient)
     result = await scraper.fetch_and_extract(public_url)
 
     assert result is None, "A redirect response must not be treated as page content"
-    assert call_log == [public_url], "The private redirect target must never be requested"
+    assert call_log == ["https://93.184.216.34/page"], "The private redirect target must never be requested"
+
+
+@pytest.mark.asyncio
+async def test_ssrf_pins_resolved_public_ip_and_preserves_host_and_tls_sni(monkeypatch):
+    scraper = ScraperTool()
+
+    async def _public_dns(_hostname: str) -> set[str]:
+        return {"93.184.216.34"}
+
+    monkeypatch.setattr(scraper, "_resolve_ips", _public_dns)
+    pinned_url, host_header, extensions = await scraper._validated_target(
+        "https://public.example.com:8443/research?q=1"
+    )
+
+    assert pinned_url == "https://93.184.216.34:8443/research?q=1"
+    assert host_header == "public.example.com:8443"
+    assert extensions == {"sni_hostname": b"public.example.com"}
+
+
+@pytest.mark.asyncio
+async def test_scraper_stops_reading_oversized_response(monkeypatch):
+    import httpx
+    import app.tools.scraper as scraper_module
+
+    scraper = ScraperTool()
+    monkeypatch.setattr(scraper_module, "MAX_RESPONSE_BYTES", 5)
+
+    async def _validated_target(_url: str):
+        return "https://93.184.216.34/page", "public.example.com", {
+            "sni_hostname": b"public.example.com"
+        }
+
+    class FakeResponse:
+        headers = {}
+        encoding = "utf-8"
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        def raise_for_status(self):
+            return None
+
+        async def aiter_bytes(self):
+            yield b"123456"
+
+    class FakeClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        def stream(self, *_args, **_kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(scraper, "_validated_target", _validated_target)
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+    assert await scraper.fetch_and_extract("https://public.example.com/page") is None
