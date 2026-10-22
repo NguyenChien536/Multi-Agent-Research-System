@@ -74,6 +74,7 @@ class TaskDispatchOutbox(Base):
     research_task_id = Column(UUID(as_uuid=True), ForeignKey("research_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
     event_type = Column(String(40), nullable=False, default="START_RESEARCH")
     attempts = Column(Integer, nullable=False, default=0)
+    unclaimed_retries = Column(Integer, nullable=False, default=0, server_default="0")
     available_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
     locked_until = Column(DateTime(timezone=True), nullable=True)
     dispatched_at = Column(DateTime(timezone=True), nullable=True, index=True)

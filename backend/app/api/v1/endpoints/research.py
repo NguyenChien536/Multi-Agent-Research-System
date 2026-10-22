@@ -157,6 +157,7 @@ async def start_research_task(
         outbox_item.last_error = None
         outbox_item.available_at = datetime.now(timezone.utc)
         outbox_item.attempts = 0
+        outbox_item.unclaimed_retries = 0
     else:
         db.add(TaskDispatchOutbox(research_task_id=task.id, event_type="START_RESEARCH"))
 
@@ -600,6 +601,7 @@ async def approve_research_plan(
         outbox_item.last_error = None
         outbox_item.available_at = datetime.now(timezone.utc)
         outbox_item.attempts = 0
+        outbox_item.unclaimed_retries = 0
     else:
         db.add(TaskDispatchOutbox(research_task_id=task.id, event_type="START_RESEARCH"))
 
@@ -654,6 +656,7 @@ async def reject_research_plan(
         outbox_item.last_error = None
         outbox_item.available_at = datetime.now(timezone.utc)
         outbox_item.attempts = 0
+        outbox_item.unclaimed_retries = 0
     else:
         db.add(TaskDispatchOutbox(research_task_id=task.id, event_type="START_RESEARCH"))
 
@@ -747,6 +750,7 @@ async def resume_research_with_data(
         outbox_item.last_error = None
         outbox_item.available_at = datetime.now(timezone.utc)
         outbox_item.attempts = 0
+        outbox_item.unclaimed_retries = 0
     else:
         db.add(TaskDispatchOutbox(research_task_id=task.id, event_type="START_RESEARCH"))
 
@@ -884,6 +888,7 @@ async def upload_task_dataset(
             outbox_item.last_error = None
             outbox_item.available_at = datetime.now(timezone.utc)
             outbox_item.attempts = 0
+            outbox_item.unclaimed_retries = 0
         else:
             db.add(TaskDispatchOutbox(research_task_id=task.id, event_type="START_RESEARCH"))
 
