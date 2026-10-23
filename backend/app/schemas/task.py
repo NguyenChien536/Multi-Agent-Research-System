@@ -78,11 +78,13 @@ class PlanRejectRequest(BaseModel):
 
 
 class UserDataResumeRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     sample_size: int = Field(..., ge=1, description="Sample size or observation count from fieldwork/lab")
-    method_notes: str = Field(..., min_length=10, description="Fieldwork/lab execution notes and procedure")
-    results_summary: str = Field(..., min_length=10, description="Summary of collected observations, metrics, or raw results")
-    data_provenance: Optional[str] = Field(default=None, description="Origin and provenance information")
-    file_artifact_id: Optional[uuid.UUID] = Field(default=None, description="Optional linked data artifact ID")
+    method_notes: str = Field(..., min_length=10, max_length=5000, description="Fieldwork/lab execution notes and procedure")
+    results_summary: str = Field(..., min_length=10, max_length=20000, description="Summary of collected observations, metrics, or raw results")
+    data_provenance: str = Field(..., min_length=10, max_length=2000, description="Data origin, collection date and responsible researcher")
+    file_artifact_id: uuid.UUID = Field(..., description="Validated result file belonging to this research task")
 
 
 class ProtocolResponse(BaseModel):

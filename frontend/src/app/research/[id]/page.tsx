@@ -132,6 +132,32 @@ export default function WorkspacePage() {
   const [methodNotes, setMethodNotes] = useState('');
   const [resultsSummary, setResultsSummary] = useState('');
   const [dataProvenance, setDataProvenance] = useState('');
+  const [resultArtifactId, setResultArtifactId] = useState('');
+  const [isUploadingResult, setIsUploadingResult] = useState(false);
+  const [resultFileError, setResultFileError] = useState('');
+
+  const handleUploadResult = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !task) return;
+    setResultFileError('');
+    if (!/\.(csv|txt)$/i.test(file.name) || file.size > 5 * 1024 * 1024 || !file.size) {
+      setResultFileError('Chọn CSV hoặc TXT UTF-8 có dữ liệu, tối đa 5 MiB.');
+      e.target.value = '';
+      return;
+    }
+    setIsUploadingResult(true);
+    try {
+      const uploaded = await api.tasks.uploadFieldworkResult(task.id, file);
+      const updatedArtifacts = await api.tasks.getArtifacts(task.id);
+      setArtifacts(updatedArtifacts);
+      setResultArtifactId(uploaded.artifact_id);
+    } catch (err) {
+      setResultFileError(err instanceof Error ? err.message : 'Không thể tải tệp kết quả.');
+    } finally {
+      setIsUploadingResult(false);
+      e.target.value = '';
+    }
+  };
 
   const loadExperiments = useCallback(async () => {
     try {
@@ -451,8 +477,8 @@ export default function WorkspacePage() {
   const handleResumeWithData = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!task) return;
-    const parsedSize = parseInt(sampleSize.trim(), 10);
-    if (isNaN(parsedSize) || parsedSize < 1) {
+    const parsedSize = Number(sampleSize.trim());
+    if (!Number.isSafeInteger(parsedSize) || parsedSize < 1) {
       alert('Vui lòng nhập cỡ mẫu thực tế hợp lệ (số nguyên lớn hơn hoặc bằng 1).');
       return;
     }
@@ -464,13 +490,18 @@ export default function WorkspacePage() {
       alert('Vui lòng nhập tóm tắt kết quả thực nghiệm / thực địa (tối thiểu 10 ký tự).');
       return;
     }
+    if (!resultArtifactId || dataProvenance.trim().length < 10 || isUploadingResult) {
+      setResultFileError('Chọn tệp kết quả đã tải lên và mô tả nguồn gốc dữ liệu (ít nhất 10 ký tự).');
+      return;
+    }
     setIsResumingData(true);
     try {
       await api.tasks.resumeWithData(task.id, {
         sample_size: parsedSize,
         method_notes: methodNotes.trim(),
         results_summary: resultsSummary.trim(),
-        data_provenance: dataProvenance.trim() || undefined,
+        data_provenance: dataProvenance.trim(),
+        file_artifact_id: resultArtifactId,
       });
       setReloadKey(v => v + 1);
     } catch (err) {
@@ -726,7 +757,14 @@ export default function WorkspacePage() {
             </div>
           )}
 
-          {task.status === 'WAITING_USER_DATA' && (
+          {task.status === 'WAITING_USER_DATA' && task.research_type === 'EMPIRICAL_COMPUTATIONAL' && (
+            <div className="p-4 bg-indigo-50 border-b border-indigo-200 text-sm" role="status">
+              Bài tính toán đang chờ tập dữ liệu CSV. Tải dữ liệu trong mục Thực nghiệm để tiếp tục.
+              <Button variant="outline" className="ml-3" onClick={() => setActiveTab('experiments')}>Mở thực nghiệm</Button>
+            </div>
+          )}
+
+          {task.status === 'WAITING_USER_DATA' && task.research_type === 'EMPIRICAL_HUMAN' && (
             <div className="p-4 bg-indigo-50/80 border-b border-indigo-200 overflow-y-auto max-h-[32rem] shrink-0">
               <div className="max-w-4xl mx-auto space-y-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -785,7 +823,22 @@ export default function WorkspacePage() {
                 <form onSubmit={handleResumeWithData} className="p-4 bg-white rounded-xl border border-indigo-200/80 text-xs space-y-3 shadow-2xs">
                   <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
                     <span className="font-semibold text-indigo-950 text-sm">Cung cấp dữ liệu thực địa / thực nghiệm</span>
-                    <span className="text-[11px] text-zinc-400">* Bắt buộc tóm tắt kết quả</span>
+                    <span className="text-[11px] text-zinc-400">* Tệp kết quả và nguồn gốc là bắt buộc</span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="fieldwork-file" className="block font-medium">Tải tệp kết quả CSV/TXT UTF-8 (tối đa 5 MiB)</label>
+                    <input id="fieldwork-file" type="file" accept=".csv,.txt" onChange={handleUploadResult} disabled={isUploadingResult || isResumingData} />
+                    {isUploadingResult && <p role="status">Đang tải và kiểm tra tệp…</p>}
+                    <label htmlFor="fieldwork-artifact" className="block font-medium">Tệp dùng cho lần tiếp tục này</label>
+                    <select id="fieldwork-artifact" required value={resultArtifactId} onChange={e => setResultArtifactId(e.target.value)} disabled={isUploadingResult || isResumingData} className="w-full rounded-lg border border-zinc-300 p-2">
+                      <option value="">Chọn tệp kết quả đã tải lên</option>
+                      {artifacts.filter(a => ['USER_DATA_CSV', 'USER_DATA_TEXT'].includes(a.export_type)).map(a => (
+                        <option key={a.id} value={a.id}>{a.file_path.split('/').pop()}</option>
+                      ))}
+                    </select>
+                    <p className="text-zinc-600">Kết quả do bạn cung cấp, chưa được hệ thống xác minh độc lập. Ghi rõ cách thu thập, thời điểm và người chịu trách nhiệm; chỉ nạp dữ liệu đã loại bỏ thông tin định danh.</p>
+                    {resultFileError && <p role="alert" className="text-red-700">{resultFileError}</p>}
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -804,10 +857,13 @@ export default function WorkspacePage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-[11px] font-medium text-zinc-600 mb-1">Nguồn gốc / Xuất xứ dữ liệu (Data Provenance)</label>
+                      <label className="block text-[11px] font-medium text-zinc-600 mb-1">Nguồn gốc / Xuất xứ dữ liệu *</label>
                       <input
                         type="text"
                         value={dataProvenance}
+                        required
+                        minLength={10}
+                        maxLength={2000}
                         onChange={e => setDataProvenance(e.target.value)}
                         placeholder="VD: Khảo sát thực địa sinh viên Đại học Bách Khoa, 10/2026"
                         className="w-full px-3 py-1.5 text-xs rounded-lg border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-indigo-900"
@@ -824,6 +880,7 @@ export default function WorkspacePage() {
                       required
                       minLength={10}
                       value={methodNotes}
+                      maxLength={5000}
                       onChange={e => setMethodNotes(e.target.value)}
                       placeholder="VD: Bảng hỏi trực tuyến Google Forms, thang đo Likert 5 mức, xử lý dữ liệu với SPSS/Python"
                       className="w-full px-3 py-1.5 text-xs rounded-lg border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-indigo-900"
@@ -838,8 +895,10 @@ export default function WorkspacePage() {
                       rows={3}
                       required
                       value={resultsSummary}
+                      minLength={10}
+                      maxLength={20000}
                       onChange={e => setResultsSummary(e.target.value)}
-                      placeholder="VD: Kết quả phân tích cho thấy 84.5% đối tượng phản hồi ghi nhận mức độ cải thiện rõ rệt (p < 0.01). Hệ số tương quan r = 0.68 chứng minh mối quan hệ đồng biến giữa thời lượng sử dụng và hiệu quả công việc..."
+                      placeholder="Tóm tắt số liệu thực tế trong tệp, cách tính và các giới hạn. Không điền kết luận hoặc p-value chưa được phân tích."
                       className="w-full px-3 py-2 text-xs rounded-lg border border-zinc-300 focus:outline-none focus:ring-1 focus:ring-indigo-900 leading-relaxed"
                     />
                   </div>
@@ -849,6 +908,7 @@ export default function WorkspacePage() {
                       type="submit"
                       variant="primary"
                       isLoading={isResumingData}
+                      disabled={isUploadingResult || !resultArtifactId}
                       className="h-8 px-4 text-xs bg-indigo-900 hover:bg-indigo-950 text-white"
                     >
                       <Check size={14} className="mr-1.5" /> Gửi dữ liệu & Tiếp tục nghiên cứu

@@ -85,6 +85,17 @@ Tên tài nguyên dưới đây là **contract thiết kế**, implementation ph
 
 Các route rút gọn trong bảng đều ở `/api/v1`. Mã lỗi: 401 thiếu token, 404 không có quyền/tài nguyên, 409 stale version/state conflict, 413 vượt size, 422 sai schema/routine, 429 vượt quota. Operation lặp cùng key+payload trả cùng kết quả; cùng key khác payload trả 409. Upload nội dung lớn có thể 202 processing; UI chờ READY trước resume.
 
+### Contract đã triển khai 23/10 — intake thực địa (R1 / issue #39)
+
+Các route sau thuộc `/api/v1`, có bearer auth và owner scope. Chỉ dùng khi task là EMPIRICAL_HUMAN và đang WAITING_USER_DATA; không thay thế checkpoint/versioned decisions dự kiến ở R3.
+
+| Route | Input / output | Điều kiện và lỗi |
+|---|---|---|
+| POST /research/{id}/data/files | Multipart `file`; trả 201 với artifact_id, file_name, file_size_bytes, sha256_hash | CSV/TXT UTF-8 ≤5 MiB; CSV có header duy nhất, ≤30 cột/20.000 dòng. Giới hạn số file theo MAX_UPLOAD_FILES_PER_TASK. Không tự enqueue |
+| POST /research/{id}/data/resume | sample_size ≥1, method_notes 10–5.000 ký tự, results_summary 10–20.000, data_provenance 10–2.000, file_artifact_id bắt buộc | 200 với QUEUED sau cùng transaction lưu submission/outbox. 422 nếu thiếu/không hợp lệ; 404 sai owner/task; 409 sai type/state hoặc lần resume thứ hai |
+
+Artifact được nhận phải có loại USER_DATA_CSV/USER_DATA_TEXT, cùng task, có file bytes đúng kích thước và qua validation nội dung. Hiện chưa có cột trạng thái READY riêng; lưu thành công rồi kiểm lại lúc resume là điều kiện sẵn sàng. ID được serialize JSON; submission lưu checksum/trích đoạn có giới hạn và nhãn USER_SUPPLIED_NOT_INDEPENDENTLY_VERIFIED. Không coi việc đính kèm file là chứng minh tính đúng khoa học; không tự dựng AnalysisRun. UI cho chọn lại file đã upload sau reload, nhập provenance và gửi một lần tiếp tục.
+
 ## 5. Files và dữ liệu phân tích
 
 Private ArtifactStore dùng local volume cho bản nộp, có interface thay object storage sau này. DB lưu metadata/checksum, không file bytes. PDF chỉ text extraction trong giới hạn SRS; không hứa OCR. CSV numeric theo schema routine, không dùng RAG để tính thống kê.

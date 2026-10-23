@@ -28,3 +28,10 @@ class PdfUploadResponse(BaseModel):
     message: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FieldworkUploadResponse(BaseModel):
+    artifact_id: uuid.UUID
+    file_name: str
+    file_size_bytes: int
+    sha256_hash: str

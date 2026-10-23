@@ -1,0 +1,68 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const ts = require('typescript');
+
+const source = fs.readFileSync(path.join(__dirname, '../src/lib/api.ts'), 'utf8');
+const compiled = ts.transpileModule(source, { compilerOptions: {
+  module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020,
+} }).outputText;
+
+function client({ status = 200, response = {}, token = 'test-token' } = {}) {
+  const storage = new Map(token ? [['synthia_access_token', token]] : []);
+  const requests = [], redirects = [];
+  const context = { exports: {}, process: { env: {} }, Headers, FormData,
+    window: {
+      sessionStorage: { getItem: key => storage.get(key) || null,
+        setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
+      location: { pathname: '/research/example', search: '?tab=report', assign: url => redirects.push(url) },
+    },
+    fetch: async (url, config) => {
+      requests.push({ url, ...config });
+      return { ok: status < 400, status, json: async () => response };
+    },
+  };
+  vm.runInNewContext(compiled, context);
+  return { api: context.exports.api, requests, storage, redirects };
+}
+
+test('protected auth/me and task requests both include the session token', async () => {
+  const c = client();
+  await c.api.auth.me();
+  await c.api.tasks.list();
+  assert.equal(c.requests.length, 2);
+  for (const request of c.requests) assert.equal(request.headers.get('Authorization'), 'Bearer test-token');
+});
+
+test('login/register are public; successful login replaces the session', async () => {
+  const c = client({ response: { access_token: 'new-token' } });
+  await c.api.auth.register({ username: 'example' });
+  await c.api.auth.login('example@example.com', 'password');
+  for (const request of c.requests) assert.equal(request.headers.has('Authorization'), false);
+  assert.equal(c.storage.get('synthia_access_token'), 'new-token');
+});
+
+test('expired profile session is cleared and returns to login with a relative next path', async () => {
+  const c = client({ status: 401, response: { detail: 'expired' } });
+  await assert.rejects(c.api.auth.me(), error => error.status === 401);
+  assert.equal(c.storage.has('synthia_access_token'), false);
+  assert.deepEqual(c.redirects, ['/login?next=%2Fresearch%2Fexample%3Ftab%3Dreport']);
+});
+
+test('failed public login does not redirect or clear an unrelated stored session', async () => {
+  const c = client({ status: 401, response: { detail: 'bad credentials' } });
+  await assert.rejects(c.api.auth.login('email', 'bad'), error => error.status === 401);
+  assert.equal(c.redirects.length, 0);
+  assert.equal(c.storage.get('synthia_access_token'), 'test-token');
+});
+
+test('fieldwork upload uses authenticated multipart and shares expiry handling', async () => {
+  const c = client({ status: 401 });
+  await assert.rejects(c.api.tasks.uploadFieldworkResult('task', new Blob(['result'])), error => error.status === 401);
+  assert.equal(c.requests[0].headers.get('Authorization'), 'Bearer test-token');
+  assert.equal(c.requests[0].headers.has('Content-Type'), false);
+  assert.ok(c.requests[0].body instanceof FormData);
+  assert.equal(c.redirects.length, 1);
+});

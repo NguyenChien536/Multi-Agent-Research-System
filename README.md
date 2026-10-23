@@ -68,28 +68,24 @@ Curator/ingestion, router, citation validator, budget và runner là mô-đun co
 
 ## ✨ Năng lực và trạng thái
 
-Repository hiện là **prototype/scaffold đang phát triển**. Bảng này phân biệt mã/thiết kế hiện có với tính năng cần hoàn thiện; “có mã nguồn” không đồng nghĩa đã chạy hoặc được kiểm thử.
+**Cập nhật 22/10/2026:** source baseline `develop@3bbeb01`. Dự án đang phát triển; đã có nhiều chức năng P1–P5 nhưng chưa khép toàn bộ acceptance gates và chưa sẵn sàng production.
 
-| Năng lực | Trạng thái theo baseline 27/09/2026 | Ghi chú |
+| Năng lực | Bằng chứng gần nhất | Phần còn thiếu |
 |---|---|---|
-| FastAPI, schema/model và API quản lý task cơ bản | Có mã nguồn tại baseline | Route mẫu khi đó dùng `dummy_user_id`; code thay đổi sau baseline chưa được xác minh runtime. |
-| LangGraph state và node | Có implementation prototype | Graph compile và routing mẫu đã smoke-test; workflow end-to-end và citation/evidence flow chưa xác minh. |
-| Tavily search, scraping, embedding và pgvector retrieval | Có implementation trong source | Chưa xác minh provider thật hoặc ingestion/retrieval end-to-end. |
-| Next.js frontend | Có starter UI | Chưa kiểm tra UX/API integration end-to-end; frontend dùng polling; SSE, HITL và PDF export chưa hoàn tất. |
-| PostgreSQL/pgvector, Redis, Celery và Docker Compose | Đã chạy baseline trong môi trường phát triển 27/09/2026 | Health/OpenAPI, POST/GET task, worker ping và graph routing smoke-check đạt; không đồng nghĩa MVP/E2E đã nghiệm thu. |
+| Auth/ownership, outbox, quota RUNNING, worker recovery | Backend suite **74 passed**; PR #38 đã merge; GitHub CI **5/5 đạt** | Sửa client auth/me; cancellation/late writes và fault test runtime còn cần hoàn thiện |
+| Research/evidence/citation workflow | Có code và provider-mocked integration; biên bản 18/10 có report lịch sử còn lưu | Budget trước call, Critic toàn bài, provider smoke trên candidate hiện tại |
+| PDF, approval, human-led và computational routine | Đã triển khai các đường cơ bản và có tests | Intake UUID/provenance, checkpoint bền vững, runner riêng, journal trước execution |
+| Next.js frontend | Frontend local hiện tại **lint/build đạt**, đã nối nhiều API | Chưa kiểm browser E2E trong audit này; không coi build là nghiệm thu UX |
+| Runtime và deployment | DB migration `d1e2f3a4b5c6`; API **200**, Redis **PONG**, Celery **pong** | Compose dev; chưa có staging/restore/pilot để phát hành production |
 
-Không gọi hệ thống là “zero hallucination”. Citation tag trỏ tới nguồn/chunk là kiểm tra tính toàn vẹn tham chiếu; mức độ nguồn hỗ trợ nội dung claim phải đánh giá riêng bằng test set và/hoặc người thẩm định.
+[Kế hoạch triển khai](docs/project/implementation-plan.md) đã chốt thứ tự sửa và các chặng đến production. [Roadmap](docs/project/roadmap-and-progress.md) và [biên bản 22/10](docs/project/baseline-verification.md#kiem-tra-2026-10-22) ghi bằng chứng cùng giới hạn. **10/11 là mốc nộp/demo, chưa phải cam kết production.**
+
+Không gọi hệ thống là “zero hallucination”. Citation trỏ tới source/chunk là kiểm tra tham chiếu; mức độ nguồn hỗ trợ claim cần đánh giá ngữ nghĩa riêng.
 
 ## 📚 Tài liệu Dự án
 
-- [Định hướng đã chốt](docs/project/product-assessment.md), [Kế hoạch triển khai](docs/project/implementation-plan.md), [Kế hoạch đánh giá](docs/project/evaluation-plan.md), [Technical Design: chức năng/công nghệ/patterns](docs/architecture/technical-design.md).
-- [SRS hiện hành](docs/requirements/SRS.md) — yêu cầu, tiêu chí nghiệm thu, demo boundary và security gates.
-- [Báo cáo giữa kỳ](docs/project/midterm-report.md) — overview, problems/objectives, technical approach, system design, plan, progress và AI disclosure.
-- [System Design](docs/architecture/system-design.md) — nguồn chuẩn cho C4 Container, DFD, inference flow, async sequence, ERD, physical DFD và class diagram.
-- [High-Level Architecture](docs/architecture/system-architecture.md) — container responsibilities, trade-offs, reliability và release boundary.
-- [Roadmap và tiến độ](docs/project/roadmap-and-progress.md) — mốc thực hiện, phân công và progress theo evidence.
-- [Baseline Verification](docs/project/baseline-verification.md) — lệnh và kết quả chạy gần nhất.
-- [Toàn bộ docs](docs/README.md) — mục lục tài liệu theo đối tượng đọc.
+- Để biết **đọc gì, dự án đang ở đâu và làm gì tiếp theo**, bắt đầu tại [Hướng dẫn tài liệu dự án](docs/README.md).
+- [Báo cáo giữa kỳ](docs/project/midterm-report.md).
 
 ---
 
@@ -133,7 +129,7 @@ MultiAgent Research System/
 
 ## 🚀 Khởi chạy (chưa xác minh trên mọi môi trường)
 
-> **Prototype notice:** Baseline Docker đã chạy ngày 27/09/2026: bốn service lên, PostgreSQL/Redis healthy, Alembic hiện ở `5ee074153cf3 (head)`, health/OpenAPI và POST/GET task đạt smoke-check, worker ping và graph routing mẫu đạt. Chưa kiểm tra migration trên DB sạch hoặc chạy research workflow end-to-end; SSE chưa được tích hợp vào API và frontend hiện polling. Đây là bằng chứng môi trường phát triển, không phải nghiệm thu production.
+> **Trạng thái kiểm tra 22/10/2026:** local runtime và 74 backend tests đạt; frontend lint/build đạt. Các giới hạn và lỗi đã tái hiện được ghi ở [Roadmap](docs/project/roadmap-and-progress.md). Chưa có đủ evidence trên release candidate để coi là bản production; dùng [Implementation Plan](docs/project/implementation-plan.md) cho thứ tự triển khai.
 
 ### Yêu cầu Tiên quyết
 * [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/) (khuyên dùng v2.20+)
@@ -289,7 +285,7 @@ Sau khi tạo task, gọi endpoint `/start` để đưa tác vụ vào hàng đ�
 curl -X POST "http://localhost:8000/api/v1/research/67b8a1c9-3e2b-4fa8-9e6b-7cb85a123456/start"
 ```
 
-Endpoint đưa job vào Celery và worker có gọi LangGraph workflow trong source hiện tại. Tuy nhiên, baseline được ghi nhận chưa chạy workflow end-to-end với provider thật; chưa xác minh report/citation output, lỗi/retry và UI integration.
+Endpoint ghi yêu cầu chạy qua outbox để Celery worker gọi LangGraph. Tests ngày 22/10 dùng provider giả; biên bản 18/10 có ghi một run thật, nhưng chưa chạy lại provider/browser E2E trên candidate hiện tại. Kiểm budget, resume/cancel, report/citations và UI theo các gate trong kế hoạch trước khi phát hành.
 
 ---
 
