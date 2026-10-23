@@ -215,6 +215,11 @@ async def test_empirical_human_protocol_pause_and_resume(monkeypatch):
         assert "Nghiên cứu thực nghiệm" in (proto_data["content_markdown"] or "")
 
         # 5. Người dùng nạp kết quả thực nghiệm và bấm tiếp tục (POST /data/resume)
+        upload_res = await client.post(
+            f"/api/v1/research/{task_id}/data/files", headers=auth_headers,
+            files={"file": ("results.csv", b"sample_size,agreement_percent\n150,78\n", "text/csv")},
+        )
+        assert upload_res.status_code == 201, upload_res.text
         resume_res = await client.post(
             f"/api/v1/research/{task_id}/data/resume",
             headers=auth_headers,
@@ -223,6 +228,7 @@ async def test_empirical_human_protocol_pause_and_resume(monkeypatch):
                 "method_notes": "Khảo sát cắt ngang tại 3 bệnh viện đa khoa khu vực",
                 "results_summary": "78% mức độ đồng thuận giữa khuyến nghị của AI và hội đồng chuyên môn",
                 "data_provenance": "Khảo sát lâm sàng bệnh viện, Oct 2026",
+                "file_artifact_id": upload_res.json()["artifact_id"],
             },
         )
         assert resume_res.status_code == 200, resume_res.text

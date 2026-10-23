@@ -54,7 +54,9 @@ Ngày 22/10: **74 backend tests, FE lint/build đạt; G1–G7 chưa đạt đ�
 | R7 | Một report/task; Q&A/report versions chưa đầy đủ | ReportVersion/base version, Q&A theo evidence của version; thay data/method tạo run mới | Giữ bản cũ, không dùng result lỗi thời; export đúng owner/version; G6 |
 | R8 | Release image dùng dependency không khóa; Compose dev; chưa có deploy/restore gate | Release lockfile đã test, image bất biến; staging → production; readiness, backup/rollback | P8–P10 và checklist phát hành |
 
-**Bắt đầu R1 rồi R2.** R3 đi trước R4/R7; R5 khép đường REVIEW; R6 xong trước khi mở upload cho người ngoài. Chia mỗi hàng thành issue/PR nhỏ khoảng 1–2 ngày làm việc.
+**Cập nhật 23/10 — R1 / issue #39:** đã sửa client auth/me và intake file; local có 98 backend tests và 5 frontend tests đạt. File thực địa hiện hỗ trợ CSV/TXT UTF-8 ≤5 MiB, có provenance và chỉ nhận artifact cùng task đã lưu/kiểm nội dung thành công. Chưa có trạng thái READY riêng trong schema; kiểm file tồn tại/đúng loại/kích thước/nội dung tại resume là điều kiện sẵn sàng hiện tại. Đang hoàn tất PR/CI; chưa đóng toàn bộ G1/G4 hoặc xác nhận browser E2E. Bảng R1 phía trên lưu vấn đề và nghiệm thu của đầu việc.
+
+**Tiếp theo R2 sau khi PR R1 đạt.** R3 đi trước R4/R7; R5 khép đường REVIEW; R6 xong trước khi mở upload cho người ngoài. Chia mỗi hàng thành issue/PR nhỏ khoảng 1–2 ngày làm việc.
 
 **Khép sai khác contract:** R2 thống nhất server/schema/UI/tests với cap SRS (40 LLM calls, 2 USD ước tính, 15 phút active/run). R4 thống nhất CSV 5 MiB/20.000 hàng/30 cột; hiện code nhận giới hạn 10 MiB/10.000 hàng/51 cột. Không nâng số hàng trước khi đo runner 120 giây; khi chưa hỗ trợ phải từ chối rõ ràng và chưa đóng G5. R6/R8 xử lý cache riêng tư theo owner/task/version hoặc tắt cache đó, bao gồm invalidation khi xóa; không chỉ xóa file gốc.
 
@@ -159,4 +161,4 @@ Evaluation khoa học theo [Evaluation Plan](evaluation-plan.md): pilot 4 câu r
 - [ ] Docs/UI mô tả đúng tính năng mở, giới hạn, cách xóa dữ liệu và trách nhiệm kiểm tra của người nghiên cứu.
 - [ ] Chiến quyết định go/no-go theo evidence; main/tag cùng artifact đã kiểm; health/smoke sau deploy đạt.
 
-**Chốt planning:** giữ hướng sản phẩm và kiến trúc, ưu tiên tính đúng/phục hồi/đo được của chức năng hiện tại. Việc kế tiếp là **R1 rồi R2**. Chưa đủ điều kiện chốt phát hành production.
+**Chốt planning:** giữ hướng sản phẩm và kiến trúc, ưu tiên tính đúng/phục hồi/đo được của chức năng hiện tại. Hoàn tất PR R1 rồi triển khai **R2**. Chưa đủ điều kiện chốt phát hành production.

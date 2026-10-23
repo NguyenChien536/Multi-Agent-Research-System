@@ -118,6 +118,8 @@ jobs:
         run: npm ci
       - name: Build and typecheck Next.js
         run: npm run build
+      - name: Run frontend regression tests
+        run: npm test
 
   compose-build:
     name: Compose build

@@ -14,7 +14,7 @@
 
 ## Việc ngay tiếp theo
 
-1. Sửa lỗi gọi thông tin tài khoản và nhận file kết quả thực địa (**R1 trong plan**).
+1. Hoàn tất PR/CI cho sửa xác thực và nạp kết quả thực địa (**R1, issue #39**): code đã có, 98 backend tests và 5 frontend tests đạt local ngày 23/10.
 2. Đặt chặn ngân sách trước mỗi lần gọi dịch vụ AI, dừng việc tiếp tục khi người dùng hủy (**R2**).
 3. Hoàn thiện lưu/tiếp tục workflow, kiểm tra toàn bài, rồi khép các luồng nghiên cứu bằng thử nghiệm thực tế.
 4. Qua evaluation → staging → dùng thử giới hạn → production. **10/11 là mốc nộp/demo, chưa phải cam kết production.**

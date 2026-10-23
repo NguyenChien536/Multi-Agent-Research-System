@@ -27,9 +27,10 @@ async function fetcher<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
 
   const headers = new Headers(options?.headers);
-  if (options?.body) headers.set('Content-Type', 'application/json');
+  if (options?.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   const token = getAccessToken();
-  if (token && !endpoint.startsWith('/auth/')) headers.set('Authorization', `Bearer ${token}`);
+  const isPublicAuth = endpoint === '/auth/login' || endpoint === '/auth/register';
+  if (token && !isPublicAuth) headers.set('Authorization', `Bearer ${token}`);
 
   const config: RequestInit = {
     ...options,
@@ -41,7 +42,7 @@ async function fetcher<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const data = await response.json().catch(() => null);
 
     if (!response.ok) {
-      if (response.status === 401 && !endpoint.startsWith('/auth/')) {
+      if (response.status === 401 && !isPublicAuth) {
         clearAccessToken();
         if (typeof window !== 'undefined') {
           const next = `${window.location.pathname}${window.location.search}`;
@@ -166,6 +167,14 @@ export const api = {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
+
+    uploadFieldworkResult: (id: string, file: File) => {
+      const body = new FormData();
+      body.append('file', file);
+      return fetcher<{ artifact_id: string; file_name: string; sha256_hash: string }>(
+        `/research/${id}/data/files`, { method: 'POST', body },
+      );
+    },
 
     getExperiments: (id: string) =>
       fetcher<AnalysisRunResponse[]>(`/research/${id}/experiments`),

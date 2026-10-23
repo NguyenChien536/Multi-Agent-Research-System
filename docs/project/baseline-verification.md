@@ -1,5 +1,13 @@
 # Biên bản kiểm tra baseline kỹ thuật
 
+## R1 ngày 23/10/2026 — issue #39
+
+- Đã sửa A01/A02 ở audit 22/10 trên branch `bugfix/39-authenticated-fieldwork-intake`: profile gửi bearer/401 xử lý session; intake cần file/provenance, kiểm owner/task/type/file, UUID lưu JSON hợp lệ; UI có upload/chọn kết quả CSV/TXT và trạng thái đang tải. Kết quả người dùng không được gắn nhãn xác minh độc lập.
+- Database tạm `synthia_r1_test_cdd7b380`: migrate từ rỗng đến `d1e2f3a4b5c6`, **98 passed, 6 warnings trong 37.51s**; đã xóa DB/artifacts tạm sau kiểm tra. Provider giả; không chạy job người dùng hoặc test trên DB dev.
+- **5 frontend regression tests đạt** bằng `npm test`: protected auth/me, login/register, session expiry, failed login và authenticated multipart upload. Frontend CI đã thêm chạy suite này.
+- Ca mới gồm thiếu file/provenance, UUID, sai owner/cùng owner khác task, sai loại artifact/research, file mất/sai kích thước, file malformed/quá lớn/quota, và hai resume đồng thời chỉ tạo một outbox event.
+- Còn phải nghiệm thu browser/provider E2E của release và các yêu cầu R2–R8. Chưa có durable checkpoint/versioned decision (R3), ingest job riêng (R6) hoặc sandbox production. PR/CI được ghi cập nhật tại Roadmap; không đánh dấu G1/G4 hoàn thành chỉ từ R1.
+
 <a id="kiem-tra-2026-10-22"></a>
 
 ## Audit ngày 22/10/2026 — chức năng hiện có và điều kiện production

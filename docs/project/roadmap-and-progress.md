@@ -1,6 +1,10 @@
 # Roadmap và tiến độ — Synthia
 
-**Cập nhật:** 22/10/2026 · **Baseline:** develop@3bbeb01 · **Hạn nộp/demo:** 10/11/2026.
+**Cập nhật:** 23/10/2026 · **Baseline đã merge:** develop@3bbeb01 · **Hạn nộp/demo:** 10/11/2026.
+
+### Đang triển khai: R1 / issue #39
+
+Branch `bugfix/39-authenticated-fieldwork-intake`: sửa xác thực profile và tiếp nhận kết quả thực địa. API/UI đã có upload CSV/TXT riêng, bắt buộc provenance/file đúng owner/task, lưu UUID dạng JSON và snapshot/hash của dữ liệu do người dùng cung cấp. Upload không tự resume; resume lặp bị chặn bằng row lock/state. **98 backend tests + 5 frontend tests đạt local**; PR/CI đang được hoàn tất. Đây là sửa một phần G1/G4, không phải nghiệm thu toàn bộ các gate. Bảng audit 22/10 bên dưới là trạng thái baseline trước sửa; lỗi auth/me và UUID/intake đã được xử lý trên branch này.
 
 Tài liệu này trả lời **đã làm đến đâu và đã kiểm tra gì**. Thứ tự, lịch và ước lượng chỉ đặt tại [Implementation Plan](implementation-plan.md). Mỗi chặng có nhiều issue; merge code không tự làm gate của cả chặng đạt.
 
@@ -44,7 +48,7 @@ DB dev chứa nhiều dữ liệu thử lịch sử; có một task QUEUED trong
 
 ## 4. Việc tiếp theo theo thứ tự
 
-1. **R1:** sửa token auth/me và intake file/provenance/UUID; thêm regression cho các lỗi đã tái hiện.
+1. **R1:** hoàn tất review/CI và nhập PR issue #39 vào develop; source và regression đã được triển khai, không đưa lên main khi chưa đủ release gates.
 2. **R2:** kiểm soát ngân sách trước call và dừng ở ranh giới an toàn khi cancel.
 3. **R3/R5:** resume bền vững và review toàn bài; khép REVIEW thực với provider trong cap.
 4. **R4/R6/R7:** runner/journal độc lập, ingestion/deletion, Q&A/versions; nghiệm thu từng lát cắt.

@@ -190,8 +190,8 @@ export interface UserDataResumeRequest {
   sample_size: number;
   method_notes: string;
   results_summary: string;
-  data_provenance?: string;
-  file_artifact_id?: string;
+  data_provenance: string;
+  file_artifact_id: string;
 }
 
 export interface ProtocolResponse {

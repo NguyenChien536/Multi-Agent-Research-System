@@ -27,7 +27,7 @@ from app.schemas.task import (
 )
 from app.schemas.report import CitationItemResponse, ResearchReportResponse, ResearchSourceItemResponse
 from app.schemas.agent_run import AgentRunItemResponse
-from app.schemas.artifact import ArtifactItemResponse, PdfUploadResponse
+from app.schemas.artifact import ArtifactItemResponse, PdfUploadResponse, FieldworkUploadResponse
 from app.models.experiment import AnalysisRun, ExperimentJournalEntry
 from app.schemas.experiment import (
     AnalysisRunResponse,
@@ -44,6 +44,7 @@ from app.services.pdf_parser import (
     PdfValidationError,
 )
 from app.services.upload_reader import read_upload_with_limit, UploadSizeLimitExceeded
+from app.services.fieldwork_intake import MAX_RESULT_BYTES, RESULT_TYPES, validate_fieldwork_result
 from app.tools.embedder import EmbedderTool
 
 router = APIRouter()
@@ -707,6 +708,60 @@ async def get_task_protocol(
     )
 
 
+@router.post("/{task_id}/data/files", response_model=FieldworkUploadResponse, status_code=201)
+async def upload_fieldwork_result(
+    task_id: uuid.UUID,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Store a validated result file; uploading alone does not resume research."""
+    task = await db.scalar(
+        select(ResearchTask)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .with_for_update()
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Research task not found")
+    if task.research_type != "EMPIRICAL_HUMAN" or task.status != "WAITING_USER_DATA":
+        raise HTTPException(status_code=409, detail="Chỉ nạp kết quả cho bài thực địa đang chờ dữ liệu.")
+    count = await db.scalar(select(func.count()).select_from(ExportArtifact).where(
+        ExportArtifact.research_task_id == task_id,
+        ExportArtifact.export_type.in_(list(RESULT_TYPES.values())),
+    ))
+    if count >= settings.MAX_UPLOAD_FILES_PER_TASK:
+        raise HTTPException(status_code=409, detail="Đã đạt giới hạn số tệp kết quả của bài này.")
+    try:
+        content = await read_upload_with_limit(file, MAX_RESULT_BYTES)
+    except UploadSizeLimitExceeded:
+        raise HTTPException(status_code=413, detail="Tệp kết quả vượt quá 5 MiB.")
+    filename = file.filename or "results.txt"
+    try:
+        validated = validate_fieldwork_result(filename, content)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    saved = artifact_store.save_artifact(task_id, filename, content)
+    try:
+        artifact = ExportArtifact(
+            research_task_id=task_id,
+            export_type=validated["export_type"],
+            file_path=saved["file_path"],
+            file_size_bytes=saved["file_size_bytes"],
+        )
+        db.add(artifact)
+        await db.flush()
+        artifact.download_url = f"/api/v1/research/{task_id}/artifacts/{artifact.id}/download"
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        artifact_store.delete_artifact(task_id, saved["file_path"])
+        raise
+    return FieldworkUploadResponse(
+        artifact_id=artifact.id, file_name=saved["file_name"],
+        file_size_bytes=saved["file_size_bytes"], sha256_hash=validated["sha256_hash"],
+    )
+
+
 @router.post("/{task_id}/data/resume", response_model=ResearchTaskResponse)
 async def resume_research_with_data(
     task_id: uuid.UUID,
@@ -729,8 +784,34 @@ async def resume_research_with_data(
             detail=f"Chỉ có thể nạp dữ liệu khi task ở trạng thái WAITING_USER_DATA (hiện tại: {task.status})",
         )
 
+    if task.research_type != "EMPIRICAL_HUMAN":
+        raise HTTPException(status_code=409, detail="Luồng này chỉ nhận kết quả nghiên cứu thực địa.")
+    artifact = await db.scalar(select(ExportArtifact).where(
+        ExportArtifact.id == payload.file_artifact_id,
+        ExportArtifact.research_task_id == task.id,
+        ExportArtifact.export_type.in_(list(RESULT_TYPES.values())),
+    ))
+    if not artifact:
+        raise HTTPException(status_code=422, detail="Chọn tệp kết quả đã tải lên đúng bài nghiên cứu này.")
+    try:
+        file_path = artifact_store.get_artifact_path(task.id, artifact.file_path)
+        if file_path is None:
+            raise ValueError("Tệp kết quả không còn trong kho lưu trữ. Vui lòng tải lại.")
+        with file_path.open("rb") as result_file:
+            content = result_file.read(MAX_RESULT_BYTES + 1)
+        if len(content) != artifact.file_size_bytes:
+            raise ValueError("Tệp kết quả không còn khớp thông tin đã lưu. Vui lòng tải lại.")
+        evidence = validate_fieldwork_result(file_path.name, content)
+        if evidence["export_type"] != artifact.export_type:
+            raise ValueError("Loại tệp kết quả không khớp thông tin đã lưu.")
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail="Tệp kết quả chưa sẵn sàng hoặc không hợp lệ.") from exc
+
     # Lưu thông tin dữ liệu thực địa
-    task.user_data_submission = payload.model_dump()
+    task.user_data_submission = {
+        **payload.model_dump(mode="json"),
+        "artifact_evidence": {**evidence, "file_name": file_path.name},
+    }
     task.status = "QUEUED"
     task.current_step = None
     task.queued_at = datetime.now(timezone.utc)
