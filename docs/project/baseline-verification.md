@@ -1,5 +1,74 @@
 # Biên bản kiểm tra baseline kỹ thuật
 
+<a id="kiem-tra-2026-10-22"></a>
+
+## Audit ngày 22/10/2026 — chức năng hiện có và điều kiện production
+
+**Phạm vi:** đọc code/CI/docs, kiểm runtime local, chạy lại toàn bộ backend tests và frontend lint/build, thử thêm các ca chưa có trong suite. Source backend: `3bbeb01`; frontend gồm thay đổi local chưa commit tại `research/[id]/page.tsx` và `MarkdownViewer.tsx`. Chưa chạy provider mới hoặc thử giao diện bằng trình duyệt trong lượt này. Audit sửa tài liệu/kế hoạch, **chưa sửa các lỗi source bên dưới**.
+
+**Kết luận:** nền tảng local và các ca regression đang đạt; không đủ căn cứ xác nhận mọi chức năng ổn. G1–G7 chưa khép; chưa sẵn sàng production. Các chỉ dẫn “bước tiếp theo” ở phần lịch sử phía dưới chỉ có giá trị tại ngày ghi. Kế hoạch hiện hành nằm ở [Implementation Plan](implementation-plan.md).
+
+### A. Kết quả kiểm tra thực tế
+
+| Hạng mục | Kết quả 22/10 | Giới hạn |
+|---|---|---|
+| GitHub CI tại `3bbeb01` | [Run 39783342134](https://github.com/NguyenChien536/Multi-Agent-Research-System/actions/runs/39783342134): 5/5 jobs thành công | Không bao gồm frontend local chưa commit; không phải provider/browser E2E |
+| Migration từ database rỗng | `alembic upgrade head` exit 0 đến `d1e2f3a4b5c6` | Chưa chứng minh upgrade mọi dữ liệu release cũ/rollback |
+| Toàn bộ backend suite | `python -m pytest -q tests`: **74 passed, 6 warnings, 24.37s** | Provider được giả lập; không chứng minh chất lượng model, chạy broker crash thật hoặc mức tải |
+| Frontend local | `npm run lint` và `npm run build` exit 0; Next.js 15.5.27 | Build/typecheck không thay việc sử dụng trên trình duyệt |
+| Frontend dependencies | `npm audit --omit=dev --json`: **0 vulnerabilities**, exit 0 | Theo advisory database lúc chạy; không bao gồm dev dependencies, backend hoặc container/system packages |
+| Compose/API/UI | `docker compose config --quiet` đạt; health API và trang `/login` trả **200** | Compose là development; health API trả trạng thái tĩnh, chưa phải DB/Redis readiness |
+| PostgreSQL | DB dev tại migration head `d1e2f3a4b5c6` | Chỉ đọc; không chạy suite hoặc migration phá dữ liệu trên DB dev |
+| Redis/Celery | Redis **PONG**; Celery **1 node pong**; broker list `celery` có **0** phần tử | Chỉ snapshot, không phải soak test hay kiểm tất cả queue |
+| Probe FE `/auth/me` | Có session token giả nhưng request **không có Authorization**; `/research` có header | Tái hiện bằng chính `api.ts` đã transpile với stub fetch; chưa sửa |
+| Probe intake không file | `EMPIRICAL_HUMAN` ở WAITING_USER_DATA, chỉ sample_size/method_notes/results_summary → **HTTP 200, QUEUED** | Không có artifact/provenance vẫn được nhận; chưa phù hợp SRS |
+| Probe intake có UUID file | Nạp `file_artifact_id` → **StatementError / TypeError: Object of type UUID is not JSON serializable** | ASGI probe bật raise_app_exceptions nên nhận exception trực tiếp; đây là lỗi server chưa được xử lý, không phải response validation hợp lệ |
+
+Database test `ati_audit_test_8e338c793c` và database probe `ati_audit_test_56dd988252` được tạo riêng, có pgvector, rồi đã đóng kết nối/xóa sau kiểm tra. Artifact test đặt trong thư mục tạm riêng; không xóa volume dự án. Hai probe không khởi động app lifespan/dispatcher và không gọi graph/provider. Không gửi/replay research job của người dùng.
+
+Warnings hiện thấy ở langchain-community cache, Pydantic Config, passlib/crypt, tên HTTP 422 của Starlette và google-genai/aiohttp. Đây là nợ tương thích cần theo dõi, không phải 6 test thất bại. Không tự nâng major dependency trong audit này.
+
+### B. Findings và cách xử lý
+
+Mức **Cao**: chặn nghiệm thu luồng liên quan hoặc phát hành cho người ngoài. **Vừa**: cần hoàn thiện đúng contract trước khi đóng gate. Đây không phải chứng nhận an toàn hoặc audit bảo mật đầy đủ.
+
+| ID / mức | Bằng chứng trong source | Tác động | Hành động trong plan |
+|---|---|---|---|
+| A01 · Vừa | [api.ts](../../frontend/src/lib/api.ts): fetcher bỏ token cho mọi endpoint `/auth/`, gồm `/auth/me` | Client không lấy được thông tin tài khoản qua helper này; không có nghĩa mọi lần login đều lỗi | R1: chỉ bỏ ở route công khai; test helper và session hết hạn |
+| A02 · Cao | [research.py](../../backend/app/api/v1/endpoints/research.py), `resume_research_with_data`: lưu `payload.model_dump()` vào JSONB; schema cho artifact/provenance optional; hai probe A đã tái hiện | Có file gây lỗi serialize; không file vẫn resume dù thiếu căn cứ thực nghiệm; chưa kiểm artifact đúng owner/task/READY | R1: JSON serialization, validate evidence/provenance/type/version; regression file giả/sai owner. Chưa chứng minh có đường đọc file trái phép qua lỗi này |
+| A03 · Cao | [worker.py](../../backend/app/worker.py) initial state không đưa budget_config vào guard; [nodes.py](../../backend/app/agents/nodes.py) gọi ainvoke trực tiếp; graph chỉ có giới hạn vòng | Có ghi estimated cost không bảo đảm chặn trước khi vượt cap; retry/fallback/search/embed cần cùng ledger | R2: gateway reserve/reconcile + quota server; không chạy paid smoke mới trước khi guard đạt |
+| A04 · Cao | nodes `_record_progress` bỏ kết quả False từ [progress.py](../../backend/app/services/progress.py); cancel chỉ đổi state/lease/outbox | Graph đã chạy có thể tiếp tục tool/provider sau cancel. Worker có guard khi ghi report cuối, nhưng guard đó không chặn mọi side effect | R2: check cancel/attempt/lease trước call và write; test cancellation giữa stages |
+| A05 · Cao | [graph.py](../../backend/app/agents/graph.py) `workflow.compile()` không checkpointer; worker invoke lại initial state | Có trạng thái WAITING trong DB nhưng chưa phải resume đúng checkpoint/node/version; có thể làm lại stage đã làm | R3: durable run/checkpoint và decision version; side effect idempotency; crash/resume tests |
+| A06 · Cao | nodes experiment_runner gọi routine và verify_repeatability đồng bộ; sau đó mới dựng PLAN_FROZEN/STARTED; [experiment_runner.py](../../backend/app/services/experiment_runner.py) gọi lại routine cùng process | Chặn worker/event loop; crash trước persist có thể mất bằng chứng attempt; kiểm tính xác định cùng process chưa phải execution độc lập | R4: persist journal trước dispatch, runner có giới hạn và kill, rerun manifest ở execution mới |
+| A07 · Cao | nodes critic đưa `draft[:3000]` vào prompt; protocol human-led đi vào WAITING trước luồng review đầy đủ | Phần Methods/Results/cuối bài có thể chưa được Critic đọc; không thể gọi là đã review toàn bộ | R5: review theo section/evidence và hợp nhất verdict; tests lỗi ở cuối bài/protocol |
+| A08 · Vừa | research upload await parse/embed trong request; delete DB trước rồi bỏ qua lỗi cleanup; cache Redis LLM cấu hình global | Timeout/đứt request khó phục hồi; có thể còn file/cache sau xóa; chưa chứng minh tenant/retention policy của cache | R6/R8: ingest job, tombstone/retry cleanup; tắt private cache hoặc scope/invalidate đúng owner/task/version, kiểm log redaction |
+| A09 · Vừa | [report.py](../../backend/app/models/report.py): unique research_task_id, quan hệ một report/task; chưa có Q&A/report version contract hoàn chỉnh | Chưa nghiệm thu sửa bài giữ bản cũ hoặc hỏi theo version; không đánh dấu P6 hoàn thành | R7: ReportVersion/run lineage và version-scoped Q&A/export |
+| A10 · Cao khi deploy | [Dockerfile.release](../../backend/Dockerfile.release) cài requirements.txt; dev Compose publish DB/Redis ra host, DEBUG và secret dev; release workflow chỉ publish backend image | Artifact release có thể khác bản đã test; chưa có môi trường đủ điều kiện phục vụ người dùng ngoài | R8/P8: lockfile, secrets/network/readiness, cùng image digest staging→prod; restore/rollback/pilot |
+
+**Sai khác contract cần khép:** SRS quy định CSV 5 MiB/20.000 hàng/30 cột; parser hiện tối đa 10.000 hàng/51 cột và route dùng giới hạn upload chung 10 MiB. SRS cap 40 LLM calls/2 USD/15 phút, API budget schema hiện cho giá trị khác và trần client rộng hơn. R2/R4 phải thống nhất server/schema/UI/tests theo SRS trước khi nghiệm thu. Không nâng giới hạn hàng trước khi đo runner; input chưa hỗ trợ phải báo rõ, không nhận rồi treo. Protocol/metadata đơn thuần không được coi là Results đã xác minh.
+
+### C. Evidence lịch sử và dữ liệu đang tồn tại
+
+- Biên bản 18/10 phía dưới ghi một lượt provider thật. Audit chỉ đọc lại task `ec0de102-517f-4706-ae51-d46d21e7987e`: còn COMPLETED, report **1.325 từ**, **9 citations**, **0 AgentRun**. Điều này xác nhận report còn lưu, không xác minh lại model/keys/chi phí hoặc toàn bộ citation semantics của lần chạy đó.
+- Không xóa ghi nhận lịch sử hoặc viết lại thành “chưa từng chạy provider”. Đồng thời, một report cũ không thay smoke trên release candidate hiện tại; phải thu evidence đủ hơn trong lần tới.
+- DB dev còn task QUEUED trong khi broker queue rỗng và các PLANNING/WAITING cũ. Cần đối soát owner/run/outbox/lease trước xử lý; không auto-resume/xóa chỉ vì trạng thái cũ. DB chứa nhiều dữ liệu thử nên tổng số COMPLETED không dùng làm benchmark thành công.
+- Health/pong cho biết service phản hồi tại thời điểm kiểm. Chưa có load/soak/fault/restore test hoặc kiểm độc lập chất lượng bài báo; không gọi hệ thống “ổn hết” dựa vào các số này.
+
+### D. Chạy lại kiểm tra an toàn
+
+1. Tạo database mới có tên chứa `_test_` bằng psycopg, enable vector; tạo artifact directory tạm. Không dùng research_db.
+2. Trong **tiến trình test riêng**, trỏ DATABASE_URL, POSTGRES_SYNC_URL, TEST_DATABASE_URL và TEST_POSTGRES_SYNC_URL về cùng DB đó; ARTIFACTS_DIR về thư mục tạm; DEBUG=false, MOCK_PROVIDERS=true, tắt tracing.
+3. Chạy `alembic upgrade head`, sau đó `python -m pytest -q tests`; lưu exit code/summary. Dọn đúng DB đã tạo và artifacts tạm trong finally, không xóa volume dev.
+4. Probe intake: tạo user/task tổng hợp qua ASGI, đặt task WAITING_USER_DATA trong DB test; gửi lần lượt payload metadata-only và payload thêm UUID file. Không bật lifespan/dispatcher. Mong đợi sau sửa: thiếu/sai file trả 4xx rõ ràng; file READY hợp lệ trả trạng thái queue thành công.
+5. Probe FE: transpile api.ts bằng TypeScript, stub sessionStorage/fetch; so header của api.auth.me với api.tasks.list. Sau sửa, cả hai phải có Bearer khi có session.
+6. Trong frontend chạy lint/build/audit; runtime chỉ đọc Compose config/ps, Alembic current, Redis PING/LLEN, Celery inspect ping và HTTP health/login.
+
+Provider/browser E2E, restart/chaos, migration upgrade dữ liệu cũ, runner sandbox, security scan backend/container, load và backup/restore **chưa chạy trong audit này**. Các bước này đã vào P1–P10 và không được ghi thành pass trước khi có kết quả.
+
+---
+
+## Biên bản lịch sử — giữ nguyên mốc và giới hạn của từng lần
+
 **Ngày kiểm tra:** 27/09/2026<br>
 **Phạm vi:** Docker Compose, PostgreSQL/pgvector, Redis/Celery, FastAPI, Alembic, LangGraph compile và routing.<br>
 **Môi trường:** Windows + Docker Desktop; backend image chạy Python 3.11.<br>
