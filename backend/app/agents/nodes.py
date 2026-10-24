@@ -6,7 +6,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any, List
-from sqlalchemy import select
+from sqlalchemy import func, select
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -952,16 +952,86 @@ async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
     task_id_str = state.get("task_id")
     dataset_csv = state.get("dataset_csv")
 
-    from app.services.experiment_runner import run_tabular_regression_v1, verify_repeatability
+    from app.services.experiment_runner import (
+        InvalidInputError,
+        build_tabular_regression_manifest,
+    )
+    from app.services.isolated_experiment import (
+        run_tabular_regression_isolated,
+        verify_tabular_repeatability_isolated,
+    )
 
+    analysis_run_id: str | None = None
+    frozen_manifest: Dict[str, Any] | None = None
     try:
         if not dataset_csv:
-            raise ValueError("A user-provided CSV dataset is required for computational empirical analysis")
+            raise InvalidInputError("A user-provided CSV dataset is required for computational empirical analysis")
 
-        run_result = run_tabular_regression_v1(dataset_csv, seed=42)
-        passed, diff = verify_repeatability(dataset_csv, run_result)
+        frozen_manifest = await asyncio.to_thread(build_tabular_regression_manifest, dataset_csv, seed=42)
+        dataset_artifact_id = state.get("dataset_artifact_id")
+        parsed_dataset_artifact_id = uuid.UUID(str(dataset_artifact_id)) if dataset_artifact_id else None
+
+        # Write the immutable plan and STARTED attempt before computation. A
+        # worker crash will leave visible evidence that the attempt began.
+        if task_id_str:
+            from app.core.database import AsyncSessionLocal
+            from app.models.experiment import AnalysisRun, ExperimentJournalEntry
+
+            async with AsyncSessionLocal() as session:
+                run_record = AnalysisRun(
+                    research_task_id=uuid.UUID(str(task_id_str)),
+                    routine_name="tabular_regression_v1",
+                    status="STARTED",
+                    dataset_artifact_id=parsed_dataset_artifact_id,
+                    input_checksum=frozen_manifest["input_checksum"],
+                    manifest=frozen_manifest,
+                    reproducibility_status="NOT_RUN",
+                )
+                session.add(run_record)
+                await session.flush()
+                analysis_run_id = str(run_record.id)
+                session.add_all([
+                    ExperimentJournalEntry(
+                        research_task_id=run_record.research_task_id,
+                        analysis_run_id=run_record.id,
+                        sequence=1,
+                        kind="PLAN_FROZEN",
+                        actor="METHODOLOGIST",
+                        payload={"manifest": frozen_manifest},
+                        artifact_ids=[str(parsed_dataset_artifact_id)] if parsed_dataset_artifact_id else [],
+                    ),
+                    ExperimentJournalEntry(
+                        research_task_id=run_record.research_task_id,
+                        analysis_run_id=run_record.id,
+                        sequence=2,
+                        kind="STARTED",
+                        actor="SYSTEM",
+                        payload={
+                            "routine_name": "tabular_regression_v1",
+                            "input_checksum": frozen_manifest["input_checksum"],
+                            "started_at": started_at.isoformat(),
+                        },
+                        artifact_ids=[str(parsed_dataset_artifact_id)] if parsed_dataset_artifact_id else [],
+                    ),
+                ])
+                await session.commit()
+
+        params = frozen_manifest["parameters"]
+        run_result = await run_tabular_regression_isolated(
+            dataset_csv,
+            target_column=frozen_manifest["target_column"],
+            feature_columns=frozen_manifest["feature_columns"],
+            alpha=params["alpha"],
+            test_size=params["test_size"],
+            seed=params["seed"],
+        )
+        if run_result.get("manifest") != frozen_manifest:
+            raise RuntimeError("Executed routine manifest differs from the pre-run frozen plan")
+        passed, diff = await verify_tabular_repeatability_isolated(dataset_csv, run_result)
+        completed_at = datetime.now(timezone.utc)
 
         analysis_run = {
+            "analysis_run_id": analysis_run_id,
             "routine_name": "tabular_regression_v1",
             "status": "COMPLETED",
             "input_checksum": run_result["input_checksum"],
@@ -1030,8 +1100,36 @@ async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
             },
         ]
 
+        if task_id_str and analysis_run_id:
+            from app.core.database import AsyncSessionLocal
+            from app.models.experiment import AnalysisRun, ExperimentJournalEntry
+
+            async with AsyncSessionLocal() as session:
+                persisted_run = await session.get(AnalysisRun, uuid.UUID(analysis_run_id))
+                if not persisted_run or persisted_run.research_task_id != uuid.UUID(str(task_id_str)):
+                    raise RuntimeError("Pre-run analysis record disappeared or changed owner")
+                persisted_run.status = "COMPLETED"
+                persisted_run.manifest = run_result["manifest"]
+                persisted_run.metrics = run_result["metrics"]
+                persisted_run.reproducibility_status = analysis_run["reproducibility_status"]
+                persisted_run.reproducibility_diff = diff
+                persisted_run.completed_at = completed_at
+                session.add_all([
+                    ExperimentJournalEntry(
+                        research_task_id=persisted_run.research_task_id,
+                        analysis_run_id=persisted_run.id,
+                        sequence=entry["sequence"],
+                        kind=entry["kind"],
+                        actor=entry["actor"],
+                        payload=entry["payload"],
+                        artifact_ids=[str(persisted_run.dataset_artifact_id)] if persisted_run.dataset_artifact_id else [],
+                    )
+                    for entry in journal_entries[2:]
+                ])
+                await session.commit()
+
         duration_ms = int((time.monotonic() - start_ts) * 1000)
-        completed_at = datetime.now(timezone.utc)
+        completed_at = completed_at or datetime.now(timezone.utc)
 
         await record_agent_run(
             task_id=task_id_str,
@@ -1094,48 +1192,42 @@ async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
                     parsed_dataset_artifact_id = None
                 safe_error = f"{type(exc).__name__}: {str(exc)[:500]}"
                 async with AsyncSessionLocal() as session:
-                    failed_run = AnalysisRun(
-                        research_task_id=uuid.UUID(str(task_id_str)),
-                        routine_name="tabular_regression_v1",
-                        status="FAILED",
-                        dataset_artifact_id=parsed_dataset_artifact_id,
-                        input_checksum=checksum,
-                        manifest={
-                            "manifest_version": "1.0",
-                            "routine_name": "tabular_regression_v1",
-                            "input_checksum": checksum,
-                            "parameters": {"seed": 42},
-                        },
-                        reproducibility_status="NOT_RUN",
-                        error_message=safe_error,
-                        completed_at=datetime.now(timezone.utc),
+                    failed_run = await session.get(AnalysisRun, uuid.UUID(analysis_run_id)) if analysis_run_id else None
+                    if failed_run is None:
+                        failed_run = AnalysisRun(
+                            research_task_id=uuid.UUID(str(task_id_str)),
+                            routine_name="tabular_regression_v1",
+                            status="FAILED",
+                            dataset_artifact_id=parsed_dataset_artifact_id if "parsed_dataset_artifact_id" in locals() else None,
+                            input_checksum=checksum,
+                            manifest=frozen_manifest or {
+                                "manifest_version": "1.0",
+                                "routine_name": "tabular_regression_v1",
+                                "input_checksum": checksum,
+                                "parameters": {"seed": 42},
+                            },
+                            reproducibility_status="NOT_RUN",
+                        )
+                        session.add(failed_run)
+                        await session.flush()
+                    failed_run.status = "FAILED"
+                    failed_run.error_message = safe_error
+                    failed_run.completed_at = datetime.now(timezone.utc)
+                    current_sequence = await session.scalar(
+                        select(func.coalesce(func.max(ExperimentJournalEntry.sequence), 0)).where(
+                            ExperimentJournalEntry.analysis_run_id == failed_run.id
+                        )
                     )
-                    session.add(failed_run)
-                    await session.flush()
-                    session.add_all([
-                        ExperimentJournalEntry(
-                            research_task_id=failed_run.research_task_id,
-                            analysis_run_id=failed_run.id,
-                            sequence=1,
-                            kind="STARTED",
-                            actor="SYSTEM",
-                            payload={"routine_name": "tabular_regression_v1", "input_checksum": checksum},
-                            artifact_ids=(
-                                [str(parsed_dataset_artifact_id)] if parsed_dataset_artifact_id else []
-                            ),
-                        ),
-                        ExperimentJournalEntry(
-                            research_task_id=failed_run.research_task_id,
-                            analysis_run_id=failed_run.id,
-                            sequence=2,
-                            kind="EXECUTION_RESULT",
-                            actor="SYSTEM",
-                            payload={"status": "TECHNICAL_FAILURE", "error": safe_error},
-                            artifact_ids=(
-                                [str(parsed_dataset_artifact_id)] if parsed_dataset_artifact_id else []
-                            ),
-                        ),
-                    ])
+                    failure_kind = "INVALID_INPUT" if isinstance(exc, InvalidInputError) else "TECHNICAL_FAILURE"
+                    session.add(ExperimentJournalEntry(
+                        research_task_id=failed_run.research_task_id,
+                        analysis_run_id=failed_run.id,
+                        sequence=int(current_sequence or 0) + 1,
+                        kind="EXECUTION_RESULT",
+                        actor="SYSTEM",
+                        payload={"status": failure_kind, "error": safe_error},
+                        artifact_ids=[str(failed_run.dataset_artifact_id)] if failed_run.dataset_artifact_id else [],
+                    ))
                     await session.commit()
             except Exception:
                 logger.exception("Failed to persist technical experiment failure for task %s", task_id_str)

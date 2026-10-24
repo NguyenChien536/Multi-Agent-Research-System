@@ -15,6 +15,7 @@ from sqlalchemy import select
 from app.services import task_dispatcher
 from app.core.database import AsyncSessionLocal, engine
 from app.main import app
+from app.models.experiment import AnalysisRun, ExperimentJournalEntry
 from app.models.report import ResearchReport
 from app.models.task import ResearchTask, TaskDispatchOutbox
 from app.worker import run_langgraph_workflow
@@ -118,8 +119,44 @@ async def test_auth_and_research_ownership(monkeypatch: pytest.MonkeyPatch) -> N
             task.status = "RUNNING"
             task.attempt_number = 1
             task.worker_lease_until = datetime.now(timezone.utc) - timedelta(seconds=1)
+            analysis_run = AnalysisRun(
+                research_task_id=task.id,
+                routine_name="tabular_regression_v1",
+                status="STARTED",
+                manifest={"routine_name": "tabular_regression_v1"},
+            )
+            db.add(analysis_run)
+            await db.flush()
+            db.add_all([
+                ExperimentJournalEntry(
+                    research_task_id=task.id,
+                    analysis_run_id=analysis_run.id,
+                    sequence=1,
+                    kind="PLAN_FROZEN",
+                    actor="METHODOLOGIST",
+                ),
+                ExperimentJournalEntry(
+                    research_task_id=task.id,
+                    analysis_run_id=analysis_run.id,
+                    sequence=2,
+                    kind="STARTED",
+                    actor="SYSTEM",
+                ),
+            ])
             await db.commit()
         assert await task_dispatcher.recover_expired_worker_claims() == 1
+        async with AsyncSessionLocal() as db:
+            recovered_run = await db.get(AnalysisRun, analysis_run.id)
+            assert recovered_run.status == "FAILED"
+            assert "lease expired" in recovered_run.error_message
+            failed_attempt = (await db.execute(
+                select(ExperimentJournalEntry).where(
+                    ExperimentJournalEntry.analysis_run_id == analysis_run.id,
+                    ExperimentJournalEntry.sequence == 3,
+                )
+            )).scalar_one()
+            assert failed_attempt.payload["status"] == "TECHNICAL_FAILURE"
+            assert failed_attempt.payload["error_type"] == "WORKER_LEASE_EXPIRED"
         assert await task_dispatcher.dispatch_one_outbox_event()
         assert dispatched == [author_id, author_id]
 
