@@ -21,6 +21,10 @@ from app.models.report import ExportArtifact, ResearchReport
 from app.models.source import DocumentChunk
 from app.models.task import ResearchTask, TaskDispatchOutbox, WorkflowRun
 from app.services.experiment_runner import (
+    ExperimentError,
+    MAX_DATASET_BYTES,
+    MAX_DATASET_COLUMNS,
+    MAX_DATASET_ROWS,
     InvalidInputError,
     TargetLeakageError,
     cholesky_solve,
@@ -94,17 +98,39 @@ def test_parse_csv_dataset_rejects_duplicate_headers_and_dimension_overflow():
     with pytest.raises(InvalidInputError, match="duplicate column names"):
         parse_csv_dataset(duplicate_header)
 
-    too_many_columns = ",".join([f"c{i}" for i in range(52)]) + "\n"
+    too_many_columns = ",".join([f"c{i}" for i in range(MAX_DATASET_COLUMNS + 1)]) + "\n"
     with pytest.raises(InvalidInputError, match="maximum supported"):
         parse_csv_dataset(too_many_columns)
 
-    too_many_rows = "feature,target\n" + "1,2\n" * 10_001
-    with pytest.raises(InvalidInputError, match="maximum of 10000 rows"):
+    too_many_rows = "feature,target\n" + "1,2\n" * (MAX_DATASET_ROWS + 1)
+    with pytest.raises(InvalidInputError, match=f"maximum of {MAX_DATASET_ROWS} rows"):
         parse_csv_dataset(too_many_rows)
 
     non_finite_values = "feature,target\n" + "1,2\n" * 9 + "inf,3\n"
     with pytest.raises(InvalidInputError, match="non-finite numeric value"):
         parse_csv_dataset(non_finite_values)
+
+
+def test_numeric_routine_rejects_silent_categorical_column_dropping():
+    csv_text = "feature,category,target\n" + "1,A,2\n" * 10
+    with pytest.raises(InvalidInputError, match="numeric columns only"):
+        parse_csv_dataset(csv_text)
+
+
+def test_srs_computational_upload_limits_are_explicit():
+    assert MAX_DATASET_BYTES == 5 * 1024 * 1024
+    assert MAX_DATASET_ROWS == 20_000
+    assert MAX_DATASET_COLUMNS == 30
+    with pytest.raises(InvalidInputError, match="maximum supported size of 5 MiB"):
+        parse_csv_dataset("x" * (MAX_DATASET_BYTES + 1))
+
+
+@pytest.mark.asyncio
+async def test_isolated_runner_timeout_is_reported_as_technical_failure():
+    from app.services.isolated_experiment import _invoke
+
+    with pytest.raises(ExperimentError, match="exceeded"):
+        await _invoke({"action": "unsupported"}, timeout_seconds=0.001)
 
 
 def test_cholesky_solve():
@@ -396,7 +422,7 @@ async def test_dataset_upload_rejects_non_computational_tasks():
 
 
 @pytest.mark.asyncio
-async def test_failed_experiment_is_recorded_as_technical_failure_not_negative_result():
+async def test_invalid_experiment_input_is_recorded_without_negative_result_label():
     suffix = uuid.uuid4().hex[:8]
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -435,9 +461,9 @@ async def test_failed_experiment_is_recorded_as_technical_failure_not_negative_r
             .where(ExperimentJournalEntry.analysis_run_id == run.id)
             .order_by(ExperimentJournalEntry.sequence)
         )).scalars().all()
-        assert [entry.kind for entry in journal] == ["STARTED", "EXECUTION_RESULT"]
-        assert journal[1].payload["status"] == "TECHNICAL_FAILURE"
-        assert "NO_IMPROVEMENT" not in str(journal[1].payload)
+        assert [entry.kind for entry in journal] == ["EXECUTION_RESULT"]
+        assert journal[0].payload["status"] == "INVALID_INPUT"
+        assert "NO_IMPROVEMENT" not in str(journal[0].payload)
         first_entry_id = journal[0].id
 
         with pytest.raises(IntegrityError, match="append-only"):
@@ -454,6 +480,55 @@ async def test_failed_experiment_is_recorded_as_technical_failure_not_negative_r
                 .where(ExperimentJournalEntry.id == first_entry_id)
             )
         await session.rollback()
+
+
+@pytest.mark.asyncio
+async def test_technical_runner_failure_keeps_frozen_plan_and_failed_attempt(monkeypatch):
+    suffix = uuid.uuid4().hex[:8]
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        headers = await _register_and_login(client, suffix)
+        create_res = await client.post("/api/v1/research", headers=headers, json={
+            "title": f"Runner Failure Test {suffix}",
+            "research_question": "Can a routine failure be distinguished from a negative result?",
+            "research_type": "EMPIRICAL_COMPUTATIONAL",
+        })
+        assert create_res.status_code == 201
+        task_id = create_res.json()["id"]
+
+    async with AsyncSessionLocal() as session:
+        task = await session.scalar(select(ResearchTask).where(ResearchTask.id == uuid.UUID(task_id)))
+        task.status = "RUNNING"
+        task.attempt_number = 1
+        await session.commit()
+
+    from app.services import isolated_experiment
+
+    async def fail_runner(*_args, **_kwargs):
+        raise RuntimeError("simulated runner process failure")
+
+    monkeypatch.setattr(isolated_experiment, "run_tabular_regression_isolated", fail_runner)
+
+    with pytest.raises(RuntimeError, match="simulated runner process failure"):
+        await nodes_module.experiment_runner_node({
+            "task_id": task_id,
+            "attempt_number": 1,
+            "current_iteration": 0,
+            "dataset_csv": _generate_synthetic_csv(30),
+        })
+
+    async with AsyncSessionLocal() as session:
+        run = await session.scalar(select(AnalysisRun).where(
+            AnalysisRun.research_task_id == uuid.UUID(task_id)
+        ))
+        assert run is not None and run.status == "FAILED"
+        assert run.manifest["parameters"]["seed"] == 42
+        journal = (await session.execute(
+            select(ExperimentJournalEntry)
+            .where(ExperimentJournalEntry.analysis_run_id == run.id)
+            .order_by(ExperimentJournalEntry.sequence)
+        )).scalars().all()
+        assert [entry.kind for entry in journal] == ["PLAN_FROZEN", "STARTED", "EXECUTION_RESULT"]
+        assert journal[-1].payload["status"] == "TECHNICAL_FAILURE"
 
 
 # =========================================================================
@@ -625,13 +700,13 @@ async def test_e2e_empirical_computational_workflow(monkeypatch):
             assert "comparison" in run.metrics
             assert run.reproducibility_diff["diff_mae"] <= 1e-8
 
-            # Check ExperimentJournalEntry items created (sequence 1..6)
+            # Check the append-only journal, including persisted output artifacts.
             journal = (await session.execute(
                 select(ExperimentJournalEntry)
                 .where(ExperimentJournalEntry.research_task_id == task.id)
                 .order_by(ExperimentJournalEntry.sequence.asc())
             )).scalars().all()
-            assert len(journal) == 6
+            assert len(journal) == 7
             kinds = [j.kind for j in journal]
             assert kinds == [
                 "PLAN_FROZEN",
@@ -640,9 +715,9 @@ async def test_e2e_empirical_computational_workflow(monkeypatch):
                 "OBSERVATION",
                 "REPRODUCTION_CHECK",
                 "INTERPRETATION",
+                "ARTIFACTS_PERSISTED",
             ]
-            for j in journal:
-                assert len(j.artifact_ids) >= 4
+            assert len(journal[-1].artifact_ids) >= 4
 
             # Check ExportArtifacts
             artifacts = (await session.execute(
@@ -666,6 +741,7 @@ async def test_e2e_empirical_computational_workflow(monkeypatch):
         jr_res = await client.get(f"/api/v1/research/{task_id}/journal", headers=headers)
         assert jr_res.status_code == 200
         jr_body = jr_res.json()
-        assert len(jr_body) == 6
+        assert len(jr_body) == 7
         assert jr_body[0]["kind"] == "PLAN_FROZEN"
         assert jr_body[5]["kind"] == "INTERPRETATION"
+        assert jr_body[6]["kind"] == "ARTIFACTS_PERSISTED"

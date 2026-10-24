@@ -562,33 +562,68 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                         art_ds.download_url = f"/api/v1/research/{task.id}/artifacts/{art_ds.id}/download"
                         dataset_artifact_id = art_ds.id
 
-                    run_record = AnalysisRun(
-                        research_task_id=task.id,
-                        routine_name=analysis_data.get("routine_name", "tabular_regression_v1"),
-                        status=analysis_data.get("status", "COMPLETED"),
-                        dataset_artifact_id=dataset_artifact_id,
-                        input_checksum=analysis_data.get("input_checksum"),
-                        manifest=analysis_data.get("manifest", {}),
-                        metrics=analysis_data.get("metrics"),
-                        reproducibility_status=analysis_data.get("reproducibility_status", "NOT_RUN"),
-                        reproducibility_diff=analysis_data.get("reproducibility_diff"),
-                        completed_at=datetime.now(timezone.utc),
-                    )
-                    session.add(run_record)
-                    await session.flush()
+                    persisted_run_id = analysis_data.get("analysis_run_id")
+                    if persisted_run_id:
+                        run_record = await session.scalar(
+                            select(AnalysisRun).where(
+                                AnalysisRun.id == uuid.UUID(str(persisted_run_id)),
+                                AnalysisRun.research_task_id == task.id,
+                            ).with_for_update()
+                        )
+                        if run_record is None:
+                            raise RuntimeError("Persisted experiment run is missing or belongs to another task")
+                        run_record.routine_name = analysis_data.get("routine_name", run_record.routine_name)
+                        run_record.status = analysis_data.get("status", "COMPLETED")
+                        run_record.dataset_artifact_id = dataset_artifact_id
+                        run_record.input_checksum = analysis_data.get("input_checksum")
+                        run_record.manifest = analysis_data.get("manifest", {})
+                        run_record.metrics = analysis_data.get("metrics")
+                        run_record.reproducibility_status = analysis_data.get("reproducibility_status", "NOT_RUN")
+                        run_record.reproducibility_diff = analysis_data.get("reproducibility_diff")
+                        run_record.completed_at = datetime.now(timezone.utc)
+                    else:
+                        run_record = AnalysisRun(
+                            research_task_id=task.id,
+                            routine_name=analysis_data.get("routine_name", "tabular_regression_v1"),
+                            status=analysis_data.get("status", "COMPLETED"),
+                            dataset_artifact_id=dataset_artifact_id,
+                            input_checksum=analysis_data.get("input_checksum"),
+                            manifest=analysis_data.get("manifest", {}),
+                            metrics=analysis_data.get("metrics"),
+                            reproducibility_status=analysis_data.get("reproducibility_status", "NOT_RUN"),
+                            reproducibility_diff=analysis_data.get("reproducibility_diff"),
+                            completed_at=datetime.now(timezone.utc),
+                        )
+                        session.add(run_record)
+                        await session.flush()
 
                     journal_art_ids = [str(art_metrics.id), str(art_manifest.id), str(art_chart.id), str(art_readme.id)]
-                    for entry in final_state.get("experiment_journal", []):
-                        j_entry = ExperimentJournalEntry(
+                    if persisted_run_id:
+                        last_sequence = await session.scalar(
+                            select(func.coalesce(func.max(ExperimentJournalEntry.sequence), 0)).where(
+                                ExperimentJournalEntry.analysis_run_id == run_record.id
+                            )
+                        )
+                        session.add(ExperimentJournalEntry(
                             research_task_id=task.id,
                             analysis_run_id=run_record.id,
-                            sequence=entry["sequence"],
-                            kind=entry["kind"],
-                            actor=entry["actor"],
-                            payload=entry.get("payload", {}),
+                            sequence=int(last_sequence or 0) + 1,
+                            kind="ARTIFACTS_PERSISTED",
+                            actor="SYSTEM",
+                            payload={"artifact_count": len(journal_art_ids)},
                             artifact_ids=journal_art_ids,
-                        )
-                        session.add(j_entry)
+                        ))
+                    else:
+                        for entry in final_state.get("experiment_journal", []):
+                            session.add(ExperimentJournalEntry(
+                                research_task_id=task.id,
+                                analysis_run_id=run_record.id,
+                                sequence=entry["sequence"],
+                                kind=entry["kind"],
+                                actor=entry["actor"],
+                                payload=entry.get("payload", {}),
+                                artifact_ids=journal_art_ids,
+                            ))
 
                 from app.models.agent_run import AgentRun
                 totals_res = await session.execute(

@@ -9,6 +9,7 @@ from sqlalchemy.orm import aliased
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
+from app.models.experiment import AnalysisRun, ExperimentJournalEntry
 from app.models.task import ResearchTask, TaskDispatchOutbox
 from app.worker import execute_research_workflow
 
@@ -117,6 +118,43 @@ async def recover_expired_worker_claims(now: datetime | None = None) -> int:
                 .with_for_update(skip_locked=True)
             )
             for task in result.scalars():
+                # If the worker died during a computational run, retain that
+                # attempt as a technical failure before redelivering the task.
+                # This is an operational failure, never a scientific finding.
+                started_runs = await session.execute(
+                    select(AnalysisRun)
+                    .where(
+                        AnalysisRun.research_task_id == task.id,
+                        AnalysisRun.status == "STARTED",
+                    )
+                    .with_for_update()
+                )
+                for analysis_run in started_runs.scalars():
+                    analysis_run.status = "FAILED"
+                    analysis_run.error_message = "Worker lease expired before the analysis result was persisted"
+                    analysis_run.completed_at = now
+                    last_sequence = await session.scalar(
+                        select(func.coalesce(func.max(ExperimentJournalEntry.sequence), 0)).where(
+                            ExperimentJournalEntry.analysis_run_id == analysis_run.id
+                        )
+                    )
+                    session.add(ExperimentJournalEntry(
+                        research_task_id=task.id,
+                        analysis_run_id=analysis_run.id,
+                        sequence=int(last_sequence or 0) + 1,
+                        kind="EXECUTION_RESULT",
+                        actor="SYSTEM",
+                        payload={
+                            "status": "TECHNICAL_FAILURE",
+                            "error_type": "WORKER_LEASE_EXPIRED",
+                            "error": analysis_run.error_message,
+                        },
+                        artifact_ids=(
+                            [str(analysis_run.dataset_artifact_id)]
+                            if analysis_run.dataset_artifact_id else []
+                        ),
+                    ))
+
                 task.status = "QUEUED"
                 task.worker_lease_until = None
                 event_result = await session.execute(

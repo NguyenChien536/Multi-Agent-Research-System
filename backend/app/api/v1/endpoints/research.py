@@ -34,7 +34,7 @@ from app.schemas.experiment import (
     ExperimentJournalEntryResponse,
     DatasetUploadResponse,
 )
-from app.services.experiment_runner import parse_csv_dataset, InvalidInputError
+from app.services.experiment_runner import MAX_DATASET_BYTES, parse_csv_dataset, InvalidInputError
 from app.services.artifact_store import artifact_store
 from app.services.pdf_parser import (
     extract_text_from_pdf,
@@ -992,11 +992,11 @@ async def upload_task_dataset(
         raise HTTPException(status_code=400, detail="Chỉ chấp nhận tệp định dạng .csv")
 
     try:
-        content = await read_upload_with_limit(file, settings.MAX_UPLOAD_SIZE_BYTES)
+        content = await read_upload_with_limit(file, MAX_DATASET_BYTES)
     except UploadSizeLimitExceeded:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Dung lượng tệp vượt quá giới hạn cho phép (tối đa {settings.MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)} MiB)",
+            detail="Tệp CSV vượt quá giới hạn 5 MiB của phân tích thực nghiệm.",
         )
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="Tệp CSV trống (0 bytes)")

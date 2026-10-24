@@ -5,8 +5,9 @@ import math
 import random
 from typing import Any, Dict, List, Optional, Tuple
 
-MAX_DATASET_ROWS = 10_000
-MAX_DATASET_COLUMNS = 51  # target + at most 50 features
+MAX_DATASET_BYTES = 5 * 1024 * 1024
+MAX_DATASET_ROWS = 20_000
+MAX_DATASET_COLUMNS = 30
 
 
 class ExperimentError(Exception):
@@ -26,6 +27,10 @@ class TargetLeakageError(ExperimentError):
 
 def parse_csv_dataset(csv_text: str) -> Tuple[List[str], List[Dict[str, Any]]]:
     """Parse CSV text into column headers and rows with type inference."""
+    if len(csv_text.encode("utf-8")) > MAX_DATASET_BYTES:
+        raise InvalidInputError(
+            f"Dataset exceeds the maximum supported size of {MAX_DATASET_BYTES // (1024 * 1024)} MiB"
+        )
     if not csv_text or not csv_text.strip():
         raise InvalidInputError("CSV dataset is empty")
 
@@ -46,7 +51,7 @@ def parse_csv_dataset(csv_text: str) -> Tuple[List[str], List[Dict[str, Any]]]:
     if len(header) > MAX_DATASET_COLUMNS:
         raise InvalidInputError(
             f"Dataset has {len(header)} columns; maximum supported is {MAX_DATASET_COLUMNS} "
-            "(one target and up to 50 features)"
+            "(the supported numeric routine accepts up to 30 columns)"
         )
 
     rows: List[Dict[str, Any]] = []
@@ -80,7 +85,73 @@ def parse_csv_dataset(csv_text: str) -> Tuple[List[str], List[Dict[str, Any]]]:
     if len(rows) < 10:
         raise InvalidInputError(f"Dataset has only {len(rows)} rows; minimum 10 rows required for 80/20 train/test evaluation")
 
+    non_numeric_columns = [
+        column
+        for column in header
+        if any(value is not None and not isinstance(value, (int, float)) for value in (row[column] for row in rows))
+    ]
+    if non_numeric_columns:
+        names = ", ".join(non_numeric_columns[:5])
+        suffix = "..." if len(non_numeric_columns) > 5 else ""
+        raise InvalidInputError(f"CSV routine supports numeric columns only; non-numeric columns: {names}{suffix}")
+
     return header, rows
+
+
+def build_tabular_regression_manifest(
+    csv_text: str,
+    *,
+    alpha: float = 1.0,
+    test_size: float = 0.2,
+    seed: int = 42,
+) -> Dict[str, Any]:
+    """Freeze the supported routine and dataset schema before its first execution."""
+    headers, rows = parse_csv_dataset(csv_text)
+    if not math.isfinite(alpha) or alpha <= 0:
+        raise InvalidInputError("alpha must be a finite number greater than zero")
+    if not math.isfinite(test_size) or not 0.0 < test_size < 1.0:
+        raise InvalidInputError("test_size must be a finite value strictly between 0 and 1")
+    if type(seed) is not int:
+        raise InvalidInputError("seed must be an integer")
+    numeric_cols = [
+        column for column in headers
+        if any(isinstance(row[column], (int, float)) for row in rows)
+    ]
+    if len(numeric_cols) < 2:
+        raise InvalidInputError("Dataset must have at least 2 numeric columns (1 target + 1 or more features)")
+    target = numeric_cols[-1]
+    features = [column for column in numeric_cols if column != target]
+    valid_rows = sum(
+        1
+        for row in rows
+        if row[target] is not None and all(row[column] is not None for column in features)
+    )
+    if valid_rows < 10:
+        raise InvalidInputError("At least 10 complete numeric rows are required for the frozen target/features")
+    train_rows = int(valid_rows * (1.0 - test_size))
+    test_rows = valid_rows - train_rows
+    if train_rows < 2 or test_rows < 2:
+        raise InvalidInputError("Train and test partitions must each contain at least 2 valid rows")
+    checksum = hashlib.sha256(csv_text.strip().encode("utf-8")).hexdigest()
+    return {
+        "manifest_version": "1.0",
+        "routine_name": "tabular_regression_v1",
+        "routine_version": "1.0.0",
+        "input_checksum": checksum,
+        "dataset_rows": len(rows),
+        "valid_rows": valid_rows,
+        "train_rows": train_rows,
+        "test_rows": test_rows,
+        "target_column": target,
+        "feature_columns": features,
+        "parameters": {
+            "alpha": alpha,
+            "test_size": test_size,
+            "seed": seed,
+            "fit_intercept": True,
+            "standardize": True,
+        },
+    }
 
 
 def cholesky_solve(A: List[List[float]], b: List[float]) -> List[float]:
@@ -487,3 +558,40 @@ def verify_repeatability(
     }
 
     return passed, diff_report
+
+
+def _isolated_runner_cli() -> int:
+    """Fixed allowlist JSON protocol used by the short-lived runner process."""
+    import json
+    import sys
+
+    try:
+        payload = json.load(sys.stdin)
+        action = payload.get("action")
+        if action == "run":
+            result = run_tabular_regression_v1(
+                payload["dataset_csv"],
+                target_column=payload.get("target_column"),
+                feature_columns=payload.get("feature_columns"),
+                alpha=payload.get("alpha", 1.0),
+                test_size=payload.get("test_size", 0.2),
+                seed=payload.get("seed", 42),
+            )
+        elif action == "verify":
+            passed, diff = verify_repeatability(
+                payload["dataset_csv"], payload["original_result"],
+                tolerance=payload.get("tolerance", 1e-8),
+                relative_tolerance=payload.get("relative_tolerance", 1e-6),
+            )
+            result = {"passed": passed, "diff": diff}
+        else:
+            raise InvalidInputError("Unsupported isolated experiment action")
+        json.dump(result, sys.stdout, allow_nan=False, separators=(",", ":"))
+        return 0
+    except Exception as exc:
+        json.dump({"error_type": type(exc).__name__, "error": str(exc)[:500]}, sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(_isolated_runner_cli())
