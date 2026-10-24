@@ -433,6 +433,10 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     research_task_id=task.id,
                     title=f"Báo cáo: {task.title}",
                     content_markdown=report_content,
+                    review_status=(final_state.get("critic_review_metadata") or {}).get(
+                        "status", "PASSED" if final_state.get("status") == "COMPLETED" else "NEEDS_REVIEW"
+                    ),
+                    review_metadata=(final_state.get("critic_review_metadata") or {}),
                     word_count=len(report_content.split()),
                 )
                 session.add(report)
@@ -609,11 +613,12 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     task.total_tokens_used = int(total_tokens)
                     task.total_cost_usd = round(float(total_cost), 4)
                 task.completed_at = datetime.now(timezone.utc)
-                task.status = "COMPLETED"
+                final_status = final_state.get("status")
+                task.status = "NEEDS_REVIEW" if final_status == "NEEDS_REVIEW" else "COMPLETED"
                 task.worker_lease_until = None
                 task.resume_action = None
                 task.resume_payload = None
-                workflow_run.status = "COMPLETED"
+                workflow_run.status = task.status
                 workflow_run.completed_at = datetime.now(timezone.utc)
                 workflow_run.plan_version = task.plan_version
                 await session.commit()

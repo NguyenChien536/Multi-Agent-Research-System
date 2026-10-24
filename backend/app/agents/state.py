@@ -59,7 +59,7 @@ class ResearchState(TypedDict, total=False):
     attempt_number: int               # Số lần retry (cho Worker crash recovery)
     max_iterations: int               # Giới hạn macro-loop, lấy từ budget nếu không truyền riêng
     current_agent: str                # Node gần nhất cập nhật trạng thái
-    status: str                       # Trạng thái workflow hiện tại
+    status: str                       # Trạng thái workflow hiện tại, gồm COMPLETED hoặc NEEDS_REVIEW
     
     # === Kế hoạch & Truy vấn (Có Reducer) ===
     plan: Dict[str, Any]              # Đề cương & danh sách câu hỏi con
@@ -85,6 +85,7 @@ class ResearchState(TypedDict, total=False):
     critic_verdict: str               # 'PASS' | 'REVISE' | 'NEED_MORE_DATA'
     critic_feedback: List[str]        # Feedback chi tiết: câu nào sai, thiếu gì
     critic_missing_areas: List[str]   # Danh sách knowledge gaps -> sinh Delta Queries
+    critic_review_metadata: Dict[str, Any] # Section coverage and bounded review findings
     citation_validation: Dict[str, Any] # Kết quả Citation Validator: valid/invalid counts
     
     # === Kết quả cuối cùng ===

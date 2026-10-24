@@ -18,7 +18,7 @@ class ResearchTask(Base):
     research_depth = Column(String(20), default="STANDARD", nullable=False)  # SHALLOW | STANDARD | DEEP
     language = Column(String(10), default="vi", nullable=False)
     research_type = Column(String(30), default="REVIEW", nullable=False)  # REVIEW | EMPIRICAL_COMPUTATIONAL | EMPIRICAL_HUMAN
-    status = Column(String(30), default="PENDING", nullable=False, index=True)  # PENDING, QUEUED, PLANNING, WAITING_APPROVAL, WAITING_USER_DATA, RESEARCHING, INDEXING, ANALYZING, WRITING, REVIEWING, FINALIZING, COMPLETED, RETRYING, FAILED, CANCELLED
+    status = Column(String(30), default="PENDING", nullable=False, index=True)  # PENDING, QUEUED, ..., COMPLETED, NEEDS_REVIEW, FAILED, CANCELLED
     current_step = Column(String(30), nullable=True)  # Current agent/module; status remains RUNNING during execution
     require_plan_approval = Column(Boolean, default=False, nullable=False)  # Human-in-the-Loop flag
     plan = Column(JSONB, nullable=True)  # Generated supervisor research plan

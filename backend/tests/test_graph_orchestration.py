@@ -171,6 +171,29 @@ def test_macro_routing_pass_verdict_goes_to_post_processor():
     assert should_continue_research(state) == "post_processor"
 
 
+def test_needs_review_verdict_routes_to_report_delivery():
+    assert should_revise_draft({"critic_verdict": "NEEDS_REVIEW"}) == "post_processor"
+
+
+def test_report_sections_preserve_the_entire_document_including_late_sections():
+    draft = "# Introduction\n" + ("intro text " * 600) + "\n# Results\nLATE_SECTION_DEFECT\n"
+    chunks = nodes_module._report_sections(draft, max_chars=5000)
+    rebuilt = "\n".join(text for _, text in chunks)
+    assert "LATE_SECTION_DEFECT" in rebuilt
+    assert sum(len(text) for _, text in chunks) >= len(draft) - 40
+
+
+def test_critic_flags_untraceable_claim_markers():
+    known_id = str(uuid.uuid4())
+    unknown_id = str(uuid.uuid4())
+    findings = nodes_module._claim_lineage_findings(
+        f"Supported [[@claim:{known_id}]]; unsupported [[@claim:{unknown_id}]].",
+        [{"claim_id": known_id, "evidence_id": "e1", "source_id": "s1", "chunk_id": "c1"}],
+    )
+    assert len(findings) == 1
+    assert unknown_id in findings[0]
+
+
 @pytest.mark.asyncio
 async def test_post_processor_keeps_only_known_claim_citations():
     claim_id = str(uuid.uuid4())
@@ -201,6 +224,83 @@ async def test_post_processor_keeps_only_known_claim_citations():
     assert "[@claim:" not in result["final_report_markdown"]
     assert "## References\n\n[1] Verified source. https://example.org/source" in result["final_report_markdown"]
     assert [item["claim_id"] for item in result["citations"]] == [claim_id]
+
+
+@pytest.mark.asyncio
+async def test_critic_reviews_late_sections_and_reports_findings(monkeypatch):
+    """A material defect at the end of a manuscript must reach the Critic."""
+    prompts = []
+    fake_llm = MagicMock()
+    fake_llm.with_structured_output.return_value = fake_llm
+
+    async def _review(messages):
+        prompt = str(messages[0].content)
+        prompts.append(prompt)
+        if "LATE_SECTION_DEFECT" in prompt:
+            return nodes_module.CriticVerdict(
+                verdict="REVISE", feedback=["Correct the unsupported result in the final section."], missing_areas=[]
+            )
+        return nodes_module.CriticVerdict(verdict="PASS", feedback=[], missing_areas=[])
+
+    fake_llm.ainvoke = AsyncMock(side_effect=_review)
+    monkeypatch.setattr(nodes_module, "_record_progress", AsyncMock())
+    monkeypatch.setattr(nodes_module, "record_agent_run", AsyncMock())
+    monkeypatch.setattr(nodes_module, "get_fast_llm", lambda: fake_llm)
+    monkeypatch.setattr(nodes_module, "get_active_model_name", lambda **_: "test-model")
+
+    result = await nodes_module.critic_node({
+        "draft_report_markdown": "# Introduction\nBackground.\n\n# Results\nLATE_SECTION_DEFECT",
+        "current_micro_revision": 0,
+        "max_micro_revisions": 2,
+        "claims": [],
+    })
+
+    assert any("LATE_SECTION_DEFECT" in prompt for prompt in prompts)
+    assert result["critic_verdict"] == "REVISE"
+    assert "[Introduction, Results] Correct the unsupported result in the final section." in result["critic_feedback"]
+    assert result["critic_review_metadata"]["sections_reviewed"] == ["Introduction", "Results"]
+
+
+@pytest.mark.asyncio
+async def test_critic_stops_no_delta_revision_for_human_review(monkeypatch):
+    import hashlib
+
+    draft = "# Findings\nSame draft"
+    fake_llm = _build_fake_llm(nodes_module.CriticVerdict(verdict="REVISE", feedback=["Change it"], missing_areas=[]))
+    monkeypatch.setattr(nodes_module, "_record_progress", AsyncMock())
+    monkeypatch.setattr(nodes_module, "record_agent_run", AsyncMock())
+    monkeypatch.setattr(nodes_module, "get_fast_llm", lambda: fake_llm)
+    monkeypatch.setattr(nodes_module, "get_active_model_name", lambda **_: "test-model")
+
+    result = await nodes_module.critic_node({
+        "draft_report_markdown": draft,
+        "current_micro_revision": 1,
+        "max_micro_revisions": 2,
+        "critic_review_metadata": {"draft_sha256": hashlib.sha256(draft.encode()).hexdigest()},
+        "claims": [],
+    })
+
+    assert result["critic_verdict"] == "NEEDS_REVIEW"
+    assert any("no manuscript change" in item for item in result["critic_feedback"])
+
+
+@pytest.mark.asyncio
+async def test_critic_budget_exhaustion_keeps_draft_and_marks_review_required(monkeypatch):
+    monkeypatch.setattr(nodes_module, "_record_progress", AsyncMock())
+    monkeypatch.setattr(nodes_module, "record_agent_run", AsyncMock())
+    monkeypatch.setattr(nodes_module, "get_fast_llm", lambda: _build_fake_llm(None))
+    monkeypatch.setattr(nodes_module, "get_active_model_name", lambda **_: "test-model")
+    monkeypatch.setattr(
+        nodes_module,
+        "invoke_llm_with_budget",
+        AsyncMock(side_effect=nodes_module.ProviderBudgetExceeded("test budget exhausted")),
+    )
+
+    result = await nodes_module.critic_node({"draft_report_markdown": "# Draft\nKeep this report."})
+
+    assert result["critic_verdict"] == "NEEDS_REVIEW"
+    assert result["critic_review_metadata"]["budget_limited"] is True
+    assert "test budget exhausted" in result["critic_feedback"][0]
 
 
 # ---------------------------------------------------------------------------
@@ -424,7 +524,10 @@ async def test_graph_micro_loop_revise_then_pass(monkeypatch):
 
     async def _count_writer(state):
         writer_calls.append(1)
-        return await _real_writer(state)
+        result = await _real_writer(state)
+        if len(writer_calls) > 1:
+            result["draft_report_markdown"] += "\n\nRevision applied."
+        return result
 
     async def _count_critic(state):
         critic_calls.append(1)
@@ -455,6 +558,7 @@ async def test_graph_micro_loop_revise_then_pass(monkeypatch):
     assert len(critic_calls) == 2, f"Critic should run exactly twice; ran {len(critic_calls)} times"
     assert final_state.get("final_report_markdown"), "Report must be produced"
     assert final_state.get("status") == "COMPLETED"
+    assert final_state.get("critic_verdict") == "PASS"
 
 
 @pytest.mark.asyncio
@@ -540,7 +644,8 @@ async def test_graph_budget_exhaustion_skips_researcher(monkeypatch):
     # After the first pass of writer→critic(NEED_MORE_DATA) and budget exhausted,
     # macro_routing → post_processor.
     assert final_state.get("final_report_markdown") is not None, "Must still produce a report"
-    assert final_state.get("status") == "COMPLETED"
+    assert final_state.get("status") == "NEEDS_REVIEW"
+    assert final_state.get("critic_verdict") == "NEED_MORE_DATA"
 
     # Check that macro routing didn't re-enter researcher after critic verdict
     # The researcher that ran is the initial one from supervisor→researcher edge
@@ -659,6 +764,15 @@ async def test_report_retrieval_and_ownership(monkeypatch):
             return {
                 "final_report_markdown": "# Result\nOwner-scoped report.",
                 "current_agent": "post_processor",
+                "status": "NEEDS_REVIEW",
+                "critic_verdict": "NEEDS_REVIEW",
+                "critic_review_metadata": {
+                    "status": "NEEDS_REVIEW",
+                    "verdict": "NEEDS_REVIEW",
+                    "sections_reviewed": ["Result"],
+                    "section_reviews": [{"sections": ["Result"], "verdict": "NEEDS_REVIEW", "feedback": ["Check the method."], "missing_areas": []}],
+                    "review_scope": "internal_quality_control_not_peer_review",
+                },
             }
 
     monkeypatch.setattr(worker_module, "research_graph", SuccessGraph())
@@ -676,12 +790,15 @@ async def test_report_retrieval_and_ownership(monkeypatch):
         # Owner can fetch the task and report
         task_resp = await client.get(f"/api/v1/research/{task_id}", headers=owner_headers)
         assert task_resp.status_code == 200
-        assert task_resp.json()["status"] == "COMPLETED"
+        assert task_resp.json()["status"] == "NEEDS_REVIEW"
 
         report_resp = await client.get(f"/api/v1/research/{task_id}/report", headers=owner_headers)
         assert report_resp.status_code == 200
         assert report_resp.json()["research_task_id"] == task_id
         assert "Owner-scoped report" in report_resp.json()["content_markdown"]
+        assert report_resp.json()["review_status"] == "NEEDS_REVIEW"
+        assert report_resp.json()["review_metadata"]["sections_reviewed"] == ["Result"]
+        assert report_resp.json()["review_metadata"]["section_reviews"][0]["feedback"] == ["Check the method."]
 
         cit_resp = await client.get(f"/api/v1/research/{task_id}/citations", headers=owner_headers)
         assert cit_resp.status_code == 200

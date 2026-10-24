@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
 from typing import Optional
-from pydantic import BaseModel, ConfigDict
+from typing import Any, Dict
+from pydantic import BaseModel, ConfigDict, Field
 
 class ResearchReportResponse(BaseModel):
     id: uuid.UUID
@@ -9,6 +10,8 @@ class ResearchReportResponse(BaseModel):
     title: str
     content_markdown: str
     executive_summary: Optional[str] = None
+    review_status: str = "NEEDS_REVIEW"
+    review_metadata: Dict[str, Any] = Field(default_factory=dict)
     word_count: int
     created_at: datetime
     updated_at: datetime

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, Text, Integer, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -15,6 +15,8 @@ class ResearchReport(Base):
     title = Column(String(255), nullable=False)
     content_markdown = Column(Text, nullable=False)
     executive_summary = Column(Text, nullable=True)
+    review_status = Column(String(30), default="NEEDS_REVIEW", nullable=False)
+    review_metadata = Column(JSONB, default=dict, nullable=False)
     word_count = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
