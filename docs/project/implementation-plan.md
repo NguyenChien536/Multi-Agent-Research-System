@@ -1,6 +1,6 @@
 # Kế hoạch triển khai đến production — Synthia
 
-**Chốt kế hoạch:** 23/10/2026 · **Mốc nộp/demo:** 10/11/2026 · **Bằng chứng audit:** 22/10/2026, develop@3bbeb01 và các thay đổi frontend local hiện có.
+**Chốt kế hoạch:** 23/10/2026 · **Cập nhật tiến độ:** 24/10/2026, develop@b2e39b7 · **Mốc nộp/demo:** 10/11/2026.
 
 Đây là nguồn duy nhất về **việc cần làm, thứ tự và điều kiện phát hành**. [Roadmap](roadmap-and-progress.md) ghi việc đã làm; [biên bản](baseline-verification.md) ghi bằng chứng. P0–P7/G0–G7 giữ ý nghĩa trong [SRS](../requirements/SRS.md); P8–P10 bổ sung đường đến production. Lịch này thay lịch 12/10 đã lỗi thời.
 
@@ -26,7 +26,7 @@ Giữ **modular monolith**: backend chia module nghiệp vụ; API và worker l�
 | Thành phần / pattern | Quyết định | Điều kiện cần khép |
 |---|---|---|
 | Next.js + FastAPI | UI gọi API có xác thực; polling là nền, SSE chỉ thêm khi có replay/reconnect | Browser E2E login/create/upload/wait/resume/report; session hết hạn rõ ràng |
-| LangGraph + state machine | Roles có input/output schema; Postgres checkpoint theo task/run | Resume đúng node/version, side effect idempotent; compile hiện chưa truyền checkpointer |
+| LangGraph + state machine | Roles có input/output schema; Postgres checkpointer theo workflow run, interrupt cho approval/data wait | Resume đúng node/version; còn cần fault test worker process restart và kiểm tra side effect idempotent khi redelivery |
 | PostgreSQL + pgvector | Nguồn chuẩn cho owner, run, versions, evidence, journal và outbox | Migration dữ liệu cũ, constraints/index; pin embedding profile, không trộn vector khác model |
 | Transactional outbox + Celery/Redis | Ghi yêu cầu chạy cùng transaction DB, retry hữu hạn, claim có lease | ACK/redelivery cấu hình rõ; delivery có thể lặp nên ghi output phải idempotent; thử crash thật |
 | Provider gateway | Một đường gọi LLM/search/embedding có quota, timeout, retry, usage ledger | Reserve trước từng call/retry/fallback; server áp cap, không chỉ cộng tiền sau call |
@@ -41,13 +41,13 @@ Nguồn kỹ thuật: [LangGraph persistence](https://docs.langchain.com/oss/pyt
 
 ## 3. Backlog audit phải xử lý trước
 
-Ngày 22/10: **74 backend tests, FE lint/build đạt; G1–G7 chưa đạt đầy đủ, chưa production-ready**. Chi tiết tại [biên bản audit](baseline-verification.md#kiem-tra-2026-10-22). R1–R8 là mã đầu việc tại đây, không phải số GitHub issue.
+Baseline audit ngày 22/10 có **74 backend tests, FE lint/build đạt**. Sau R1–R3, suite hiện có **109 backend tests**; G1–G7 vẫn chưa đạt đầy đủ và hệ thống chưa production-ready. Chi tiết baseline tại [biên bản audit](baseline-verification.md#kiem-tra-2026-10-22). R1–R8 là mã đầu việc tại đây, không phải số GitHub issue.
 
 | Thứ tự | Vấn đề thực tế | Cách sửa đã chọn | Nghiệm thu |
 |---|---|---|---|
 | R1 | FE bỏ token ở /auth/me; data/resume có UUID lỗi JSON, thiếu file/provenance vẫn QUEUED | Chỉ bỏ token với login/register; serialize JSON đúng; artifact phải READY, đúng owner/task/type; intake có provenance | Token, UUID, file thiếu/sai owner, duplicate resume; G1/G4 |
 | R2 | Budget chưa chặn trước call; cancel chưa chặn graph gọi tool tiếp | Gateway + ledger reserve/reconcile; kiểm cancel/lease trước stage/call/side effect | Hết cap không có call tiếp; tính retry/fallback/embedding; không output muộn. Không hứa thu hồi call provider đã nhận; G1/G2 |
-| R3 | Resume dựng lại graph từ đầu; thiếu checkpoint/run/plan version bền vững | ResearchRun, Postgres checkpointer, decision ID/version và migration | Restart ở cả hai loại WAITING; A/B/C chờ vẫn chạy D; chặn decision/data cũ; G1/G4 |
+| R3 | Resume dựng lại graph từ đầu; thiếu checkpoint/run/plan version bền vững | WorkflowRun, Postgres checkpointer, interrupt, decision ID/version và migration | Đã merge PR #44; suite test resume approval/data và stale version. Còn cần fault test kill/restart worker và kiểm tra cạnh tranh nhiều worker; G1/G4 chưa khép |
 | R4 | Routine trong worker; PLAN_FROZEN dựng sau tính toán; rerun cùng process | Runner riêng; persist plan/start trước dispatch; ghi từng attempt; rerun execution độc lập | Kill/timeout vẫn giữ journal; kết quả âm được giữ; so manifest/checksum/tolerance; G5 |
 | R5 | Critic chỉ đọc 3.000 ký tự đầu; protocol chưa đủ review gate | Review từng section với evidence/method/results; tổng hợp verdict; no-delta stop, citation repair dùng chung cap | Lỗi cuối bài bị phát hiện; nguồn bất đồng/thiếu evidence, protocol chưa đạt không phát hành như đã duyệt; G2/G4/G5 |
 | R6 | PDF parse/embed ngay trong HTTP request; hard-delete rồi cleanup có thể bỏ qua lỗi | Ingest job riêng, READY gating; tombstone và cleanup retry | Timeout, upload trùng, xóa khi ingest/run, file mồ côi; G3/G6 |
@@ -58,25 +58,27 @@ Ngày 22/10: **74 backend tests, FE lint/build đạt; G1–G7 chưa đạt đ�
 
 **Cập nhật 24/10 — R2 / issue #41:** giới hạn API theo SRS, đặt chỗ và đối chiếu ngân sách trong JSON task bền vững, tính từng lần thử LLM/fallback/embedding và mỗi truy vấn search, kiểm tra trạng thái/attempt/lease trước request, dừng khi hủy hoặc hết thời gian. Backend suite đạt **109 tests trên PostgreSQL/pgvector tạm**; Docker backend build và OpenAPI đạt. PR #42 đạt 5/5 CI và đã squash-merge vào `develop` tại `eacdb2b`. Không có provider thật trong lần kiểm này. Search mặc định tính 0.01 USD/request để ước lượng; phải đối chiếu với gói Tavily đang dùng trước pilot, nên đây chưa phải bảo đảm hóa đơn chính xác. PDF upload chỉ chia/lưu chunks cục bộ; embedding được tạo trong workflow có ngân sách.
 
-**R1/R2 đã merge; R3 / issue #43 là bước tiếp theo.** R3 đi trước R4/R7; R5 khép đường REVIEW; R6 xong trước khi mở upload cho người ngoài. Chia mỗi hàng thành issue/PR nhỏ khoảng 1–2 ngày làm việc.
+**Cập nhật 24/10 — R3 / issue #43:** thêm `workflow_runs`, PostgreSQL LangGraph checkpointer, interrupt/resume cho duyệt kế hoạch và nạp kết quả, `plan_version` cùng quyết định có version. Worker đóng checkpointer sau mỗi lần chạy; test resume khôi phục state qua một graph/checkpointer mới. Backend suite đạt **109 tests** trên DB PostgreSQL/pgvector tạm; backend/frontend/Compose build đạt; PR #44 đạt **5/5 CI** và merge vào `develop` tại `b2e39b7`. Chưa chạy provider thật, kill worker giữa execution hoặc thử nhiều worker đồng thời; G1/G4 chưa khép.
+
+**R1–R3 đã merge; tiếp theo R5 / issue #45** để khép review toàn bài và chạy REVIEW E2E trong cap. Sau đó R4 xử lý runner/journal thực nghiệm; R6/R7 theo thứ tự phụ thuộc. Chia mỗi hàng thành issue/PR nhỏ khoảng 1–2 ngày làm việc.
 
 **Khép sai khác contract:** R2 thống nhất server/schema/UI/tests với cap SRS (40 LLM calls, 2 USD ước tính, 15 phút active/run). R4 thống nhất CSV 5 MiB/20.000 hàng/30 cột; hiện code nhận giới hạn 10 MiB/10.000 hàng/51 cột. Không nâng số hàng trước khi đo runner 120 giây; khi chưa hỗ trợ phải từ chối rõ ràng và chưa đóng G5. R6/R8 xử lý cache riêng tư theo owner/task/version hoặc tắt cache đó, bao gồm invalidation khi xóa; không chỉ xóa file gốc.
 
 ## 4. P0–P7: phần còn lại và ước lượng
 
-Không xây lại phần đã có. Các số dưới là **giờ tập trung còn lại của Chiến từ 23/10**, gồm test/review cơ bản, chưa gồm 20% dự phòng hoặc chờ provider/hạ tầng.
+Không xây lại phần đã có. Các số dưới là **ước lượng trước khi R3 hoàn tất (23/10)** cho phần việc được liệt kê, gồm test/review cơ bản, chưa gồm 20% dự phòng hoặc chờ provider/hạ tầng. Đo lại tổng giờ còn lại ngày 25/10 sau khi chốt phạm vi R5/R4.
 
 | Chặng | Đã có code | Phần còn lại | Phụ thuộc | Giờ | Gate |
 |---|---|---|---|---:|---|
 | P0 — nền tảng | Docker, migration sạch, DB test riêng, lock dev/CI | Duy trì bằng chứng revision/config | — | 0–2 | G0 đã kiểm lại 22/10 |
-| P1 — quyền/lifecycle | Auth, owner, outbox, lease/recovery, quota RUNNING, cancel/delete | R1 auth, R2 cancel, R3 run; thử broker/worker failure thực | P0 | 8–12 | G1 đầy đủ |
+| P1 — quyền/lifecycle | Auth, owner, outbox, lease/recovery, quota RUNNING, cancel/delete | R1/R2/R3 đã merge; fault test kill/restart worker, nhiều worker và late-write | P0 | 8–12 | G1 đầy đủ |
 | P2 — REVIEW có căn cứ | Web/evidence/writer/critic/citations/AgentRun | R2 budget, R5 toàn bài/no-delta, provider smoke có cap | P1 | 12–18 | G2 với provider thật |
 | P3 — PDF/workspace | PDF/artifacts, UI nối nhiều API, polling | R6 ingestion, READY/embedding scope, browser E2E web+PDF | P1/P2 | 6–10 | G3 |
-| P4 — approval/human-led | Approval, protocol, WAITING_USER_DATA | R1 intake, R3 checkpoint/version, R5 protocol review | P1; plan/evidence P2 | 12–18 | G4 qua restart |
+| P4 — approval/human-led | Approval, protocol, WAITING_USER_DATA, R1 intake, R3 checkpoint/version | R5 protocol review; fault test restart/concurrency | P1; plan/evidence P2 | 12–18 | G4 qua restart |
 | P5 — thực nghiệm | Routine regression, metrics/journal, kiểm lặp | R4 runner/journal/rerun, provenance human-led, artifact integrity | P2/P4 | 16–24 | G5 |
 | P6 — hỏi/sửa/xuất | Xem report, tải artifact cơ bản | R7, export Markdown/gói thực nghiệm; R6 deletion/retention | P2/P4/P5 | 10–16 | G6 |
 | P7 — đánh giá/bản nộp | Có thiết kế evaluation | Freeze dataset/rubric, baseline/ablation, browser/runtime QA, báo cáo kết quả | Các gate tương ứng | 10–16 | G7 |
-| **Tổng** | | | | **74–116** | **Khoảng 89–140 giờ có 20% dự phòng** |
+| **Tổng (ước lượng 23/10, trước R3)** | | | | **74–116** | **Khoảng 89–140 giờ có 20% dự phòng; cần cập nhật 25/10** |
 
 ### Lịch mục tiêu đến 10/11
 
@@ -84,8 +86,8 @@ Không xây lại phần đã có. Các số dưới là **giờ tập trung cò
 
 | Khoảng thời gian | Ưu tiên điều phối | Điểm kiểm soát |
 |---|---|---|
-| 23–25/10 | R1, nền R2; khóa contract run/budget | Không lỗi intake/session; guard trước paid call |
-| 26/10–01/11 | R3, REVIEW/R5, provider smoke có cap, upload | Bài REVIEW qua UI; restart/resume và nhiều bài không lẫn nhau |
+| 23–25/10 | R1/R2/R3 đã merge; khóa contract run/budget và kiểm resume | 109 backend tests; còn cần fault test restart/worker concurrency |
+| 26/10–01/11 | REVIEW/R5, provider smoke có cap, upload | Critic review cả bài; bài REVIEW qua UI; restart/resume và nhiều bài không lẫn nhau |
 | 02–05/11 | R4; protocol/data path và ingestion | Execution riêng; human-led chỉ hoàn thành khi đủ dữ liệu |
 | 06–09/11 | R7/R6 nếu dependency đạt; evaluation/sửa blockers ưu tiên | Freeze candidate và evidence trên cùng revision |
 | 10/11 | Demo/bàn giao | Không thêm feature; báo gate đạt/chưa đạt |
@@ -163,4 +165,4 @@ Evaluation khoa học theo [Evaluation Plan](evaluation-plan.md): pilot 4 câu r
 - [ ] Docs/UI mô tả đúng tính năng mở, giới hạn, cách xóa dữ liệu và trách nhiệm kiểm tra của người nghiên cứu.
 - [ ] Chiến quyết định go/no-go theo evidence; main/tag cùng artifact đã kiểm; health/smoke sau deploy đạt.
 
-**Chốt planning:** giữ hướng sản phẩm và kiến trúc, ưu tiên tính đúng/phục hồi/đo được của chức năng hiện tại. R1/R2 đã merge; triển khai **R3** tiếp theo. Chưa đủ điều kiện chốt phát hành production.
+**Chốt planning:** giữ hướng sản phẩm và kiến trúc, ưu tiên tính đúng/phục hồi/đo được của chức năng hiện tại. R1–R3 đã merge; tiếp theo R5 review toàn bài, rồi R4 runner/journal theo dependency. Chưa đủ điều kiện chốt phát hành production.
