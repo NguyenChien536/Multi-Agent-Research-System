@@ -88,6 +88,22 @@ export interface ResearchReportResponse {
   title: string;
   content_markdown: string;
   executive_summary?: string | null;
+  review_status?: string;
+  review_metadata?: {
+    verdict?: string;
+    sections_reviewed?: string[];
+    section_reviews?: Array<{
+      sections?: string[];
+      verdict?: string;
+      feedback?: string[];
+      missing_areas?: string[];
+    }>;
+    lineage_findings?: string[];
+    automatic_revision_stopped?: boolean;
+    budget_limited?: boolean;
+    review_scope?: string;
+    [key: string]: unknown;
+  };
   word_count: number;
   created_at: string;
   updated_at: string;
