@@ -62,10 +62,10 @@ async def create_research_task(
     
     budget_dict = task_in.budget.model_dump() if task_in.budget else {
         "max_cost_usd": 2.0,
-        "max_llm_calls": 50,
+        "max_llm_calls": 40,
         "max_input_tokens": 100000,
         "max_output_tokens": 50000,
-        "timeout_seconds": 300,
+        "timeout_seconds": 900,
     }
     
     task = ResearchTask(
@@ -267,6 +267,8 @@ async def cancel_research_task(
     task.status = "CANCELLED"
     task.completed_at = datetime.now(timezone.utc)
     task.worker_lease_until = None
+    from app.services.provider_budget import pause_budget_config
+    task.budget_config = pause_budget_config(task.budget_config)
 
     # Cancel any pending outbox entry to prevent dispatch
     outbox_res = await db.execute(
@@ -438,12 +440,16 @@ async def upload_task_pdf(
 
     # 8. Chia nhỏ (Chunking) và tạo Vector Embedding trong pgvector
     embedder = EmbedderTool()
-    chunks_count = await embedder.embed_and_store(
-        db=db,
-        task_id=task.id,
-        source_id=db_source.id,
-        text_content=parsed_doc["text"],
-    )
+    try:
+        chunks_count = await embedder.embed_and_store(
+            db=db,
+            task_id=task.id,
+            source_id=db_source.id,
+            text_content=parsed_doc["text"],
+        )
+    except Exception:
+        artifact_store.delete_artifact(task.id, artifact_meta["file_name"])
+        raise
 
     await db.commit()
 
@@ -456,7 +462,7 @@ async def upload_task_pdf(
         page_count=parsed_doc["page_count"],
         chunks_count=chunks_count,
         sha256_hash=artifact_meta["sha256_hash"],
-        message="Tải lên và nạp dữ liệu PDF thành công",
+        message="Tải lên và chia nhỏ tài liệu PDF thành công",
     )
 
 

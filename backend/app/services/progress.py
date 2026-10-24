@@ -3,7 +3,7 @@
 import logging
 import uuid
 
-from sqlalchemy import update
+from sqlalchemy import func, update
 
 from app.core.database import AsyncSessionLocal
 from app.models.task import ResearchTask
@@ -38,6 +38,7 @@ async def record_agent_progress(
                 ResearchTask.id == parsed_task_id,
                 ResearchTask.status == "RUNNING",
                 ResearchTask.attempt_number == attempt_number,
+                ResearchTask.worker_lease_until > func.now(),
             )
             .values(**values)
         )

@@ -1,10 +1,14 @@
 # Roadmap và tiến độ — Synthia
 
-**Cập nhật:** 23/10/2026 · **Baseline đã merge:** develop@3bbeb01 · **Hạn nộp/demo:** 10/11/2026.
+**Cập nhật:** 24/10/2026 · **Baseline đã merge:** develop@baac5ba · **Hạn nộp/demo:** 10/11/2026.
 
-### Đang triển khai: R1 / issue #39
+### Đã hoàn thành R1 / issue #39 — tiếp theo R2
 
-Branch `bugfix/39-authenticated-fieldwork-intake`: sửa xác thực profile và tiếp nhận kết quả thực địa. API/UI đã có upload CSV/TXT riêng, bắt buộc provenance/file đúng owner/task, lưu UUID dạng JSON và snapshot/hash của dữ liệu do người dùng cung cấp. Upload không tự resume; resume lặp bị chặn bằng row lock/state. **98 backend tests + 5 frontend tests đạt local**; PR/CI đang được hoàn tất. Đây là sửa một phần G1/G4, không phải nghiệm thu toàn bộ các gate. Bảng audit 22/10 bên dưới là trạng thái baseline trước sửa; lỗi auth/me và UUID/intake đã được xử lý trên branch này.
+Branch `bugfix/39-authenticated-fieldwork-intake`: sửa xác thực profile và tiếp nhận kết quả thực địa. API/UI đã có upload CSV/TXT riêng, bắt buộc provenance/file đúng owner/task, lưu UUID dạng JSON và snapshot/hash của dữ liệu do người dùng cung cấp. Upload không tự resume; resume lặp bị chặn bằng row lock/state. **98 backend tests + 5 frontend tests đạt local**; [PR #40](https://github.com/NguyenChien536/Multi-Agent-Research-System/pull/40) đạt 5/5 CI và đã merge vào develop ngày 23/10, commit baac5ba. Issue #39 đã đóng. Đây là sửa một phần G1/G4, không phải nghiệm thu toàn bộ các gate. Bảng audit 22/10 bên dưới là trạng thái baseline trước sửa; lỗi auth/me và UUID/intake đã được xử lý trên branch này.
+
+### Đang triển khai R2 / issue #41
+
+Nhánh `feature/41-provider-budget-cancel-guards` chặn LLM, search và embedding trước request bằng usage/reservation trong task; retry/fallback được tính riêng, task bị hủy/stale không qua bước tiếp theo. Schema giới hạn theo SRS: 40 LLM calls, 2 USD ước tính, 100k input tokens, 50k output tokens, 15 phút hoạt động. **109 backend tests đạt** trên DB test riêng, Docker backend build và OpenAPI đạt. Chưa tạo PR/nhận CI; provider giả, chưa chạy browser hoặc provider thật. Search dùng mức ước lượng mặc định 0.01 USD/request và cần đối chiếu giá gói trước pilot. PDF được chia chunks tại upload; embedding chạy trong workflow để tính đúng vào budget.
 
 Tài liệu này trả lời **đã làm đến đâu và đã kiểm tra gì**. Thứ tự, lịch và ước lượng chỉ đặt tại [Implementation Plan](implementation-plan.md). Mỗi chặng có nhiều issue; merge code không tự làm gate của cả chặng đạt.
 
@@ -20,7 +24,7 @@ Tài liệu này trả lời **đã làm đến đâu và đã kiểm tra gì**.
 | Chặng | Đã triển khai | Bằng chứng | Phần chưa đạt / gate |
 |---|---|---|---|
 | P0 — môi trường | Runtime, migration, DB test riêng, lockfile dev/CI | 22/10: DB rỗng migrate head; suite/lint/build đạt | G0 nền tảng đạt; release Dockerfile còn lệch lockfile, xử lý R8 |
-| P1 — quyền và vòng đời | Login/ownership; outbox/worker claim/lease; quota RUNNING; cancel/delete; retry job chưa được nhận | PR #38 merged; 74-test suite gồm ca owner/start/recovery/quota | G1 chưa khép: auth/me client lỗi; cancel chưa ngăn tool tiếp tục; deletion/late writes và fault test thật còn thiếu |
+| P1 — quyền và vòng đời | Login/ownership; outbox/worker claim/lease; quota RUNNING; R1 intake; R2 budget/cancel đang ở nhánh | PR #40 R1: 98 backend + 5 frontend, 5/5 CI; R2: 109 backend tests pass local | G1 chưa khép: R2 chưa qua PR/CI, release E2E/fault test và deletion/late-write review còn thiếu |
 | P2 — tìm nguồn và REVIEW | Search/fetch/embed; evidence/claims/citations; Writer/Critic; AgentRun | Các PR #17–#26; fake-provider integration đạt; lịch sử 18/10 có report đã lưu | G2 chưa khép: budget guard, review toàn bài, no-delta; provider E2E trên candidate hiện tại chưa chạy lại |
 | P3 — PDF và workspace | PDF/artifacts; UI gọi API, polling/task detail | PR #28; tests upload/ownership; frontend local build đạt | G3 chưa khép: ingest còn trong request, browser E2E và parser execution boundary |
 | P4 — approval và human-led | Plan approval, protocol, WAITING_APPROVAL/WAITING_USER_DATA, intake/resume | PR #30/#32, tests luồng giả đạt | G4 chưa khép: UUID intake lỗi, thiếu evidence vẫn queue, chưa checkpoint/version bền vững hoặc protocol review đầy đủ |
@@ -48,9 +52,8 @@ DB dev chứa nhiều dữ liệu thử lịch sử; có một task QUEUED trong
 
 ## 4. Việc tiếp theo theo thứ tự
 
-1. **R1:** hoàn tất review/CI và nhập PR issue #39 vào develop; source và regression đã được triển khai, không đưa lên main khi chưa đủ release gates.
-2. **R2:** kiểm soát ngân sách trước call và dừng ở ranh giới an toàn khi cancel.
-3. **R3/R5:** resume bền vững và review toàn bài; khép REVIEW thực với provider trong cap.
+1. Hoàn tất **PR/CI R2** trên develop; main chưa được thay đổi.
+2. **R3/R5:** resume bền vững và review toàn bài; khép REVIEW thực với provider trong cap.
 4. **R4/R6/R7:** runner/journal độc lập, ingestion/deletion, Q&A/versions; nghiệm thu từng lát cắt.
 5. **P7 → P8 → P9 → P10:** đánh giá → staging/restore → pilot → production giới hạn theo plan.
 

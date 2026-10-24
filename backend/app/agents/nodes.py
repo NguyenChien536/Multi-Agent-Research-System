@@ -1,4 +1,5 @@
 import asyncio
+import contextvars
 import logging
 import hashlib
 import time
@@ -18,6 +19,14 @@ from app.services.agent_run import (
     get_active_model_name,
     record_agent_run,
 )
+from app.services.provider_budget import (
+    DEFAULT_CALL_OUTPUT_TOKENS,
+    ProviderBudgetExceeded,
+    ResearchTaskStopped,
+    estimate_tokens,
+    reserve_provider_call,
+    settle_provider_call,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +34,14 @@ logger = logging.getLogger(__name__)
 async def _record_progress(state: ResearchState, step: str, iteration: int | None = None) -> None:
     from app.services.progress import record_agent_progress
 
-    await record_agent_progress(
+    updated = await record_agent_progress(
         state.get("task_id"),
         state.get("attempt_number"),
         step,
         iteration,
     )
+    if state.get("enforce_provider_budget") and not updated:
+        raise ResearchTaskStopped("Research task was cancelled or this worker attempt is stale")
 
 # ---------------------------------------------------------------------------
 # Caching Configuration
@@ -57,56 +68,199 @@ else:
 # ---------------------------------------------------------------------------
 
 # Mô hình nhỏ siêu tốc cho logic, trích xuất (Supervisor, Analyst, Critic)
+_BUDGET_CALL_CONTEXT: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
+    "provider_budget_call_context", default=None
+)
+
+
+class BudgetedFallbackLLM:
+    """Try configured providers in order, reserving budget for every attempt."""
+
+    def __init__(self, models: list[tuple[str, Any]]):
+        self.models = models
+
+    def with_structured_output(self, schema: Any):
+        return BudgetedFallbackLLM(
+            [(model_name, model.with_structured_output(schema)) for model_name, model in self.models]
+        )
+
+    async def ainvoke(self, messages: Any, **kwargs: Any):
+        context = _BUDGET_CALL_CONTEXT.get()
+        last_error: Exception | None = None
+        for model_name, model in self.models:
+            reservation_id = None
+            if context:
+                reservation_id = await reserve_provider_call(
+                    task_id=context["task_id"],
+                    attempt_number=context["attempt_number"],
+                    kind="llm",
+                    model=model_name,
+                    input_tokens=context["input_tokens"],
+                    output_tokens=context["output_tokens"],
+                )
+            try:
+                if context:
+                    from app.services.provider_budget import assert_task_active
+                    await assert_task_active(context["task_id"], context["attempt_number"])
+                response = await model.ainvoke(messages, **kwargs)
+                if reservation_id:
+                    prompt_text = context["prompt_text"]
+                    output_text = response.model_dump_json() if hasattr(response, "model_dump_json") else str(
+                        getattr(response, "content", response)
+                    )
+                    input_tokens, output_tokens = extract_tokens(response, prompt_text, output_text)
+                    await settle_provider_call(
+                        task_id=context["task_id"],
+                        reservation_id=reservation_id,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cost_usd=estimate_cost(model_name, input_tokens, output_tokens),
+                        succeeded=True,
+                    )
+                return response
+            except (ProviderBudgetExceeded, ResearchTaskStopped):
+                raise
+            except Exception as exc:
+                last_error = exc
+                if reservation_id:
+                    await settle_provider_call(
+                        task_id=context["task_id"],
+                        reservation_id=reservation_id,
+                        input_tokens=0,
+                        output_tokens=0,
+                        cost_usd=0,
+                        succeeded=False,
+                    )
+                logger.warning("LLM provider attempt failed (%s); trying the next configured provider", model_name)
+        if last_error:
+            raise last_error
+        raise RuntimeError("No LLM provider is configured")
+
+
+def _provider_model_names(provider: str, is_smart: bool) -> list[str]:
+    names = {
+        "gemini": ["gemini-3.5-flash", "gemini-3.5-flash-lite"] if is_smart else [
+            "gemini-3.5-flash-lite", "gemini-3.5-flash"
+        ],
+        "openai": ["gpt-4o", "gpt-4o-mini"] if is_smart else ["gpt-4o-mini", "gpt-4o"],
+        "anthropic": ["claude-3-5-sonnet-20240620", "claude-3-5-haiku-20241022"] if is_smart else [
+            "claude-3-5-haiku-20241022", "claude-3-5-sonnet-20240620"
+        ],
+        "groq": ["llama-3.1-8b-instant"],
+    }
+    return names[provider]
+
+
 def build_llm_chain(is_smart: bool = False):
     providers = [p.strip().lower() for p in settings.LLM_PROVIDER_PRIORITY.split(",")]
-    models = []
+    models: list[tuple[str, Any]] = []
     
     for provider in providers:
         if provider == "gemini" and getattr(settings, "GEMINI_API_KEY", None) and "your_" not in settings.GEMINI_API_KEY:
             from langchain_google_genai import ChatGoogleGenerativeAI
-            model_name = "gemini-3.5-flash" if is_smart else "gemini-3.5-flash-lite"
-            fallback_name = "gemini-3.5-flash-lite" if is_smart else "gemini-3.5-flash"
-            primary_gemini = ChatGoogleGenerativeAI(
-                model=model_name, 
-                temperature=0.7 if is_smart else 0.2, 
-                google_api_key=settings.GEMINI_API_KEY
-            )
-            fallback_gemini = ChatGoogleGenerativeAI(
-                model=fallback_name, 
-                temperature=0.7 if is_smart else 0.2, 
-                google_api_key=settings.GEMINI_API_KEY
-            )
-            models.append(primary_gemini.with_fallbacks([fallback_gemini]))
+            for model_name in _provider_model_names(provider, is_smart):
+                models.append((model_name, ChatGoogleGenerativeAI(
+                    model=model_name,
+                    temperature=0.7 if is_smart else 0.2,
+                    google_api_key=settings.GEMINI_API_KEY,
+                    max_output_tokens=4096,
+                    max_retries=0,
+                )))
         elif provider == "openai" and getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
             from langchain_openai import ChatOpenAI
-            models.append(ChatOpenAI(
-                model="gpt-4o" if is_smart else "gpt-4o-mini", 
-                temperature=0.7 if is_smart else 0.2, 
-                api_key=settings.OPENAI_API_KEY
-            ))
+            model_name = _provider_model_names(provider, is_smart)[0]
+            models.append((model_name, ChatOpenAI(
+                model=model_name,
+                temperature=0.7 if is_smart else 0.2,
+                api_key=settings.OPENAI_API_KEY,
+                max_tokens=4096,
+                max_retries=0,
+            )))
         elif provider == "anthropic" and getattr(settings, "ANTHROPIC_API_KEY", None) and "your_" not in settings.ANTHROPIC_API_KEY:
             from langchain_anthropic import ChatAnthropic
-            models.append(ChatAnthropic(
-                model="claude-3-5-sonnet-20240620" if is_smart else "claude-3-5-haiku-20241022", 
-                temperature=0.7 if is_smart else 0.2, 
-                api_key=settings.ANTHROPIC_API_KEY
-            ))
+            model_name = _provider_model_names(provider, is_smart)[0]
+            models.append((model_name, ChatAnthropic(
+                model=model_name,
+                temperature=0.7 if is_smart else 0.2,
+                api_key=settings.ANTHROPIC_API_KEY,
+                max_tokens=4096,
+                max_retries=0,
+            )))
         elif provider == "groq" and getattr(settings, "GROQ_API_KEY", None) and "your_" not in settings.GROQ_API_KEY:
             from langchain_groq import ChatGroq
-            models.append(ChatGroq(
-                model="llama-3.1-8b-instant", 
-                temperature=0.7 if is_smart else 0.2, 
-                api_key=settings.GROQ_API_KEY
-            ))
+            model_name = _provider_model_names(provider, is_smart)[0]
+            models.append((model_name, ChatGroq(
+                model=model_name,
+                temperature=0.7 if is_smart else 0.2,
+                api_key=settings.GROQ_API_KEY,
+                max_tokens=4096,
+                max_retries=0,
+            )))
             
     if not models:
         raise ValueError("Cần cấu hình ít nhất 1 API KEY hợp lệ trong LLM_PROVIDER_PRIORITY")
         
-    primary_llm = models[0]
-    if len(models) > 1:
-        # Fallback chain: Primary -> Fallback 1 -> Fallback 2
-        return primary_llm.with_fallbacks(models[1:])
-    return primary_llm
+    return BudgetedFallbackLLM(models)
+
+
+async def invoke_llm_with_budget(
+    state: ResearchState,
+    llm: Any,
+    messages: Any,
+    *,
+    model_name: str,
+    output_tokens: int = DEFAULT_CALL_OUTPUT_TOKENS,
+):
+    """Invoke an LLM and charge its pre-call reservation, including test doubles."""
+    if not state.get("enforce_provider_budget") or not state.get("task_id"):
+        return await llm.ainvoke(messages)
+
+    prompt_text = "\n".join(str(getattr(message, "content", message)) for message in messages)
+    context = {
+        "task_id": state["task_id"],
+        "attempt_number": state.get("attempt_number", 1),
+        "input_tokens": estimate_tokens(prompt_text),
+        "output_tokens": output_tokens,
+        "prompt_text": prompt_text,
+    }
+    if isinstance(llm, BudgetedFallbackLLM):
+        token = _BUDGET_CALL_CONTEXT.set(context)
+        try:
+            return await llm.ainvoke(messages)
+        finally:
+            _BUDGET_CALL_CONTEXT.reset(token)
+
+    reservation_id = await reserve_provider_call(
+        task_id=context["task_id"],
+        attempt_number=context["attempt_number"],
+        kind="llm",
+        model=model_name,
+        input_tokens=context["input_tokens"],
+        output_tokens=output_tokens,
+    )
+    try:
+        from app.services.provider_budget import assert_task_active
+        await assert_task_active(context["task_id"], context["attempt_number"])
+        response = await llm.ainvoke(messages)
+        output_text = response.model_dump_json() if hasattr(response, "model_dump_json") else str(
+            getattr(response, "content", response)
+        )
+        input_used, output_used = extract_tokens(response, prompt_text, output_text)
+        await settle_provider_call(
+            task_id=context["task_id"],
+            reservation_id=reservation_id,
+            input_tokens=input_used,
+            output_tokens=output_used,
+            cost_usd=estimate_cost(model_name, input_used, output_used),
+            succeeded=True,
+        )
+        return response
+    except Exception:
+        await settle_provider_call(
+            task_id=context["task_id"], reservation_id=reservation_id,
+            input_tokens=0, output_tokens=0, cost_usd=0, succeeded=False,
+        )
+        raise
 
 def get_fast_llm():
     return build_llm_chain(is_smart=False)
@@ -190,7 +344,9 @@ async def supervisor_node(state: ResearchState) -> Dict[str, Any]:
 
     try:
         # Thực thi LLM gọi schema
-        plan: SupervisorPlan = await llm.ainvoke([HumanMessage(content=prompt)])
+        plan: SupervisorPlan = await invoke_llm_with_budget(
+            state, llm, [HumanMessage(content=prompt)], model_name=model_name, output_tokens=4096
+        )
         duration_ms = int((time.monotonic() - start_ts) * 1000)
         completed_at = datetime.now(timezone.utc)
         in_tok, out_tok = extract_tokens(plan, prompt_str=prompt, output_str=plan.model_dump_json())
@@ -253,7 +409,18 @@ async def researcher_node(state: ResearchState) -> Dict[str, Any]:
 
     try:
         # 1. Gọi Tavily search (parallel)
-        search_results = await execute_parallel_searches(queries, max_results_per_query=3)
+        budget_context = None
+        if state.get("enforce_provider_budget"):
+            budget_context = {
+                "task_id": state["task_id"],
+                "attempt_number": state.get("attempt_number", 1),
+            }
+        if budget_context:
+            search_results = await execute_parallel_searches(
+                queries, max_results_per_query=3, budget_context=budget_context
+            )
+        else:
+            search_results = await execute_parallel_searches(queries, max_results_per_query=3)
 
         # Bỏ qua các URL đã thu thập trước đó (Seen URL Cache)
         visited = state.get("visited_urls", set())
@@ -265,6 +432,9 @@ async def researcher_node(state: ResearchState) -> Dict[str, Any]:
 
         # 2. Cào nội dung (Scraping) song song
         urls_to_scrape = list(new_urls_map.keys())
+        if budget_context:
+            from app.services.provider_budget import assert_task_active
+            await assert_task_active(budget_context["task_id"], budget_context["attempt_number"])
         scraped_data = await fetch_urls_parallel(urls_to_scrape, max_concurrent=5)
 
         # 3. Gom kết quả vào state
@@ -358,7 +528,18 @@ async def curator_node(state: ResearchState) -> Dict[str, Any]:
         async with AsyncSessionLocal() as db:
             for src in sources:
                 if "db_id" in src:
-                    continue  # Đã xử lý ở vòng trước
+                    if state.get("enforce_provider_budget"):
+                        count = await embedder.embed_existing_chunks(
+                            db=db,
+                            task_id=task_id,
+                            source_id=uuid.UUID(src["db_id"]),
+                            budget_context={
+                                "task_id": state["task_id"],
+                                "attempt_number": state.get("attempt_number", 1),
+                            },
+                        )
+                        chunks_count += count
+                    continue  # Existing sources are embedded once; later rounds skip their stored vectors.
 
                 # Lưu Source vào DB
                 db_source = ResearchSource(
@@ -373,14 +554,23 @@ async def curator_node(state: ResearchState) -> Dict[str, Any]:
                 src["db_id"] = str(db_source.id)
 
                 # Chia chunk và nhúng
-                count = await embedder.embed_and_store(
-                    db=db,
-                    task_id=task_id,
-                    source_id=db_source.id,
-                    text_content=src.get("content", "")
-                )
+                embed_args = {
+                    "db": db,
+                    "task_id": task_id,
+                    "source_id": db_source.id,
+                    "text_content": src.get("content", ""),
+                }
+                if state.get("enforce_provider_budget"):
+                    embed_args["budget_context"] = {
+                        "task_id": state["task_id"],
+                        "attempt_number": state.get("attempt_number", 1),
+                    }
+                count = await embedder.embed_and_store(**embed_args)
                 chunks_count += count
 
+            if state.get("enforce_provider_budget"):
+                from app.services.provider_budget import assert_task_active
+                await assert_task_active(state["task_id"], state.get("attempt_number", 1))
             await db.commit()
 
         duration_ms = int((time.monotonic() - start_ts) * 1000)
@@ -459,7 +649,16 @@ async def analyst_node(state: ResearchState) -> Dict[str, Any]:
         async def process_query(query: str) -> tuple[List[Dict], List[Any]]:
             async with AsyncSessionLocal() as db:
                 # RAG: Lấy top 3 chunks liên quan nhất cho query
-                similar_chunks = await embedder.search_similar_chunks(db, task_id, query, limit=3)
+                if state.get("enforce_provider_budget"):
+                    similar_chunks = await embedder.search_similar_chunks(
+                        db, task_id, query, limit=3,
+                        budget_context={
+                            "task_id": state["task_id"],
+                            "attempt_number": state.get("attempt_number", 1),
+                        },
+                    )
+                else:
+                    similar_chunks = await embedder.search_similar_chunks(db, task_id, query, limit=3)
 
                 if not similar_chunks:
                     return [], []
@@ -491,9 +690,13 @@ async def analyst_node(state: ResearchState) -> Dict[str, Any]:
                 """
 
                 try:
-                    extraction = await llm.ainvoke([HumanMessage(content=prompt)])
+                    extraction = await invoke_llm_with_budget(
+                        state, llm, [HumanMessage(content=prompt)], model_name=model_name, output_tokens=4096
+                    )
                     return [c.model_dump() for c in extraction.claims], retrieved_chunks
                 except Exception as e:
+                    if isinstance(e, (ProviderBudgetExceeded, ResearchTaskStopped)):
+                        raise
                     print(f"Lỗi khi trích xuất claims: {e}")
                     return [], []
 
@@ -502,11 +705,18 @@ async def analyst_node(state: ResearchState) -> Dict[str, Any]:
         results = await asyncio.gather(*tasks)
         from app.services.grounding import persist_grounded_claims
 
+        if state.get("enforce_provider_budget"):
+            from app.services.provider_budget import assert_task_active
+            await assert_task_active(state["task_id"], state.get("attempt_number", 1))
+
         async with AsyncSessionLocal() as db:
             for extracted, retrieved_chunks in results:
                 all_claims.extend(
                     await persist_grounded_claims(db, task_id, extracted, retrieved_chunks)
                 )
+            if state.get("enforce_provider_budget"):
+                from app.services.provider_budget import assert_task_active
+                await assert_task_active(state["task_id"], state.get("attempt_number", 1))
             await db.commit()
 
         duration_ms = int((time.monotonic() - start_ts) * 1000)
@@ -608,7 +818,9 @@ async def methodologist_node(state: ResearchState) -> Dict[str, Any]:
 
     try:
         llm = get_smart_llm().with_structured_output(MethodologistProtocol)
-        proto_result: MethodologistProtocol = await llm.ainvoke([HumanMessage(content=prompt)])
+        proto_result: MethodologistProtocol = await invoke_llm_with_budget(
+            state, llm, [HumanMessage(content=prompt)], model_name=model_name, output_tokens=4096
+        )
         protocol_dict = proto_result.model_dump()
         markdown_content = proto_result.protocol_markdown or ""
 
@@ -951,7 +1163,9 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     """
 
     try:
-        response = await llm.ainvoke([HumanMessage(content=prompt)])
+        response = await invoke_llm_with_budget(
+            state, llm, [HumanMessage(content=prompt)], model_name=model_name, output_tokens=4096
+        )
         content = response.content
         if isinstance(content, list):
             draft_markdown = "".join(
@@ -1022,7 +1236,9 @@ async def critic_node(state: ResearchState) -> Dict[str, Any]:
     """
 
     try:
-        verdict: CriticVerdict = await llm.ainvoke([HumanMessage(content=prompt)])
+        verdict: CriticVerdict = await invoke_llm_with_budget(
+            state, llm, [HumanMessage(content=prompt)], model_name=model_name, output_tokens=4096
+        )
         duration_ms = int((time.monotonic() - start_ts) * 1000)
         completed_at = datetime.now(timezone.utc)
         in_tok, out_tok = extract_tokens(verdict, prompt_str=prompt, output_str=verdict.model_dump_json())

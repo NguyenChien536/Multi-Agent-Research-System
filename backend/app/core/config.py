@@ -64,10 +64,12 @@ class Settings(BaseSettings):
     WORKER_LEASE_SECONDS: int = 300
     WORKER_HEARTBEAT_SECONDS: int = 30
     DEFAULT_BUDGET_USD: float = 2.00
-    DEFAULT_MAX_LLM_CALLS: int = 50
+    DEFAULT_MAX_LLM_CALLS: int = 40
     DEFAULT_MAX_INPUT_TOKENS: int = 100000
     DEFAULT_MAX_OUTPUT_TOKENS: int = 50000
-    DEFAULT_TIMEOUT_SECONDS: int = 300
+    DEFAULT_TIMEOUT_SECONDS: int = 900
+    # Conservative per-request estimate used when reserving Tavily search budget.
+    TAVILY_REQUEST_COST_USD: float = 0.01
 
     # Artifact Storage & Upload Limits (SRS FR-02 & P3)
     ARTIFACTS_DIR: str = "storage/artifacts"

@@ -5,11 +5,11 @@ from pydantic import BaseModel, Field, ConfigDict
 
 
 class BudgetConfigSchema(BaseModel):
-    max_cost_usd: float = Field(default=2.00, ge=0.1, le=20.0)
-    max_llm_calls: int = Field(default=50, ge=5, le=200)
-    max_input_tokens: int = Field(default=100000, ge=10000)
-    max_output_tokens: int = Field(default=50000, ge=5000)
-    timeout_seconds: int = Field(default=300, ge=60, le=1800)
+    max_cost_usd: float = Field(default=2.00, ge=0.1, le=2.0)
+    max_llm_calls: int = Field(default=40, ge=5, le=40)
+    max_input_tokens: int = Field(default=100000, ge=10000, le=100000)
+    max_output_tokens: int = Field(default=50000, ge=5000, le=50000)
+    timeout_seconds: int = Field(default=900, ge=60, le=900)
 
 
 class ResearchTaskCreate(BaseModel):

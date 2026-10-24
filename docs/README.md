@@ -2,7 +2,7 @@
 
 **Synthia — Multi-Agent Research System** hỗ trợ người nghiên cứu đi từ câu hỏi/tài liệu đến bản thảo bài báo có nguồn, có kết quả thực nghiệm khi phương pháp yêu cầu. Đây là đề tài học phần ATI; bản thảo vẫn cần người nghiên cứu kiểm tra.
 
-**Cập nhật 22/10/2026:** nhiều chức năng P1–P5 đã có code. 74 backend tests và frontend lint/build đạt, nhưng audit phát hiện lỗi và một số yêu cầu chưa được thực hiện đầy đủ. **Chưa sẵn sàng production.**
+**Cập nhật 24/10/2026:** R1 đã merge vào `develop`; R2 đang triển khai trên nhánh riêng. Backend hiện có 109 tests đạt trên PostgreSQL test riêng. **Chưa sẵn sàng production.**
 
 ## Chỉ cần mở ba tài liệu thường xuyên
 
@@ -14,10 +14,9 @@
 
 ## Việc ngay tiếp theo
 
-1. Hoàn tất PR/CI cho sửa xác thực và nạp kết quả thực địa (**R1, issue #39**): code đã có, 98 backend tests và 5 frontend tests đạt local ngày 23/10.
-2. Đặt chặn ngân sách trước mỗi lần gọi dịch vụ AI, dừng việc tiếp tục khi người dùng hủy (**R2**).
-3. Hoàn thiện lưu/tiếp tục workflow, kiểm tra toàn bài, rồi khép các luồng nghiên cứu bằng thử nghiệm thực tế.
-4. Qua evaluation → staging → dùng thử giới hạn → production. **10/11 là mốc nộp/demo, chưa phải cam kết production.**
+1. Hoàn tất PR/CI cho **R2 / issue #41**: giới hạn ngân sách trước LLM/search/embedding và dừng khi hủy.
+2. Khép phần lưu/tiếp tục workflow và kiểm tra toàn bài (**R3/R5**), rồi chạy E2E với provider thật trong cap.
+3. Qua evaluation → staging → dùng thử giới hạn → production. **10/11 là mốc nộp/demo, chưa phải cam kết production.**
 
 Quy trình Git: issue nhỏ → branch chức năng/sửa lỗi → tests/review → PR develop. Chỉ đưa lên main khi CI và demo end-to-end trên đúng candidate đạt. Xem [CONTRIBUTING](../CONTRIBUTING.md).
 
