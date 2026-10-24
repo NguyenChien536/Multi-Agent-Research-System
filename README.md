@@ -48,7 +48,7 @@
 
 Người nghiên cứu cần tìm và đối chiếu nhiều nguồn, thiết kế phương pháp, kiểm tra kết quả và viết bài có căn cứ. Một câu trả lời trôi chảy hoặc citation tồn tại chưa chứng minh kết luận đúng. Giá trị của việc dùng nhiều agent cần được so sánh thực nghiệm với single-agent có tools và cùng nguồn.
 
-**ATI — Hệ thống đa tác tử hỗ trợ nghiên cứu có bằng chứng và thực nghiệm tái lập** hướng tới một **bản thảo bài báo hoàn chỉnh cho mỗi task** qua ba đường: tổng quan từ web/PDF (REVIEW), thí nghiệm tính toán trong phạm vi được hỗ trợ (EMPIRICAL_COMPUTATIONAL), và nghiên cứu con người thực hiện bên ngoài rồi nạp kết quả thực (EMPIRICAL_HUMAN). Protocol của đường human-led là artifact trung gian. Một user có thể làm bài B khi bài A đang chờ dữ liệu; mỗi bài có state và file riêng. Có hỏi đáp/sửa bài, report versions và tiến độ agent.
+**Synthia — Multi-Agent Research System** hướng tới một **bản thảo bài báo hoàn chỉnh cho mỗi task** qua ba đường: tổng quan từ web/PDF (REVIEW), thí nghiệm tính toán trong phạm vi được hỗ trợ (EMPIRICAL_COMPUTATIONAL), và nghiên cứu con người thực hiện bên ngoài rồi nạp kết quả thực (EMPIRICAL_HUMAN). Protocol của đường human-led là artifact trung gian. Một user có thể làm bài B khi bài A đang chờ dữ liệu; mỗi bài có state và file riêng. Có hỏi đáp/sửa bài, report versions và tiến độ agent.
 
 Bản chốt cập nhật 09/10/2026 yêu cầu một experiment CSV chạy thật trước 10/11, cùng citation/provenance, durable waits và đánh giá baseline/ablation. Tổng quan/human-led protocol nhận nhiều lĩnh vực; execution tự động ban đầu giới hạn routine numeric CSV. Thiếu dữ liệu/kết quả thật thì bài empirical tiếp tục chờ hoặc cần review, không tự sinh Results hay cam kết bài đủ điều kiện công bố. [User Journey và Outputs](docs/project/user-journey-and-outputs.md) mô tả luồng sử dụng đầy đủ.
 
@@ -68,13 +68,13 @@ Curator/ingestion, router, citation validator, budget và runner là mô-đun co
 
 ## ✨ Năng lực và trạng thái
 
-**Cập nhật 22/10/2026:** source baseline `develop@3bbeb01`. Dự án đang phát triển; đã có nhiều chức năng P1–P5 nhưng chưa khép toàn bộ acceptance gates và chưa sẵn sàng production.
+**Cập nhật 24/10/2026:** source baseline `develop@b2e39b7`. R1–R3 đã merge; backend suite có 109 tests và PR #44 đạt CI 5/5. Dự án vẫn chưa khép toàn bộ acceptance gates và chưa sẵn sàng production.
 
 | Năng lực | Bằng chứng gần nhất | Phần còn thiếu |
 |---|---|---|
-| Auth/ownership, outbox, quota RUNNING, worker recovery | Backend suite **74 passed**; PR #38 đã merge; GitHub CI **5/5 đạt** | Sửa client auth/me; cancellation/late writes và fault test runtime còn cần hoàn thiện |
-| Research/evidence/citation workflow | Có code và provider-mocked integration; biên bản 18/10 có report lịch sử còn lưu | Budget trước call, Critic toàn bài, provider smoke trên candidate hiện tại |
-| PDF, approval, human-led và computational routine | Đã triển khai các đường cơ bản và có tests | Intake UUID/provenance, checkpoint bền vững, runner riêng, journal trước execution |
+| Auth/ownership, outbox, quota RUNNING, worker recovery | R1–R3 đã merge; backend suite **109 passed**; PR #44 GitHub CI **5/5 đạt** | Kill/restart fault test, nhiều worker, cancellation/late-write và release E2E còn cần hoàn thiện |
+| Research/evidence/citation workflow | Có code và provider-mocked integration; R2 budget guard đã merge | Critic toàn bài, provider smoke trên candidate hiện tại |
+| PDF, approval, human-led và computational routine | Intake có UUID/provenance; durable checkpoint/version cho approval và data resume | Runner riêng, journal trước execution, ingest job và protocol review |
 | Next.js frontend | Frontend local hiện tại **lint/build đạt**, đã nối nhiều API | Chưa kiểm browser E2E trong audit này; không coi build là nghiệm thu UX |
 | Runtime và deployment | DB migration `d1e2f3a4b5c6`; API **200**, Redis **PONG**, Celery **pong** | Compose dev; chưa có staging/restore/pilot để phát hành production |
 
@@ -129,7 +129,7 @@ MultiAgent Research System/
 
 ## 🚀 Khởi chạy (chưa xác minh trên mọi môi trường)
 
-> **Trạng thái kiểm tra 22/10/2026:** local runtime và 74 backend tests đạt; frontend lint/build đạt. Các giới hạn và lỗi đã tái hiện được ghi ở [Roadmap](docs/project/roadmap-and-progress.md). Chưa có đủ evidence trên release candidate để coi là bản production; dùng [Implementation Plan](docs/project/implementation-plan.md) cho thứ tự triển khai.
+> **Trạng thái kiểm tra 24/10/2026:** develop@b2e39b7 có R1–R3; 109 backend tests đạt trên PostgreSQL/pgvector tạm và CI PR #44 đạt 5/5. Chưa có provider thật, browser E2E hoặc fault test kill/restart worker trên candidate; chưa sẵn sàng production. Chi tiết ở [Roadmap](docs/project/roadmap-and-progress.md) và [Implementation Plan](docs/project/implementation-plan.md).
 
 ### Yêu cầu Tiên quyết
 * [Docker](https://docs.docker.com/get-docker/) & [Docker Compose](https://docs.docker.com/compose/) (khuyên dùng v2.20+)
@@ -285,7 +285,7 @@ Sau khi tạo task, gọi endpoint `/start` để đưa tác vụ vào hàng đ�
 curl -X POST "http://localhost:8000/api/v1/research/67b8a1c9-3e2b-4fa8-9e6b-7cb85a123456/start"
 ```
 
-Endpoint ghi yêu cầu chạy qua outbox để Celery worker gọi LangGraph. Tests ngày 22/10 dùng provider giả; biên bản 18/10 có ghi một run thật, nhưng chưa chạy lại provider/browser E2E trên candidate hiện tại. Kiểm budget, resume/cancel, report/citations và UI theo các gate trong kế hoạch trước khi phát hành.
+Endpoint ghi yêu cầu chạy qua outbox để Celery worker gọi LangGraph. WAITING approval/data lưu checkpoint PostgreSQL và resume theo plan version. Tests ngày 24/10 dùng provider giả; chưa chạy lại provider/browser E2E hoặc kill/restart worker trên candidate hiện tại. Kiểm budget, resume/cancel, report/citations và UI theo các gate trong kế hoạch trước khi phát hành.
 
 ---
 
