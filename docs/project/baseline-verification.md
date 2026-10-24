@@ -6,7 +6,7 @@
 - Mỗi LLM fallback và embedding retry đặt chỗ riêng; Tavily search được chặn trước request. Provider model/giá không nhận diện được sẽ bị chặn. PDF upload chỉ parse/chunk locally; worker tạo embedding trong ngân sách trước khi phân tích.
 - Cancel/stale attempt/lease hết hạn chặn stage hoặc provider call kế tiếp. Budget exhaustion đưa task sang `NEEDS_REVIEW`; lỗi không chắc provider đã nhận request thì giữ nguyên khoản đặt chỗ. Request provider đang bay có thể hoàn tất, nhưng worker không dùng kết quả đó để phát sinh bước tiếp theo sau khi nhận diện cancel.
 - DB test riêng migrate từ rỗng lên `d1e2f3a4b5c6`; `pytest -q`: **109 passed, 4 warnings trong 34.38s**. Gồm kiểm tra giới hạn đồng thời, cap chi phí/thời gian/search, fallback, hủy/stale/lease, embedding retry và không deadlock khi lưu nguồn mới. Provider được giả lập; không dùng DB dev.
-- `docker compose build backend`, `docker compose config --quiet`, Python `compileall` và `GET /api/v1/openapi.json` đạt. Chưa có PR/CI, chưa chạy provider thật hoặc browser E2E; chưa đánh dấu G1/G2 đạt.
+- `docker compose build backend`, `docker compose config --quiet`, Python `compileall` và `GET /api/v1/openapi.json` đạt. PR #42 đạt 5/5 CI và đã squash-merge vào `develop` tại `eacdb2b`; chưa chạy provider thật hoặc browser E2E, nên chưa đánh dấu G1/G2 đạt.
 - Chi phí search hiện dùng **ước tính mặc định 0.01 USD/request**, không phải giá hóa đơn cam kết. Phải kiểm tra/cấu hình theo gói Tavily trước khi chạy pilot có phí. Main chưa thay đổi.
 
 ## R1 ngày 23/10/2026 — issue #39
