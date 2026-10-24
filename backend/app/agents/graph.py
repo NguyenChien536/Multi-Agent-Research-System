@@ -1,4 +1,5 @@
 from langgraph.graph import StateGraph, END
+from langgraph.types import interrupt
 from app.agents.state import ResearchState
 from app.agents.nodes import (
     supervisor_node,
@@ -14,10 +15,31 @@ from app.agents.nodes import (
 
 
 async def plan_approval_wait_node(state: ResearchState) -> dict:
-    """Tạm dừng workflow tại mốc duyệt kế hoạch của người dùng (Human-in-the-Loop)."""
+    """Persist an interrupt and release the worker until the user decides."""
+    decision = interrupt({
+        "kind": "PLAN_APPROVAL",
+        "plan_version": state.get("plan_version", 0),
+        "plan": state.get("plan", {}),
+    })
+    if not isinstance(decision, dict) or decision.get("plan_version") != state.get("plan_version", 0):
+        raise ValueError("Plan approval decision does not match the active plan version")
+    action = decision.get("action")
+    if action == "REVISE_PLAN":
+        return {
+            "current_agent": "supervisor",
+            "status": "RUNNING",
+            "plan_approved": False,
+            "plan": {},
+            "plan_feedback": decision.get("feedback", ""),
+        }
+    if action != "APPROVE_PLAN":
+        raise ValueError("Unsupported plan decision")
     return {
         "current_agent": "supervisor",
-        "status": "WAITING_APPROVAL",
+        "status": "RUNNING",
+        "plan_approved": True,
+        "plan": decision.get("plan", state.get("plan", {})),
+        "plan_feedback": decision.get("feedback", state.get("plan_feedback")),
     }
 
 
@@ -33,11 +55,29 @@ def should_pause_for_plan_approval(state: ResearchState) -> str:
 
 
 async def wait_user_data_node(state: ResearchState) -> dict:
-    """Tạm dừng workflow tại mốc chờ dữ liệu thực địa của người dùng (Gate G4)."""
+    """Persist an interrupt while human-led data collection happens outside ATI."""
+    decision = interrupt({
+        "kind": "USER_DATA",
+        "plan_version": state.get("plan_version", 0),
+        "research_type": state.get("research_type"),
+    })
+    if not isinstance(decision, dict) or decision.get("plan_version") != state.get("plan_version", 0):
+        raise ValueError("Research data does not match the active plan version")
     return {
         "current_agent": "methodologist",
-        "status": "WAITING_USER_DATA",
+        "status": "RUNNING",
+        "user_data_submission": decision.get("submission", {}),
     }
+
+
+def route_after_plan_decision(state: ResearchState) -> str:
+    return "researcher" if state.get("plan_approved") else "supervisor"
+
+
+def route_after_user_data(state: ResearchState) -> str:
+    if state.get("research_type") == "EMPIRICAL_COMPUTATIONAL":
+        return "experiment_runner" if state.get("dataset_csv") else "wait_user_data"
+    return "writer" if state.get("user_data_submission") else "wait_user_data"
 
 
 def route_after_analyst(state: ResearchState) -> str:
@@ -105,7 +145,7 @@ def should_revise_draft(state: ResearchState) -> str:
     return "post_processor"
 
 
-def build_research_graph() -> StateGraph:
+def build_research_graph(checkpointer=None) -> StateGraph:
     """
     Biên dịch StateGraph cho Multi-Agent Research System.
     """
@@ -137,7 +177,11 @@ def build_research_graph() -> StateGraph:
             "researcher": "researcher",
         }
     )
-    workflow.add_edge("plan_approval_wait", END)
+    workflow.add_conditional_edges(
+        "plan_approval_wait",
+        route_after_plan_decision,
+        {"researcher": "researcher", "supervisor": "supervisor"},
+    )
 
     # Researcher -> Curator -> Analyst
     workflow.add_edge("researcher", "curator")
@@ -163,7 +207,11 @@ def build_research_graph() -> StateGraph:
             "writer": "writer",
         },
     )
-    workflow.add_edge("wait_user_data", END)
+    workflow.add_conditional_edges(
+        "wait_user_data",
+        route_after_user_data,
+        {"writer": "writer", "experiment_runner": "experiment_runner", "wait_user_data": "wait_user_data"},
+    )
     workflow.add_edge("experiment_runner", "writer")
 
     # Writer -> Critic (Bắt đầu Micro-loop)
@@ -193,7 +241,7 @@ def build_research_graph() -> StateGraph:
     # Post Processor -> Kết thúc
     workflow.add_edge("post_processor", END)
 
-    return workflow.compile()
+    return workflow.compile(checkpointer=checkpointer)
 
 # Khởi tạo graph instance để Worker có thể import
 research_graph = build_research_graph()

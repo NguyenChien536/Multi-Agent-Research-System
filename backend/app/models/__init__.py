@@ -1,6 +1,6 @@
 from app.core.database import Base
 from app.models.user import User
-from app.models.task import ResearchTask, ResearchIteration, TaskDispatchOutbox
+from app.models.task import ResearchTask, ResearchIteration, TaskDispatchOutbox, WorkflowRun
 from app.models.source import ResearchSource, DocumentChunk
 from app.models.grounding import ClaimEvidence, Evidence, ResearchClaim, Citation
 from app.models.report import ResearchReport, ExportArtifact
@@ -13,6 +13,7 @@ __all__ = [
     "ResearchTask",
     "ResearchIteration",
     "TaskDispatchOutbox",
+    "WorkflowRun",
     "ResearchSource",
     "DocumentChunk",
     "ClaimEvidence",

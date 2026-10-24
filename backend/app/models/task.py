@@ -22,8 +22,11 @@ class ResearchTask(Base):
     current_step = Column(String(30), nullable=True)  # Current agent/module; status remains RUNNING during execution
     require_plan_approval = Column(Boolean, default=False, nullable=False)  # Human-in-the-Loop flag
     plan = Column(JSONB, nullable=True)  # Generated supervisor research plan
+    plan_version = Column(Integer, default=0, nullable=False)
     plan_approved = Column(Boolean, default=False, nullable=False)  # Approval status
     plan_feedback = Column(Text, nullable=True)  # User feedback or adjustment notes
+    resume_action = Column(String(40), nullable=True)
+    resume_payload = Column(JSONB, nullable=True)
     protocol_artifact_id = Column(UUID(as_uuid=True), ForeignKey("export_artifacts.id", ondelete="SET NULL"), nullable=True)
     user_data_submission = Column(JSONB, nullable=True)  # Fieldwork or user-provided data metadata
     
@@ -61,6 +64,27 @@ class ResearchTask(Base):
     analysis_runs = relationship("AnalysisRun", back_populates="task", cascade="all, delete-orphan", order_by="AnalysisRun.created_at")
     journal_entries = relationship("ExperimentJournalEntry", back_populates="task", cascade="all, delete-orphan", order_by="ExperimentJournalEntry.created_at")
     dispatch_events = relationship("TaskDispatchOutbox", back_populates="task", cascade="all, delete-orphan")
+    workflow_runs = relationship("WorkflowRun", back_populates="task", cascade="all, delete-orphan", order_by="WorkflowRun.run_number")
+
+
+class WorkflowRun(Base):
+    """Durable LangGraph thread identity and lifecycle for one research execution."""
+
+    __tablename__ = "workflow_runs"
+    __table_args__ = (UniqueConstraint("research_task_id", "run_number", name="uq_workflow_run_number"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    research_task_id = Column(UUID(as_uuid=True), ForeignKey("research_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    run_number = Column(Integer, nullable=False)
+    plan_version = Column(Integer, default=0, nullable=False)
+    status = Column(String(30), default="RUNNING", nullable=False)
+    checkpoint_thread_id = Column(String(64), nullable=False, unique=True)
+    last_decision_id = Column(UUID(as_uuid=True), nullable=True)
+    started_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    task = relationship("ResearchTask", back_populates="workflow_runs")
 
 
 class TaskDispatchOutbox(Base):

@@ -448,6 +448,7 @@ export default function WorkspacePage() {
     setIsApprovingPlan(true);
     try {
       await api.tasks.approvePlan(task.id, {
+        plan_version: task.plan_version,
         approved_queries: editableQueries.filter(q => q.trim().length > 0),
         feedback: planFeedback.trim() || undefined,
       });
@@ -465,7 +466,7 @@ export default function WorkspacePage() {
     if (!reason.trim()) return;
     setIsRejectingPlan(true);
     try {
-      await api.tasks.rejectPlan(task.id, { reason: reason.trim() });
+      await api.tasks.rejectPlan(task.id, { plan_version: task.plan_version, reason: reason.trim() });
       setReloadKey(v => v + 1);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Không thể từ chối kế hoạch.');
@@ -497,6 +498,7 @@ export default function WorkspacePage() {
     setIsResumingData(true);
     try {
       await api.tasks.resumeWithData(task.id, {
+        plan_version: task.plan_version,
         sample_size: parsedSize,
         method_notes: methodNotes.trim(),
         results_summary: resultsSummary.trim(),

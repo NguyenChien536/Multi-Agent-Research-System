@@ -45,6 +45,7 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
         search_queries=["ai healthcare 1", "ai healthcare 2"],
         required_sections=["Overview", "Methodology", "Results"],
     )
+    supervisor_plan_calls = 0
 
     class FakeStructuredLLM:
         def __init__(self, schema=None):
@@ -57,7 +58,9 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
             return self
 
         async def ainvoke(self, _messages):
+            nonlocal supervisor_plan_calls
             if self.schema is nodes_module.SupervisorPlan:
+                supervisor_plan_calls += 1
                 return plan_mock
             if self.schema is nodes_module.AnalystExtraction:
                 return nodes_module.AnalystExtraction(claims=[
@@ -143,6 +146,7 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
         # 2. Chạy worker lần 1 -> Phải dừng tại WAITING_APPROVAL
         worker_result = await run_langgraph_workflow(task_id)
         assert worker_result["status"] == "WAITING_APPROVAL"
+        assert supervisor_plan_calls == 1
 
         # Kiểm tra database: task ở trạng thái WAITING_APPROVAL, current_step là Supervisor, worker lease đã giải phóng
         async with AsyncSessionLocal() as session:
@@ -159,7 +163,7 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
         cross_get = await client.get(f"/api/v1/research/{task_id}/plan", headers=headers_other)
         assert cross_get.status_code == 404
 
-        cross_approve = await client.post(f"/api/v1/research/{task_id}/plan/approve", json={}, headers=headers_other)
+        cross_approve = await client.post(f"/api/v1/research/{task_id}/plan/approve", json={"plan_version": 1}, headers=headers_other)
         assert cross_approve.status_code == 404
 
         # 4. Chủ sở hữu xem kế hoạch (GET /plan)
@@ -170,11 +174,19 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
         assert plan_data["plan_approved"] is False
         assert len(plan_data["plan"]["search_queries"]) == 2
 
+        stale_approval = await client.post(
+            f"/api/v1/research/{task_id}/plan/approve",
+            json={"plan_version": plan_data["plan_version"] + 1},
+            headers=headers_owner,
+        )
+        assert stale_approval.status_code == 409
+
         # 5. Chủ sở hữu duyệt kế hoạch kèm chỉnh sửa truy vấn (POST /plan/approve)
         approved_queries = ["ai multi-agent clinical diagnostic 2026", "healthcare agents safety"]
         approve_res = await client.post(
             f"/api/v1/research/{task_id}/plan/approve",
             json={
+                "plan_version": plan_data["plan_version"],
                 "approved_queries": approved_queries,
                 "feedback": "Tập trung vào độ an toàn và chẩn đoán lâm sàng",
             },
@@ -189,6 +201,7 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
         # 6. Chạy worker lần 2 -> Tiếp tục từ Researcher và hoàn tất báo cáo
         resumed_result = await run_langgraph_workflow(task_id)
         assert resumed_result["status"] == "SUCCESS"
+        assert supervisor_plan_calls == 1, "The resumed workflow must continue from its checkpoint, not re-plan."
 
         # 7. Kiểm tra kết quả trong DB: Task COMPLETED, có ResearchReport
         async with AsyncSessionLocal() as session:
@@ -243,7 +256,7 @@ async def test_hitl_plan_rejection_flow(monkeypatch):
         # Từ chối kế hoạch
         reject_res = await client.post(
             f"/api/v1/research/{task_id}/plan/reject",
-            json={"reason": "Kế hoạch chưa bao quát rủi ro thanh khoản"},
+            json={"plan_version": 1, "reason": "Kế hoạch chưa bao quát rủi ro thanh khoản"},
             headers=headers,
         )
         assert reject_res.status_code == 200

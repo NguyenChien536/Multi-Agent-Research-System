@@ -374,6 +374,7 @@ async def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         return {
             "current_agent": "supervisor",
             "plan": plan.model_dump(),
+            "plan_version": int(state.get("plan_version", 0)) + 1,
             "delta_queries": plan.search_queries,
             "current_queries": plan.search_queries
         }

@@ -19,7 +19,7 @@ from app.main import app
 from app.models.experiment import AnalysisRun, ExperimentJournalEntry
 from app.models.report import ExportArtifact, ResearchReport
 from app.models.source import DocumentChunk
-from app.models.task import ResearchTask, TaskDispatchOutbox
+from app.models.task import ResearchTask, TaskDispatchOutbox, WorkflowRun
 from app.services.experiment_runner import (
     InvalidInputError,
     TargetLeakageError,
@@ -340,6 +340,13 @@ async def test_dataset_upload_resumes_waiting_computational_task_and_enforces_ow
                 dispatched_at=datetime.now(timezone.utc),
             )
             session.add(event)
+            session.add(WorkflowRun(
+                research_task_id=task.id,
+                run_number=1,
+                plan_version=task.plan_version,
+                status="WAITING_USER_DATA",
+                checkpoint_thread_id=str(uuid.uuid4()),
+            ))
             await session.commit()
 
         csv_data = _generate_synthetic_csv(30, correlated=True)

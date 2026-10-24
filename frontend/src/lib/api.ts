@@ -147,16 +147,16 @@ export const api = {
     getPlan: (id: string) =>
       fetcher<PlanReviewResponse>(`/research/${id}/plan`),
 
-    approvePlan: (id: string, payload?: PlanApprovalRequest) =>
+    approvePlan: (id: string, payload: PlanApprovalRequest) =>
       fetcher<ResearchTaskResponse>(`/research/${id}/plan/approve`, {
         method: 'POST',
-        body: JSON.stringify(payload || {}),
+        body: JSON.stringify(payload),
       }),
 
-    rejectPlan: (id: string, payload?: PlanRejectRequest) =>
+    rejectPlan: (id: string, payload: PlanRejectRequest) =>
       fetcher<ResearchTaskResponse>(`/research/${id}/plan/reject`, {
         method: 'POST',
-        body: JSON.stringify(payload || {}),
+        body: JSON.stringify(payload),
       }),
 
     getProtocol: (id: string) =>

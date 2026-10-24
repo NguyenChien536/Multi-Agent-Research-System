@@ -49,6 +49,7 @@ export interface ResearchTaskResponse {
     required_sections?: string[];
     [key: string]: any;
   } | null;
+  plan_version: number;
   plan_approved?: boolean;
   plan_feedback?: string | null;
   protocol_artifact_id?: string | null;
@@ -168,6 +169,7 @@ export interface PlanReviewResponse {
   status: string;
   require_plan_approval: boolean;
   plan_approved: boolean;
+  plan_version: number;
   plan?: {
     research_angle?: string;
     search_queries?: string[];
@@ -178,15 +180,18 @@ export interface PlanReviewResponse {
 }
 
 export interface PlanApprovalRequest {
+  plan_version: number;
   approved_queries?: string[];
   feedback?: string;
 }
 
 export interface PlanRejectRequest {
+  plan_version: number;
   reason?: string;
 }
 
 export interface UserDataResumeRequest {
+  plan_version: number;
   sample_size: number;
   method_notes: string;
   results_summary: string;
