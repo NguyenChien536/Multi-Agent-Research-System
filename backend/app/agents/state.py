@@ -19,7 +19,7 @@ class ResearchBudget(TypedDict):
     max_iterations: int               # Mặc định: 3
     max_sources: int                  # Mặc định: 20
     max_search_queries: int           # Mặc định: 30
-    max_llm_calls: int                # Mặc định: 50
+    max_llm_calls: int                # Mặc định: 40; provider attempts include fallbacks/retries
     max_input_tokens: int             # Mặc định: 100000
     max_output_tokens: int            # Mặc định: 50000
     max_cost_usd: float               # Mặc định: 2.0

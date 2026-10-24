@@ -1,9 +1,19 @@
 # Biên bản kiểm tra baseline kỹ thuật
 
+## R2 ngày 24/10/2026 — issue #41
+
+- Giới hạn server/schema theo SRS: tối đa 40 LLM calls, 100.000 input tokens, 50.000 output tokens, 2 USD ước tính và 900 giây chạy chủ động. Usage/reservation lưu trong JSON budget của task nên không reset khi worker retry; reserve/reconcile được khóa theo task.
+- Mỗi LLM fallback và embedding retry đặt chỗ riêng; Tavily search được chặn trước request. Provider model/giá không nhận diện được sẽ bị chặn. PDF upload chỉ parse/chunk locally; worker tạo embedding trong ngân sách trước khi phân tích.
+- Cancel/stale attempt/lease hết hạn chặn stage hoặc provider call kế tiếp. Budget exhaustion đưa task sang `NEEDS_REVIEW`; lỗi không chắc provider đã nhận request thì giữ nguyên khoản đặt chỗ. Request provider đang bay có thể hoàn tất, nhưng worker không dùng kết quả đó để phát sinh bước tiếp theo sau khi nhận diện cancel.
+- DB test riêng migrate từ rỗng lên `d1e2f3a4b5c6`; `pytest -q`: **109 passed, 4 warnings trong 34.38s**. Gồm kiểm tra giới hạn đồng thời, cap chi phí/thời gian/search, fallback, hủy/stale/lease, embedding retry và không deadlock khi lưu nguồn mới. Provider được giả lập; không dùng DB dev.
+- `docker compose build backend`, `docker compose config --quiet`, Python `compileall` và `GET /api/v1/openapi.json` đạt. Chưa có PR/CI, chưa chạy provider thật hoặc browser E2E; chưa đánh dấu G1/G2 đạt.
+- Chi phí search hiện dùng **ước tính mặc định 0.01 USD/request**, không phải giá hóa đơn cam kết. Phải kiểm tra/cấu hình theo gói Tavily trước khi chạy pilot có phí. Main chưa thay đổi.
+
 ## R1 ngày 23/10/2026 — issue #39
 
 - Đã sửa A01/A02 ở audit 22/10 trên branch `bugfix/39-authenticated-fieldwork-intake`: profile gửi bearer/401 xử lý session; intake cần file/provenance, kiểm owner/task/type/file, UUID lưu JSON hợp lệ; UI có upload/chọn kết quả CSV/TXT và trạng thái đang tải. Kết quả người dùng không được gắn nhãn xác minh độc lập.
 - Database tạm `synthia_r1_test_cdd7b380`: migrate từ rỗng đến `d1e2f3a4b5c6`, **98 passed, 6 warnings trong 37.51s**; đã xóa DB/artifacts tạm sau kiểm tra. Provider giả; không chạy job người dùng hoặc test trên DB dev.
+- PR #40 đạt **5/5 CI** trên candidate 1ddd020 và đã merge develop tại **baac5ba** ngày 23/10; issue #39 đã đóng. CI build/typecheck và frontend tests xác minh cả điều chỉnh cuối cùng của banner WAITING. Không thay đổi main.
 - **5 frontend regression tests đạt** bằng `npm test`: protected auth/me, login/register, session expiry, failed login và authenticated multipart upload. Frontend CI đã thêm chạy suite này.
 - Ca mới gồm thiếu file/provenance, UUID, sai owner/cùng owner khác task, sai loại artifact/research, file mất/sai kích thước, file malformed/quá lớn/quota, và hai resume đồng thời chỉ tạo một outbox event.
 - Còn phải nghiệm thu browser/provider E2E của release và các yêu cầu R2–R8. Chưa có durable checkpoint/versioned decision (R3), ingest job riêng (R6) hoặc sandbox production. PR/CI được ghi cập nhật tại Roadmap; không đánh dấu G1/G4 hoàn thành chỉ từ R1.

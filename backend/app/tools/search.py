@@ -5,6 +5,13 @@ from tavily import AsyncTavilyClient
 from pydantic import BaseModel, HttpUrl, Field
 
 from app.core.config import settings
+from app.services.provider_budget import (
+    ProviderBudgetExceeded,
+    ResearchTaskStopped,
+    assert_task_active,
+    reserve_provider_call,
+    settle_provider_call,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,15 +33,32 @@ class TavilySearchTool:
         else:
             self.client = AsyncTavilyClient(api_key=self.api_key)
 
-    async def search(self, query: str, max_results: int = 5, search_depth: str = "basic") -> List[SearchResult]:
+    async def search(
+        self,
+        query: str,
+        max_results: int = 5,
+        search_depth: str = "basic",
+        budget_context: dict[str, Any] | None = None,
+    ) -> List[SearchResult]:
         """Thực hiện tìm kiếm."""
         if not self.client:
             raise ValueError("Tavily client chưa được khởi tạo. Kiểm tra TAVILY_API_KEY.")
 
         logger.info(f"Đang tìm kiếm: '{query}' (depth={search_depth}, max={max_results})")
 
+        reservation_id = None
+        if budget_context:
+            reservation_id = await reserve_provider_call(
+                task_id=budget_context["task_id"],
+                attempt_number=budget_context["attempt_number"],
+                kind="search",
+                fixed_cost_usd=settings.TAVILY_REQUEST_COST_USD,
+            )
+
         try:
             # Gọi API bất đồng bộ
+            if reservation_id:
+                await assert_task_active(budget_context["task_id"], budget_context["attempt_number"])
             response = await self.client.search(
                 query=query,
                 search_depth=search_depth,
@@ -44,6 +68,14 @@ class TavilySearchTool:
                 include_domains=None,
                 exclude_domains=None
             )
+
+            if reservation_id:
+                await settle_provider_call(
+                    task_id=budget_context["task_id"], reservation_id=reservation_id,
+                    input_tokens=0, output_tokens=0,
+                    cost_usd=settings.TAVILY_REQUEST_COST_USD, succeeded=True,
+                )
+                await assert_task_active(budget_context["task_id"], budget_context["attempt_number"])
 
             results = []
             for item in response.get("results", []):
@@ -60,16 +92,26 @@ class TavilySearchTool:
             return results
 
         except Exception as e:
+            if reservation_id:
+                await settle_provider_call(
+                    task_id=budget_context["task_id"], reservation_id=reservation_id,
+                    input_tokens=0, output_tokens=0, cost_usd=0, succeeded=False,
+                )
             logger.error(f"Lỗi khi tìm kiếm Tavily với query '{query}': {str(e)}")
+            if isinstance(e, (ProviderBudgetExceeded, ResearchTaskStopped)):
+                raise
             return []
 
-async def execute_parallel_searches(queries: List[str], max_results_per_query: int = 3) -> List[SearchResult]:
+async def execute_parallel_searches(
+    queries: List[str], max_results_per_query: int = 3,
+    budget_context: dict[str, Any] | None = None,
+) -> List[SearchResult]:
     """Thực thi nhiều luồng tìm kiếm song song."""
     tool = TavilySearchTool()
 
     # Tạo danh sách các task bất đồng bộ
     tasks = [
-        tool.search(query=q, max_results=max_results_per_query)
+        tool.search(query=q, max_results=max_results_per_query, budget_context=budget_context)
         for q in queries
     ]
 
@@ -82,6 +124,8 @@ async def execute_parallel_searches(queries: List[str], max_results_per_query: i
 
     for res_list in results_lists:
         if isinstance(res_list, Exception):
+            if isinstance(res_list, (ResearchTaskStopped, ProviderBudgetExceeded)):
+                raise res_list
             logger.error(f"Một task search song song bị lỗi: {res_list}")
             continue
 

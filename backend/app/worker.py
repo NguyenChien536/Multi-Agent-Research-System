@@ -141,6 +141,8 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             user_id = task.user_id
             await session.commit()
             heartbeat = asyncio.create_task(renew_worker_lease(task_id, claim_attempt))
+            from app.services.provider_budget import resume_active_clock
+            await resume_active_clock(task.id)
 
             # Preload existing sources (e.g. uploaded private PDFs) into initial state
             existing_sources_res = await session.execute(
@@ -211,6 +213,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 "max_iterations": task.max_iterations,
                 "max_micro_revisions": 2,
                 "attempt_number": task.attempt_number,
+                "enforce_provider_budget": True,
                 "collected_sources": preloaded_sources,
                 "visited_urls": visited_urls,
             }
@@ -221,6 +224,8 @@ async def run_langgraph_workflow(task_id: str) -> dict:
 
                 # Kiểm tra nếu graph dừng tại điểm duyệt kế hoạch (HITL)
                 if final_state and final_state.get("status") == "WAITING_APPROVAL":
+                    from app.services.provider_budget import pause_active_clock
+                    await pause_active_clock(task.id)
                     await session.refresh(task)
                     if task.status != "RUNNING" or task.attempt_number != claim_attempt:
                         return {"status": "SUPERSEDED", "task_id": task_id}
@@ -236,6 +241,8 @@ async def run_langgraph_workflow(task_id: str) -> dict:
 
                 # Kiểm tra nếu graph dừng tại điểm chờ dữ liệu thực địa của người dùng (Gate G4)
                 if final_state and final_state.get("status") == "WAITING_USER_DATA":
+                    from app.services.provider_budget import pause_active_clock
+                    await pause_active_clock(task.id)
                     await session.refresh(task)
                     if task.status != "RUNNING" or task.attempt_number != claim_attempt:
                         return {"status": "SUPERSEDED", "task_id": task_id}
@@ -446,8 +453,19 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 )
                 total_tokens, total_cost = totals_res.one()
 
-                task.total_tokens_used = int(total_tokens)
-                task.total_cost_usd = round(float(total_cost), 4)
+                provider_usage = (task.budget_config or {}).get("_provider_usage") or {}
+                provider_call_count = sum(
+                    int(provider_usage.get(key, 0))
+                    for key in ("llm_calls", "search_calls", "embedding_calls")
+                )
+                if provider_call_count:
+                    task.total_tokens_used = int(provider_usage.get("input_tokens", 0)) + int(
+                        provider_usage.get("output_tokens", 0)
+                    )
+                    task.total_cost_usd = round(float(provider_usage.get("cost_usd", 0)), 4)
+                else:
+                    task.total_tokens_used = int(total_tokens)
+                    task.total_cost_usd = round(float(total_cost), 4)
                 task.completed_at = datetime.now(timezone.utc)
                 task.status = "COMPLETED"
                 task.worker_lease_until = None
@@ -469,12 +487,19 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 await session.refresh(task)
                 if task.status != "RUNNING" or task.attempt_number != claim_attempt:
                     return {"status": "SUPERSEDED", "task_id": task_id}
-                task.status = "FAILED"
+                from app.services.provider_budget import ProviderBudgetExceeded, ResearchTaskStopped
+                task.status = "NEEDS_REVIEW" if isinstance(e, (ProviderBudgetExceeded, ResearchTaskStopped)) else "FAILED"
                 task.completed_at = datetime.now(timezone.utc)
                 task.worker_lease_until = None
+                if isinstance(e, ProviderBudgetExceeded):
+                    task.current_step = "BUDGET_LIMIT"
                 # Detailed provider/runtime exceptions stay in server logs;
                 # do not expose arbitrary exception text through task.description.
-                error_msg = f"ERROR: Research workflow failed ({type(e).__name__})."
+                error_msg = (
+                    f"STOPPED: {str(e)}"
+                    if isinstance(e, (ProviderBudgetExceeded, ResearchTaskStopped))
+                    else f"ERROR: Research workflow failed ({type(e).__name__})."
+                )
                 task.description = f"{task.description}\n\n{error_msg}" if task.description else error_msg
 
                 from app.models.agent_run import AgentRun
