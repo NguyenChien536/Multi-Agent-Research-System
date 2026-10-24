@@ -224,6 +224,7 @@ async def test_empirical_human_protocol_pause_and_resume(monkeypatch):
             f"/api/v1/research/{task_id}/data/resume",
             headers=auth_headers,
             json={
+                "plan_version": 1,
                 "sample_size": 150,
                 "method_notes": "Khảo sát cắt ngang tại 3 bệnh viện đa khoa khu vực",
                 "results_summary": "78% mức độ đồng thuận giữa khuyến nghị của AI và hội đồng chuyên môn",

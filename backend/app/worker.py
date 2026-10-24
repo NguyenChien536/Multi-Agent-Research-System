@@ -1,23 +1,106 @@
 import asyncio
+from contextlib import asynccontextmanager
 import logging
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from celery import Celery
 from sqlalchemy import func, select, update
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
-from app.models.task import ResearchTask, TaskDispatchOutbox
+from app.models.task import ResearchTask, TaskDispatchOutbox, WorkflowRun
 from app.models.source import DocumentChunk, ResearchSource
 from app.models.report import ExportArtifact, ResearchReport
 from app.models.grounding import Citation, ClaimEvidence, Evidence, ResearchClaim
 from app.models.experiment import AnalysisRun, ExperimentJournalEntry
 from app.models.user import User
-from app.agents.graph import research_graph
+from app.agents.graph import research_graph, build_research_graph
 from app.agents.state import ResearchState
 from app.services.artifact_store import artifact_store
 import json
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_RESEARCH_GRAPH = research_graph
+_CHECKPOINT_SCHEMA_READY = False
+
+
+async def _ensure_checkpoint_schema() -> None:
+    """Initialize LangGraph's checkpoint schema before opening the task transaction."""
+    global _CHECKPOINT_SCHEMA_READY
+    if _CHECKPOINT_SCHEMA_READY or research_graph is not _DEFAULT_RESEARCH_GRAPH:
+        return
+
+    os.environ.setdefault("LANGGRAPH_STRICT_MSGPACK", "true")
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+    async with AsyncPostgresSaver.from_conn_string(settings.POSTGRES_SYNC_URL) as checkpointer:
+        await checkpointer.setup()
+    _CHECKPOINT_SCHEMA_READY = True
+
+
+@asynccontextmanager
+async def _graph_for_worker():
+    """Use PostgreSQL checkpoints in production and preserve graph test doubles."""
+    if research_graph is not _DEFAULT_RESEARCH_GRAPH:
+        yield research_graph
+        return
+
+    os.environ.setdefault("LANGGRAPH_STRICT_MSGPACK", "true")
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
+    async with AsyncPostgresSaver.from_conn_string(settings.POSTGRES_SYNC_URL) as checkpointer:
+        yield build_research_graph(checkpointer=checkpointer)
+
+
+async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRun, preloaded_dataset_csv):
+    from langgraph.types import Command
+
+    config = {"configurable": {"thread_id": run.checkpoint_thread_id}}
+    if not hasattr(graph, "aget_state") or getattr(graph, "checkpointer", None) is None:
+        return await graph.ainvoke(initial_state), config
+
+    snapshot = await graph.aget_state(config)
+    if snapshot and getattr(snapshot, "values", None):
+        pending_interrupts = [
+            item.value
+            for pending_task in getattr(snapshot, "tasks", ())
+            for item in getattr(pending_task, "interrupts", ())
+        ]
+        if pending_interrupts:
+            interrupt_value = pending_interrupts[0]
+            expected_actions = {
+                "PLAN_APPROVAL": {"APPROVE_PLAN", "REVISE_PLAN"},
+                "USER_DATA": {"SUBMIT_USER_DATA"},
+            }
+            action = task.resume_action
+            if not action or action not in expected_actions.get(interrupt_value.get("kind"), set()):
+                raise RuntimeError("This workflow is paused; a matching versioned user decision is required")
+            resume_payload = task.resume_payload or {}
+            if resume_payload.get("plan_version") != interrupt_value.get("plan_version"):
+                raise RuntimeError("Saved user decision does not match the checkpoint plan version")
+            checkpoint_update = {"attempt_number": task.attempt_number}
+            if preloaded_dataset_csv is not None:
+                checkpoint_update["dataset_csv"] = preloaded_dataset_csv
+                checkpoint_update["dataset_artifact_id"] = initial_state.get("dataset_artifact_id")
+            return await graph.ainvoke(
+                Command(
+                    resume=resume_payload,
+                    update=checkpoint_update,
+                ),
+                config=config,
+            ), config
+
+        if not getattr(snapshot, "next", ()) and snapshot.values.get("final_report_markdown"):
+            return snapshot.values, config
+
+        # The checkpoint advanced before a worker crash but the task row still
+        # carries the submitted decision. Resume from graph state, never replay it.
+        return await graph.ainvoke(
+            Command(update={"attempt_number": task.attempt_number}), config=config
+        ), config
+
+    return await graph.ainvoke(initial_state, config=config), config
 
 # Khởi tạo Celery Application
 celery_app = Celery(
@@ -125,6 +208,35 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             task.current_step = None
             task.attempt_number += 1
             task.worker_lease_until = datetime.now(timezone.utc) + timedelta(seconds=settings.WORKER_LEASE_SECONDS)
+            active_run_res = await session.execute(
+                select(WorkflowRun)
+                .where(
+                    WorkflowRun.research_task_id == task.id,
+                    WorkflowRun.status.in_(["RUNNING", "WAITING_APPROVAL", "WAITING_USER_DATA"]),
+                )
+                .order_by(WorkflowRun.run_number.desc())
+                .limit(1)
+                .with_for_update()
+            )
+            workflow_run = active_run_res.scalar_one_or_none()
+            if workflow_run is None:
+                last_run_number = await session.scalar(
+                    select(func.max(WorkflowRun.run_number)).where(WorkflowRun.research_task_id == task.id)
+                )
+                workflow_run = WorkflowRun(
+                    research_task_id=task.id,
+                    run_number=(last_run_number or 0) + 1,
+                    status="RUNNING",
+                    checkpoint_thread_id=str(uuid.uuid4()),
+                    plan_version=task.plan_version,
+                )
+                session.add(workflow_run)
+                await session.flush()
+            else:
+                workflow_run.status = "RUNNING"
+                workflow_run.updated_at = datetime.now(timezone.utc)
+                task.plan_version = max(task.plan_version, workflow_run.plan_version)
+            workflow_run_id = workflow_run.id
             dispatch_result = await session.execute(
                 select(TaskDispatchOutbox)
                 .where(
@@ -140,6 +252,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             claim_attempt = task.attempt_number
             user_id = task.user_id
             await session.commit()
+            await _ensure_checkpoint_schema()
             heartbeat = asyncio.create_task(renew_worker_lease(task_id, claim_attempt))
             from app.services.provider_budget import resume_active_clock
             await resume_active_clock(task.id)
@@ -203,6 +316,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 "require_plan_approval": task.require_plan_approval,
                 "plan_approved": task.plan_approved,
                 "plan": task.plan or {},
+                "plan_version": task.plan_version,
                 "plan_feedback": task.plan_feedback,
                 "protocol_artifact_id": str(task.protocol_artifact_id) if task.protocol_artifact_id else None,
                 "user_data_submission": task.user_data_submission or None,
@@ -213,6 +327,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 "max_iterations": task.max_iterations,
                 "max_micro_revisions": 2,
                 "attempt_number": task.attempt_number,
+                "workflow_run_id": str(workflow_run_id),
                 "enforce_provider_budget": True,
                 "collected_sources": preloaded_sources,
                 "visited_urls": visited_urls,
@@ -220,10 +335,24 @@ async def run_langgraph_workflow(task_id: str) -> dict:
 
             # 3. Kích hoạt (Invoke) Graph
             try:
-                final_state = await research_graph.ainvoke(initial_state)
+                async with _graph_for_worker() as graph:
+                    final_state, _graph_config = await _invoke_checkpointed_graph(
+                        graph, initial_state, task, workflow_run, preloaded_dataset_csv
+                    )
+
+                pending_interrupts = (final_state or {}).get("__interrupt__", ())
+                interrupt_info = None
+                if pending_interrupts:
+                    interrupt_info = getattr(pending_interrupts[0], "value", pending_interrupts[0])
+                pause_kind = (interrupt_info or {}).get("kind")
+                if not pause_kind and final_state:
+                    if final_state.get("status") == "WAITING_APPROVAL":
+                        pause_kind = "PLAN_APPROVAL"
+                    elif final_state.get("status") == "WAITING_USER_DATA":
+                        pause_kind = "USER_DATA"
 
                 # Kiểm tra nếu graph dừng tại điểm duyệt kế hoạch (HITL)
-                if final_state and final_state.get("status") == "WAITING_APPROVAL":
+                if pause_kind == "PLAN_APPROVAL":
                     from app.services.provider_budget import pause_active_clock
                     await pause_active_clock(task.id)
                     await session.refresh(task)
@@ -233,14 +362,20 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     task.status = "WAITING_APPROVAL"
                     task.current_step = "Supervisor"
                     task.plan = final_state.get("plan")
+                    task.plan_version = int(final_state.get("plan_version", task.plan_version))
                     task.plan_approved = False
+                    task.resume_action = None
+                    task.resume_payload = None
                     task.worker_lease_until = None
+                    workflow_run.status = "WAITING_APPROVAL"
+                    workflow_run.plan_version = task.plan_version
+                    workflow_run.updated_at = datetime.now(timezone.utc)
                     await session.commit()
                     logger.info("Task %s: Paused at WAITING_APPROVAL. Worker lease released.", task_id)
                     return {"status": "WAITING_APPROVAL", "task_id": task_id}
 
                 # Kiểm tra nếu graph dừng tại điểm chờ dữ liệu thực địa của người dùng (Gate G4)
-                if final_state and final_state.get("status") == "WAITING_USER_DATA":
+                if pause_kind == "USER_DATA":
                     from app.services.provider_budget import pause_active_clock
                     await pause_active_clock(task.id)
                     await session.refresh(task)
@@ -248,6 +383,8 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                         return {"status": "SUPERSEDED", "task_id": task_id}
 
                     task.status = "WAITING_USER_DATA"
+                    task.plan = final_state.get("plan", task.plan)
+                    task.plan_version = int(final_state.get("plan_version", task.plan_version))
                     task.current_step = (
                         "Waiting for dataset"
                         if getattr(task, "research_type", "REVIEW") == "EMPIRICAL_COMPUTATIONAL"
@@ -275,6 +412,11 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                         task.protocol_artifact_id = art.id
 
                     task.worker_lease_until = None
+                    task.resume_action = None
+                    task.resume_payload = None
+                    workflow_run.status = "WAITING_USER_DATA"
+                    workflow_run.plan_version = task.plan_version
+                    workflow_run.updated_at = datetime.now(timezone.utc)
                     await session.commit()
                     logger.info("Task %s: Paused at WAITING_USER_DATA. Worker lease released.", task_id)
                     return {"status": "WAITING_USER_DATA", "task_id": task_id}
@@ -469,6 +611,11 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 task.completed_at = datetime.now(timezone.utc)
                 task.status = "COMPLETED"
                 task.worker_lease_until = None
+                task.resume_action = None
+                task.resume_payload = None
+                workflow_run.status = "COMPLETED"
+                workflow_run.completed_at = datetime.now(timezone.utc)
+                workflow_run.plan_version = task.plan_version
                 await session.commit()
 
                 try:
@@ -501,6 +648,10 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     else f"ERROR: Research workflow failed ({type(e).__name__})."
                 )
                 task.description = f"{task.description}\n\n{error_msg}" if task.description else error_msg
+                task.resume_action = None
+                task.resume_payload = None
+                workflow_run.status = "NEEDS_REVIEW" if isinstance(e, (ProviderBudgetExceeded, ResearchTaskStopped)) else "FAILED"
+                workflow_run.completed_at = datetime.now(timezone.utc)
 
                 from app.models.agent_run import AgentRun
                 totals_res = await session.execute(

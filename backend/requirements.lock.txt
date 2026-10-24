@@ -209,6 +209,9 @@ langgraph-checkpoint==4.2.0
     # via
     #   langgraph
     #   langgraph-prebuilt
+    #   langgraph-checkpoint-postgres
+langgraph-checkpoint-postgres==3.1.2
+    # via -r backend/requirements.txt
 langgraph-prebuilt==1.1.0
     # via langgraph
 langgraph-sdk==0.4.6
@@ -296,6 +299,10 @@ propcache==0.5.4
     # via
     #   aiohttp
     #   yarl
+psycopg==3.3.6
+    # via langgraph-checkpoint-postgres
+psycopg-pool==3.3.3
+    # via langgraph-checkpoint-postgres
 psycopg2-binary==2.9.13
     # via -r backend/requirements.txt
 pyasn1==0.6.4

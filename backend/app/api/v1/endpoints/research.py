@@ -10,7 +10,7 @@ from sqlalchemy import select, func
 from app.core.database import get_db
 from app.core.config import settings
 from app.api.deps import get_current_user
-from app.models.task import ResearchTask, TaskDispatchOutbox
+from app.models.task import ResearchTask, TaskDispatchOutbox, WorkflowRun
 from app.models.user import User
 from app.models.report import ExportArtifact, ResearchReport
 from app.models.grounding import Citation
@@ -48,6 +48,27 @@ from app.services.fieldwork_intake import MAX_RESULT_BYTES, RESULT_TYPES, valida
 from app.tools.embedder import EmbedderTool
 
 router = APIRouter()
+
+
+async def _require_active_workflow_run(db: AsyncSession, task: ResearchTask, expected_status: str) -> WorkflowRun:
+    run = await db.scalar(
+        select(WorkflowRun)
+        .where(
+            WorkflowRun.research_task_id == task.id,
+            WorkflowRun.status == expected_status,
+        )
+        .order_by(WorkflowRun.run_number.desc())
+        .limit(1)
+        .with_for_update()
+    )
+    if run is None:
+        raise HTTPException(
+            status_code=409,
+            detail="This task has no resumable checkpoint. Restart the research task to create a new run.",
+        )
+    if run.plan_version != task.plan_version:
+        raise HTTPException(status_code=409, detail="The saved checkpoint belongs to an older plan version.")
+    return run
 
 
 
@@ -143,6 +164,11 @@ async def start_research_task(
     task.status = "QUEUED"
     task.completed_at = None
     task.worker_lease_until = None
+    task.plan = None
+    task.plan_approved = False
+    task.plan_version = 0
+    task.resume_action = None
+    task.resume_payload = None
 
     # Check if outbox item already exists (e.g. from previously cancelled task)
     outbox_res = await db.execute(
@@ -269,6 +295,15 @@ async def cancel_research_task(
     task.worker_lease_until = None
     from app.services.provider_budget import pause_budget_config
     task.budget_config = pause_budget_config(task.budget_config)
+    active_run_res = await db.execute(
+        select(WorkflowRun).where(
+            WorkflowRun.research_task_id == task.id,
+            WorkflowRun.status.in_(["RUNNING", "WAITING_APPROVAL", "WAITING_USER_DATA"]),
+        ).with_for_update()
+    )
+    for workflow_run in active_run_res.scalars():
+        workflow_run.status = "CANCELLED"
+        workflow_run.completed_at = datetime.now(timezone.utc)
 
     # Cancel any pending outbox entry to prevent dispatch
     outbox_res = await db.execute(
@@ -552,6 +587,7 @@ async def get_research_plan(
         status=task.status,
         require_plan_approval=task.require_plan_approval,
         plan_approved=task.plan_approved,
+        plan_version=task.plan_version,
         plan=task.plan,
         plan_feedback=task.plan_feedback,
     )
@@ -560,7 +596,7 @@ async def get_research_plan(
 @router.post("/{task_id}/plan/approve", response_model=ResearchTaskResponse)
 async def approve_research_plan(
     task_id: uuid.UUID,
-    payload: PlanApprovalRequest = Body(default_factory=PlanApprovalRequest),
+    payload: PlanApprovalRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -578,12 +614,25 @@ async def approve_research_plan(
             status_code=409,
             detail=f"Kế hoạch chỉ có thể duyệt khi task ở trạng thái WAITING_APPROVAL (hiện tại: {task.status})",
         )
+    if payload.plan_version != task.plan_version:
+        raise HTTPException(status_code=409, detail="This approval refers to an outdated plan version. Reload the current plan.")
+    workflow_run = await _require_active_workflow_run(db, task, "WAITING_APPROVAL")
 
     # Nếu người dùng có chỉnh sửa search queries
+    updated_plan = dict(task.plan or {})
     if payload.approved_queries and task.plan:
-        updated_plan = dict(task.plan)
         updated_plan["search_queries"] = payload.approved_queries
-        task.plan = updated_plan
+    decision_id = uuid.uuid4()
+    task.plan = updated_plan
+    task.resume_action = "APPROVE_PLAN"
+    task.resume_payload = {
+        "action": "APPROVE_PLAN",
+        "plan_version": task.plan_version,
+        "plan": updated_plan,
+        "feedback": payload.feedback,
+        "decision_id": str(decision_id),
+    }
+    workflow_run.last_decision_id = decision_id
 
     task.plan_approved = True
     if payload.feedback:
@@ -620,7 +669,7 @@ async def approve_research_plan(
 @router.post("/{task_id}/plan/reject", response_model=ResearchTaskResponse)
 async def reject_research_plan(
     task_id: uuid.UUID,
-    payload: PlanRejectRequest = Body(default_factory=PlanRejectRequest),
+    payload: PlanRejectRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -638,11 +687,23 @@ async def reject_research_plan(
             status_code=409,
             detail=f"Kế hoạch chỉ có thể từ chối khi task ở trạng thái WAITING_APPROVAL (hiện tại: {task.status})",
         )
+    if payload.plan_version != task.plan_version:
+        raise HTTPException(status_code=409, detail="This rejection refers to an outdated plan version. Reload the current plan.")
+    workflow_run = await _require_active_workflow_run(db, task, "WAITING_APPROVAL")
 
     task.plan_approved = False
     task.plan = None
     if payload.reason:
         task.plan_feedback = payload.reason
+    decision_id = uuid.uuid4()
+    task.resume_action = "REVISE_PLAN"
+    task.resume_payload = {
+        "action": "REVISE_PLAN",
+        "plan_version": task.plan_version,
+        "feedback": payload.reason or "",
+        "decision_id": str(decision_id),
+    }
+    workflow_run.last_decision_id = decision_id
 
     task.status = "QUEUED"
     task.current_step = None
@@ -792,6 +853,9 @@ async def resume_research_with_data(
 
     if task.research_type != "EMPIRICAL_HUMAN":
         raise HTTPException(status_code=409, detail="Luồng này chỉ nhận kết quả nghiên cứu thực địa.")
+    if payload.plan_version != task.plan_version:
+        raise HTTPException(status_code=409, detail="This result belongs to an outdated plan version. Reload the current protocol.")
+    workflow_run = await _require_active_workflow_run(db, task, "WAITING_USER_DATA")
     artifact = await db.scalar(select(ExportArtifact).where(
         ExportArtifact.id == payload.file_artifact_id,
         ExportArtifact.research_task_id == task.id,
@@ -818,6 +882,15 @@ async def resume_research_with_data(
         **payload.model_dump(mode="json"),
         "artifact_evidence": {**evidence, "file_name": file_path.name},
     }
+    decision_id = uuid.uuid4()
+    task.resume_action = "SUBMIT_USER_DATA"
+    task.resume_payload = {
+        "action": "SUBMIT_USER_DATA",
+        "plan_version": task.plan_version,
+        "submission": task.user_data_submission,
+        "decision_id": str(decision_id),
+    }
+    workflow_run.last_decision_id = decision_id
     task.status = "QUEUED"
     task.current_step = None
     task.queued_at = datetime.now(timezone.utc)
@@ -910,6 +983,9 @@ async def upload_task_dataset(
             status_code=409,
             detail=f"Không thể thay dataset khi task ở trạng thái {task.status}",
         )
+    workflow_run = None
+    if task.status == "WAITING_USER_DATA":
+        workflow_run = await _require_active_workflow_run(db, task, "WAITING_USER_DATA")
 
     filename = file.filename or "dataset.csv"
     if not filename.lower().endswith(".csv"):
@@ -956,6 +1032,15 @@ async def upload_task_dataset(
     # at WAITING_USER_DATA. Reuse the durable outbox row to avoid losing the
     # resume event if the broker is temporarily unavailable.
     if task.status == "WAITING_USER_DATA":
+        decision_id = uuid.uuid4()
+        task.resume_action = "SUBMIT_USER_DATA"
+        task.resume_payload = {
+            "action": "SUBMIT_USER_DATA",
+            "plan_version": task.plan_version,
+            "submission": {"dataset_artifact_id": str(art.id)},
+            "decision_id": str(decision_id),
+        }
+        workflow_run.last_decision_id = decision_id
         task.status = "QUEUED"
         task.current_step = None
         task.queued_at = datetime.now(timezone.utc)

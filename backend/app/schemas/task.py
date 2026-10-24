@@ -48,6 +48,7 @@ class ResearchTaskResponse(BaseModel):
     total_cost_usd: float
     total_tokens_used: int
     plan: Optional[Dict[str, Any]] = None
+    plan_version: int = 0
     plan_approved: bool = False
     plan_feedback: Optional[str] = None
     protocol_artifact_id: Optional[uuid.UUID] = None
@@ -64,22 +65,26 @@ class PlanReviewResponse(BaseModel):
     status: str
     require_plan_approval: bool
     plan_approved: bool
+    plan_version: int
     plan: Optional[Dict[str, Any]] = None
     plan_feedback: Optional[str] = None
 
 
 class PlanApprovalRequest(BaseModel):
+    plan_version: int = Field(..., ge=1)
     approved_queries: Optional[List[str]] = Field(default=None, description="Optional updated or curated search queries")
     feedback: Optional[str] = Field(default=None, description="Optional feedback notes for the research run")
 
 
 class PlanRejectRequest(BaseModel):
+    plan_version: int = Field(..., ge=1)
     reason: Optional[str] = Field(default=None, description="Reason for rejection or requested changes")
 
 
 class UserDataResumeRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
+    plan_version: int = Field(..., ge=1, description="Plan version this result file belongs to")
     sample_size: int = Field(..., ge=1, description="Sample size or observation count from fieldwork/lab")
     method_notes: str = Field(..., min_length=10, max_length=5000, description="Fieldwork/lab execution notes and procedure")
     results_summary: str = Field(..., min_length=10, max_length=20000, description="Summary of collected observations, metrics, or raw results")

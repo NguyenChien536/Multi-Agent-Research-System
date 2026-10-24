@@ -9,7 +9,7 @@ from app.api.v1.endpoints import research
 from app.core.database import AsyncSessionLocal
 from app.main import app
 from app.models.report import ExportArtifact
-from app.models.task import ResearchTask, TaskDispatchOutbox
+from app.models.task import ResearchTask, TaskDispatchOutbox, WorkflowRun
 from app.services.artifact_store import ArtifactStore
 from app.services.fieldwork_intake import validate_fieldwork_result, MAX_RESULT_BYTES
 
@@ -37,6 +37,14 @@ async def waiting_task(client, headers, research_type='EMPIRICAL_HUMAN', status=
     async with AsyncSessionLocal() as db:
         task = await db.get(ResearchTask, uuid.UUID(task_id))
         task.status = status
+        task.plan_version = 1
+        db.add(WorkflowRun(
+            research_task_id=task.id,
+            run_number=1,
+            plan_version=1,
+            status=status,
+            checkpoint_thread_id=str(uuid.uuid4()),
+        ))
         await db.commit()
     return task_id
 
@@ -49,7 +57,7 @@ async def upload(client, headers, task_id):
 
 
 def submission(artifact_id):
-    return {'sample_size': 20, 'method_notes': 'Collected with a predefined questionnaire.',
+    return {'plan_version': 1, 'sample_size': 20, 'method_notes': 'Collected with a predefined questionnaire.',
             'results_summary': 'Group A contained 12 responses and group B contained 8.',
             'data_provenance': 'Synthetic test fixture, researcher example, 2026-10-23.',
             'file_artifact_id': artifact_id}
@@ -61,6 +69,12 @@ async def test_valid_file_resume_serializes_uuid_and_duplicate_is_rejected():
         headers = await login(client)
         task_id = await waiting_task(client, headers)
         artifact_id = await upload(client, headers, task_id)
+        stale_resume = await client.post(
+            f'/api/v1/research/{task_id}/data/resume',
+            headers=headers,
+            json={**submission(artifact_id), 'plan_version': 2},
+        )
+        assert stale_resume.status_code == 409
         responses = await asyncio.gather(*[
             client.post(f'/api/v1/research/{task_id}/data/resume', headers=headers, json=submission(artifact_id))
             for _ in range(2)
