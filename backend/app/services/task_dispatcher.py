@@ -10,8 +10,9 @@ from sqlalchemy.orm import aliased
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.experiment import AnalysisRun, ExperimentJournalEntry
-from app.models.task import ResearchTask, TaskDispatchOutbox
-from app.worker import execute_research_workflow
+from app.models.task import ResearchTask, TaskDispatchOutbox, DocumentIngestionOutbox
+from app.models.source import ResearchSource
+from app.worker import execute_document_ingestion, execute_research_workflow
 
 logger = logging.getLogger(__name__)
 
@@ -248,11 +249,125 @@ async def dispatch_one_outbox_event(user_id: uuid.UUID | None = None) -> bool:
     return True
 
 
+async def dispatch_one_document_ingestion_event(now: datetime | None = None) -> bool:
+    """Publish one pending PDF-ingestion event from its durable database outbox."""
+    now = now or datetime.now(timezone.utc)
+    stale_before = now - timedelta(seconds=settings.OUTBOX_DISPATCH_ACK_TIMEOUT_SECONDS)
+    recover_after = now - timedelta(seconds=settings.OUTBOX_AUTO_RECOVERY_MAX_AGE_SECONDS)
+    max_retries = settings.OUTBOX_MAX_UNCLAIMED_RETRIES
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            stale = await session.execute(
+                select(ResearchSource, DocumentIngestionOutbox)
+                .join(DocumentIngestionOutbox, DocumentIngestionOutbox.source_id == ResearchSource.id)
+                .where(
+                    ResearchSource.ingestion_status == "PROCESSING",
+                    ResearchSource.ingestion_lease_until <= now,
+                    DocumentIngestionOutbox.dispatched_at.is_not(None),
+                )
+                .limit(50)
+                .with_for_update(of=(ResearchSource, DocumentIngestionOutbox), skip_locked=True)
+            )
+            for source, stale_event in stale.all():
+                source.ingestion_lease_until = None
+                stale_event.locked_until = None
+                if source.ingestion_attempt < max_retries:
+                    source.ingestion_status = "PENDING"
+                    source.ingestion_error = "Previous ingestion worker lease expired; retrying the same stored document"
+                    stale_event.dispatched_at = None
+                    stale_event.available_at = now
+                    stale_event.last_error = source.ingestion_error
+                else:
+                    source.ingestion_status = "FAILED"
+                    source.ingestion_error = "Document worker stopped repeatedly before ingestion completed. Retry this document manually."
+                    stale_event.last_error = source.ingestion_error
+
+            # A broker can accept a message even when no worker ever claims it.
+            # Recover only recent messages and bound redelivery; terminally mark
+            # exhausted/old jobs so they remain visible and manually retryable.
+            stale_pending = await session.execute(
+                select(ResearchSource, DocumentIngestionOutbox)
+                .join(DocumentIngestionOutbox, DocumentIngestionOutbox.source_id == ResearchSource.id)
+                .where(
+                    ResearchSource.ingestion_status == "PENDING",
+                    DocumentIngestionOutbox.dispatched_at <= stale_before,
+                )
+                .limit(50)
+                .with_for_update(of=(ResearchSource, DocumentIngestionOutbox), skip_locked=True)
+            )
+            for source, stale_event in stale_pending.all():
+                if stale_event.dispatched_at >= recover_after and stale_event.unclaimed_retries < max_retries:
+                    stale_event.dispatched_at = None
+                    stale_event.locked_until = None
+                    stale_event.available_at = now
+                    stale_event.unclaimed_retries += 1
+                    stale_event.last_error = (
+                        "Ingestion message was not claimed; retrying "
+                        f"({stale_event.unclaimed_retries}/{max_retries})"
+                    )
+                    source.ingestion_error = stale_event.last_error
+                else:
+                    source.ingestion_status = "FAILED"
+                    source.ingestion_error = "Ingestion worker did not claim this document. Retry it manually."
+                    stale_event.last_error = source.ingestion_error
+
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            event = await session.scalar(
+                select(DocumentIngestionOutbox)
+                .join(ResearchTask, ResearchTask.id == DocumentIngestionOutbox.research_task_id)
+                .join(ResearchSource, ResearchSource.id == DocumentIngestionOutbox.source_id)
+                .where(
+                    DocumentIngestionOutbox.dispatched_at.is_(None),
+                    DocumentIngestionOutbox.available_at <= now,
+                    (DocumentIngestionOutbox.locked_until.is_(None) | (DocumentIngestionOutbox.locked_until <= now)),
+                    ResearchSource.ingestion_status == "PENDING",
+                )
+                .order_by(DocumentIngestionOutbox.created_at)
+                .limit(1)
+                .with_for_update(of=DocumentIngestionOutbox, skip_locked=True)
+            )
+            if event is None:
+                return False
+            event.locked_until = now + timedelta(seconds=settings.OUTBOX_LOCK_SECONDS)
+            event.attempts += 1
+            event_id = event.id
+            source_id = event.source_id
+
+    try:
+        await asyncio.to_thread(execute_document_ingestion.delay, str(source_id))
+    except Exception as exc:
+        retry_after = min(
+            settings.OUTBOX_MAX_RETRY_SECONDS,
+            settings.OUTBOX_RETRY_SECONDS * 2 ** min(event.attempts - 1, 10),
+        )
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                event = await session.get(DocumentIngestionOutbox, event_id, with_for_update=True)
+                if event and event.dispatched_at is None:
+                    event.available_at = datetime.now(timezone.utc) + timedelta(seconds=retry_after)
+                    event.locked_until = None
+                    event.last_error = str(exc)[:2000]
+        logger.warning("Document ingestion dispatch failed event=%s", event_id, exc_info=exc)
+        return True
+
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            event = await session.get(DocumentIngestionOutbox, event_id, with_for_update=True)
+            if event and event.dispatched_at is None:
+                event.dispatched_at = datetime.now(timezone.utc)
+                event.locked_until = None
+                event.last_error = None
+    return True
+
+
 async def outbox_dispatch_loop() -> None:
     """Poll the durable outbox; unavailable broker/DB never drops queued work."""
     while True:
         try:
-            dispatched = await dispatch_one_outbox_event()
+            research_dispatched = await dispatch_one_outbox_event()
+            ingestion_dispatched = await dispatch_one_document_ingestion_event()
+            dispatched = research_dispatched or ingestion_dispatched
         except asyncio.CancelledError:
             raise
         except Exception:

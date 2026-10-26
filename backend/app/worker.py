@@ -8,7 +8,7 @@ from celery import Celery
 from sqlalchemy import func, select, update
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
-from app.models.task import ResearchTask, TaskDispatchOutbox, WorkflowRun
+from app.models.task import ResearchTask, TaskDispatchOutbox, DocumentIngestionOutbox, WorkflowRun
 from app.models.source import DocumentChunk, ResearchSource
 from app.models.report import ExportArtifact, ResearchReport
 from app.models.grounding import Citation, ClaimEvidence, Evidence, ResearchClaim
@@ -17,6 +17,8 @@ from app.models.user import User
 from app.agents.graph import research_graph, build_research_graph
 from app.agents.state import ResearchState
 from app.services.artifact_store import artifact_store
+from app.services.pdf_parser import extract_text_from_pdf
+from app.tools.embedder import EmbedderTool
 import json
 
 logger = logging.getLogger(__name__)
@@ -260,7 +262,10 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             # Preload existing sources (e.g. uploaded private PDFs) into initial state
             existing_sources_res = await session.execute(
                 select(ResearchSource)
-                .where(ResearchSource.research_task_id == task.id)
+                .where(
+                    ResearchSource.research_task_id == task.id,
+                    ResearchSource.ingestion_status == "READY",
+                )
                 .order_by(ResearchSource.created_at.asc())
             )
             existing_sources = existing_sources_res.scalars().all()
@@ -730,3 +735,109 @@ def execute_research_workflow(self, task_id: str):
     result = asyncio.run(run_langgraph_workflow(task_id))
 
     return result
+
+
+async def run_document_ingestion(source_id: str) -> dict:
+    """Parse and chunk one private uploaded PDF with a durable, idempotent claim."""
+    source_uuid = uuid.UUID(source_id)
+    now = datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            source = await session.scalar(
+                select(ResearchSource).where(ResearchSource.id == source_uuid).with_for_update()
+            )
+            if source is None:
+                return {"status": "DELETED", "source_id": source_id}
+            if source.ingestion_status == "READY":
+                return {"status": "ALREADY_READY", "source_id": source_id}
+            if source.ingestion_status == "PROCESSING" and source.ingestion_lease_until and source.ingestion_lease_until > now:
+                return {"status": "ALREADY_PROCESSING", "source_id": source_id}
+            source.ingestion_status = "PROCESSING"
+            source.ingestion_error = None
+            source.ingestion_attempt += 1
+            attempt = source.ingestion_attempt
+            source.ingestion_lease_until = now + timedelta(seconds=settings.WORKER_LEASE_SECONDS)
+            task_id = source.research_task_id
+            artifact_id = source.upload_artifact_id
+
+    try:
+        async with AsyncSessionLocal() as session:
+            artifact = await session.scalar(
+                select(ExportArtifact).where(
+                    ExportArtifact.id == artifact_id,
+                    ExportArtifact.research_task_id == task_id,
+                    ExportArtifact.export_type == "PDF_UPLOAD",
+                )
+            )
+            if artifact is None:
+                raise FileNotFoundError("Uploaded document artifact is unavailable")
+            path = artifact_store.get_artifact_path(task_id, artifact.file_path)
+            if path is None:
+                raise FileNotFoundError("Uploaded document file is unavailable")
+            content = await asyncio.to_thread(path.read_bytes)
+            if len(content) != artifact.file_size_bytes:
+                raise ValueError("Uploaded document size does not match its stored metadata")
+            import hashlib
+            checksum = hashlib.sha256(content).hexdigest()
+            source = await session.get(ResearchSource, source_uuid)
+            if source is None or checksum != source.content_checksum:
+                raise ValueError("Uploaded document checksum validation failed")
+
+        parsed = await asyncio.to_thread(extract_text_from_pdf, content)
+
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                source = await session.scalar(
+                    select(ResearchSource).where(ResearchSource.id == source_uuid).with_for_update()
+                )
+                if source is None:
+                    return {"status": "DELETED", "source_id": source_id}
+                if source.ingestion_attempt != attempt or source.ingestion_status != "PROCESSING":
+                    return {"status": "SUPERSEDED", "source_id": source_id}
+                source.title = parsed.get("title") or source.title
+                source.author = parsed.get("author")
+                source.content_snippet = parsed["text"][:500]
+                source.summary = (
+                    f"PDF ({parsed['page_count']} pages, {len(content)} bytes). "
+                    f"SHA256: {checksum}"
+                )
+                chunk_count = await EmbedderTool().embed_and_store(
+                    db=session,
+                    task_id=task_id,
+                    source_id=source_uuid,
+                    text_content=parsed["text"],
+                )
+                source.ingestion_status = "READY"
+                source.ingestion_error = None
+                source.ingestion_lease_until = None
+        logger.info(
+            "PDF ingestion ready task=%s source=%s attempt=%s pages=%s chunks=%s",
+            task_id, source_uuid, attempt, parsed["page_count"], chunk_count,
+        )
+        return {
+            "status": "READY",
+            "task_id": str(task_id),
+            "source_id": source_id,
+            "page_count": parsed["page_count"],
+            "chunks_count": chunk_count,
+        }
+    except Exception as exc:
+        safe_error = f"{type(exc).__name__}: {str(exc)[:400]}"
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                source = await session.scalar(
+                    select(ResearchSource).where(ResearchSource.id == source_uuid).with_for_update()
+                )
+                if source and source.ingestion_attempt == attempt and source.ingestion_status == "PROCESSING":
+                    source.ingestion_status = "FAILED"
+                    source.ingestion_error = safe_error
+                    source.ingestion_lease_until = None
+        logger.exception("PDF ingestion failed task=%s source=%s attempt=%s", task_id, source_uuid, attempt)
+        return {"status": "FAILED", "task_id": str(task_id), "source_id": source_id, "error": safe_error}
+
+
+@celery_app.task(bind=True, name="app.worker.execute_document_ingestion")
+def execute_document_ingestion(self, source_id: str):
+    """Celery entry point for one PDF ingestion attempt."""
+    self.update_state(state="PROGRESS", meta={"message": "Extracting and indexing document"})
+    return asyncio.run(run_document_ingestion(source_id))

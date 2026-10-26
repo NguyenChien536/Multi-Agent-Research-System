@@ -22,6 +22,12 @@ class ResearchSource(Base):
     content_snippet = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
     relevance_score = Column(Float, default=0.0, nullable=False)
+    ingestion_status = Column(String(20), default="READY", nullable=False)  # PENDING | PROCESSING | READY | FAILED
+    ingestion_error = Column(Text, nullable=True)
+    ingestion_attempt = Column(Integer, default=0, nullable=False)
+    ingestion_lease_until = Column(DateTime(timezone=True), nullable=True)
+    upload_artifact_id = Column(UUID(as_uuid=True), ForeignKey("export_artifacts.id", ondelete="SET NULL"), nullable=True)
+    content_checksum = Column(String(64), nullable=True)
     # Image & attribution fields (migration a1b2c3d4e5f6 / ADR-001)
     attribution = Column(String(500), nullable=True)     # Photographer / creator name
     provider_name = Column(String(100), nullable=True)   # e.g. "Serper / Google Images"
