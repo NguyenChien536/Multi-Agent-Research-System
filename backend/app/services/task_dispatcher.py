@@ -10,9 +10,9 @@ from sqlalchemy.orm import aliased
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.experiment import AnalysisRun, ExperimentJournalEntry
-from app.models.task import ResearchTask, TaskDispatchOutbox, DocumentIngestionOutbox
+from app.models.task import ResearchTask, TaskDispatchOutbox, DocumentIngestionOutbox, TaskDeletionOutbox
 from app.models.source import ResearchSource
-from app.worker import execute_document_ingestion, execute_research_workflow
+from app.worker import execute_document_ingestion, execute_research_workflow, execute_task_deletion
 
 logger = logging.getLogger(__name__)
 
@@ -260,7 +260,9 @@ async def dispatch_one_document_ingestion_event(now: datetime | None = None) -> 
             stale = await session.execute(
                 select(ResearchSource, DocumentIngestionOutbox)
                 .join(DocumentIngestionOutbox, DocumentIngestionOutbox.source_id == ResearchSource.id)
+                .join(ResearchTask, ResearchTask.id == DocumentIngestionOutbox.research_task_id)
                 .where(
+                    ResearchTask.status != "DELETING",
                     ResearchSource.ingestion_status == "PROCESSING",
                     ResearchSource.ingestion_lease_until <= now,
                     DocumentIngestionOutbox.dispatched_at.is_not(None),
@@ -288,7 +290,9 @@ async def dispatch_one_document_ingestion_event(now: datetime | None = None) -> 
             stale_pending = await session.execute(
                 select(ResearchSource, DocumentIngestionOutbox)
                 .join(DocumentIngestionOutbox, DocumentIngestionOutbox.source_id == ResearchSource.id)
+                .join(ResearchTask, ResearchTask.id == DocumentIngestionOutbox.research_task_id)
                 .where(
+                    ResearchTask.status != "DELETING",
                     ResearchSource.ingestion_status == "PENDING",
                     DocumentIngestionOutbox.dispatched_at <= stale_before,
                 )
@@ -361,13 +365,70 @@ async def dispatch_one_document_ingestion_event(now: datetime | None = None) -> 
     return True
 
 
+async def dispatch_one_task_deletion_event(now: datetime | None = None) -> bool:
+    """Publish one due tombstone cleanup job from its durable outbox."""
+    now = now or datetime.now(timezone.utc)
+    stale_before = now - timedelta(seconds=settings.OUTBOX_DISPATCH_ACK_TIMEOUT_SECONDS)
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            result = await session.execute(
+                select(TaskDeletionOutbox)
+                .join(ResearchTask, ResearchTask.id == TaskDeletionOutbox.research_task_id)
+                .where(
+                    ResearchTask.status == "DELETING",
+                    or_(
+                        TaskDeletionOutbox.dispatched_at.is_(None),
+                        (TaskDeletionOutbox.dispatched_at <= stale_before)
+                        & (TaskDeletionOutbox.cleanup_lease_until.is_(None) | (TaskDeletionOutbox.cleanup_lease_until <= now)),
+                    ),
+                    TaskDeletionOutbox.available_at <= now,
+                    (TaskDeletionOutbox.locked_until.is_(None) | (TaskDeletionOutbox.locked_until <= now)),
+                )
+                .order_by(TaskDeletionOutbox.created_at)
+                .limit(1)
+                .with_for_update(of=TaskDeletionOutbox, skip_locked=True)
+            )
+            event = result.scalar_one_or_none()
+            if event is None:
+                return False
+            event.locked_until = now + timedelta(seconds=settings.OUTBOX_LOCK_SECONDS)
+            event.attempts += 1
+            event_id = event.id
+            task_id = event.research_task_id
+            claim_lease = event.locked_until
+
+    try:
+        await asyncio.to_thread(execute_task_deletion.delay, str(task_id))
+    except Exception as exc:
+        retry_after = min(settings.OUTBOX_MAX_RETRY_SECONDS, settings.OUTBOX_RETRY_SECONDS * 2 ** min(event.attempts - 1, 10))
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                event = await session.get(TaskDeletionOutbox, event_id, with_for_update=True)
+                if event and event.dispatched_at is None and event.locked_until == claim_lease:
+                    event.available_at = datetime.now(timezone.utc) + timedelta(seconds=retry_after)
+                    event.locked_until = None
+                    event.last_error = f"Broker dispatch failed: {str(exc)[:1800]}"
+        logger.warning("Task deletion dispatch failed event=%s", event_id, exc_info=exc)
+        return True
+
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            event = await session.get(TaskDeletionOutbox, event_id, with_for_update=True)
+            if event and event.dispatched_at is None and event.locked_until == claim_lease:
+                event.dispatched_at = datetime.now(timezone.utc)
+                event.locked_until = None
+                event.last_error = None
+    return True
+
+
 async def outbox_dispatch_loop() -> None:
     """Poll the durable outbox; unavailable broker/DB never drops queued work."""
     while True:
         try:
             research_dispatched = await dispatch_one_outbox_event()
             ingestion_dispatched = await dispatch_one_document_ingestion_event()
-            dispatched = research_dispatched or ingestion_dispatched
+            deletion_dispatched = await dispatch_one_task_deletion_event()
+            dispatched = research_dispatched or ingestion_dispatched or deletion_dispatched
         except asyncio.CancelledError:
             raise
         except Exception:

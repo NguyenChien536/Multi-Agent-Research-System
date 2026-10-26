@@ -8,7 +8,7 @@ from celery import Celery
 from sqlalchemy import func, select, update
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
-from app.models.task import ResearchTask, TaskDispatchOutbox, DocumentIngestionOutbox, WorkflowRun
+from app.models.task import ResearchTask, TaskDispatchOutbox, DocumentIngestionOutbox, TaskDeletionOutbox, WorkflowRun
 from app.models.source import DocumentChunk, ResearchSource
 from app.models.report import ExportArtifact, ResearchReport
 from app.models.grounding import Citation, ClaimEvidence, Evidence, ResearchClaim
@@ -360,7 +360,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 if pause_kind == "PLAN_APPROVAL":
                     from app.services.provider_budget import pause_active_clock
                     await pause_active_clock(task.id)
-                    await session.refresh(task)
+                    await session.refresh(task, with_for_update=True)
                     if task.status != "RUNNING" or task.attempt_number != claim_attempt:
                         return {"status": "SUPERSEDED", "task_id": task_id}
 
@@ -383,7 +383,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 if pause_kind == "USER_DATA":
                     from app.services.provider_budget import pause_active_clock
                     await pause_active_clock(task.id)
-                    await session.refresh(task)
+                    await session.refresh(task, with_for_update=True)
                     if task.status != "RUNNING" or task.attempt_number != claim_attempt:
                         return {"status": "SUPERSEDED", "task_id": task_id}
 
@@ -430,7 +430,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 if not report_content:
                     raise RuntimeError("Research graph completed without producing a report")
 
-                await session.refresh(task)
+                await session.refresh(task, with_for_update=True)
                 if task.status != "RUNNING" or task.attempt_number != claim_attempt:
                     return {"status": "SUPERSEDED", "task_id": task_id}
 
@@ -676,7 +676,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     "final_agent": final_state.get("current_agent")
                 }
             except Exception as e:
-                await session.refresh(task)
+                await session.refresh(task, with_for_update=True)
                 if task.status != "RUNNING" or task.attempt_number != claim_attempt:
                     return {"status": "SUPERSEDED", "task_id": task_id}
                 from app.services.provider_budget import ProviderBudgetExceeded, ResearchTaskStopped
@@ -743,6 +743,13 @@ async def run_document_ingestion(source_id: str) -> dict:
     now = datetime.now(timezone.utc)
     async with AsyncSessionLocal() as session:
         async with session.begin():
+            task = await session.scalar(
+                select(ResearchTask)
+                .where(ResearchTask.id == select(ResearchSource.research_task_id).where(ResearchSource.id == source_uuid).scalar_subquery())
+                .with_for_update()
+            )
+            if task is None or task.status == "DELETING":
+                return {"status": "DELETED", "source_id": source_id}
             source = await session.scalar(
                 select(ResearchSource).where(ResearchSource.id == source_uuid).with_for_update()
             )
@@ -787,6 +794,11 @@ async def run_document_ingestion(source_id: str) -> dict:
 
         async with AsyncSessionLocal() as session:
             async with session.begin():
+                task = await session.scalar(
+                    select(ResearchTask).where(ResearchTask.id == task_id).with_for_update()
+                )
+                if task is None or task.status == "DELETING":
+                    return {"status": "DELETED", "source_id": source_id}
                 source = await session.scalar(
                     select(ResearchSource).where(ResearchSource.id == source_uuid).with_for_update()
                 )
@@ -841,3 +853,85 @@ def execute_document_ingestion(self, source_id: str):
     """Celery entry point for one PDF ingestion attempt."""
     self.update_state(state="PROGRESS", meta={"message": "Extracting and indexing document"})
     return asyncio.run(run_document_ingestion(source_id))
+
+
+async def run_task_deletion(task_id: str) -> dict:
+    """Remove private files only after active research/ingestion leases expire."""
+    task_uuid = uuid.UUID(task_id)
+    now = datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            task = await session.scalar(
+                select(ResearchTask).where(ResearchTask.id == task_uuid).with_for_update()
+            )
+            if task is None:
+                return {"status": "DELETED", "task_id": task_id}
+            if task.status != "DELETING":
+                return {"status": "IGNORED", "task_id": task_id, "reason": "Task is not tombstoned"}
+            outbox = await session.scalar(
+                select(TaskDeletionOutbox)
+                .where(TaskDeletionOutbox.research_task_id == task_uuid)
+                .with_for_update()
+            )
+            if outbox is None:
+                outbox = TaskDeletionOutbox(research_task_id=task_uuid)
+                session.add(outbox)
+                await session.flush()
+            if outbox.cleanup_lease_until and outbox.cleanup_lease_until > now:
+                return {"status": "ALREADY_CLAIMED", "task_id": task_id}
+            active_ingestion = await session.scalar(
+                select(func.count(ResearchSource.id)).where(
+                    ResearchSource.research_task_id == task_uuid,
+                    ResearchSource.ingestion_status == "PROCESSING",
+                    ResearchSource.ingestion_lease_until > now,
+                )
+            )
+            if (task.worker_lease_until and task.worker_lease_until > now) or active_ingestion:
+                outbox.available_at = now + timedelta(seconds=15)
+                outbox.dispatched_at = None
+                outbox.locked_until = None
+                outbox.cleanup_lease_until = None
+                outbox.last_error = "Cleanup deferred while an active worker lease is running"
+                return {"status": "DEFERRED", "task_id": task_id}
+            outbox.cleanup_lease_until = now + timedelta(
+                seconds=max(settings.WORKER_LEASE_SECONDS * 2, settings.OUTBOX_DISPATCH_ACK_TIMEOUT_SECONDS * 2)
+            )
+            outbox_id = outbox.id
+
+    try:
+        await asyncio.to_thread(artifact_store.delete_task_artifacts, task_uuid)
+    except Exception as exc:
+        async with AsyncSessionLocal() as session:
+            async with session.begin():
+                outbox = await session.get(TaskDeletionOutbox, outbox_id, with_for_update=True)
+                if outbox is not None:
+                    outbox.attempts += 1
+                    retry_after = min(settings.OUTBOX_MAX_RETRY_SECONDS, settings.OUTBOX_RETRY_SECONDS * 2 ** min(outbox.attempts - 1, 10))
+                    outbox.available_at = datetime.now(timezone.utc) + timedelta(seconds=retry_after)
+                    outbox.dispatched_at = None
+                    outbox.locked_until = None
+                    outbox.cleanup_lease_until = None
+                    outbox.last_error = f"{type(exc).__name__}: {str(exc)[:1800]}"
+        logger.exception("Task artifact cleanup failed task=%s; retained tombstone for retry", task_id)
+        return {"status": "RETRY", "task_id": task_id}
+
+    async with AsyncSessionLocal() as session:
+        async with session.begin():
+            task = await session.scalar(
+                select(ResearchTask).where(ResearchTask.id == task_uuid).with_for_update()
+            )
+            if task is None:
+                return {"status": "DELETED", "task_id": task_id}
+            if task.status != "DELETING":
+                return {"status": "RETRY", "task_id": task_id, "reason": "Tombstone changed during cleanup"}
+            # No new worker can claim a tombstoned task; leases checked before
+            # cleanup are static because both worker claim paths reject DELETING.
+            await session.delete(task)
+    logger.info("Deleted task and private artifacts task=%s", task_id)
+    return {"status": "DELETED", "task_id": task_id}
+
+
+@celery_app.task(bind=True, name="app.worker.execute_task_deletion")
+def execute_task_deletion(self, task_id: str):
+    self.update_state(state="PROGRESS", meta={"message": "Cleaning up deleted research task"})
+    return asyncio.run(run_task_deletion(task_id))
