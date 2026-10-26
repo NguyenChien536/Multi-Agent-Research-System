@@ -66,3 +66,14 @@ test('fieldwork upload uses authenticated multipart and shares expiry handling',
   assert.ok(c.requests[0].body instanceof FormData);
   assert.equal(c.redirects.length, 1);
 });
+
+test('monitoring requests carry auth, pagination, cancellation and disable response caching', async () => {
+  const c = client();
+  const controller = new AbortController();
+  await c.api.tasks.getMonitor('paper-id', 20, 20, controller.signal);
+  const request = c.requests[0];
+  assert.ok(request.url.endsWith('/research/paper-id/monitor?offset=20&limit=20'));
+  assert.equal(request.headers.get('Authorization'), 'Bearer test-token');
+  assert.equal(request.signal, controller.signal);
+  assert.equal(request.cache, 'no-store');
+});

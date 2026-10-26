@@ -1,6 +1,6 @@
 # Kế hoạch triển khai đến production — Synthia
 
-**Chốt kế hoạch:** 23/10/2026 · **Cập nhật tiến độ:** 24/10/2026, develop@b2e39b7 · **Mốc nộp/demo:** 10/11/2026.
+**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 26/10/2026, nền develop@fc7d7ae · **Mốc nộp/demo:** 10/11/2026.
 
 Đây là nguồn duy nhất về **việc cần làm, thứ tự và điều kiện phát hành**. [Roadmap](roadmap-and-progress.md) ghi việc đã làm; [biên bản](baseline-verification.md) ghi bằng chứng. P0–P7/G0–G7 giữ ý nghĩa trong [SRS](../requirements/SRS.md); P8–P10 bổ sung đường đến production. Lịch này thay lịch 12/10 đã lỗi thời.
 
@@ -34,6 +34,7 @@ Giữ **modular monolith**: backend chia module nghiệp vụ; API và worker l�
 | Isolated runner | Routine ID/config/artifact IDs được cho phép; job riêng | API/worker không có Docker socket; không nhận shell/code LLM; tính toán không chặn Celery workflow |
 | Private artifact storage | Local volume dev; S3-compatible private bucket khi triển khai | Owner-only download/URL ký ngắn hạn, checksum, cleanup, backup cùng metadata |
 | Observability | JSON log theo request/task/run/step; metrics/cảnh báo độc lập UI | Không log secrets/nội dung riêng; queue age, lease, errors, cost, runner, cleanup |
+| Theo dõi nghiên cứu cho người dùng | Trang tổng quan nhiều bài và trang tiến độ từng bài; đọc task/run, AgentRun, số liệu và output đã lưu | Đúng owner, trạng thái chờ/lỗi/phục hồi rõ ràng; không đoán %/ETA hoặc coi bước trước đã xong chỉ vì đã chuyển bước |
 
 Restricted container là lựa chọn cho **routine tin cậy**. Nếu mở code tùy ý sau này phải có ADR về sandbox, network policy, đánh giá bảo mật/chi phí; không coi Docker đơn thuần là bảo đảm an toàn cho mã thù địch.
 
@@ -60,7 +61,7 @@ Baseline audit ngày 22/10 có **74 backend tests, FE lint/build đạt**. Sau R
 
 **Cập nhật 24/10 — R3 / issue #43:** thêm `workflow_runs`, PostgreSQL LangGraph checkpointer, interrupt/resume cho duyệt kế hoạch và nạp kết quả, `plan_version` cùng quyết định có version. Worker đóng checkpointer sau mỗi lần chạy; test resume khôi phục state qua một graph/checkpointer mới. Backend suite đạt **109 tests** trên DB PostgreSQL/pgvector tạm; backend/frontend/Compose build đạt; PR #44 đạt **5/5 CI** và merge vào `develop` tại `b2e39b7`. Chưa chạy provider thật, kill worker giữa execution hoặc thử nhiều worker đồng thời; G1/G4 chưa khép.
 
-**R1–R3 đã merge; tiếp theo R5 / issue #45** để khép review toàn bài và chạy REVIEW E2E trong cap. Sau đó R4 xử lý runner/journal thực nghiệm; R6/R7 theo thứ tự phụ thuộc. Chia mỗi hàng thành issue/PR nhỏ khoảng 1–2 ngày làm việc.
+**Cập nhật 26/10:** R5 review toàn bài đã merge PR #47; sửa empirical integrity/runner/journal PR #48; ingestion nền PR #51; tombstone/cleanup PR #52; nền report versions PR #54. Issue #53 đã đóng; backend suite gần nhất **120 tests**, PR #54 CI **5/5**. Đây là bằng chứng kiểm thử với provider giả, chưa đóng các gate provider thật/browser/fault/release. Ưu tiên mới: **issue #56 — theo dõi tiến độ nghiên cứu**, sau đó **#55 — hỏi đáp theo phiên bản**, rồi sửa bài có base version và export đúng phiên bản. Các mục kế tiếp không đồng nghĩa đã hoàn tất R7.
 
 **Khép sai khác contract:** R2 thống nhất server/schema/UI/tests với cap SRS (40 LLM calls, 2 USD ước tính, 15 phút active/run). R4 thống nhất CSV 5 MiB/20.000 hàng/30 cột; hiện code nhận giới hạn 10 MiB/10.000 hàng/51 cột. Không nâng số hàng trước khi đo runner 120 giây; khi chưa hỗ trợ phải từ chối rõ ràng và chưa đóng G5. R6/R8 xử lý cache riêng tư theo owner/task/version hoặc tắt cache đó, bao gồm invalidation khi xóa; không chỉ xóa file gốc.
 
@@ -77,6 +78,7 @@ Không xây lại phần đã có. Các số dưới là **ước lượng trư�
 | P4 — approval/human-led | Approval, protocol, WAITING_USER_DATA, R1 intake, R3 checkpoint/version | R5 protocol review; fault test restart/concurrency | P1; plan/evidence P2 | 12–18 | G4 qua restart |
 | P5 — thực nghiệm | Routine regression, metrics/journal, kiểm lặp | R4 runner/journal/rerun, provenance human-led, artifact integrity | P2/P4 | 16–24 | G5 |
 | P6 — hỏi/sửa/xuất | Xem report, tải artifact cơ bản | R7, export Markdown/gói thực nghiệm; R6 deletion/retention | P2/P4/P5 | 10–16 | G6 |
+| Theo dõi nghiên cứu — #56 | Task.current_step, WorkflowRun, AgentRun, ledger và journal đã được lưu | API snapshot riêng, tổng quan nhiều bài, nhật ký theo bài, cảnh báo chờ/lỗi/lease; polling có ngắt và báo dữ liệu cũ | P1–P5; độc lập Q&A | 6–10 bổ sung | Quyền owner, số liệu thật, chờ/resume, lỗi mạng và UI regression |
 | P7 — đánh giá/bản nộp | Có thiết kế evaluation | Freeze dataset/rubric, baseline/ablation, browser/runtime QA, báo cáo kết quả | Các gate tương ứng | 10–16 | G7 |
 | **Tổng (ước lượng 23/10, trước R3)** | | | | **74–116** | **Khoảng 89–140 giờ có 20% dự phòng; cần cập nhật 25/10** |
 
@@ -93,6 +95,21 @@ Không xây lại phần đã có. Các số dưới là **ước lượng trư�
 | 10/11 | Demo/bàn giao | Không thêm feature; báo gate đạt/chưa đạt |
 
 Đo lại thời gian còn lại vào **25/10 và 01/11**. Thiếu thời gian thì giữ quality gate, dời nghiệm thu phần chưa xong và công khai trong báo cáo; không âm thầm xóa FR khỏi SRS hoặc mock thí nghiệm. Phần chưa đạt không được quảng bá/bật cho người ngoài. PDF đẹp/ảnh/OCR không nằm trên đường găng. Việc chốt plan là chốt hướng và thứ tự, không xác nhận deadline đã khả thi.
+
+### Theo dõi tiến độ và monitoring vận hành
+
+Hai lớp dùng chung task/run identity nhưng phục vụ nhu cầu khác nhau. Người dùng xem **bài đang làm đến đâu và cần làm gì**; Chiến vận hành hệ thống xem **dịch vụ có bị nghẽn, treo hay vượt tài nguyên không**. Tiến độ không hiển thị suy nghĩ nội bộ của model.
+
+| Lát cắt | Nội dung cụ thể | Thời điểm / trạng thái | Điều kiện nghiệm thu |
+|---|---|---|---|
+| M1 — Theo dõi bài nghiên cứu (#56) | `/research/monitor` liệt kê bài của owner; `/research/{id}/monitor` hiển thị bước gần nhất, agent/module, vòng lặp, hoạt động đã lưu, số nguồn/claim/version/artifact, chi phí ước tính, chờ duyệt/dữ liệu, lỗi và lease hết hạn | Triển khai trước Q&A; 6–10 giờ bổ sung | Refresh/đổi bài không mất lịch sử đã lưu; không lẫn owner; chỉ ghi thành công khi có dữ liệu; network error ghi rõ dữ liệu cũ; không tự suy phần trăm/ETA |
+| M2 — Log và metrics vận hành | JSON log với request/task/workflow-run/attempt/step; đo queue age, worker lease/recovery, failed provider calls, ingestion/runner/cleanup failure, latency và provider usage. Chuẩn hóa việc AgentRun gắn workflow_run_id trước khi lọc lịch sử theo lần chạy | Phần còn lại P1/P7/P8; 8–12 giờ dự kiến | Inject lỗi worker/provider/runner và truy ra cùng task/run; không log secrets, raw prompt hay file người dùng; counter/histogram không gắn task/user ID làm nhãn có cardinality cao |
+| M3 — Dashboard và cảnh báo | Prometheus + Grafana hoặc dịch vụ tương đương (chọn qua ADR khi staging); dashboard API/queue/worker/runner, alert backlog/lease lặp/error rate/storage/budget | P8; hiệu chỉnh ngưỡng theo đo thực tế ở P9 | Dashboard vận hành được bảo vệ quyền, không công khai; alert đến người nhận thật; có runbook xử lý và diễn tập lỗi/khôi phục |
+| M4 — Push tiến độ | SSE chỉ khi có event ID bền vững, owner scope, replay/reconnect và polling fallback | Sau M1, khi đo polling cho thấy cần; không bắt buộc bản demo | Mất kết nối/reload không mất event; không gán Pub/Sub không bền vững thành nhật ký chuẩn |
+
+M1 đọc trạng thái đã lưu ở backend và tự cập nhật định kỳ; trang tổng quan có phân trang, các số tổng hợp ghi rõ phạm vi trang. Bài WAITING không giữ worker và vẫn nằm trong danh sách để người dùng chuyển sang bài D hoặc bài khác. Nhật ký AgentRun hiện là lịch sử toàn bài; khi chưa có khóa run trên từng dòng, UI không được khẳng định đây chỉ là nhật ký của workflow run mới nhất. Chi phí là ước tính từ ledger; reservation đang chạy phải tách khỏi khoản đã đối chiếu. Output summary chỉ gồm counters/verdict được cho phép, không đưa lỗi provider thô hoặc đường dẫn storage vào monitor.
+
+Issue #55 giữ phạm vi Q&A theo report version. Yêu cầu sửa bài tiếp theo phải ghi rõ base version và serialize cấp version; đổi dữ liệu/phương pháp tạo run mới và không tái dùng Results cũ. Sau M1 phải đo lại lịch còn lại, không cộng các chức năng này vào cam kết deadline cũ mà không tính thời gian.
 
 ## 5. Từ bản nộp đến production
 
