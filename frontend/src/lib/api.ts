@@ -1,5 +1,6 @@
 import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, UserDataResumeRequest, ProtocolResponse, AnalysisRunResponse, ExperimentJournalEntryResponse, DatasetUploadResponse, TokenResponse, UserCreate, UserResponse } from '../types';
 import type { ResearchMonitor } from '../types/monitoring';
+import type { ReportQuestion, ReportQuestionHistory, ReportVersionMetadata } from '../types/report-questions';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -103,6 +104,17 @@ export const api = {
 
     getReport: (id: string) =>
       fetcher<ResearchReportResponse>(`/research/${id}/report`),
+
+    getReportVersions: (id: string, signal?: AbortSignal) =>
+      fetcher<ReportVersionMetadata[]>(`/research/${id}/report/versions`, { signal, cache: 'no-store' }),
+
+    getQuestionHistory: (id: string, version: number, offset = 0, signal?: AbortSignal) =>
+      fetcher<ReportQuestionHistory>(`/research/${id}/report/versions/${version}/questions?offset=${offset}&limit=20`, { signal, cache: 'no-store' }),
+
+    askQuestion: (id: string, version: number, payload: { request_id: string; question: string }, signal?: AbortSignal) =>
+      fetcher<ReportQuestion>(`/research/${id}/report/versions/${version}/questions`, {
+        method: 'POST', body: JSON.stringify(payload), signal, cache: 'no-store',
+      }),
 
     getCitations: (id: string) =>
       fetcher<CitationResponse[]>(`/research/${id}/citations`),

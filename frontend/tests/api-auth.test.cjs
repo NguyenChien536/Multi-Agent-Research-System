@@ -77,3 +77,15 @@ test('monitoring requests carry auth, pagination, cancellation and disable respo
   assert.equal(request.signal, controller.signal);
   assert.equal(request.cache, 'no-store');
 });
+
+test('question requests pin the explicit report version and preserve the idempotency key', async () => {
+  const c = client();
+  const payload = { request_id: 'stable-request-id', question: 'What supports this conclusion?' };
+  await c.api.tasks.askQuestion('paper-id', 1, payload);
+  await c.api.tasks.getQuestionHistory('paper-id', 1, 20);
+  assert.ok(c.requests[0].url.endsWith('/research/paper-id/report/versions/1/questions'));
+  assert.deepEqual(JSON.parse(c.requests[0].body), payload);
+  assert.equal(c.requests[0].headers.get('Authorization'), 'Bearer test-token');
+  assert.ok(c.requests[1].url.endsWith('/research/paper-id/report/versions/1/questions?offset=20&limit=20'));
+  assert.equal(c.requests[1].cache, 'no-store');
+});

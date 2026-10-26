@@ -126,6 +126,7 @@ async def reserve_provider_call(
     output_tokens: int = 0,
     fixed_cost_usd: float | None = None,
     allow_pre_run: bool = False,
+    allow_post_run: bool = False,
 ) -> str:
     """Atomically reserve one provider attempt. Retries must call this again."""
     parsed_id = uuid.UUID(str(task_id))
@@ -137,7 +138,9 @@ async def reserve_provider_call(
         if task is None:
             raise ResearchTaskStopped("Research task no longer exists")
         allowed_pre_run = {"PENDING", "WAITING_APPROVAL", "WAITING_USER_DATA"}
-        status_allowed = task.status == "RUNNING" or (allow_pre_run and task.status in allowed_pre_run)
+        status_allowed = (task.status in {"COMPLETED", "NEEDS_REVIEW", "PARTIAL"}) if allow_post_run else (
+            task.status == "RUNNING" or (allow_pre_run and task.status in allowed_pre_run)
+        )
         if not status_allowed or task.attempt_number != attempt_number:
             raise ResearchTaskStopped("Research task was cancelled or this worker attempt is stale")
         if task.status == "RUNNING" and task.worker_lease_until and task.worker_lease_until <= datetime.now(timezone.utc):
@@ -243,6 +246,7 @@ async def assert_task_active(
     task_id: str | uuid.UUID,
     attempt_number: int,
     allow_pre_run: bool = False,
+    allow_post_run: bool = False,
 ) -> None:
     """Check task ownership before persisting workflow side effects."""
     parsed_id = uuid.UUID(str(task_id))
@@ -251,7 +255,9 @@ async def assert_task_active(
         allowed_pre_run = {"PENDING", "WAITING_APPROVAL", "WAITING_USER_DATA"}
         if task is None:
             raise ResearchTaskStopped("Research task no longer exists")
-        status_allowed = task.status == "RUNNING" or (allow_pre_run and task.status in allowed_pre_run)
+        status_allowed = (task.status in {"COMPLETED", "NEEDS_REVIEW", "PARTIAL"}) if allow_post_run else (
+            task.status == "RUNNING" or (allow_pre_run and task.status in allowed_pre_run)
+        )
         if not status_allowed or task.attempt_number != attempt_number:
             raise ResearchTaskStopped("Research task was cancelled or this worker attempt is stale")
         if (
