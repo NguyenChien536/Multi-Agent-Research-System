@@ -1,6 +1,6 @@
 # Kế hoạch triển khai đến production — Synthia
 
-**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 26/10/2026, nền develop@fc7d7ae · **Mốc nộp/demo:** 10/11/2026.
+**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 26/10/2026, nền develop@c5ff300 · **Mốc nộp/demo:** 10/11/2026.
 
 Đây là nguồn duy nhất về **việc cần làm, thứ tự và điều kiện phát hành**. [Roadmap](roadmap-and-progress.md) ghi việc đã làm; [biên bản](baseline-verification.md) ghi bằng chứng. P0–P7/G0–G7 giữ ý nghĩa trong [SRS](../requirements/SRS.md); P8–P10 bổ sung đường đến production. Lịch này thay lịch 12/10 đã lỗi thời.
 
@@ -110,6 +110,26 @@ Hai lớp dùng chung task/run identity nhưng phục vụ nhu cầu khác nhau.
 M1 đọc trạng thái đã lưu ở backend và tự cập nhật định kỳ; trang tổng quan có phân trang, các số tổng hợp ghi rõ phạm vi trang. Bài WAITING không giữ worker và vẫn nằm trong danh sách để người dùng chuyển sang bài D hoặc bài khác. Nhật ký AgentRun hiện là lịch sử toàn bài; khi chưa có khóa run trên từng dòng, UI không được khẳng định đây chỉ là nhật ký của workflow run mới nhất. Chi phí là ước tính từ ledger; reservation đang chạy phải tách khỏi khoản đã đối chiếu. Output summary chỉ gồm counters/verdict được cho phép, không đưa lỗi provider thô hoặc đường dẫn storage vào monitor.
 
 Issue #55 giữ phạm vi Q&A theo report version. Yêu cầu sửa bài tiếp theo phải ghi rõ base version và serialize cấp version; đổi dữ liệu/phương pháp tạo run mới và không tái dùng Results cũ. Sau M1 phải đo lại lịch còn lại, không cộng các chức năng này vào cam kết deadline cũ mà không tính thời gian.
+
+**M1 đã merge:** PR #57 / `develop@c5ff300`; 132 backend tests, 11 frontend tests và 5/5 CI đạt. Đã có tổng quan nhiều bài, snapshot riêng theo owner và nhật ký có phân trang. Kiểm tra trực quan/browser E2E và dashboard vận hành M2/M3 vẫn còn; M1 không đóng toàn bộ FR-12/NFR-06.
+
+### Hỏi đáp theo phiên bản — R7 / #55
+
+Người dùng chọn phiên bản bài báo, đặt câu hỏi cụ thể và xem câu trả lời cùng đoạn nguồn được trích dẫn. Bản thảo giữ nguyên; lịch sử gắn cố định với version ID. Lượt này triển khai FR-15 ở phạm vi hỏi đáp; yêu cầu sửa bài, đổi phương pháp/dữ liệu và export theo phiên bản vẫn cần issue riêng trước khi khép G6.
+
+| Quyết định | Hành vi cần giữ |
+|---|---|
+| Quyền và API | GET/POST `/research/{task_id}/report/versions/{version_number}/questions`; owner-only, bỏ task DELETING, phản hồi private/no-store; lịch sử phân trang |
+| Dữ liệu dùng để trả lời | Chỉ nội dung bản thảo và citation/chunk cùng task/version đã lưu; chọn đoạn theo câu hỏi trong giới hạn 8.000 ký tự bài + tối đa 8 đoạn nguồn, mỗi đoạn 1.200 ký tự; xét tối đa 100 citation đầu. Khi chọn lọc có thể bỏ sót nội dung, UI phải hiển thị giới hạn |
+| Kiểm tra trích dẫn | Citation ID phải thuộc tập bằng chứng đã gửi; quote phải là chuỗi nguyên văn trong đoạn nguồn đó. Kiểm này xác nhận nguồn/đoạn trích, không chứng minh mọi diễn giải của LLM là đúng; người dùng vẫn đối chiếu nguồn |
+| Thiếu hoặc sai bằng chứng | Không có đoạn nguồn hợp lệ thì lưu INSUFFICIENT_EVIDENCE và không gọi provider. Model báo thiếu thì dùng thông báo cố định. Citation/quote sai thì FAILED/INVALID_REFERENCE và không phát hành phần trả lời đó |
+| Ngân sách và giới hạn | Dùng chung ledger/cap của bài, không tự tăng ngân sách sau khi chạy xong; reserve từng attempt/fallback, tối đa 2 provider attempts/câu hỏi, output 1.024 token/attempt, timeout xử lý 40 giây. 1 câu đang xử lý/user, tối đa 50 câu/bài, câu hỏi 3–2.000 ký tự |
+| Vòng đời và gửi lặp | Request UUID duy nhất theo user; gửi lại cùng câu/version trả dòng đã lưu thay vì gọi lại. Lease 75 giây; lịch sử/yêu cầu tiếp theo đánh dấu request bị gián đoạn khi lease hết hạn. Request lỗi không được hiển thị như đã trả lời thành công |
+| Không giữ khóa khi chờ AI | Lưu câu hỏi trước provider call, thả transaction; trước khi lưu output kiểm lại task/attempt/lease và tombstone. Xóa version/bài kéo theo lịch sử qua FK cascade; kết quả muộn không được tái tạo dữ liệu đã xóa |
+| Điều kiện hỏi | Tạo câu hỏi khi task COMPLETED/NEEDS_REVIEW/PARTIAL và có version; task đang chạy/chờ/hủy trả 409. Lịch sử cũ vẫn đọc theo quyền owner khi task chưa bị xóa |
+| UI | Trang `/research/{id}/questions`, chọn version, lịch sử tự cập nhật, trạng thái lỗi/thiếu nguồn/ngân sách, quote và link HTTP(S) an toàn. Không render HTML/model links tùy ý. Shared LLM prompt cache tắt cho hỏi đáp |
+
+Nghiệm thu phải có: hai owner và hai version; gửi lặp/cạnh tranh; trích dẫn nhầm version; quote bịa; thiếu nguồn; lỗi/timeout provider; hết ngân sách trước call; trạng thái task đổi hoặc bị xóa trong lúc chờ; phục hồi request gián đoạn; xóa dữ liệu; regression UI/API và CI. Provider giả kiểm hành vi phần mềm, chưa thay cho đánh giá chất lượng câu trả lời với provider thật.
 
 ## 5. Từ bản nộp đến production
 

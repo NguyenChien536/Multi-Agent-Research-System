@@ -13,6 +13,7 @@ from app.models.grounding import ClaimEvidence, Evidence, ResearchClaim, Citatio
 from app.models.report import ResearchReport, ReportVersion, ExportArtifact
 from app.models.agent_run import AgentRun, Evaluation
 from app.models.experiment import AnalysisRun, ExperimentJournalEntry
+from app.models.report_question import ReportQuestion
 
 __all__ = [
     "Base",
@@ -36,4 +37,5 @@ __all__ = [
     "Evaluation",
     "AnalysisRun",
     "ExperimentJournalEntry",
+    "ReportQuestion",
 ]
