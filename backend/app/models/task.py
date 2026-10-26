@@ -45,6 +45,7 @@ class ResearchTask(Base):
     citation_style = Column(String(20), default="IEEE", nullable=False)
     
     queued_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
@@ -120,6 +121,26 @@ class DocumentIngestionOutbox(Base):
     unclaimed_retries = Column(Integer, nullable=False, default=0, server_default="0")
     available_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
     locked_until = Column(DateTime(timezone=True), nullable=True)
+    dispatched_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
+class TaskDeletionOutbox(Base):
+    """Durable task tombstone cleanup record; retained until cleanup succeeds."""
+    __tablename__ = "task_deletion_outbox"
+    __table_args__ = (UniqueConstraint("research_task_id", name="uq_task_deletion_research_task"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    research_task_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("research_tasks.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attempts = Column(Integer, nullable=False, default=0)
+    available_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+    cleanup_lease_until = Column(DateTime(timezone=True), nullable=True)
     dispatched_at = Column(DateTime(timezone=True), nullable=True, index=True)
     last_error = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))

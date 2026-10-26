@@ -10,7 +10,7 @@ from sqlalchemy import select, func
 from app.core.database import get_db
 from app.core.config import settings
 from app.api.deps import get_current_user
-from app.models.task import ResearchTask, TaskDispatchOutbox, DocumentIngestionOutbox, WorkflowRun
+from app.models.task import ResearchTask, TaskDispatchOutbox, DocumentIngestionOutbox, TaskDeletionOutbox, WorkflowRun
 from app.models.user import User
 from app.models.report import ExportArtifact, ResearchReport
 from app.models.grounding import Citation
@@ -119,6 +119,7 @@ async def list_research_tasks(
     result = await db.execute(
         select(ResearchTask)
         .where(ResearchTask.user_id == current_user.id)
+        .where(ResearchTask.status != "DELETING")
         .order_by(ResearchTask.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -133,7 +134,7 @@ async def get_research_task(
     current_user: User = Depends(get_current_user),
 ):
     """Xem thông tin chi tiết một Research Task."""
-    result = await db.execute(select(ResearchTask).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id))
+    result = await db.execute(select(ResearchTask).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING"))
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Research task not found")
@@ -149,7 +150,7 @@ async def start_research_task(
     """Bắt đầu hoặc chạy lại workflow nghiên cứu đa tác tử trong Celery background."""
     result = await db.execute(
         select(ResearchTask)
-        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
         .with_for_update()
     )
     task = result.scalar_one_or_none()
@@ -209,7 +210,7 @@ async def get_research_report(
     result = await db.execute(
         select(ResearchReport)
         .join(ResearchTask, ResearchReport.research_task_id == ResearchTask.id)
-        .where(ResearchReport.research_task_id == task_id, ResearchTask.user_id == current_user.id)
+        .where(ResearchReport.research_task_id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
     )
     report = result.scalar_one_or_none()
     if not report:
@@ -225,7 +226,7 @@ async def get_research_citations(
 ):
     """Lấy danh sách trích dẫn và bằng chứng đã xác minh của Research Task."""
     task_res = await db.execute(
-        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
     )
     if not task_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Research task not found")
@@ -264,7 +265,7 @@ async def get_research_sources(
 ):
     """Lấy danh sách các nguồn tài liệu đã thu thập của Research Task."""
     task_res = await db.execute(
-        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
     )
     if not task_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Research task not found")
@@ -287,7 +288,7 @@ async def retry_document_ingestion(
     """Requeue one failed private PDF ingestion for its owner."""
     task = await db.scalar(
         select(ResearchTask)
-        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
         .with_for_update()
     )
     if not task:
@@ -335,7 +336,7 @@ async def cancel_research_task(
     """Hủy một Research Task đang chờ hoặc đang chạy."""
     result = await db.execute(
         select(ResearchTask)
-        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
         .with_for_update()
     )
     task = result.scalar_one_or_none()
@@ -384,29 +385,53 @@ async def cancel_research_task(
     return {"status": "CANCELLED", "message": "Research task cancelled successfully", "task_id": str(task_id)}
 
 
-@router.delete("/{task_id}", status_code=status.HTTP_200_OK)
+@router.delete("/{task_id}", status_code=status.HTTP_202_ACCEPTED)
 async def delete_research_task(
     task_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Xóa một Research Task."""
+    """Hide a task immediately and queue durable private-artifact cleanup."""
     result = await db.execute(
         select(ResearchTask)
         .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .with_for_update()
     )
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Research task not found")
 
-    await db.delete(task)
+    if task.status == "DELETING":
+        return {"status": "DELETING", "message": "Task deletion is already queued", "task_id": str(task_id)}
+    task.status = "DELETING"
+    task.deleted_at = datetime.now(timezone.utc)
+    from app.services.provider_budget import pause_budget_config
+    task.budget_config = pause_budget_config(task.budget_config)
+    active_runs = await db.execute(
+        select(WorkflowRun).where(
+            WorkflowRun.research_task_id == task.id,
+            WorkflowRun.status.in_(["RUNNING", "WAITING_APPROVAL", "WAITING_USER_DATA"]),
+        ).with_for_update()
+    )
+    for workflow_run in active_runs.scalars():
+        workflow_run.status = "CANCELLED"
+        workflow_run.completed_at = datetime.now(timezone.utc)
+    pending_dispatches = await db.execute(
+        select(TaskDispatchOutbox).where(
+            TaskDispatchOutbox.research_task_id == task.id,
+            TaskDispatchOutbox.dispatched_at.is_(None),
+        ).with_for_update()
+    )
+    for event in pending_dispatches.scalars():
+        event.dispatched_at = datetime.now(timezone.utc)
+        event.last_error = "Task deleted by owner"
+    deletion_outbox = await db.scalar(
+        select(TaskDeletionOutbox).where(TaskDeletionOutbox.research_task_id == task.id).with_for_update()
+    )
+    if deletion_outbox is None:
+        db.add(TaskDeletionOutbox(research_task_id=task.id))
     await db.commit()
-    # Cleanup task artifacts on disk (SRS FR-02 & Tombstone cleanup)
-    try:
-        artifact_store.delete_task_artifacts(task_id)
-    except Exception:
-        pass
-    return {"message": "Research task deleted successfully", "task_id": str(task_id)}
+    return {"status": "DELETING", "message": "Task hidden; cleanup queued", "task_id": str(task_id)}
 
 
 @router.get("/{task_id}/agent-runs", response_model=List[AgentRunItemResponse])
@@ -417,7 +442,7 @@ async def get_task_agent_runs(
 ):
     """Lấy lịch sử thực thi của các Agent trong Research Task."""
     task_res = await db.execute(
-        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
     )
     if not task_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Research task not found")
@@ -443,7 +468,7 @@ async def upload_task_pdf(
     # 1. Kiểm tra quyền sở hữu task
     task_res = await db.execute(
         select(ResearchTask)
-        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
         .with_for_update()
     )
     task = task_res.scalar_one_or_none()
@@ -554,7 +579,7 @@ async def list_task_artifacts(
 ):
     """Lấy danh sách các tệp tin / tài liệu riêng tư của Research Task."""
     task_res = await db.execute(
-        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
     )
     if not task_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Research task not found")
@@ -576,7 +601,7 @@ async def download_task_artifact(
 ):
     """Tải xuống tệp tin riêng tư của Research Task (chỉ dành cho chủ sở hữu)."""
     task_res = await db.execute(
-        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
     )
     if not task_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Research task not found")
@@ -621,7 +646,7 @@ async def get_research_plan(
 ):
     """Xem kế hoạch nghiên cứu do Supervisor tạo ra."""
     result = await db.execute(
-        select(ResearchTask).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        select(ResearchTask).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
     )
     task = result.scalar_one_or_none()
     if not task:
@@ -648,7 +673,7 @@ async def approve_research_plan(
     """Người dùng duyệt kế hoạch nghiên cứu và tiếp tục workflow."""
     result = await db.execute(
         select(ResearchTask)
-        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
         .with_for_update()
     )
     task = result.scalar_one_or_none()
@@ -721,7 +746,7 @@ async def reject_research_plan(
     """Người dùng từ chối kế hoạch và yêu cầu Supervisor lập kế hoạch lại với góp ý mới."""
     result = await db.execute(
         select(ResearchTask)
-        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
         .with_for_update()
     )
     task = result.scalar_one_or_none()
@@ -786,7 +811,7 @@ async def get_task_protocol(
 ):
     """Xem đề cương nghiên cứu khoa học (Study Protocol) của task."""
     result = await db.execute(
-        select(ResearchTask).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        select(ResearchTask).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
     )
     task = result.scalar_one_or_none()
     if not task:
@@ -830,7 +855,7 @@ async def upload_fieldwork_result(
     """Store a validated result file; uploading alone does not resume research."""
     task = await db.scalar(
         select(ResearchTask)
-        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
         .with_for_update()
     )
     if not task:
@@ -884,7 +909,7 @@ async def resume_research_with_data(
     """Nạp kết quả thực nghiệm/khảo sát thực tế và tiếp tục workflow (Gate G4)."""
     result = await db.execute(
         select(ResearchTask)
-        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
         .with_for_update()
     )
     task = result.scalar_one_or_none()
@@ -972,7 +997,7 @@ async def get_task_experiments(
 ):
     """Lấy danh sách các lần chạy thực nghiệm tính toán (AnalysisRun) của task."""
     task_res = await db.execute(
-        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
     )
     if not task_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Research task not found")
@@ -993,7 +1018,7 @@ async def get_task_experiment_journal(
 ):
     """Lấy toàn bộ các mục nhật ký thí nghiệm (ExperimentJournalEntry, append-only) của task."""
     task_res = await db.execute(
-        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        select(ResearchTask.id).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
     )
     if not task_res.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Research task not found")
@@ -1016,7 +1041,7 @@ async def upload_task_dataset(
     """Tải lên tập dữ liệu định dạng CSV cho bài nghiên cứu thực nghiệm tính toán (EMPIRICAL_COMPUTATIONAL)."""
     task = await db.scalar(
         select(ResearchTask)
-        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING")
         .with_for_update()
     )
     if not task:

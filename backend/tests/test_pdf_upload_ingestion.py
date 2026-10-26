@@ -22,7 +22,7 @@ from app.services.pdf_parser import (
     PdfValidationError,
 )
 from app.tools.embedder import EmbedderTool
-from app.worker import run_document_ingestion
+from app.worker import run_document_ingestion, run_task_deletion
 
 
 def make_valid_pdf_bytes(text: str = "Research on multi-agent systems and large language models for scientific automation.") -> bytes:
@@ -94,6 +94,12 @@ async def test_artifact_store_operations(tmp_path):
     count = store.delete_task_artifacts(task_id)
     assert count == 3
     assert store.get_artifact_path(task_id, "test_document.pdf") is None
+    task_dir = tmp_path / str(task_id)
+    assert not task_dir.exists()
+    with pytest.raises(RuntimeError, match="being deleted"):
+        store.save_artifact(task_id, "late.pdf", b"late write")
+    assert not task_dir.exists()
+    assert store.delete_task_artifacts(task_id) == 0
 
 
 @pytest.mark.asyncio
@@ -345,9 +351,14 @@ async def test_pdf_upload_api_and_ownership(monkeypatch):
             retrieved_chunk = similar[0][0]
             assert "multi-agent" in retrieved_chunk.content
 
-        # 11. Xóa task -> artifacts bị xóa và file trên đĩa được dọn dẹp
+        # 11. Xóa task -> hide now; durable worker cleanup removes DB and files.
         del_res = await client.delete(
             f"/api/v1/research/{task_id}",
             headers=headers1,
         )
-        assert del_res.status_code == 200
+        assert del_res.status_code == 202
+        assert del_res.json()["status"] == "DELETING"
+        assert (await client.get(f"/api/v1/research/{task_id}", headers=headers1)).status_code == 404
+        assert (await run_task_deletion(task_id))["status"] == "DELETED"
+        async with AsyncSessionLocal() as session:
+            assert await session.get(ResearchTask, uuid.UUID(task_id)) is None

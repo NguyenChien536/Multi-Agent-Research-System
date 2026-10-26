@@ -17,8 +17,8 @@ from app.core.database import AsyncSessionLocal, engine
 from app.main import app
 from app.models.experiment import AnalysisRun, ExperimentJournalEntry
 from app.models.report import ResearchReport
-from app.models.task import ResearchTask, TaskDispatchOutbox
-from app.worker import run_langgraph_workflow
+from app.models.task import ResearchTask, TaskDispatchOutbox, TaskDeletionOutbox
+from app.worker import run_langgraph_workflow, run_task_deletion
 
 
 @pytest.mark.asyncio
@@ -234,8 +234,77 @@ async def test_auth_and_research_ownership(monkeypatch: pytest.MonkeyPatch) -> N
         # Author can delete task
         # Author can delete task
         delete_res = await client.delete(f"/api/v1/research/{cancel_id}", headers=author_headers)
-        assert delete_res.status_code == 200
+        assert delete_res.status_code == 202
+        assert delete_res.json()["status"] == "DELETING"
         assert (await client.get(f"/api/v1/research/{cancel_id}", headers=author_headers)).status_code == 404
+        assert (await client.delete(f"/api/v1/research/{cancel_id}", headers=author_headers)).status_code == 202
+        listed_after_delete = await client.get("/api/v1/research", headers=author_headers)
+        assert cancel_id not in {item["id"] for item in listed_after_delete.json()}
+        deletion_jobs: list[str] = []
+        monkeypatch.setattr(
+            task_dispatcher.execute_task_deletion,
+            "delay",
+            lambda task_id: deletion_jobs.append(task_id),
+        )
+        assert await task_dispatcher.dispatch_one_task_deletion_event()
+        assert deletion_jobs == [cancel_id]
+
+        async with AsyncSessionLocal() as db:
+            deleted_task = await db.get(ResearchTask, uuid.UUID(cancel_id))
+            assert deleted_task is not None and deleted_task.status == "DELETING"
+            await db.commit()
+            assert await db.scalar(
+                select(TaskDeletionOutbox.id).where(TaskDeletionOutbox.research_task_id == uuid.UUID(cancel_id))
+            ) is not None
+            deletion_event = await db.scalar(
+                select(TaskDeletionOutbox).where(TaskDeletionOutbox.research_task_id == uuid.UUID(cancel_id))
+            )
+            deletion_event.cleanup_lease_until = datetime.now(timezone.utc) + timedelta(minutes=1)
+            await db.commit()
+        assert (await run_task_deletion(cancel_id))["status"] == "ALREADY_CLAIMED"
+        async with AsyncSessionLocal() as db:
+            deletion_event = await db.scalar(
+                select(TaskDeletionOutbox).where(TaskDeletionOutbox.research_task_id == uuid.UUID(cancel_id))
+            )
+            deletion_event.cleanup_lease_until = None
+            await db.commit()
+
+        import app.services.artifact_store as artifact_store_module
+        original_cleanup = artifact_store_module.artifact_store.delete_task_artifacts
+        monkeypatch.setattr(
+            artifact_store_module.artifact_store,
+            "delete_task_artifacts",
+            lambda _task_id: (_ for _ in ()).throw(OSError("disk unavailable")),
+        )
+        cleanup_failed = await run_task_deletion(cancel_id)
+        assert cleanup_failed["status"] == "RETRY"
+        async with AsyncSessionLocal() as db:
+            pending_cleanup = await db.scalar(
+                select(TaskDeletionOutbox).where(TaskDeletionOutbox.research_task_id == uuid.UUID(cancel_id))
+            )
+            assert pending_cleanup is not None
+            assert "disk unavailable" in pending_cleanup.last_error
+
+        monkeypatch.setattr(artifact_store_module.artifact_store, "delete_task_artifacts", original_cleanup)
+
+        async with AsyncSessionLocal() as db:
+            deleted_task = await db.get(ResearchTask, uuid.UUID(cancel_id))
+            assert deleted_task is not None
+            deleted_task.worker_lease_until = datetime.now(timezone.utc) + timedelta(minutes=1)
+            await db.commit()
+
+        deferred = await run_task_deletion(cancel_id)
+        assert deferred["status"] == "DEFERRED"
+        async with AsyncSessionLocal() as db:
+            deleted_task = await db.get(ResearchTask, uuid.UUID(cancel_id))
+            assert deleted_task is not None and deleted_task.status == "DELETING"
+            deleted_task.worker_lease_until = datetime.now(timezone.utc) - timedelta(seconds=1)
+            await db.commit()
+
+        cleaned = await run_task_deletion(cancel_id)
+        assert cleaned["status"] == "DELETED"
+        async with AsyncSessionLocal() as db:
+            assert await db.get(ResearchTask, uuid.UUID(cancel_id)) is None
 
     # pytest-asyncio gives each test a new loop; pooled asyncpg connections
     # cannot be reused by the next test's loop.
