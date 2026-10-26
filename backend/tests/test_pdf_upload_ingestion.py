@@ -1,5 +1,6 @@
 import io
 import uuid
+from datetime import datetime, timedelta, timezone
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pypdf import PdfWriter
@@ -10,6 +11,7 @@ from app.core.database import AsyncSessionLocal
 from app.main import app
 from app.models.report import ExportArtifact
 from app.models.source import DocumentChunk, ResearchSource
+from app.models.task import DocumentIngestionOutbox, ResearchTask
 from app.services.artifact_store import ArtifactStore
 from app.services.pdf_parser import (
     extract_text_from_pdf,
@@ -20,6 +22,7 @@ from app.services.pdf_parser import (
     PdfValidationError,
 )
 from app.tools.embedder import EmbedderTool
+from app.worker import run_document_ingestion
 
 
 def make_valid_pdf_bytes(text: str = "Research on multi-agent systems and large language models for scientific automation.") -> bytes:
@@ -130,7 +133,7 @@ async def test_pdf_parser_validation():
 
 
 @pytest.mark.asyncio
-async def test_pdf_upload_api_and_ownership():
+async def test_pdf_upload_api_and_ownership(monkeypatch):
     """Kiểm tra endpoint upload PDF, phân quyền, trích xuất text và lưu DocumentChunks."""
     suffix = uuid.uuid4().hex[:10]
     user1_data = {"username": f"uploader_{suffix}", "email": f"uploader_{suffix}@example.com", "password": "SecurePass123!"}
@@ -183,29 +186,92 @@ async def test_pdf_upload_api_and_ownership():
         assert invalid_res.status_code == 400
         assert "Định dạng file không hợp lệ" in invalid_res.json()["detail"]
 
-        # 5. Tải file PDF trắng (không có text) -> 422 (OCR required guidance)
+        # 5. Tải PDF trắng: transport accepts it; background parser reports OCR guidance.
         blank_pdf = make_blank_pdf_bytes(pages=1)
         blank_res = await client.post(
             f"/api/v1/research/{task_id}/upload",
             files={"file": ("scanned.pdf", blank_pdf, "application/pdf")},
             headers=headers1,
         )
-        assert blank_res.status_code == 422
-        assert "không hỗ trợ OCR" in blank_res.json()["detail"]
+        assert blank_res.status_code == 202
+        blank_result = await run_document_ingestion(blank_res.json()["source_id"])
+        assert blank_result["status"] == "FAILED"
+        assert "không hỗ trợ OCR" in blank_result["error"]
+        retry_blank = await client.post(
+            f"/api/v1/research/{task_id}/sources/{blank_res.json()['source_id']}/retry",
+            headers=headers1,
+        )
+        assert retry_blank.status_code == 202
+        assert retry_blank.json()["ingestion_status"] == "PENDING"
+        assert (await run_document_ingestion(blank_res.json()["source_id"]))["status"] == "FAILED"
 
-        # 6. Tải file PDF hợp lệ của User 1 -> 201 Created
+        # 6. Tải file PDF hợp lệ của User 1 -> accepted before extraction/chunking.
         upload_res = await client.post(
             f"/api/v1/research/{task_id}/upload",
             files={"file": ("autonomous_agents.pdf", pdf_bytes, "application/pdf")},
             headers=headers1,
         )
-        assert upload_res.status_code == 201
+        assert upload_res.status_code == 202
         upload_data = upload_res.json()
-        assert upload_data["source_tag"] == "src_01"
+        assert upload_data["source_tag"] == "src_02"
         assert upload_data["file_name"] == "autonomous_agents.pdf"
-        assert upload_data["page_count"] == 1
-        assert upload_data["chunks_count"] > 0
+        assert upload_data["ingestion_status"] == "PENDING"
+        assert upload_data["page_count"] is None
+        assert upload_data["chunks_count"] is None
         assert len(upload_data["sha256_hash"]) == 64
+        pending_start = await client.post(f"/api/v1/research/{task_id}/start", headers=headers1)
+        assert pending_start.status_code == 409
+        assert "đang được xử lý" in pending_start.json()["detail"]
+
+        from app.services import task_dispatcher
+        dispatched_sources = []
+        monkeypatch.setattr(
+            task_dispatcher.execute_document_ingestion,
+            "delay",
+            lambda source_id: dispatched_sources.append(source_id),
+        )
+        assert await task_dispatcher.dispatch_one_document_ingestion_event()
+        assert dispatched_sources == [upload_data["source_id"]]
+        ack_timeout = datetime.now(timezone.utc) + timedelta(
+            seconds=settings.OUTBOX_DISPATCH_ACK_TIMEOUT_SECONDS + 1
+        )
+        assert await task_dispatcher.dispatch_one_document_ingestion_event(now=ack_timeout)
+        assert dispatched_sources == [upload_data["source_id"], upload_data["source_id"]]
+        async with AsyncSessionLocal() as session:
+            event = await session.scalar(
+                select(DocumentIngestionOutbox).where(
+                    DocumentIngestionOutbox.source_id == uuid.UUID(upload_data["source_id"])
+                )
+            )
+            assert event.unclaimed_retries == 1
+            assert event.attempts == 2
+        async with AsyncSessionLocal() as session:
+            source = await session.get(ResearchSource, uuid.UUID(upload_data["source_id"]))
+            source.ingestion_status = "PROCESSING"
+            source.ingestion_attempt = 1
+            source.ingestion_lease_until = ack_timeout - timedelta(seconds=1)
+            await session.commit()
+        assert await task_dispatcher.dispatch_one_document_ingestion_event(now=ack_timeout)
+        assert dispatched_sources == [upload_data["source_id"]] * 3
+
+        ingestion_result = await run_document_ingestion(upload_data["source_id"])
+        assert ingestion_result["status"] == "READY"
+        assert ingestion_result["page_count"] == 1
+        assert ingestion_result["chunks_count"] > 0
+        assert (await run_document_ingestion(upload_data["source_id"]))["status"] == "ALREADY_READY"
+        sources_response = await client.get(f"/api/v1/research/{task_id}/sources", headers=headers1)
+        source_payload = next(item for item in sources_response.json() if item["id"] == upload_data["source_id"])
+        assert source_payload["ingestion_status"] == "READY"
+        async with AsyncSessionLocal() as session:
+            task = await session.get(ResearchTask, uuid.UUID(task_id))
+            task.status = "QUEUED"
+            await session.commit()
+        late_upload = await client.post(
+            f"/api/v1/research/{task_id}/upload",
+            files={"file": ("late.pdf", pdf_bytes, "application/pdf")},
+            headers=headers1,
+        )
+        assert late_upload.status_code == 409
 
         # 7. Kiểm tra cơ sở dữ liệu đã lưu ResearchSource, ExportArtifact và DocumentChunk
         async with AsyncSessionLocal() as session:
@@ -214,7 +280,8 @@ async def test_pdf_upload_api_and_ownership():
             )
             assert src is not None
             assert src.source_type == "PDF"
-            assert src.source_tag == "src_01"
+            assert src.source_tag == "src_02"
+            assert src.ingestion_status == "READY"
 
             art = await session.scalar(
                 select(ExportArtifact).where(ExportArtifact.id == uuid.UUID(upload_data["artifact_id"]))
@@ -228,7 +295,7 @@ async def test_pdf_upload_api_and_ownership():
                     select(DocumentChunk).where(DocumentChunk.source_id == src.id)
                 )
             ).all()
-            assert len(chunks) == upload_data["chunks_count"]
+            assert len(chunks) == ingestion_result["chunks_count"]
             assert any("multi-agent" in c.content for c in chunks)
 
         # 8. Xem danh sách artifacts (GET /artifacts)
@@ -238,8 +305,8 @@ async def test_pdf_upload_api_and_ownership():
         )
         assert art_list_res.status_code == 200
         artifacts = art_list_res.json()
-        assert len(artifacts) == 1
-        assert artifacts[0]["id"] == upload_data["artifact_id"]
+        assert len(artifacts) == 2
+        assert upload_data["artifact_id"] in {artifact["id"] for artifact in artifacts}
 
         # User 2 không xem được artifacts của User 1 -> 404
         art_list_cross = await client.get(

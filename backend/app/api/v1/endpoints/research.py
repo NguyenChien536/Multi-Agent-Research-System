@@ -10,7 +10,7 @@ from sqlalchemy import select, func
 from app.core.database import get_db
 from app.core.config import settings
 from app.api.deps import get_current_user
-from app.models.task import ResearchTask, TaskDispatchOutbox, WorkflowRun
+from app.models.task import ResearchTask, TaskDispatchOutbox, DocumentIngestionOutbox, WorkflowRun
 from app.models.user import User
 from app.models.report import ExportArtifact, ResearchReport
 from app.models.grounding import Citation
@@ -37,15 +37,12 @@ from app.schemas.experiment import (
 from app.services.experiment_runner import MAX_DATASET_BYTES, parse_csv_dataset, InvalidInputError
 from app.services.artifact_store import artifact_store
 from app.services.pdf_parser import (
-    extract_text_from_pdf,
+    validate_pdf_bytes,
     PdfSizeLimitError,
-    PdfPageLimitError,
-    PdfOcrRequiredError,
     PdfValidationError,
 )
 from app.services.upload_reader import read_upload_with_limit, UploadSizeLimitExceeded
 from app.services.fieldwork_intake import MAX_RESULT_BYTES, RESULT_TYPES, validate_fieldwork_result
-from app.tools.embedder import EmbedderTool
 
 router = APIRouter()
 
@@ -160,6 +157,16 @@ async def start_research_task(
         raise HTTPException(status_code=404, detail="Research task not found")
     if task.status not in ("PENDING", "CANCELLED"):
         raise HTTPException(status_code=409, detail=f"Research task cannot be started from status {task.status}")
+
+    pending_ingestion = await db.scalar(
+        select(func.count(ResearchSource.id)).where(
+            ResearchSource.research_task_id == task.id,
+            ResearchSource.source_type == "PDF",
+            ResearchSource.ingestion_status.in_(("PENDING", "PROCESSING")),
+        )
+    )
+    if pending_ingestion:
+        raise HTTPException(status_code=409, detail="Tài liệu PDF vẫn đang được xử lý. Hãy đợi trạng thái READY rồi bắt đầu bài nghiên cứu.")
     
     task.status = "QUEUED"
     task.completed_at = None
@@ -270,6 +277,55 @@ async def get_research_sources(
     return result.scalars().all()
 
 
+@router.post("/{task_id}/sources/{source_id}/retry", status_code=status.HTTP_202_ACCEPTED)
+async def retry_document_ingestion(
+    task_id: uuid.UUID,
+    source_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Requeue one failed private PDF ingestion for its owner."""
+    task = await db.scalar(
+        select(ResearchTask)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .with_for_update()
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Research task not found")
+    if task.status in {"RUNNING", "QUEUED", "COMPLETED", "FAILED", "CANCELLED"}:
+        raise HTTPException(status_code=409, detail="Tài liệu chỉ có thể thử lại khi bài nghiên cứu chưa chạy.")
+    source = await db.scalar(
+        select(ResearchSource).where(
+            ResearchSource.id == source_id,
+            ResearchSource.research_task_id == task.id,
+            ResearchSource.source_type == "PDF",
+        ).with_for_update()
+    )
+    if not source:
+        raise HTTPException(status_code=404, detail="PDF source not found")
+    if source.ingestion_status != "FAILED":
+        raise HTTPException(status_code=409, detail="Chỉ có thể thử lại tài liệu đang ở trạng thái FAILED.")
+    source.ingestion_status = "PENDING"
+    source.ingestion_error = None
+    source.ingestion_lease_until = None
+    source.ingestion_attempt = 0
+    outbox = await db.scalar(
+        select(DocumentIngestionOutbox).where(DocumentIngestionOutbox.source_id == source.id).with_for_update()
+    )
+    if outbox is None:
+        outbox = DocumentIngestionOutbox(research_task_id=task.id, source_id=source.id)
+        db.add(outbox)
+    else:
+        outbox.dispatched_at = None
+        outbox.locked_until = None
+        outbox.available_at = datetime.now(timezone.utc)
+        outbox.last_error = None
+        outbox.attempts = 0
+        outbox.unclaimed_retries = 0
+    await db.commit()
+    return {"source_id": str(source.id), "ingestion_status": "PENDING"}
+
+
 @router.post("/{task_id}/cancel", status_code=status.HTTP_200_OK)
 async def cancel_research_task(
     task_id: uuid.UUID,
@@ -374,7 +430,7 @@ async def get_task_agent_runs(
     return result.scalars().all()
 
 
-@router.post("/{task_id}/upload", response_model=PdfUploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/{task_id}/upload", response_model=PdfUploadResponse, status_code=status.HTTP_202_ACCEPTED)
 async def upload_task_pdf(
     task_id: uuid.UUID,
     file: UploadFile = File(...),
@@ -382,20 +438,22 @@ async def upload_task_pdf(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Tải lên tài liệu PDF riêng tư (Private Artifact), trích xuất văn bản và băm nhỏ thành DocumentChunk.
+    Lưu PDF riêng tư và xếp hàng xử lý nền; nguồn chỉ dùng được sau khi ingestion READY.
     """
     # 1. Kiểm tra quyền sở hữu task
     task_res = await db.execute(
-        select(ResearchTask).where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        select(ResearchTask)
+        .where(ResearchTask.id == task_id, ResearchTask.user_id == current_user.id)
+        .with_for_update()
     )
     task = task_res.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Research task not found")
 
-    if task.status in {"CANCELLED", "COMPLETED", "FAILED"}:
+    if task.status != "PENDING":
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Không thể tải lên tài liệu cho bài nghiên cứu ở trạng thái {task.status}",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Chỉ có thể thêm PDF khi bài nghiên cứu chưa được đưa vào hàng đợi.",
         )
 
     # 2. Kiểm tra giới hạn số file per task (tối đa 5 file theo SRS FR-02)
@@ -423,70 +481,56 @@ async def upload_task_pdf(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Lỗi khi đọc file tải lên: {e}")
 
-    # 4. Phân tích cú pháp và trích xuất text
+    # Validate format/size cheaply; expensive parsing and chunking run in Celery.
     try:
-        parsed_doc = extract_text_from_pdf(content)
+        validate_pdf_bytes(content)
     except PdfSizeLimitError as e:
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=str(e))
-    except PdfOcrRequiredError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
-    except (PdfPageLimitError, PdfValidationError) as e:
+    except PdfValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Lỗi phân tích file PDF: {e}")
 
     # 5. Lưu file vật lý an toàn vào ArtifactStore
     filename = file.filename or "document.pdf"
     artifact_meta = artifact_store.save_artifact(task_id=task.id, filename=filename, content=content)
 
-    # 6. Tạo bản ghi ExportArtifact
-    artifact = ExportArtifact(
-        research_task_id=task.id,
-        export_type="PDF_UPLOAD",
-        file_path=artifact_meta["file_path"],
-        file_size_bytes=artifact_meta["file_size_bytes"],
-        download_url=f"/api/v1/research/{task.id}/artifacts/placeholder/download",
-    )
-    db.add(artifact)
-    await db.flush()
-    artifact.download_url = f"/api/v1/research/{task.id}/artifacts/{artifact.id}/download"
-
-    # 7. Tạo bản ghi ResearchSource
-    all_sources_res = await db.execute(
-        select(func.count(ResearchSource.id)).where(ResearchSource.research_task_id == task.id)
-    )
-    total_sources = all_sources_res.scalar_one()
-    source_tag = f"src_{total_sources + 1:02d}"
-
-    source_title = parsed_doc["title"] or filename
-    db_source = ResearchSource(
-        research_task_id=task.id,
-        source_tag=source_tag,
-        title=source_title,
-        url=f"file://{artifact_meta['file_name']}",
-        source_type="PDF",
-        author=parsed_doc.get("author"),
-        content_snippet=parsed_doc["text"][:500],
-        summary=f"Tài liệu PDF tải lên ({parsed_doc['page_count']} trang, {artifact_meta['file_size_bytes']} bytes). SHA256: {artifact_meta['sha256_hash'][:16]}...",
-        relevance_score=1.0,
-    )
-    db.add(db_source)
-    await db.flush()
-
-    # 8. Chia nhỏ (Chunking) và tạo Vector Embedding trong pgvector
-    embedder = EmbedderTool()
     try:
-        chunks_count = await embedder.embed_and_store(
-            db=db,
-            task_id=task.id,
-            source_id=db_source.id,
-            text_content=parsed_doc["text"],
+        # Artifact/source metadata and the durable outbox commit atomically.
+        artifact = ExportArtifact(
+            research_task_id=task.id,
+            export_type="PDF_UPLOAD",
+            file_path=artifact_meta["file_path"],
+            file_size_bytes=artifact_meta["file_size_bytes"],
+            download_url=f"/api/v1/research/{task.id}/artifacts/placeholder/download",
         )
+        db.add(artifact)
+        await db.flush()
+        artifact.download_url = f"/api/v1/research/{task.id}/artifacts/{artifact.id}/download"
+
+        all_sources_res = await db.execute(
+            select(func.count(ResearchSource.id)).where(ResearchSource.research_task_id == task.id)
+        )
+        total_sources = all_sources_res.scalar_one()
+        source_tag = f"src_{total_sources + 1:02d}"
+        db_source = ResearchSource(
+            research_task_id=task.id,
+            source_tag=source_tag,
+            title=artifact_meta["file_name"],
+            url=f"file://{artifact_meta['file_name']}",
+            source_type="PDF",
+            summary=f"PDF đang chờ xử lý nền ({artifact_meta['file_size_bytes']} bytes). SHA256: {artifact_meta['sha256_hash'][:16]}...",
+            relevance_score=1.0,
+            ingestion_status="PENDING",
+            upload_artifact_id=artifact.id,
+            content_checksum=artifact_meta["sha256_hash"],
+        )
+        db.add(db_source)
+        await db.flush()
+        db.add(DocumentIngestionOutbox(research_task_id=task.id, source_id=db_source.id))
+        await db.commit()
     except Exception:
+        await db.rollback()
         artifact_store.delete_artifact(task.id, artifact_meta["file_name"])
         raise
-
-    await db.commit()
 
     return PdfUploadResponse(
         artifact_id=artifact.id,
@@ -494,10 +538,11 @@ async def upload_task_pdf(
         source_tag=source_tag,
         file_name=artifact_meta["file_name"],
         file_size_bytes=artifact_meta["file_size_bytes"],
-        page_count=parsed_doc["page_count"],
-        chunks_count=chunks_count,
+        ingestion_status="PENDING",
+        page_count=None,
+        chunks_count=None,
         sha256_hash=artifact_meta["sha256_hash"],
-        message="Tải lên và chia nhỏ tài liệu PDF thành công",
+        message="Đã lưu tài liệu. Hệ thống đang xử lý nội dung ở chế độ nền.",
     )
 
 

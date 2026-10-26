@@ -108,6 +108,23 @@ class TaskDispatchOutbox(Base):
     task = relationship("ResearchTask", back_populates="dispatch_events")
 
 
+class DocumentIngestionOutbox(Base):
+    """Durable handoff from a stored PDF/source row to its ingestion worker."""
+    __tablename__ = "document_ingestion_outbox"
+    __table_args__ = (UniqueConstraint("source_id", name="uq_document_ingestion_source"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    research_task_id = Column(UUID(as_uuid=True), ForeignKey("research_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_id = Column(UUID(as_uuid=True), ForeignKey("research_sources.id", ondelete="CASCADE"), nullable=False, index=True)
+    attempts = Column(Integer, nullable=False, default=0)
+    unclaimed_retries = Column(Integer, nullable=False, default=0, server_default="0")
+    available_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+    dispatched_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
 class ResearchIteration(Base):
     __tablename__ = "research_iterations"
 

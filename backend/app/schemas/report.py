@@ -44,6 +44,8 @@ class ResearchSourceItemResponse(BaseModel):
     content_snippet: Optional[str] = None
     summary: Optional[str] = None
     relevance_score: float = 0.0
+    ingestion_status: str = "READY"
+    ingestion_error: Optional[str] = None
     attribution: Optional[str] = None
     provider_name: Optional[str] = None
     license_name: Optional[str] = None

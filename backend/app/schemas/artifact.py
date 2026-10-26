@@ -22,8 +22,9 @@ class PdfUploadResponse(BaseModel):
     source_tag: str
     file_name: str
     file_size_bytes: int
-    page_count: int
-    chunks_count: int
+    ingestion_status: str
+    page_count: Optional[int] = None
+    chunks_count: Optional[int] = None
     sha256_hash: str
     message: str
 
