@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, Float, Boolean, Integer, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, Float, Boolean, Integer, DateTime, ForeignKey, ForeignKeyConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -79,6 +79,14 @@ class ResearchClaim(Base):
 
 class Citation(Base):
     __tablename__ = "citations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["report_version_id", "report_id"],
+            ["report_versions.id", "report_versions.report_id"],
+            ondelete="CASCADE",
+            name="fk_citations_report_version_identity",
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     research_task_id = Column(
@@ -88,6 +96,7 @@ class Citation(Base):
         index=True,
     )
     report_id = Column(UUID(as_uuid=True), ForeignKey("research_reports.id", ondelete="CASCADE"), nullable=False, index=True)
+    report_version_id = Column(UUID(as_uuid=True), ForeignKey("report_versions.id", ondelete="CASCADE"), nullable=False, index=True)
     source_id = Column(UUID(as_uuid=True), ForeignKey("research_sources.id", ondelete="CASCADE"), nullable=False, index=True)
     chunk_id = Column(
         UUID(as_uuid=True),
@@ -104,6 +113,7 @@ class Citation(Base):
     # Relationships
     task = relationship("ResearchTask", foreign_keys=[research_task_id])
     report = relationship("ResearchReport", back_populates="citations")
+    report_version = relationship("ReportVersion", back_populates="citations", foreign_keys=[report_version_id])
     source = relationship("ResearchSource", back_populates="citations")
     chunk = relationship("DocumentChunk", foreign_keys=[chunk_id])
     claim = relationship("ResearchClaim", back_populates="citations")
