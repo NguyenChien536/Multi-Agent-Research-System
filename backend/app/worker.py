@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.task import ResearchTask, TaskDispatchOutbox, DocumentIngestionOutbox, TaskDeletionOutbox, WorkflowRun
 from app.models.source import DocumentChunk, ResearchSource
-from app.models.report import ExportArtifact, ResearchReport
+from app.models.report import ExportArtifact, ResearchReport, ReportVersion
 from app.models.grounding import Citation, ClaimEvidence, Evidence, ResearchClaim
 from app.models.experiment import AnalysisRun, ExperimentJournalEntry
 from app.models.user import User
@@ -436,15 +436,25 @@ async def run_langgraph_workflow(task_id: str) -> dict:
 
                 report = ResearchReport(
                     research_task_id=task.id,
-                    title=f"Báo cáo: {task.title}",
-                    content_markdown=report_content,
-                    review_status=(final_state.get("critic_review_metadata") or {}).get(
-                        "status", "PASSED" if final_state.get("status") == "COMPLETED" else "NEEDS_REVIEW"
-                    ),
-                    review_metadata=(final_state.get("critic_review_metadata") or {}),
-                    word_count=len(report_content.split()),
                 )
                 session.add(report)
+                await session.flush()
+                review_metadata = final_state.get("critic_review_metadata") or {}
+                report_version = ReportVersion(
+                    report_id=report.id,
+                    version_number=1,
+                    workflow_run_id=workflow_run.id,
+                    plan_version=task.plan_version,
+                    title=f"Báo cáo: {task.title}",
+                    content_markdown=report_content,
+                    executive_summary=final_state.get("executive_summary"),
+                    review_status=review_metadata.get(
+                        "status", "PASSED" if final_state.get("status") == "COMPLETED" else "NEEDS_REVIEW"
+                    ),
+                    review_metadata=review_metadata,
+                    word_count=len(report_content.split()),
+                )
+                session.add(report_version)
                 await session.flush()
 
                 # Citation rows are created only from persisted, verified
@@ -488,6 +498,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     session.add(Citation(
                         research_task_id=task.id,
                         report_id=report.id,
+                        report_version_id=report_version.id,
                         source_id=source_id,
                         chunk_id=chunk_id,
                         claim_id=claim_id,

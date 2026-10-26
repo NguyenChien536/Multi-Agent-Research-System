@@ -7,6 +7,10 @@ from pydantic import BaseModel, ConfigDict, Field
 class ResearchReportResponse(BaseModel):
     id: uuid.UUID
     research_task_id: uuid.UUID
+    version_id: uuid.UUID
+    version_number: int
+    workflow_run_id: Optional[uuid.UUID] = None
+    plan_version: Optional[int] = None
     title: str
     content_markdown: str
     executive_summary: Optional[str] = None
@@ -21,6 +25,7 @@ class ResearchReportResponse(BaseModel):
 
 class CitationItemResponse(BaseModel):
     id: uuid.UUID
+    report_version_id: uuid.UUID
     citation_number: Optional[int] = None
     citation_label: str
     claim_text: Optional[str] = None

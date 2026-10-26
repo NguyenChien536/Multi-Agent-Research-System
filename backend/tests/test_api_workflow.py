@@ -16,7 +16,7 @@ from app.services import task_dispatcher
 from app.core.database import AsyncSessionLocal, engine
 from app.main import app
 from app.models.experiment import AnalysisRun, ExperimentJournalEntry
-from app.models.report import ResearchReport
+from app.models.report import ResearchReport, ReportVersion
 from app.models.task import ResearchTask, TaskDispatchOutbox, TaskDeletionOutbox
 from app.worker import run_langgraph_workflow, run_task_deletion
 
@@ -173,10 +173,17 @@ async def test_auth_and_research_ownership(monkeypatch: pytest.MonkeyPatch) -> N
                 select(ResearchReport).where(ResearchReport.research_task_id == uuid.UUID(author_id))
             )).scalars().all()
             assert len(reports) == 1
+            report_versions = (await db.execute(
+                select(ReportVersion).where(ReportVersion.report_id == reports[0].id)
+            )).scalars().all()
+            assert len(report_versions) == 1
+            assert report_versions[0].version_number == 1
+            assert report_versions[0].workflow_run_id is not None
 
         report = await client.get(f"/api/v1/research/{author_id}/report", headers=author_headers)
         assert report.status_code == 200, report.text
         assert report.json()["research_task_id"] == author_id
+        assert report.json()["version_number"] == 1
         assert (await client.get(f"/api/v1/research/{author_id}/report", headers=reader_headers)).status_code == 404
 
         citations = await client.get(f"/api/v1/research/{author_id}/citations", headers=author_headers)

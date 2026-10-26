@@ -10,7 +10,7 @@ from app.models.task import (
 )
 from app.models.source import ResearchSource, DocumentChunk
 from app.models.grounding import ClaimEvidence, Evidence, ResearchClaim, Citation
-from app.models.report import ResearchReport, ExportArtifact
+from app.models.report import ResearchReport, ReportVersion, ExportArtifact
 from app.models.agent_run import AgentRun, Evaluation
 from app.models.experiment import AnalysisRun, ExperimentJournalEntry
 
@@ -30,6 +30,7 @@ __all__ = [
     "ResearchClaim",
     "Citation",
     "ResearchReport",
+    "ReportVersion",
     "ExportArtifact",
     "AgentRun",
     "Evaluation",

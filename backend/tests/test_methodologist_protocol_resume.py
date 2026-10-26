@@ -12,7 +12,7 @@ from app.agents import nodes as nodes_module
 from app.core.database import AsyncSessionLocal
 from app.main import app
 from app.models.task import ResearchTask, TaskDispatchOutbox
-from app.models.report import ExportArtifact, ResearchReport
+from app.models.report import ExportArtifact, ResearchReport, ReportVersion
 from app.models.source import DocumentChunk
 from app.tools.search import SearchResult
 from app.worker import run_langgraph_workflow
@@ -260,9 +260,12 @@ async def test_empirical_human_protocol_pause_and_resume(monkeypatch):
 
             report = await db.scalar(select(ResearchReport).where(ResearchReport.research_task_id == uuid.UUID(task_id)))
             assert report is not None
-            assert "Kết quả thực địa" in report.content_markdown
-            assert "N=150" in report.content_markdown
-            assert "78%" in report.content_markdown
+            version = await db.scalar(select(ReportVersion).where(ReportVersion.report_id == report.id))
+            assert version is not None
+            assert version.version_number == 1
+            assert "Kết quả thực địa" in version.content_markdown
+            assert "N=150" in version.content_markdown
+            assert "78%" in version.content_markdown
 
 
 @pytest.mark.asyncio

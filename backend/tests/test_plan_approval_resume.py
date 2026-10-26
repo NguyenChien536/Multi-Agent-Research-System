@@ -13,7 +13,7 @@ from app.agents import nodes as nodes_module
 from app.core.database import AsyncSessionLocal
 from app.main import app
 from app.models.task import ResearchTask, TaskDispatchOutbox
-from app.models.report import ResearchReport
+from app.models.report import ResearchReport, ReportVersion
 from app.models.source import DocumentChunk
 from app.tools.search import SearchResult
 from app.worker import run_langgraph_workflow
@@ -212,7 +212,10 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
 
             report = await session.scalar(select(ResearchReport).where(ResearchReport.research_task_id == final_task.id))
             assert report is not None
-            assert "Clinical Multi-Agent Systems" in report.content_markdown
+            version = await session.scalar(select(ReportVersion).where(ReportVersion.report_id == report.id))
+            assert version is not None
+            assert version.version_number == 1
+            assert "Clinical Multi-Agent Systems" in version.content_markdown
 
 
 @pytest.mark.asyncio
