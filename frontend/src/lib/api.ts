@@ -1,4 +1,5 @@
 import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, UserDataResumeRequest, ProtocolResponse, AnalysisRunResponse, ExperimentJournalEntryResponse, DatasetUploadResponse, TokenResponse, UserCreate, UserResponse } from '../types';
+import type { ResearchMonitor } from '../types/monitoring';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -86,8 +87,11 @@ export const api = {
         body: JSON.stringify(data),
       }),
 
-    list: (skip = 0, limit = 20) =>
-      fetcher<ResearchTaskResponse[]>(`/research?skip=${skip}&limit=${limit}`),
+    list: (skip = 0, limit = 20, signal?: AbortSignal) =>
+      fetcher<ResearchTaskResponse[]>(`/research?skip=${skip}&limit=${limit}`, { signal }),
+
+    getMonitor: (id: string, offset = 0, limit = 20, signal?: AbortSignal) =>
+      fetcher<ResearchMonitor>(`/research/${id}/monitor?offset=${offset}&limit=${limit}`, { signal, cache: 'no-store' }),
 
     get: (id: string) =>
       fetcher<ResearchTaskResponse>(`/research/${id}`),
