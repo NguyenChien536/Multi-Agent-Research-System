@@ -19,7 +19,7 @@ export function PollStatus({ error, lastSuccess, refresh }: {
   return <div className="space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-500">
       <span className="flex items-center gap-2"><Activity size={14} />
-        {lastSuccess ? `Đồng bộ lúc ${lastSuccess.toLocaleTimeString('vi-VN')}` : 'Đang kết nối máy chủ…'}
+        {lastSuccess ? `Đồng bộ lúc ${lastSuccess.toLocaleTimeString('vi-VN')}` : error ? 'Chưa có dữ liệu đồng bộ' : 'Đang kết nối máy chủ…'}
       </span>
       <button onClick={refresh} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-zinc-700 hover:bg-zinc-50">
         <RefreshCw size={13} /> Cập nhật

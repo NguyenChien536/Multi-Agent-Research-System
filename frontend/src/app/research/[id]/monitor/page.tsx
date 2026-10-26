@@ -25,7 +25,8 @@ const ACTIONS: Record<string, { title: string; text: string; button: string }> =
 
 export default function ResearchMonitorPage() {
   const { id } = useParams<{ id: string }>();
-  const [offset, setOffset] = useState(0);
+  const [historyPage, setHistoryPage] = useState({ taskId: id, offset: 0 });
+  const offset = historyPage.taskId === id ? historyPage.offset : 0;
   const load = useCallback((signal: AbortSignal) => api.tasks.getMonitor(id, offset, 20, signal), [id, offset]);
   const { data, error, loading, lastSuccess, refresh } = useMonitorPoll(load, 4000);
   const snapshot = data?.task_id === id ? data : null;
@@ -76,7 +77,7 @@ export default function ResearchMonitorPage() {
                 {activity.has_error && <p className="mt-2 text-xs text-red-700">Bước này có ghi nhận lỗi. Chi tiết kỹ thuật được lưu trong log vận hành.</p>}
               </div>
             </li>)}</ol>
-            <div className="flex items-center justify-between gap-2 border-t border-zinc-100 p-4 text-xs text-zinc-500"><button disabled={!offset} onClick={() => setOffset(value => Math.max(0, value - 20))} className="rounded-lg border px-3 py-2 disabled:opacity-40">Mới hơn</button><span>{snapshot.activity_total ? `${offset + 1}–${Math.min(offset + 20, snapshot.activity_total)} / ${snapshot.activity_total}` : '0 hoạt động'}</span><button disabled={offset + 20 >= snapshot.activity_total} onClick={() => setOffset(value => value + 20)} className="rounded-lg border px-3 py-2 disabled:opacity-40">Cũ hơn</button></div>
+            <div className="flex items-center justify-between gap-2 border-t border-zinc-100 p-4 text-xs text-zinc-500"><button disabled={!offset} onClick={() => setHistoryPage({ taskId: id, offset: Math.max(0, offset - 20) })} className="rounded-lg border px-3 py-2 disabled:opacity-40">Mới hơn</button><span>{snapshot.activities.length ? `${offset + 1}–${offset + snapshot.activities.length} / ${snapshot.activity_total}` : '0 hoạt động ở trang này'}</span><button disabled={offset + 20 >= snapshot.activity_total} onClick={() => setHistoryPage({ taskId: id, offset: offset + 20 })} className="rounded-lg border px-3 py-2 disabled:opacity-40">Cũ hơn</button></div>
           </section>
           <aside className="space-y-4">
             <section className="rounded-2xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Tài nguyên đã ghi nhận</h2><p className="mt-4 text-3xl font-semibold">${snapshot.estimated_cost_usd.toFixed(4)}</p><p className="mt-1 text-xs text-zinc-500">Chi phí ước tính · {snapshot.accounting_source === 'PROVIDER_LEDGER' ? 'sổ theo dõi provider' : 'lịch sử agent'}</p><dl className="mt-5 space-y-3 text-sm"><div className="flex justify-between"><dt className="text-zinc-500">Đặt chỗ chưa đối chiếu</dt><dd>${snapshot.reserved_cost_usd.toFixed(4)}</dd></div><div className="flex justify-between"><dt className="text-zinc-500">Token đã ghi nhận</dt><dd>{snapshot.recorded_tokens.toLocaleString('vi-VN')}</dd></div><div className="flex justify-between"><dt className="text-zinc-500">Lần phân tích</dt><dd>{snapshot.counts.experiments}</dd></div></dl><p className="mt-4 text-xs leading-5 text-zinc-400">Chi phí có thể cập nhật sau khi request hoàn tất; không phải hóa đơn chính thức.</p></section>
