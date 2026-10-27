@@ -200,7 +200,7 @@ def validate_manuscript(markdown: str, contract: dict | None) -> list[dict[str, 
         if re.search(r"\b(no[t]?|without|not|khong|chua|non[- ]systematic)\b", sentence):
             continue
         prior_work = re.search(r"(?:prior|previous|cited|published)\s+(?:systematic\s+)?(?:review|study|work)|(?:nghien cuu|tong quan)\s+(?:truoc|duoc trich dan)", sentence)
-        own_action = re.search(r"(?:\bwe\b|this study|this review|our study|nghien cuu nay|chung toi).{0,65}(?:conduct|perform|follow|apply|ap dung|tuan thu|thuc hien)", sentence)
+        own_action = re.search(r"(?:\bwe\b|this study|this review|our study|nghien cuu nay|chung toi)\s+(?:(?:have|has|had|was|is|been|also|then|directly|da|se|cung)\s+){0,4}(?:conduct|perform|follow|appl|ap dung|tuan thu|thuc hien)", sentence)
         if prior_work and not own_action:
             continue
         review_term = re.search(r"prisma|systematic (?:literature )?review|tong quan (?:tai lieu )?he thong|meta.analysis|phan tich gop", sentence)

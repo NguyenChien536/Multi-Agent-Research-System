@@ -41,6 +41,7 @@ def test_a_list_dominated_discussion_is_rejected_even_in_a_long_prose_article():
 
 @pytest.mark.parametrize("claim", [
     "We conducted a systematic review following PRISMA.",
+    "Unlike prior work, we conducted a systematic review following PRISMA.",
     "Nghiên cứu này áp dụng tổng quan tài liệu hệ thống theo chuẩn PRISMA.",
     "We searched PubMed and IEEE Xplore databases for all eligible studies.",
 ])
