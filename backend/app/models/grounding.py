@@ -106,7 +106,7 @@ class Citation(Base):
     )
     claim_id = Column(UUID(as_uuid=True), ForeignKey("research_claims.id", ondelete="SET NULL"), nullable=True, index=True)
     citation_number = Column(Integer, nullable=True)    # Sequential number within report: 1, 2, 3...
-    citation_label = Column(String(20), nullable=False)  # Backward compat: retain until report writer migrates
+    citation_label = Column(String(500), nullable=False)
     claim_text = Column(Text, nullable=True)
     chunk_reference = Column(String(100), nullable=True)  # DEPRECATED — use chunk_id FK; drop after Writer is updated
 

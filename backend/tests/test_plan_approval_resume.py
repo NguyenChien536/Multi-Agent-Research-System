@@ -86,7 +86,7 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
     monkeypatch.setattr(nodes_module, "get_fast_llm", FakeStructuredLLM)
     monkeypatch.setattr(nodes_module, "get_smart_llm", FakeWriterLLM)
 
-    async def fake_search(_queries, max_results_per_query=3):
+    async def fake_search(_queries, max_results_per_query=3, budget_context=None):
         return [SearchResult(
             title="Clinical Multi-Agent Systems",
             url="https://health-ai.org/paper1",
@@ -100,7 +100,7 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
     monkeypatch.setattr("app.tools.scraper.fetch_urls_parallel", fake_fetch)
 
     class FakeEmbedder:
-        async def embed_and_store(self, db, task_id, source_id, text_content):
+        async def embed_and_store(self, db, task_id, source_id, text_content, budget_context=None):
             db.add(DocumentChunk(
                 research_task_id=task_id,
                 source_id=source_id,
@@ -111,7 +111,7 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
             await db.flush()
             return 1
 
-        async def search_similar_chunks(self, db, task_id, _query, limit=3):
+        async def search_similar_chunks(self, db, task_id, _query, limit=3, budget_context=None):
             rows = (await db.execute(
                 select(DocumentChunk)
                 .where(DocumentChunk.research_task_id == task_id)

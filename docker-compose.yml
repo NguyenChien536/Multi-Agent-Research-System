@@ -96,10 +96,13 @@ services:
   # 4. Asynchronous Task Queue & LangGraph Worker (Celery)
   # ==============================================================================
   worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     image: research-backend:local
     container_name: research_worker
     restart: unless-stopped
-    command: celery -A app.worker.celery_app worker --loglevel=info -E --concurrency=4
+    command: sh -c "python -m app.services.runtime_check && exec celery -A app.worker.celery_app worker --loglevel=info -E --concurrency=4"
     environment:
       - ENVIRONMENT=development
       - DEBUG=True

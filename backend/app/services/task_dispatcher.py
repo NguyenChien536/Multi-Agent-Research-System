@@ -4,13 +4,13 @@ import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import aliased
 
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.experiment import AnalysisRun, ExperimentJournalEntry
-from app.models.task import ResearchTask, TaskDispatchOutbox, DocumentIngestionOutbox, TaskDeletionOutbox
+from app.models.task import ResearchTask, TaskDispatchOutbox, DocumentIngestionOutbox, TaskDeletionOutbox, WorkflowRun
 from app.models.source import ResearchSource
 from app.worker import execute_document_ingestion, execute_research_workflow, execute_task_deletion
 
@@ -95,6 +95,14 @@ async def recover_unclaimed_dispatches(
             exhausted_result = await session.execute(exhausted_query)
             for task, event in exhausted_result.all():
                 event.last_error = diagnostic
+                # Do not leave a paper looking busy forever when no worker has
+                # accepted it after the bounded redelivery window.
+                from app.services.provider_budget import pause_budget_config
+                task.status = "FAILED"
+                task.current_step = "DISPATCH_FAILED"
+                task.completed_at = now
+                task.budget_config = pause_budget_config(task.budget_config, now=now)
+                task.description = (task.description or "") + "\nNo worker accepted the job after bounded redelivery; check worker availability before retrying."
                 logger.error(
                     "Stale task dispatch exhausted retries event=%s task=%s unclaimed_retries=%s",
                     event.id,
@@ -156,6 +164,23 @@ async def recover_expired_worker_claims(now: datetime | None = None) -> int:
                         ),
                     ))
 
+                config = dict(task.budget_config or {})
+                recoveries = int(config.get("_worker_recoveries", 0)) + 1
+                config["_worker_recoveries"] = recoveries
+                task.budget_config = config
+                if recoveries > settings.WORKER_MAX_RECOVERIES:
+                    from app.services.provider_budget import pause_budget_config
+                    task.budget_config = pause_budget_config(config, now=now)
+                    task.status = "FAILED"
+                    task.current_step = "RECOVERY_LIMIT"
+                    task.worker_lease_until = None
+                    task.completed_at = now
+                    task.description = (task.description or "") + "\nWorker recovery limit reached; inspect runtime before retrying."
+                    await session.execute(update(WorkflowRun).where(
+                        WorkflowRun.research_task_id == task.id, WorkflowRun.status == "RUNNING",
+                    ).values(status="FAILED", completed_at=now))
+                    recovered += 1
+                    continue
                 task.status = "QUEUED"
                 task.worker_lease_until = None
                 event_result = await session.execute(

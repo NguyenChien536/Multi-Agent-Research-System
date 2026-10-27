@@ -600,7 +600,8 @@ async def test_e2e_empirical_computational_workflow(monkeypatch):
 
         async def ainvoke(self, messages):
             prompt_text = messages[0].content
-            claim_ids = re.findall(r"'claim_id':\s*UUID\('([a-f0-9\-]+)'\)", prompt_text)
+            claim_ids = re.findall(r"'claim_id':\s*'([a-f0-9\-]+)'", prompt_text)
+            assert claim_ids, "Writer must receive persisted, source-grounded claim IDs"
             markers = " ".join(f"[[@claim:{cid}]]" for cid in claim_ids)
             content = (
                 f"# Báo cáo thực nghiệm: Tabular Regression v1\n\n"
@@ -613,7 +614,7 @@ async def test_e2e_empirical_computational_workflow(monkeypatch):
     monkeypatch.setattr(nodes_module, "get_fast_llm", lambda: FakeStructuredLLM())
     monkeypatch.setattr(nodes_module, "get_smart_llm", lambda: FakeSmartWriterLLM())
 
-    async def fake_search(_queries, max_results_per_query=3):
+    async def fake_search(_queries, max_results_per_query=3, budget_context=None):
         return [
             SearchResult(
                 url="https://tabular-ml.example.org/study",
@@ -629,7 +630,7 @@ async def test_e2e_empirical_computational_workflow(monkeypatch):
     monkeypatch.setattr("app.tools.scraper.fetch_urls_parallel", fake_fetch)
 
     class FakeEmbedder:
-        async def embed_and_store(self, db, task_id, source_id, text_content):
+        async def embed_and_store(self, db, task_id, source_id, text_content, budget_context=None):
             db.add(DocumentChunk(
                 research_task_id=task_id,
                 source_id=source_id,
@@ -640,7 +641,7 @@ async def test_e2e_empirical_computational_workflow(monkeypatch):
             await db.flush()
             return 1
 
-        async def search_similar_chunks(self, db, task_id, _query, limit=3):
+        async def search_similar_chunks(self, db, task_id, _query, limit=3, budget_context=None):
             rows = (await db.execute(
                 select(DocumentChunk)
                 .where(DocumentChunk.research_task_id == task_id)

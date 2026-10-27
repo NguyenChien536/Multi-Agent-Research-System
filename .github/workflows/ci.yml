@@ -130,3 +130,5 @@ jobs:
         run: docker compose config --quiet
       - name: Build API and frontend images
         run: docker compose build backend frontend
+      - name: Check worker runtime from the built image
+        run: docker compose run --rm --no-deps worker python -m app.services.runtime_check

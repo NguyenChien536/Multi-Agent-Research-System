@@ -3,13 +3,14 @@ import logging
 import ipaddress
 import socket
 from typing import Optional
-from urllib.parse import urlparse, urlunsplit
+from urllib.parse import urlparse, urlunsplit, urljoin
 
 import httpx
 import trafilatura
 
 logger = logging.getLogger(__name__)
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+MAX_REDIRECTS = 3
 
 class SSRFError(Exception):
     """Lỗi khi phát hiện URL có dấu hiệu SSRF."""
@@ -64,7 +65,7 @@ class ScraperTool:
 
 
 
-    async def _validated_target(self, url: str) -> tuple[str, str, dict[str, bytes]]:
+    async def _validated_target(self, url: str) -> tuple[str, str, dict[str, str]]:
         """Validate and pin a public destination so the HTTP client cannot re-resolve DNS."""
         parsed = urlparse(url)
 
@@ -97,9 +98,10 @@ class ScraperTool:
                 self._assert_public_ip(ipaddress.ip_address(ip_str), hostname)
             # The request URL uses the checked IP literal, preventing the HTTP
             # client from resolving the original hostname a second time.
-            connect_ip = sorted(resolved_ips)[0]
+            # Prefer IPv4 on hosts without an IPv6 route (common in Docker).
+            connect_ip = sorted(resolved_ips, key=lambda ip: (":" in ip, ip))[0]
             host_header = hostname.encode("idna").decode("ascii")
-            sni_hostname = host_header.encode("ascii") if parsed.scheme == "https" else None
+            sni_hostname = host_header if parsed.scheme == "https" else None
 
         authority = f"[{connect_ip}]" if ":" in connect_ip else connect_ip
         host_authority = host_header
@@ -125,9 +127,6 @@ class ScraperTool:
     async def fetch_and_extract(self, url: str) -> Optional[str]:
         """Tải trang HTML và trích xuất nội dung chính (bỏ quảng cáo, menu)."""
         try:
-            pinned_url, host_header, extensions = await self._validated_target(url)
-            request_headers = {**self.headers, "Host": host_header}
-
             # Connect to the exact IP that passed validation. Disable environment
             # proxies because they would resolve/route the original host elsewhere.
             async with httpx.AsyncClient(
@@ -135,26 +134,46 @@ class ScraperTool:
                 follow_redirects=False,
                 trust_env=False,
             ) as client:
-                async with client.stream(
-                    "GET",
-                    pinned_url,
-                    headers=request_headers,
-                    extensions=extensions,
-                ) as response:
-                    response.raise_for_status()
-                    content_length = response.headers.get("content-length")
-                    if content_length and content_length.isdigit() and int(content_length) > MAX_RESPONSE_BYTES:
-                        raise ValueError("Trang web vượt quá giới hạn dung lượng tải xuống")
-                    body = bytearray()
-                    async for chunk in response.aiter_bytes():
-                        if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
+                current_url = url
+                seen = set()
+                for hop in range(MAX_REDIRECTS + 1):
+                    if current_url in seen:
+                        raise ValueError("Redirect loop")
+                    seen.add(current_url)
+                    pinned_url, host_header, extensions = await self._validated_target(current_url)
+                    async with client.stream(
+                        "GET", pinned_url,
+                        headers={**self.headers, "Host": host_header}, extensions=extensions,
+                    ) as response:
+                        if response.status_code in {301, 302, 303, 307, 308}:
+                            location = response.headers.get("location") or response.headers.get("Location")
+                            if not location or hop == MAX_REDIRECTS:
+                                raise ValueError("Invalid redirect or redirect limit reached")
+                            current_url = urljoin(current_url, location)
+                            # Every redirect destination is independently resolved,
+                            # checked and IP-pinned before another request is sent.
+                            continue
+                        response.raise_for_status()
+                        content_length = response.headers.get("content-length")
+                        if content_length and content_length.isdigit() and int(content_length) > MAX_RESPONSE_BYTES:
                             raise ValueError("Trang web vượt quá giới hạn dung lượng tải xuống")
-                        body.extend(chunk)
-                    try:
-                        html_content = body.decode(response.encoding or "utf-8", errors="replace")
-                    except LookupError:
-                        html_content = body.decode("utf-8", errors="replace")
+                        body = bytearray()
+                        async for chunk in response.aiter_bytes():
+                            if len(body) + len(chunk) > MAX_RESPONSE_BYTES:
+                                raise ValueError("Trang web vượt quá giới hạn dung lượng tải xuống")
+                            body.extend(chunk)
+                        try:
+                            html_content = body.decode(response.encoding or "utf-8", errors="replace")
+                        except LookupError:
+                            html_content = body.decode("utf-8", errors="replace")
+                        break
 
+            # Search providers also return public academic PDFs. Never decode
+            # their binary bytes as HTML; use the same bounded parser as uploads.
+            if bytes(body[:5]) == b"%PDF-":
+                from app.services.pdf_parser import extract_text_from_pdf
+                parsed_pdf = await asyncio.to_thread(extract_text_from_pdf, bytes(body))
+                return parsed_pdf["text"]
             # Bước 3: Trích xuất nội dung bằng trafilatura (Đồng bộ, nhưng chạy rất nhanh)
             # Nếu HTML quá lớn, có thể cân nhắc run_in_executor
             extracted_text = trafilatura.extract(
@@ -178,10 +197,10 @@ class ScraperTool:
             logger.warning("Rejected page from host %s: %s", self._hostname_for_log(url), str(e))
             return None
         except httpx.HTTPError as e:
-            logger.warning("HTTP error while fetching host %s: %s", self._hostname_for_log(url), str(e))
+            logger.warning("HTTP error while fetching host %s (%s): %s", self._hostname_for_log(url), type(e).__name__, str(e))
             return None
         except Exception as e:
-            logger.error("Unexpected scraper error for host %s: %s", self._hostname_for_log(url), str(e))
+            logger.error("Unexpected scraper error for host %s (%s): %s", self._hostname_for_log(url), type(e).__name__, str(e))
             return None
 
 async def fetch_urls_parallel(urls: list[str], max_concurrent: int = 5) -> dict[str, str]:

@@ -231,3 +231,34 @@ Invoke-WebRequest -UseBasicParsing http://localhost:8000/api/v1/openapi.json
 ## An toàn thông tin
 
 Không đưa API key, mật khẩu hoặc nội dung `.env` vào tài liệu, prompt hay log được chia sẻ. Tài liệu chỉ ghi trạng thái và output không nhạy cảm.
+
+## Kiểm tra 27/10/2026 — sửa bài kẹt QUEUED/RUNNING (#59)
+
+Đây là bằng chứng mới hơn các mốc lịch sử ở trên, kiểm tra trên nhánh `bugfix/59-research-runtime-recovery`.
+
+| Vấn đề | Nguyên nhân đã xác nhận | Cách xử lý |
+|---|---|---|
+| Worker lặp khôi phục, bài không tiến triển | Image worker cũ thiếu Postgres checkpointer; restart không cập nhật thư viện | API/worker cùng build; kiểm tra dependency trước khi nhận việc |
+| Các job sau lỗi database | `asyncio.run()` tạo vòng sự kiện khác, dùng lại connection pool của vòng đã đóng | Một `asyncio.Runner` cho mỗi Celery child; đóng pool trên chính vòng đó |
+| Đã claim nhưng bootstrap lỗi | Checkpoint/preload nằm ngoài handler của graph | Handler ngoài cùng cập nhật FAILED và giải phóng lease, có kiểm tra attempt để không ghi đè lần chạy mới |
+| Không tải được nguồn HTTPS | TLS SNI nhận bytes thay vì chuỗi; mọi trang lỗi trước khi trích xuất | SNI dạng chuỗi đã thử với web thật; redirect được kiểm tra SSRF và ghim IP từng chặng; PDF công khai dùng parser PDF có giới hạn |
+| Lựa chọn cấu hình bị bỏ qua | Thiếu các trường trong graph state; độ dài/kiểu citation chưa được áp dụng | Truyền lại cấu hình khi resume; Writer nhận độ dài và hạn đầu ra; formatter dùng IEEE/APA/Harvard với metadata có thật |
+| Bài ngắn bị cắt mà vẫn PASS | Hạn token gồm cả suy luận; Critic không biết cấu trúc đầy đủ | Gemini dùng thinking level thấp, tăng headroom; ghi finish reason; bản bị cắt không thể COMPLETED; Critic nhận outline/yêu cầu bài |
+| Giao việc hoặc khôi phục lặp mãi | Thiếu kết thúc khi hết số lần redelivery/recovery | FAILED với DISPATCH_FAILED/RECOVERY_LIMIT; có deadline cho provider và graph |
+| Chạy lại mất lịch sử hoặc tính cả thời gian chờ | Report identity tạo mới; active clock chưa đóng ở trạng thái kết thúc | Tái sử dụng report, thêm immutable version; đóng clock khi dừng; giữ ngân sách đã tiêu |
+
+| Kiểm tra | Kết quả |
+|---|---|
+| Backend toàn bộ trên PostgreSQL mới `issue59_verified_test` | **267 passed**; không chạy test trên database phát triển |
+| Hồi quy redelivery sau khi bổ sung kết thúc FAILED | **3 passed** |
+| Ma trận cấu hình REVIEW với provider giả lập, graph thật và interrupt/resume | **108 tổ hợp đạt**: 3 độ sâu × 3 độ dài × 3 kiểu trích dẫn × 2 chế độ duyệt × 2 ngôn ngữ |
+| Celery thật, nhiều lần truy vấn DB liên tiếp | 12 deliveries qua prefork pool trả kết quả; không có lỗi connection khác event loop. Probe dùng ID không tồn tại, không gọi provider |
+| REVIEW DEEP / LONG / IEEE, provider thật | COMPLETED; 5 nguồn, 8 citation, phiên bản 2; phiên bản 1 thiếu nguồn được giữ nguyên |
+| REVIEW SHALLOW / SHORT / APA / English / duyệt kế hoạch, provider thật | WAITING_APPROVAL → duyệt → COMPLETED; 569 từ, 7 citation |
+| REVIEW STANDARD / MEDIUM / Harvard / Vietnamese, provider thật | Kết thúc NEEDS_REVIEW; 1.040 từ, 9 citation; cần xem góp ý nội dung, worker không còn chạy |
+| Frontend | 14 tests đạt; production build/typecheck đạt |
+| Docker và migration | Backend image build đạt; runtime preflight đạt; migration sạch tới `a6b7c8d9e0f1` và upgrade database dev đạt |
+
+108 tổ hợp là kiểm thử điều phối với provider giả lập, không phải 108 lần gọi dịch vụ thật. Các đường empirical tiếp tục được kiểm thử integration với dữ liệu/routine có kiểm soát; đợt kiểm tra provider thật này tập trung REVIEW. PASS của Critic là kiểm soát chất lượng nội bộ, không phải xác nhận bài đủ điều kiện công bố. Kiểu APA/Harvard hiện dựa trên metadata web cơ bản; tác giả/ngày thiếu được giữ thiếu, không tự suy đoán.
+
+Tài khoản và bài dùng riêng cho smoke test đã được dọn; dữ liệu nghiên cứu thật và các phiên bản cũ được giữ lại. Hướng dẫn rebuild và retry nằm trong README. Đợt sửa này không thay cho nghiệm thu tải, backup/restore và bảo mật production.
