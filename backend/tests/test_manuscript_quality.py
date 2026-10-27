@@ -1,4 +1,5 @@
 import uuid
+import unicodedata
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -54,6 +55,7 @@ def test_unexecuted_methods_are_rejected(claim):
     "This is a non-systematic literature review with a limited source set.",
     "We did not conduct a systematic review or claim PRISMA compliance.",
     "We discuss PRISMA as a reporting guideline in the cited literature.",
+    "We discuss a prior systematic review that followed PRISMA to motivate this narrative approach.",
     "We used Tavily web search to find publicly accessible IEEE Xplore pages.",
 ])
 def test_limited_scope_and_discussion_of_prior_methods_are_not_false_claims(statement):
@@ -68,6 +70,11 @@ def test_planned_searches_never_become_executed_provenance():
     assert provenance["uploaded_pdf_count"] == 1
     assert provenance["search_activity_this_run"] == []
     assert provenance["direct_academic_database_search"] is False
+
+
+def test_unicode_normalization_does_not_reject_localized_headings():
+    manuscript = complete_manuscript("A supported finding.", language="vi")
+    assert not validate_manuscript(unicodedata.normalize("NFD", manuscript), manuscript_contract("REVIEW", "vi"))
 
 
 @pytest.mark.asyncio

@@ -35,12 +35,16 @@ _OTHER_HEADINGS = {
     "zh": ["摘要", "关键词", "引言", "文献检索与范围", "主题综合分析", "研究方法", "实验设置", "结果", "讨论", "局限性", "结论"],
     "ko": ["초록", "핵심어", "서론", "문헌 검색 및 범위", "주제별 종합 분석", "연구 방법", "실험 설정", "결과", "논의", "한계", "결론"],
 }
+# Bind translations to semantic IDs once; changing _HEADINGS insertion order
+# must not silently relabel Methods as Results in another language.
+_TRANSLATION_IDS = ("abstract", "keywords", "introduction", "review_methods", "synthesis", "methods", "setup", "results", "discussion", "limitations", "conclusion")
+_OTHER_HEADINGS = {locale: dict(zip(_TRANSLATION_IDS, labels, strict=True)) for locale, labels in _OTHER_HEADINGS.items()}
 _REFERENCE_HEADINGS = {"vi": "Tài liệu tham khảo", "en": "References", "fr": "Références", "de": "Literaturverzeichnis", "es": "Referencias", "ja": "参考文献", "zh": "参考文献", "ko": "참고문헌"}
 
 
 def _localized_heading(key: str, locale: str) -> str:
     if locale in _OTHER_HEADINGS:
-        return _OTHER_HEADINGS[locale][list(_HEADINGS).index(key)]
+        return _OTHER_HEADINGS[locale][key]
     return _HEADINGS[key][locale == "vi"]
 
 
@@ -194,6 +198,10 @@ def validate_manuscript(markdown: str, contract: dict | None) -> list[dict[str, 
     # Search only the manuscript's own approach, not related-work discussion.
     for sentence in re.split(r"[.!?\n]", _fold("\n".join(method_parts))):
         if re.search(r"\b(no[t]?|without|not|khong|chua|non[- ]systematic)\b", sentence):
+            continue
+        prior_work = re.search(r"(?:prior|previous|cited|published)\s+(?:systematic\s+)?(?:review|study|work)|(?:nghien cuu|tong quan)\s+(?:truoc|duoc trich dan)", sentence)
+        own_action = re.search(r"(?:\bwe\b|this study|this review|our study|nghien cuu nay|chung toi).{0,65}(?:conduct|perform|follow|apply|ap dung|tuan thu|thuc hien)", sentence)
+        if prior_work and not own_action:
             continue
         review_term = re.search(r"prisma|systematic (?:literature )?review|tong quan (?:tai lieu )?he thong|meta.analysis|phan tich gop", sentence)
         own_method = re.search(r"conduct|perform|appl|follow|adher|complian|accordance|thuc hien|ap dung|tuan thu|theo chuan|tien hanh|(?:this|our) review (?:is|was)", sentence)
