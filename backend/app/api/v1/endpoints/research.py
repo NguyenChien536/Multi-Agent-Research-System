@@ -156,7 +156,7 @@ async def start_research_task(
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Research task not found")
-    if task.status not in ("PENDING", "CANCELLED"):
+    if task.status not in ("PENDING", "CANCELLED", "FAILED", "NEEDS_REVIEW"):
         raise HTTPException(status_code=409, detail=f"Research task cannot be started from status {task.status}")
 
     pending_ingestion = await db.scalar(
@@ -169,9 +169,15 @@ async def start_research_task(
     if pending_ingestion:
         raise HTTPException(status_code=409, detail="Tài liệu PDF vẫn đang được xử lý. Hãy đợi trạng thái READY rồi bắt đầu bài nghiên cứu.")
     
+    # Older workers did not freeze the clock on terminal states. Do not charge
+    # hours spent reading a finished report as active research on explicit retry.
+    from app.services.provider_budget import pause_budget_config
+    task.budget_config = pause_budget_config(task.budget_config, now=task.completed_at)
     task.status = "QUEUED"
     task.completed_at = None
     task.worker_lease_until = None
+    task.current_iteration = 0
+    task.current_step = None
     task.plan = None
     task.plan_approved = False
     task.plan_version = 0

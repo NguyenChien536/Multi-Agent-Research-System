@@ -380,7 +380,7 @@ def _patch_external_boundaries(monkeypatch, critic_sequence=("PASS",)):
     monkeypatch.setattr(nodes_module, "build_llm_chain", _build_llm_chain)
 
     # Patch search — returns empty list (no actual HTTP calls)
-    async def _fake_search(queries, max_results_per_query=3):
+    async def _fake_search(queries, max_results_per_query=3, budget_context=None):
         return []
 
     # Patch scraper — returns empty dict (no actual HTTP calls)
@@ -929,7 +929,7 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
     monkeypatch.setattr(nodes_module, "get_fast_llm", FakeStructuredLLM)
     monkeypatch.setattr(nodes_module, "get_smart_llm", FakeWriterLLM)
 
-    async def fake_search(_queries, max_results_per_query=3):
+    async def fake_search(_queries, max_results_per_query=3, budget_context=None):
         return [SearchResult(
             title="Example paper",
             url="https://example.org/paper",
@@ -943,7 +943,7 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
     monkeypatch.setattr("app.tools.scraper.fetch_urls_parallel", fake_fetch)
 
     class FakeEmbedder:
-        async def embed_and_store(self, db, task_id, source_id, text_content):
+        async def embed_and_store(self, db, task_id, source_id, text_content, budget_context=None):
             db.add(DocumentChunk(
                 research_task_id=task_id,
                 source_id=source_id,
@@ -954,7 +954,7 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
             await db.flush()
             return 1
 
-        async def search_similar_chunks(self, db, task_id, _query, limit=3):
+        async def search_similar_chunks(self, db, task_id, _query, limit=3, budget_context=None):
             rows = (await db.execute(
                 select(DocumentChunk)
                 .where(DocumentChunk.research_task_id == task_id)
@@ -1190,8 +1190,10 @@ async def test_ssrf_redirect_following_disabled(monkeypatch):
     call_log: list[str] = []
 
     async def _allow_public_target(_url: str):
+        if _url != public_url:
+            raise SSRFError("Private redirect blocked")
         return "https://93.184.216.34/page", "public.example.com", {
-            "sni_hostname": b"public.example.com"
+            "sni_hostname": "public.example.com"
         }
 
     class FakeResponse:
@@ -1252,7 +1254,7 @@ async def test_ssrf_pins_resolved_public_ip_and_preserves_host_and_tls_sni(monke
 
     assert pinned_url == "https://93.184.216.34:8443/research?q=1"
     assert host_header == "public.example.com:8443"
-    assert extensions == {"sni_hostname": b"public.example.com"}
+    assert extensions == {"sni_hostname": "public.example.com"}
 
 
 @pytest.mark.asyncio

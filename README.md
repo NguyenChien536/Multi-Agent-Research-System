@@ -171,6 +171,17 @@ Kiểm tra trạng thái các dịch vụ đang chạy:
 docker compose ps
 ```
 
+Sau khi cập nhật mã backend hoặc thư viện, dựng lại **cả API và worker**:
+
+```bash
+docker compose up -d --build backend worker
+docker compose exec worker python -m app.services.runtime_check
+```
+
+`docker compose restart` chỉ khởi động lại container cũ, không cài thư viện mới. Worker kiểm tra thư viện trước khi nhận bài để tránh dùng mã mới với image cũ.
+
+Nếu bài không tiến triển, xem `docker compose logs --tail 100 worker backend`. `WAITING_APPROVAL` cần duyệt kế hoạch; `WAITING_USER_DATA` cần nạp dữ liệu. Bài lỗi chuyển sang `FAILED` thay vì lặp phục hồi vô hạn; có thể gọi lại `/research/{id}/start` cho `FAILED` hoặc `NEEDS_REVIEW` sau khi xử lý nguyên nhân. Lần chạy lại giữ các phiên bản báo cáo cũ và vẫn chịu ngân sách còn lại của bài.
+
 Khi khởi chạy thành công, bạn có thể truy cập ngay:
 * 📘 **FastAPI Swagger Docs (Kiểm thử API):** [http://localhost:8000/api/v1/docs](http://localhost:8000/api/v1/docs)
 * 🩺 **Health Check Endpoint:** [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)

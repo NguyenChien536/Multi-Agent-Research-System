@@ -57,7 +57,7 @@ except ModuleNotFoundError as exc:
 
 if RedisCache is not None:
     try:
-        _redis_client = _Redis.from_url(settings.REDIS_URL)
+        _redis_client = _Redis.from_url(settings.REDIS_URL, socket_connect_timeout=2, socket_timeout=3)
         set_llm_cache(RedisCache(redis_=_redis_client))
         logger.info("LLM Redis cache enabled")
     except Exception as exc:
@@ -102,7 +102,8 @@ class BudgetedFallbackLLM:
                 if context:
                     from app.services.provider_budget import assert_task_active
                     await assert_task_active(context["task_id"], context["attempt_number"])
-                response = await model.ainvoke(messages, **kwargs)
+                async with asyncio.timeout(settings.PROVIDER_CALL_TIMEOUT_SECONDS):
+                    response = await model.ainvoke(messages, **kwargs)
                 if reservation_id:
                     prompt_text = context["prompt_text"]
                     output_text = response.model_dump_json() if hasattr(response, "model_dump_json") else str(
@@ -164,6 +165,7 @@ def build_llm_chain(is_smart: bool = False):
                     temperature=0.7 if is_smart else 0.2,
                     google_api_key=settings.GEMINI_API_KEY,
                     max_output_tokens=4096,
+                    thinking_level="low",
                     max_retries=0,
                 )))
         elif provider == "openai" and getattr(settings, "OPENAI_API_KEY", None) and "your_" not in settings.OPENAI_API_KEY:
@@ -473,6 +475,9 @@ async def researcher_node(state: ResearchState) -> Dict[str, Any]:
         return {"current_agent": "researcher"}
 
     try:
+        remaining_sources = max(0, state.get("max_sources", 10) - len(state.get("collected_sources", [])))
+        if not remaining_sources:
+            return {"current_agent": "researcher", "current_iteration": state.get("current_iteration", 0) + 1}
         # 1. Gọi Tavily search (parallel)
         budget_context = None
         if state.get("enforce_provider_budget"):
@@ -507,6 +512,8 @@ async def researcher_node(state: ResearchState) -> Dict[str, Any]:
         base_idx = len(state.get("collected_sources", []))
 
         for url, content in scraped_data.items():
+            if len(new_sources) >= remaining_sources:
+                break
             base_idx += 1
             res = new_urls_map[url]
             source_tag = f"src_{base_idx:02d}"
@@ -1253,6 +1260,18 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     protocol = state.get("protocol") or {}
     user_data = state.get("user_data_submission")
     analysis_run = state.get("analysis_run")
+    length = state.get("report_length", "MEDIUM")
+    word_target, output_limit = {
+        "SHORT": ("400–600", 4096),
+        "MEDIUM": ("800–1100", 8192),
+        "LONG": ("1400–1800", 12288),
+    }[length]
+    if isinstance(llm, BudgetedFallbackLLM):
+        for _, model in llm.models:
+            if hasattr(model, "max_output_tokens"):
+                model.max_output_tokens = output_limit
+            elif hasattr(model, "max_tokens"):
+                model.max_tokens = output_limit
 
     empirical_section = ""
     if research_type == "EMPIRICAL_HUMAN" and user_data:
@@ -1310,6 +1329,8 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     Bạn là một Nhà văn học thuật chuyên nghiệp. Hãy viết báo cáo nghiên cứu về đề tài: {state.get('research_question')}
     Loại nghiên cứu: {research_type}
     Ngôn ngữ: {state.get('language')}
+    Độ dài mục tiêu: {word_target} từ ({length}); ưu tiên đầy đủ các mục, không thêm thông tin thiếu bằng chứng để đạt số từ.
+    Kiểu tài liệu tham khảo: {state.get('citation_style', 'IEEE')}; chỉ dùng marker luận điểm, bộ định dạng sẽ tạo trích dẫn cuối cùng.
 
     Cấu trúc bắt buộc: {plan.get('required_sections', [])}
     Dữ liệu đã trích xuất (chỉ luận điểm có bằng chứng khớp chính xác với đoạn nguồn): {claims}
@@ -1321,7 +1342,7 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
 
     try:
         response = await invoke_llm_with_budget(
-            state, llm, [HumanMessage(content=prompt)], model_name=model_name, output_tokens=4096
+            state, llm, [HumanMessage(content=prompt)], model_name=model_name, output_tokens=output_limit
         )
         content = response.content
         if isinstance(content, list):
@@ -1331,6 +1352,8 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
             )
         else:
             draft_markdown = str(content)
+        finish_reason = str((getattr(response, "response_metadata", None) or {}).get("finish_reason", "")).upper()
+        truncated = finish_reason in {"MAX_TOKENS", "LENGTH"}
 
         duration_ms = int((time.monotonic() - start_ts) * 1000)
         completed_at = datetime.now(timezone.utc)
@@ -1351,13 +1374,14 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
             output_tokens=out_tok,
             estimated_cost=cost,
             input_summary={"claims_count": len(claims)},
-            output_summary={"draft_words": len(draft_markdown.split())},
+            output_summary={"draft_words": len(draft_markdown.split()), "truncated": truncated},
             tool_calls=[],
         )
 
         return {
             "current_agent": "writer",
-            "draft_report_markdown": draft_markdown
+            "draft_report_markdown": draft_markdown,
+            "draft_truncated": truncated,
         }
     except Exception as exc:
         duration_ms = int((time.monotonic() - start_ts) * 1000)
@@ -1420,6 +1444,10 @@ search may resolve; NEEDS_REVIEW for unavailable user data, protocol approval, o
 PASS only when no material issue is found. Limit feedback and missing_areas to five items each.
 
 Research type: {state.get('research_type', 'REVIEW')}
+Research question: {state.get('research_question')}
+Required manuscript sections: {(state.get('plan') or {}).get('required_sections', [])}
+Full manuscript outline: {[name for name, _ in sections]}
+Requested report length: {state.get('report_length', 'MEDIUM')}
 User-submitted data available: {bool(state.get('user_data_submission'))}
 Persisted analysis result available: {bool(state.get('analysis_run'))}
 Persisted protocol (if any): {protocol_context}
@@ -1453,6 +1481,9 @@ Complete section content:
             })
 
         lineage_findings = _claim_lineage_findings(draft, claims)
+        if state.get("draft_truncated"):
+            feedback.append("The provider truncated the draft at its output limit. Rewrite concisely with all required sections and complete citation markers.")
+            verdicts.append("REVISE")
         feedback.extend(lineage_findings)
         if lineage_findings:
             verdicts.append("NEEDS_REVIEW")
@@ -1559,6 +1590,26 @@ Complete section content:
         )
         raise
 
+def _format_reference(item, number, style):
+    """Format known webpage metadata; absent authors/dates stay explicitly absent."""
+    import re
+    title = item.get("source_title") or item.get("source_url") or item.get("source_tag", "Untitled")
+    url = item.get("source_url") or ""
+    if style == "IEEE":
+        return f"[{number}]", f"[{number}] {title}" + (f". {url}" if url else ".")
+    author = item.get("source_author")
+    year_match = re.search(r"\b(?:19|20)\d{2}\b", item.get("publication_date") or "")
+    year = year_match.group() if year_match else "n.d."
+    identity = author or title
+    # Bibliographic metadata is bounded by the source schema; cap the label to
+    # the persisted field size, keeping report text and citation API consistent.
+    label = f"({identity[:470]}, {year})"
+    if style == "APA":
+        return label, f"{identity}. ({year}). " + (f"{title}. " if author else "") + url
+    accessed = datetime.now(timezone.utc).strftime("%d %B %Y")
+    return label, f"{identity} ({year}) " + (f"{title}. " if author else "") + f"[Online]. {url} (Accessed: {accessed})."
+
+
 async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
     """
     Post Processor: Module Regex code để định dạng Markdown cuối cùng và đánh số trích dẫn.
@@ -1584,6 +1635,8 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
                 used_ids.append(claim_id)
 
         citation_numbers = {claim_id: index for index, claim_id in enumerate(used_ids, start=1)}
+        formatted = {claim_id: _format_reference(claims_by_id[claim_id], number, state.get("citation_style", "IEEE"))
+                     for claim_id, number in citation_numbers.items()}
 
         def replace_marker(match: re.Match[str]) -> str:
             number = citation_numbers.get(match.group(1))
@@ -1594,21 +1647,24 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
         # that resolved to validated claim/evidence records.
         final_md = re.sub(r"\[\d+\]", "", final_md)
         for claim_id, number in citation_numbers.items():
-            final_md = final_md.replace(f"@@VALID_CITATION_{number}@@", f"[{number}]")
-        final_md = re.sub(r"\[\[@claim:[^\]]+\]\]", "", final_md)
+            final_md = final_md.replace(f"@@VALID_CITATION_{number}@@", formatted[claim_id][0])
+        final_md = re.sub(r"\[\[@claim:[^\n]*(?:\]\]|$)", "", final_md, flags=re.MULTILINE)
         # Discard a model-authored bibliography and construct it from validated sources.
         final_md = re.sub(
-            r"(?ims)^#{1,3}\s*(references|bibliography|works cited)\s*$.*\Z",
+            r"(?ims)^#{1,3}\s*(references|bibliography|works cited|tài liệu tham khảo)\s*$.*\Z",
             "",
             final_md,
         ).rstrip()
-        citation_records = [claims_by_id[claim_id] for claim_id in used_ids]
+        citation_records = [{**claims_by_id[claim_id], "citation_label": formatted[claim_id][0]}
+                            for claim_id in used_ids]
+        no_grounded_citations = state.get("enforce_provider_budget") and not citation_records
+        review_metadata = dict(state.get("critic_review_metadata") or {})
+        if no_grounded_citations:
+            review_metadata.update(status="NEEDS_REVIEW", delivery_findings=["The manuscript contains no validated source citations."])
         if citation_records:
             references = ["", "## References", ""]
             for number, item in enumerate(citation_records, start=1):
-                label = item.get("source_title") or item.get("source_url") or item["source_tag"]
-                url = item.get("source_url")
-                references.append(f"[{number}] {label}" + (f". {url}" if url else "."))
+                references.append(formatted[used_ids[number - 1]][1])
             final_md += "\n".join(references)
 
         duration_ms = int((time.monotonic() - start_ts) * 1000)
@@ -1636,7 +1692,8 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
             "current_agent": "post_processor",
             "final_report_markdown": final_md,
             "citations": citation_records,
-            "status": "NEEDS_REVIEW" if state.get("critic_verdict") in {"NEEDS_REVIEW", "NEED_MORE_DATA", "REVISE"} else "COMPLETED",
+            "status": "NEEDS_REVIEW" if no_grounded_citations or state.get("draft_truncated") or state.get("critic_verdict") in {"NEEDS_REVIEW", "NEED_MORE_DATA", "REVISE"} else "COMPLETED",
+            "critic_review_metadata": review_metadata,
             "citation_validation": {
                 "valid_citations": len(citation_records),
                 "unresolved_markers": len(_claim_lineage_findings(draft, state.get("claims", []))),

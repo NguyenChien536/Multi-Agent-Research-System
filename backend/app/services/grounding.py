@@ -110,6 +110,8 @@ async def persist_grounded_claims(
             "source_tag": source.source_tag,
             "source_title": source.title,
             "source_url": source.url,
+            "source_author": source.author,
+            "publication_date": source.publication_date,
             "chunk_id": str(chunk.id),
         })
 

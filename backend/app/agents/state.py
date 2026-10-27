@@ -43,6 +43,11 @@ class ResearchState(TypedDict, total=False):
     research_depth: str               # 'SHALLOW' | 'STANDARD' | 'DEEP'
     research_type: str                # 'REVIEW' | 'EMPIRICAL_COMPUTATIONAL' | 'EMPIRICAL_HUMAN'
     language: str
+    report_length: str
+    citation_style: str
+    max_sources: int
+    enforce_provider_budget: bool
+    dataset_artifact_id: Optional[str]
     budget: ResearchBudget            # Giới hạn tài nguyên toàn bộ task
     require_plan_approval: bool       # Bật chế độ Human-in-the-Loop (mặc định: False)
     plan_approved: bool               # Người dùng đã duyệt kế hoạch hay chưa
@@ -82,6 +87,7 @@ class ResearchState(TypedDict, total=False):
     
     # === Viết & Phản biện (Ủy quyền cho Subgraph) ===
     draft_report_markdown: str        # Bản nháp từ Writer (có marker claim để tạo citation đã kiểm chứng)
+    draft_truncated: bool
     critic_verdict: str               # 'PASS' | 'REVISE' | 'NEED_MORE_DATA'
     critic_feedback: List[str]        # Feedback chi tiết: câu nào sai, thiếu gì
     critic_missing_areas: List[str]   # Danh sách knowledge gaps -> sinh Delta Queries

@@ -46,13 +46,13 @@ def _usage(config: dict[str, Any]) -> dict[str, Any]:
     return usage
 
 
-def pause_budget_config(config: dict[str, Any] | None) -> dict[str, Any]:
+def pause_budget_config(config: dict[str, Any] | None, *, now: datetime | None = None) -> dict[str, Any]:
     """Freeze active elapsed time while a task is cancelled or waiting for the user."""
     result = deepcopy(config or {})
     usage = _usage(result)
     started = usage.get("active_since")
     if started:
-        elapsed = (datetime.now(timezone.utc) - datetime.fromisoformat(started)).total_seconds()
+        elapsed = ((now or datetime.now(timezone.utc)) - datetime.fromisoformat(started)).total_seconds()
         usage["active_seconds"] = max(0.0, float(usage.get("active_seconds", 0)) + elapsed)
         usage["active_since"] = None
     result["_provider_usage"] = usage
@@ -103,6 +103,23 @@ async def pause_active_clock(task_id: uuid.UUID | str) -> None:
             config["_provider_usage"] = usage
             task.budget_config = config
             await session.commit()
+
+
+async def remaining_active_seconds(task_id: uuid.UUID | str) -> float:
+    """A real deadline also bounds a provider that never returns to a budget check."""
+    async with AsyncSessionLocal() as session:
+        task = await session.get(ResearchTask, uuid.UUID(str(task_id)))
+        if task is None or task.status != "RUNNING":
+            raise ResearchTaskStopped("Research task is no longer running")
+        config = task.budget_config or {}
+        usage = _usage(config)
+        elapsed = float(usage.get("active_seconds", 0))
+        if usage.get("active_since"):
+            elapsed += (datetime.now(timezone.utc) - datetime.fromisoformat(usage["active_since"])).total_seconds()
+        remaining = _limits(config)[4] - elapsed
+        if remaining <= 0:
+            raise ProviderBudgetExceeded("Active research time budget exhausted")
+        return remaining
 
 
 def _check_active(task: ResearchTask, usage: dict[str, Any], limits: tuple[int, int, int, float, int]) -> None:

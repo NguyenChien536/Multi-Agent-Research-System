@@ -96,6 +96,10 @@ async def test_recent_unclaimed_dispatch_is_redelivered_with_a_bound(
     assert exhausted_event.unclaimed_retries == 2
     assert exhausted_event.dispatched_at is not None
     assert exhausted_event.last_error == "Automatic redelivery limit reached; manual retry required"
+    async with AsyncSessionLocal() as session:
+        task = await session.get(ResearchTask, task_id)
+        assert task.status == "FAILED"
+        assert task.current_step == "DISPATCH_FAILED"
     assert published == [str(task_id), str(task_id)]
 
 

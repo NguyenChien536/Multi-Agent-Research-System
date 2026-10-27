@@ -8,6 +8,7 @@ from celery import Celery
 from sqlalchemy import func, select, update
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
+from app.services.worker_runtime import run_worker_coroutine
 from app.models.task import ResearchTask, TaskDispatchOutbox, DocumentIngestionOutbox, TaskDeletionOutbox, WorkflowRun
 from app.models.source import DocumentChunk, ResearchSource
 from app.models.report import ExportArtifact, ResearchReport, ReportVersion
@@ -37,7 +38,12 @@ async def _ensure_checkpoint_schema() -> None:
     from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
     async with AsyncPostgresSaver.from_conn_string(settings.POSTGRES_SYNC_URL) as checkpointer:
-        await checkpointer.setup()
+        await checkpointer.conn.execute("SET lock_timeout = '30s'")
+        await checkpointer.conn.execute("SELECT pg_advisory_lock(736421905)")
+        try:
+            await checkpointer.setup()
+        finally:
+            await checkpointer.conn.execute("SELECT pg_advisory_unlock(736421905)")
     _CHECKPOINT_SCHEMA_READY = True
 
 
@@ -81,7 +87,9 @@ async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRu
             resume_payload = task.resume_payload or {}
             if resume_payload.get("plan_version") != interrupt_value.get("plan_version"):
                 raise RuntimeError("Saved user decision does not match the checkpoint plan version")
-            checkpoint_update = {"attempt_number": task.attempt_number}
+            checkpoint_update = {key: initial_state[key] for key in (
+                "attempt_number", "report_length", "citation_style", "max_sources", "enforce_provider_budget"
+            ) if key in initial_state}
             if preloaded_dataset_csv is not None:
                 checkpoint_update["dataset_csv"] = preloaded_dataset_csv
                 checkpoint_update["dataset_artifact_id"] = initial_state.get("dataset_artifact_id")
@@ -99,7 +107,9 @@ async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRu
         # The checkpoint advanced before a worker crash but the task row still
         # carries the submitted decision. Resume from graph state, never replay it.
         return await graph.ainvoke(
-            Command(update={"attempt_number": task.attempt_number}), config=config
+            Command(update={key: initial_state[key] for key in (
+                "attempt_number", "report_length", "citation_style", "max_sources", "enforce_provider_budget"
+            ) if key in initial_state}), config=config
         ), config
 
     return await graph.ainvoke(initial_state, config=config), config
@@ -148,6 +158,8 @@ async def renew_worker_lease(task_id: str, attempt_number: int) -> None:
 async def run_langgraph_workflow(task_id: str) -> dict:
     """Hàm chạy async LangGraph và tương tác với DB."""
     heartbeat: asyncio.Task | None = None
+    claim_attempt: int | None = None
+    workflow_run_id: uuid.UUID | None = None
     try:
         async with AsyncSessionLocal() as session:
             # Claim only a queued task. A duplicate Celery delivery is acknowledged
@@ -234,6 +246,9 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 )
                 session.add(workflow_run)
                 await session.flush()
+                config = dict(task.budget_config or {})
+                config["_worker_recoveries"] = 0
+                task.budget_config = config
             else:
                 workflow_run.status = "RUNNING"
                 workflow_run.updated_at = datetime.now(timezone.utc)
@@ -256,7 +271,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             await session.commit()
             await _ensure_checkpoint_schema()
             heartbeat = asyncio.create_task(renew_worker_lease(task_id, claim_attempt))
-            from app.services.provider_budget import resume_active_clock
+            from app.services.provider_budget import resume_active_clock, remaining_active_seconds
             await resume_active_clock(task.id)
 
             # Preload existing sources (e.g. uploaded private PDFs) into initial state
@@ -315,6 +330,9 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 "user_id": str(task.user_id) if task.user_id else "anonymous",
                 "research_question": task.research_question,
                 "research_depth": task.research_depth,
+                "report_length": task.report_length,
+                "citation_style": task.citation_style,
+                "max_sources": task.max_sources,
                 "research_type": getattr(task, "research_type", "REVIEW") or "REVIEW",
                 "language": task.language,
                 "status": "RUNNING",
@@ -341,9 +359,10 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             # 3. Kích hoạt (Invoke) Graph
             try:
                 async with _graph_for_worker() as graph:
-                    final_state, _graph_config = await _invoke_checkpointed_graph(
-                        graph, initial_state, task, workflow_run, preloaded_dataset_csv
-                    )
+                    async with asyncio.timeout(await remaining_active_seconds(task.id)):
+                        final_state, _graph_config = await _invoke_checkpointed_graph(
+                            graph, initial_state, task, workflow_run, preloaded_dataset_csv
+                        )
 
                 pending_interrupts = (final_state or {}).get("__interrupt__", ())
                 interrupt_info = None
@@ -434,15 +453,16 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 if task.status != "RUNNING" or task.attempt_number != claim_attempt:
                     return {"status": "SUPERSEDED", "task_id": task_id}
 
-                report = ResearchReport(
-                    research_task_id=task.id,
-                )
-                session.add(report)
-                await session.flush()
+                report = await session.scalar(select(ResearchReport).where(ResearchReport.research_task_id == task.id))
+                if report is None:
+                    report = ResearchReport(research_task_id=task.id)
+                    session.add(report)
+                    await session.flush()
+                last_version = await session.scalar(select(func.max(ReportVersion.version_number)).where(ReportVersion.report_id == report.id))
                 review_metadata = final_state.get("critic_review_metadata") or {}
                 report_version = ReportVersion(
                     report_id=report.id,
-                    version_number=1,
+                    version_number=(last_version or 0) + 1,
                     workflow_run_id=workflow_run.id,
                     plan_version=task.plan_version,
                     title=f"Báo cáo: {task.title}",
@@ -503,7 +523,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                         chunk_id=chunk_id,
                         claim_id=claim_id,
                         citation_number=number,
-                        citation_label=f"[{number}]",
+                        citation_label=item.get("citation_label", f"[{number}]")[:500],
                         claim_text=lineage_row.claim_text,
                     ))
 
@@ -664,6 +684,8 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     task.total_tokens_used = int(total_tokens)
                     task.total_cost_usd = round(float(total_cost), 4)
                 task.completed_at = datetime.now(timezone.utc)
+                from app.services.provider_budget import pause_budget_config
+                task.budget_config = pause_budget_config(task.budget_config, now=task.completed_at)
                 final_status = final_state.get("status")
                 task.status = "NEEDS_REVIEW" if final_status == "NEEDS_REVIEW" else "COMPLETED"
                 task.worker_lease_until = None
@@ -693,6 +715,8 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 from app.services.provider_budget import ProviderBudgetExceeded, ResearchTaskStopped
                 task.status = "NEEDS_REVIEW" if isinstance(e, (ProviderBudgetExceeded, ResearchTaskStopped)) else "FAILED"
                 task.completed_at = datetime.now(timezone.utc)
+                from app.services.provider_budget import pause_budget_config
+                task.budget_config = pause_budget_config(task.budget_config, now=task.completed_at)
                 task.worker_lease_until = None
                 if isinstance(e, ProviderBudgetExceeded):
                     task.current_step = "BUDGET_LIMIT"
@@ -728,6 +752,35 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     logger.warning("Failed to dispatch next queued task after failure: %s", dispatch_err)
 
                 raise RuntimeError(f"Research workflow failed for task {task_id}: {e}") from e
+    except Exception as exc:
+        # Bootstrap/preload errors happen outside the graph's error handler.
+        # Use a new transaction after rollback, and never overwrite a newer claim.
+        if claim_attempt is not None:
+            async with AsyncSessionLocal() as failure_session:
+                async with failure_session.begin():
+                    failed_task = await failure_session.scalar(select(ResearchTask).where(
+                        ResearchTask.id == task_id, ResearchTask.status == "RUNNING",
+                        ResearchTask.attempt_number == claim_attempt,
+                    ).with_for_update())
+                    if failed_task is not None:
+                        failed_task.status = "FAILED"
+                        failed_task.current_step = failed_task.current_step or "INITIALIZATION_FAILED"
+                        failed_task.worker_lease_until = None
+                        failed_task.completed_at = datetime.now(timezone.utc)
+                        from app.services.provider_budget import pause_budget_config
+                        failed_task.budget_config = pause_budget_config(failed_task.budget_config, now=failed_task.completed_at)
+                        failed_task.resume_action = None
+                        failed_task.resume_payload = None
+                        summary = f"Research execution could not initialize/continue ({type(exc).__name__}). Check worker runtime logs."
+                        failed_task.description = (failed_task.description or "") + "\n" + summary
+                        if workflow_run_id is not None:
+                            await failure_session.execute(update(WorkflowRun).where(
+                                WorkflowRun.id == workflow_run_id,
+                                WorkflowRun.research_task_id == failed_task.id,
+                                WorkflowRun.status == "RUNNING",
+                            ).values(status="FAILED", completed_at=failed_task.completed_at))
+        logger.exception("Research execution failed task=%s attempt=%s", task_id, claim_attempt)
+        raise
     finally:
         if heartbeat is not None:
             heartbeat.cancel()
@@ -735,6 +788,8 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 await heartbeat
             except asyncio.CancelledError:
                 pass
+            except Exception:
+                logger.exception("Worker heartbeat stopped unexpectedly task=%s attempt=%s", task_id, claim_attempt)
 
 
 @celery_app.task(bind=True, name="app.worker.execute_research_workflow")
@@ -742,8 +797,7 @@ def execute_research_workflow(self, task_id: str):
     """Task nền thực thi toàn bộ luồng Multi-Agent LangGraph cho một research task."""
     self.update_state(state="PROGRESS", meta={"message": "Khởi tạo LangGraph Engine"})
 
-    # Celery chạy hàm đồng bộ, gọi hàm bất đồng bộ bằng asyncio.run
-    result = asyncio.run(run_langgraph_workflow(task_id))
+    result = run_worker_coroutine(run_langgraph_workflow(task_id))
 
     return result
 
@@ -863,7 +917,7 @@ async def run_document_ingestion(source_id: str) -> dict:
 def execute_document_ingestion(self, source_id: str):
     """Celery entry point for one PDF ingestion attempt."""
     self.update_state(state="PROGRESS", meta={"message": "Extracting and indexing document"})
-    return asyncio.run(run_document_ingestion(source_id))
+    return run_worker_coroutine(run_document_ingestion(source_id))
 
 
 async def run_task_deletion(task_id: str) -> dict:
@@ -945,4 +999,4 @@ async def run_task_deletion(task_id: str) -> dict:
 @celery_app.task(bind=True, name="app.worker.execute_task_deletion")
 def execute_task_deletion(self, task_id: str):
     self.update_state(state="PROGRESS", meta={"message": "Cleaning up deleted research task"})
-    return asyncio.run(run_task_deletion(task_id))
+    return run_worker_coroutine(run_task_deletion(task_id))
