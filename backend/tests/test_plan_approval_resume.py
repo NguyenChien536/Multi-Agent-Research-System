@@ -17,6 +17,7 @@ from app.models.report import ResearchReport, ReportVersion
 from app.models.source import DocumentChunk
 from app.tools.search import SearchResult
 from app.worker import run_langgraph_workflow
+from tests.manuscript_helpers import complete_manuscript
 
 
 async def _register_and_login(client: AsyncClient, suffix: str):
@@ -81,7 +82,7 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
             prompt = str(messages)
             claim_id_match = re.search(r"'claim_id': '([0-9a-f-]{36})'", prompt)
             claim_ref = f" [[@claim:{claim_id_match.group(1)}]]" if claim_id_match else ""
-            return SimpleNamespace(content=f"## Clinical Multi-Agent Systems\nEvidence found.{claim_ref}")
+            return SimpleNamespace(content=complete_manuscript(f"Clinical Multi-Agent Systems\nEvidence found.{claim_ref}"))
 
     monkeypatch.setattr(nodes_module, "get_fast_llm", FakeStructuredLLM)
     monkeypatch.setattr(nodes_module, "get_smart_llm", FakeWriterLLM)

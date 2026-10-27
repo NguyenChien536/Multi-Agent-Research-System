@@ -453,6 +453,12 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 if task.status != "RUNNING" or task.attempt_number != claim_attempt:
                     return {"status": "SUPERSEDED", "task_id": task_id}
 
+                # Auto-approved runs need the same durable plan/contract identity
+                # as interrupted runs. Persist only after the current claim fence.
+                if isinstance(final_state.get("plan"), dict) and final_state["plan"]:
+                    task.plan = final_state["plan"]
+                    task.plan_version = int(final_state.get("plan_version", task.plan_version))
+
                 report = await session.scalar(select(ResearchReport).where(ResearchReport.research_task_id == task.id))
                 if report is None:
                     report = ResearchReport(research_task_id=task.id)
@@ -460,12 +466,13 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     await session.flush()
                 last_version = await session.scalar(select(func.max(ReportVersion.version_number)).where(ReportVersion.report_id == report.id))
                 review_metadata = final_state.get("critic_review_metadata") or {}
+                article_title = next((line[2:].strip() for line in report_content.splitlines() if line.startswith("# ")), task.title)
                 report_version = ReportVersion(
                     report_id=report.id,
                     version_number=(last_version or 0) + 1,
                     workflow_run_id=workflow_run.id,
                     plan_version=task.plan_version,
-                    title=f"Báo cáo: {task.title}",
+                    title=article_title[:255] if (task.plan or {}).get("manuscript_contract") else f"Báo cáo: {task.title}",
                     content_markdown=report_content,
                     executive_summary=final_state.get("executive_summary"),
                     review_status=review_metadata.get(

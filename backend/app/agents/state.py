@@ -70,6 +70,7 @@ class ResearchState(TypedDict, total=False):
     plan: Dict[str, Any]              # Đề cương & danh sách câu hỏi con
     plan_version: int
     current_queries: Annotated[List[str], operator.add]   # Tích lũy queries qua các vòng
+    search_activity: Annotated[List[Dict[str, Any]], operator.add]
     delta_queries: List[str]          # Truy vấn của vòng hiện tại; được thay thế khi lập kế hoạch bổ sung
     visited_urls: Annotated[Set[str], merge_sets]         # URLs đã crawl — tránh lặp ở vòng sau (Seen URL Cache)
     

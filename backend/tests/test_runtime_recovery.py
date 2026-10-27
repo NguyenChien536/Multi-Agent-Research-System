@@ -151,7 +151,7 @@ async def test_configuration_matrix_survives_graph_and_approval(monkeypatch, dep
     async def noop(state):
         return {}
     async def analyst(state):
-        return {"claims": [{"claim_id": claim_id, "evidence_id": "e1", "source_title": "Verified title", "source_url": "https://example.org", "source_tag": "src_01"}]}
+        return {"claims": [{"claim_id": claim_id, "evidence_id": "e1", "source_id": "s1", "chunk_id": "c1", "source_title": "Verified title", "source_url": "https://example.org", "source_tag": "src_01"}]}
     async def critic(state):
         return {"critic_verdict": "PASS"}
     async def invoke(state, llm, messages, **kwargs):

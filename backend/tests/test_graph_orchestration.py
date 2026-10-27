@@ -60,6 +60,7 @@ from app.services.grounding import persist_grounded_claims
 from app import worker as worker_module
 from app.worker import run_langgraph_workflow
 from app.tools.scraper import ScraperTool, SSRFError
+from tests.manuscript_helpers import complete_manuscript
 
 
 # ---------------------------------------------------------------------------
@@ -324,7 +325,7 @@ def _patch_external_boundaries(monkeypatch, critic_sequence=("PASS",)):
     supervisor_plan = _supervisor_plan_output()
     analyst_ext = _analyst_extraction_output()
     writer_content = MagicMock()
-    writer_content.content = "# Draft Report\n\nA finding [1].\n\n# References\n[1] src."
+    writer_content.content = complete_manuscript("A finding.", language="en")
 
     def make_fast_llm():
         fake = MagicMock()
@@ -924,7 +925,7 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
             writer_prompts.append(prompt)
             claim_id_match = re.search(r"'claim_id': '([0-9a-f-]{36})'", prompt)
             assert claim_id_match, f"Writer must receive a persisted claim ID: {prompt}"
-            return SimpleNamespace(content=f"{report_markdown} [[@claim:{claim_id_match.group(1)}]]")
+            return SimpleNamespace(content=complete_manuscript(f"{report_markdown} [[@claim:{claim_id_match.group(1)}]]"))
 
     monkeypatch.setattr(nodes_module, "get_fast_llm", FakeStructuredLLM)
     monkeypatch.setattr(nodes_module, "get_smart_llm", FakeWriterLLM)
@@ -985,7 +986,7 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
         assert task.json()["current_step"] == "POST_PROCESSOR"
         assert report.status_code == 200
         assert "The source supports the finding. [1]" in report.json()["content_markdown"]
-        assert "## References" in report.json()["content_markdown"]
+        assert "## Tài liệu tham khảo" in report.json()["content_markdown"]
 
         cit_resp = await client.get(f"/api/v1/research/{task_id}/citations", headers=headers)
         assert cit_resp.status_code == 200, cit_resp.text
