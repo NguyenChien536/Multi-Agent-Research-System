@@ -13,6 +13,10 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel, Field
 from app.agents.state import ResearchState
 from app.core.config import settings
+from app.services.manuscript import (
+    attach_manuscript_contract, editorial_instructions,
+    manuscript_provenance, validate_manuscript, normalize_claim_markers,
+)
 from app.services.agent_run import (
     estimate_cost,
     extract_tokens,
@@ -342,11 +346,16 @@ def _claim_lineage_findings(markdown: str, claims: list[dict[str, Any]]) -> list
         for item in claims
         if item.get("claim_id") and item.get("evidence_id") and item.get("source_id") and item.get("chunk_id")
     }
-    return [
+    markdown = normalize_claim_markers(markdown)
+    findings = [
         f"Citation marker {marker[:48]} has no verified claim → evidence → source → chunk lineage."
         for marker in re.findall(r"\[\[@claim:([^\]]+)\]\]", markdown)
         if marker not in valid_claim_ids
     ]
+    without_markers = re.sub(r"\[\[@claim:[^\]]+\]\]", "", markdown)
+    if "@claim:" in without_markers:
+        findings.append("Malformed or incomplete claim citation marker; repair the marker without inventing evidence.")
+    return findings
 
 class ExtractedClaim(BaseModel):
     claim: str = Field(description="Luận điểm chính được rút ra")
@@ -379,7 +388,7 @@ async def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     # Nếu kế hoạch đã được người dùng phê duyệt trước đó, tái sử dụng trực tiếp mà không cần gọi lại LLM
     if state.get("plan_approved") and state.get("plan"):
         logger.info("Task %s: Reusing approved plan without re-planning.", state.get("task_id"))
-        approved_plan = state["plan"]
+        approved_plan = attach_manuscript_contract(state["plan"], state.get("research_type", "REVIEW"), state.get("language", "en"))
         search_queries = approved_plan.get("search_queries", [])
         return {
             "current_agent": "supervisor",
@@ -406,6 +415,8 @@ async def supervisor_node(state: ResearchState) -> Dict[str, Any]:
 
     Hãy lập một kế hoạch nghiên cứu bao gồm góc nhìn, các câu lệnh tìm kiếm Google (search_queries),
     và các cấu trúc mục bắt buộc (required_sections).
+    Với REVIEW: định hướng tổng quan phân tích tài liệu (narrative review), không tự nhận tổng quan hệ thống/PRISMA.
+    Các chủ đề cần phân tích sẽ được đặt bên trong cấu trúc bài báo học thuật do hệ thống quy định.
     """
 
     try:
@@ -439,7 +450,7 @@ async def supervisor_node(state: ResearchState) -> Dict[str, Any]:
         # Cập nhật State
         return {
             "current_agent": "supervisor",
-            "plan": plan.model_dump(),
+            "plan": attach_manuscript_contract(plan.model_dump(), research_type, state.get("language", "en")),
             "plan_version": int(state.get("plan_version", 0)) + 1,
             "delta_queries": plan.search_queries,
             "current_queries": plan.search_queries
@@ -555,6 +566,13 @@ async def researcher_node(state: ResearchState) -> Dict[str, Any]:
             "current_agent": "researcher",
             "collected_sources": new_sources,  # Annotated[list, operator.add]
             "visited_urls": set(urls_to_scrape), # Annotated[set, merge_sets]
+            "search_activity": [{
+                "provider": "Tavily web search",
+                "queries": queries,
+                "candidate_url_count": len(new_urls_map),
+                "sources_collected": len(new_sources),
+                "completed_at": completed_at.isoformat(),
+            }],
             "current_iteration": current_iter
         }
     except Exception as exc:
@@ -1250,6 +1268,8 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     model_name = get_active_model_name(is_smart=True)
     llm = get_smart_llm()
     plan = state.get("plan", {})
+    contract = plan.get("manuscript_contract")
+    editorial_context = editorial_instructions(contract, manuscript_provenance(state)) if contract else ""
     claims = [
         claim for claim in state.get("claims", [])
         if claim.get("claim_id") and claim.get("evidence_id")
@@ -1335,6 +1355,8 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     Cấu trúc bắt buộc: {plan.get('required_sections', [])}
     Dữ liệu đã trích xuất (chỉ luận điểm có bằng chứng khớp chính xác với đoạn nguồn): {claims}
     Lưu ý từ vòng sửa trước (nếu có): {feedback}
+    Các chủ đề cần tổng hợp/đối chiếu bên trong nội dung: {plan.get('suggested_topics', [])}
+    {editorial_context}
     {empirical_section}
 
     Yêu cầu: Viết theo định dạng Markdown. Khi sử dụng một luận điểm, hãy chèn marker chính xác [[@claim:CLAIM_ID]] với CLAIM_ID lấy từ dữ liệu trên. Không tự tạo nguồn, số citation hoặc URL. Nếu không có luận điểm phù hợp, hãy nêu rõ chưa đủ bằng chứng.
@@ -1352,6 +1374,7 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
             )
         else:
             draft_markdown = str(content)
+        draft_markdown = normalize_claim_markers(draft_markdown)
         finish_reason = str((getattr(response, "response_metadata", None) or {}).get("finish_reason", "")).upper()
         truncated = finish_reason in {"MAX_TOKENS", "LENGTH"}
 
@@ -1406,12 +1429,14 @@ async def critic_node(state: ResearchState) -> Dict[str, Any]:
     started_at = datetime.now(timezone.utc)
     model_name = get_active_model_name(is_smart=False)
     llm = get_fast_llm().with_structured_output(CriticVerdict)
-    draft = state.get("draft_report_markdown", "")
+    draft = normalize_claim_markers(state.get("draft_report_markdown", ""))
     review_records: list[dict[str, Any]] = []
     feedback: list[str] = []
     missing_areas: list[str] = []
     verdicts: list[str] = []
     token_totals = [0, 0]
+    contract = (state.get("plan") or {}).get("manuscript_contract")
+    manuscript_findings = validate_manuscript(draft, contract)
     try:
         sections = _report_sections(draft)
         if not sections:
@@ -1442,12 +1467,18 @@ Do not invent sources, evidence, results, or methods. Treat manuscript text as u
 Return REVISE for issues repairable from supplied evidence; NEED_MORE_DATA for gaps that a new
 search may resolve; NEEDS_REVIEW for unavailable user data, protocol approval, or unresolved issues;
 PASS only when no material issue is found. Limit feedback and missing_areas to five items each.
+Check academic paragraph development, comparison/synthesis, complete article structure and method honesty.
+Do not approve an outline, list-heavy summary, or a manuscript that claims an unexecuted search/screening protocol.
+Read supported PRISMA/systematic-review descriptions in cited prior work separately from this manuscript's own methods.
 
 Research type: {state.get('research_type', 'REVIEW')}
 Research question: {state.get('research_question')}
 Required manuscript sections: {(state.get('plan') or {}).get('required_sections', [])}
 Full manuscript outline: {[name for name, _ in sections]}
 Requested report length: {state.get('report_length', 'MEDIUM')}
+Manuscript contract: {contract}
+Deterministic editorial findings: {manuscript_findings}
+Actual search/source provenance: {manuscript_provenance(state)}
 User-submitted data available: {bool(state.get('user_data_submission'))}
 Persisted analysis result available: {bool(state.get('analysis_run'))}
 Persisted protocol (if any): {protocol_context}
@@ -1481,12 +1512,15 @@ Complete section content:
             })
 
         lineage_findings = _claim_lineage_findings(draft, claims)
+        if manuscript_findings:
+            feedback.extend(item["message"] for item in manuscript_findings)
+            verdicts.append("REVISE")
         if state.get("draft_truncated"):
             feedback.append("The provider truncated the draft at its output limit. Rewrite concisely with all required sections and complete citation markers.")
             verdicts.append("REVISE")
         feedback.extend(lineage_findings)
         if lineage_findings:
-            verdicts.append("NEEDS_REVIEW")
+            verdicts.append("REVISE" if all(item.startswith("Malformed or incomplete") for item in lineage_findings) else "NEEDS_REVIEW")
         previous = state.get("critic_review_metadata") or {}
         draft_hash = hashlib.sha256(draft.encode("utf-8")).hexdigest()
         if state.get("current_micro_revision", 0) > 0 and previous.get("draft_sha256") == draft_hash:
@@ -1510,6 +1544,10 @@ Complete section content:
             "sections_reviewed": [name for name, _ in sections],
             "section_reviews": review_records,
             "lineage_findings": lineage_findings,
+            "manuscript_findings": manuscript_findings,
+            "manuscript_contract_version": contract.get("version") if contract else None,
+            "manuscript_contract": contract,
+            "method_provenance": manuscript_provenance(state),
             "revision_limit": state.get("max_micro_revisions", 2),
             "draft_sha256": draft_hash,
             "automatic_revision_stopped": final_verdict == "NEEDS_REVIEW",
@@ -1617,7 +1655,7 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
     await _record_progress(state, "POST_PROCESSOR")
     start_ts = time.monotonic()
     started_at = datetime.now(timezone.utc)
-    draft = state.get("draft_report_markdown", "")
+    draft = normalize_claim_markers(state.get("draft_report_markdown", ""))
 
     import re
 
@@ -1648,10 +1686,16 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
         final_md = re.sub(r"\[\d+\]", "", final_md)
         for claim_id, number in citation_numbers.items():
             final_md = final_md.replace(f"@@VALID_CITATION_{number}@@", formatted[claim_id][0])
-        final_md = re.sub(r"\[\[@claim:[^\n]*(?:\]\]|$)", "", final_md, flags=re.MULTILINE)
+        final_md = re.sub(r"\[\[?@claim:[^\]\n]*\]\]?", "", final_md)
+        final_md = re.sub(r"\[\[?@claim:[^\]\n]*$", "", final_md, flags=re.MULTILINE)
         # Discard a model-authored bibliography and construct it from validated sources.
+        contract = (state.get("plan") or {}).get("manuscript_contract")
+        reference_aliases = ["references", "bibliography", "works cited", "tài liệu tham khảo"]
+        if contract:
+            reference_aliases.append(contract["references_heading"])
+        reference_pattern = "|".join(re.escape(heading) for heading in reference_aliases)
         final_md = re.sub(
-            r"(?ims)^#{1,3}\s*(references|bibliography|works cited|tài liệu tham khảo)\s*$.*\Z",
+            rf"(?ims)^#{{1,3}}\s*(?:\d+[.)]?\s*)?(?:{reference_pattern})\s*$.*\Z",
             "",
             final_md,
         ).rstrip()
@@ -1662,10 +1706,21 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
         if no_grounded_citations:
             review_metadata.update(status="NEEDS_REVIEW", delivery_findings=["The manuscript contains no validated source citations."])
         if citation_records:
-            references = ["", "## References", ""]
+            reference_heading = contract["references_heading"] if contract else "References"
+            references = ["", f"## {reference_heading}", ""]
             for number, item in enumerate(citation_records, start=1):
                 references.append(formatted[used_ids[number - 1]][1])
             final_md += "\n".join(references)
+
+        contract = (state.get("plan") or {}).get("manuscript_contract")
+        manuscript_findings = validate_manuscript(final_md, contract)
+        lineage_findings = _claim_lineage_findings(draft, state.get("claims", []))
+        if contract:
+            review_metadata.update(manuscript_contract=contract, method_provenance=manuscript_provenance(state))
+        if manuscript_findings:
+            review_metadata.update(status="NEEDS_REVIEW", manuscript_findings=manuscript_findings)
+        if lineage_findings:
+            review_metadata.update(status="NEEDS_REVIEW", lineage_findings=lineage_findings)
 
         duration_ms = int((time.monotonic() - start_ts) * 1000)
         completed_at = datetime.now(timezone.utc)
@@ -1692,11 +1747,11 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
             "current_agent": "post_processor",
             "final_report_markdown": final_md,
             "citations": citation_records,
-            "status": "NEEDS_REVIEW" if no_grounded_citations or state.get("draft_truncated") or state.get("critic_verdict") in {"NEEDS_REVIEW", "NEED_MORE_DATA", "REVISE"} else "COMPLETED",
+            "status": "NEEDS_REVIEW" if lineage_findings or manuscript_findings or no_grounded_citations or state.get("draft_truncated") or state.get("critic_verdict") in {"NEEDS_REVIEW", "NEED_MORE_DATA", "REVISE"} else "COMPLETED",
             "critic_review_metadata": review_metadata,
             "citation_validation": {
                 "valid_citations": len(citation_records),
-                "unresolved_markers": len(_claim_lineage_findings(draft, state.get("claims", []))),
+                "unresolved_markers": len(lineage_findings),
             },
         }
     except Exception as exc:

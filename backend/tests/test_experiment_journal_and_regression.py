@@ -609,7 +609,8 @@ async def test_e2e_empirical_computational_workflow(monkeypatch):
                 f"## Kết quả\nĐo lường đối chứng MAE và RMSE: {markers}\n\n"
                 f"## Kết luận\nKết quả dự đoán và không suy luận nhân quả."
             )
-            return SimpleNamespace(content=content)
+            from tests.manuscript_helpers import complete_manuscript
+            return SimpleNamespace(content=complete_manuscript(content, "EMPIRICAL_COMPUTATIONAL"))
 
     monkeypatch.setattr(nodes_module, "get_fast_llm", lambda: FakeStructuredLLM())
     monkeypatch.setattr(nodes_module, "get_smart_llm", lambda: FakeSmartWriterLLM())

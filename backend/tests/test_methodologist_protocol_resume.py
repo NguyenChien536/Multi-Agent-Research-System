@@ -16,6 +16,7 @@ from app.models.report import ExportArtifact, ResearchReport, ReportVersion
 from app.models.source import DocumentChunk
 from app.tools.search import SearchResult
 from app.worker import run_langgraph_workflow
+from tests.manuscript_helpers import complete_manuscript
 
 
 async def _register_and_login(client: AsyncClient, suffix: str):
@@ -117,7 +118,7 @@ async def test_empirical_human_protocol_pause_and_resume(monkeypatch):
                 f"Mức độ đồng thuận đạt 78%. Luận điểm bổ trợ: {markers}\n\n"
                 f"## Thảo luận & Kết luận\nKết quả ủng hộ giả thuyết H1."
             )
-            return SimpleNamespace(content=content)
+            return SimpleNamespace(content=complete_manuscript(content, "EMPIRICAL_HUMAN"))
 
     monkeypatch.setattr(nodes_module, "get_fast_llm", lambda: FakeStructuredLLM())
     monkeypatch.setattr(nodes_module, "get_smart_llm", lambda: FakeSmartWriterLLM())
