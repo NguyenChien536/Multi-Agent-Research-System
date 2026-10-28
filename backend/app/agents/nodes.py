@@ -1689,7 +1689,14 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
             if claim_id in claims_by_id and claim_id not in used_ids:
                 used_ids.append(claim_id)
 
-        citation_numbers = {claim_id: index for index, claim_id in enumerate(used_ids, start=1)}
+        source_numbers, citation_numbers, reference_claims = {}, {}, []
+        for claim_id in used_ids:
+            item = claims_by_id[claim_id]
+            source_key = item.get("source_id") or item.get("source_url") or claim_id
+            if source_key not in source_numbers:
+                source_numbers[source_key] = len(source_numbers) + 1
+                reference_claims.append(claim_id)
+            citation_numbers[claim_id] = source_numbers[source_key]
         formatted = {claim_id: _format_reference(claims_by_id[claim_id], number, state.get("citation_style", "IEEE"))
                      for claim_id, number in citation_numbers.items()}
 
@@ -1716,7 +1723,7 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
             "",
             final_md,
         ).rstrip()
-        citation_records = [{**claims_by_id[claim_id], "citation_label": formatted[claim_id][0]}
+        citation_records = [{**claims_by_id[claim_id], "citation_label": formatted[claim_id][0], "citation_number": citation_numbers[claim_id]}
                             for claim_id in used_ids]
         no_grounded_citations = state.get("enforce_provider_budget") and not citation_records
         review_metadata = dict(state.get("critic_review_metadata") or {})
@@ -1728,8 +1735,8 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
         if citation_records:
             reference_heading = contract["references_heading"] if contract else "References"
             references = ["", f"## {reference_heading}", ""]
-            for number, item in enumerate(citation_records, start=1):
-                references.append(formatted[used_ids[number - 1]][1])
+            for claim_id in reference_claims:
+                references.append(formatted[claim_id][1])
             final_md += "\n".join(references)
 
         contract = (state.get("plan") or {}).get("manuscript_contract")

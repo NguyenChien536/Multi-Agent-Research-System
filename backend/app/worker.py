@@ -529,7 +529,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                         source_id=source_id,
                         chunk_id=chunk_id,
                         claim_id=claim_id,
-                        citation_number=number,
+                        citation_number=item.get("citation_number", number),
                         citation_label=item.get("citation_label", f"[{number}]")[:500],
                         claim_text=lineage_row.claim_text,
                     ))

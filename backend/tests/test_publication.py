@@ -115,6 +115,21 @@ def test_grouped_claim_markers_preserve_each_identity_and_unknowns_still_fail():
     assert _claim_lineage_findings(malformed, [claim])
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("style", ["IEEE", "APA"])
+async def test_many_claims_from_one_source_have_one_bibliography_entry(style):
+    from app.agents.nodes import post_processor_node
+    source_id = str(uuid.uuid4())
+    claims=[{"claim_id":str(uuid.uuid4()),"evidence_id":str(uuid.uuid4()),"source_id":source_id,"chunk_id":str(uuid.uuid4()),"source_title":"Shared verified paper","source_url":"https://example.org/paper","source_author":"Author","publication_date":"2024"} for _ in range(2)]
+    draft="# Comparison\n\n"+" ".join(f"A supported statement [[@claim:{c['claim_id']}]]." for c in claims)
+    result=await post_processor_node({"claims":claims,"draft_report_markdown":draft,"citation_style":style})
+    references=result['final_report_markdown'].split('## References')[1]
+    assert references.count('Shared verified paper') == 1
+    assert len(result['citations']) == 2  # Both claim/evidence links remain inspectable.
+    assert {c['citation_number'] for c in result['citations']} == {1}
+    assert len({c['citation_label'] for c in result['citations']}) == 1
+
+
 @pytest.mark.parametrize("template,document_class", [("IEEE_CONFERENCE", "IEEEtran"), ("ACM_SIGCONF", "acmart")])
 def test_publication_source_uses_official_class_measured_figures_and_escaped_text(template, document_class):
     context = measured_context(); figures = build_scientific_figures(context, {})
