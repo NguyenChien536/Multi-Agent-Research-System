@@ -99,6 +99,10 @@ def validate_scientific_reporting(markdown: str, contract: dict | None, context:
         if not any(len(p.split()) >= 12 for p in matching):
             add("FIGURE_UNEXPLAINED", f"Explain Figure {f['number']} in a substantive paragraph, including what it shows and its limits.")
     allowed = {f["id"] for f in figures}
+    approved_paths = {f"figures/{name}.svg" for name in allowed}
+    for image_path in re.findall(r"!\[[^\]]*\]\(([^)]+)\)", markdown):
+        if image_path not in approved_paths:
+            add("UNKNOWN_FIGURE", "Do not insert invented or unapproved image URLs; use the supplied versioned figure assets.")
     for name in re.findall(r"\[\[figure:([^\]]+)\]\]|\]\(figures/([^)]+)\.svg\)", markdown):
         if (name[0] or name[1]) not in allowed:
             add("UNKNOWN_FIGURE", "Use only figures produced from approved data or the labeled conceptual workflow.")

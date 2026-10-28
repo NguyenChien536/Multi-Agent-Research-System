@@ -96,6 +96,11 @@ def test_explicit_narrative_disclaimers_are_not_systematic_review_claims():
     assert not any(f["code"] == "UNSUPPORTED_METHOD" for f in validate_manuscript(text, manuscript_contract("REVIEW","en")))
 
 
+def test_a_fabricated_chart_url_cannot_be_delivered_as_a_figure():
+    findings = validate_scientific_reporting("![Accuracy experiment](https://example.com/invented-results.png)", manuscript_contract("REVIEW","en"), {}, [])
+    assert any(f["code"] == "UNKNOWN_FIGURE" for f in findings)
+
+
 @pytest.mark.parametrize("template,document_class", [("IEEE_CONFERENCE", "IEEEtran"), ("ACM_SIGCONF", "acmart")])
 def test_publication_source_uses_official_class_measured_figures_and_escaped_text(template, document_class):
     context = measured_context(); figures = build_scientific_figures(context, {})
