@@ -11,7 +11,9 @@ CONTRACT_VERSION = 2
 
 def normalize_claim_markers(markdown: str) -> str:
     """Accept single/clustered bracket variants without inventing a claim identity."""
-    return re.sub(r"\[\[?@claim:([0-9a-fA-F-]{36})\]\]?", r"[[@claim:\1]]", markdown)
+    identifier = r"[0-9a-fA-F-]{36}"
+    pattern = rf"\[\[?@claim:({identifier}(?:\s*[,;]\s*(?:@claim:)?{identifier})*)\]\]?"
+    return re.sub(pattern, lambda match: "".join(f"[[@claim:{value.lower()}]]" for value in re.findall(identifier, match[1])), markdown)
 
 
 def writer_claim_context(claims: list[dict]) -> list[dict]:

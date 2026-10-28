@@ -12,7 +12,7 @@ from app.main import app
 from app.core.database import AsyncSessionLocal
 from app.models.task import ResearchTask
 from app.models.report import ResearchReport, ReportVersion
-from app.services.manuscript import manuscript_contract, validate_manuscript, writer_claim_context
+from app.services.manuscript import manuscript_contract, validate_manuscript, writer_claim_context, normalize_claim_markers
 from app.services.publication_export import build_publication_bundle
 from app.services.scientific_paper import build_scientific_figures, validate_scientific_reporting, materialize_figures
 from tests.manuscript_helpers import complete_manuscript
@@ -99,6 +99,20 @@ def test_explicit_narrative_disclaimers_are_not_systematic_review_claims():
 def test_a_fabricated_chart_url_cannot_be_delivered_as_a_figure():
     findings = validate_scientific_reporting("![Accuracy experiment](https://example.com/invented-results.png)", manuscript_contract("REVIEW","en"), {}, [])
     assert any(f["code"] == "UNKNOWN_FIGURE" for f in findings)
+
+
+def test_grouped_claim_markers_preserve_each_identity_and_unknowns_still_fail():
+    from app.agents.nodes import _claim_lineage_findings
+    first, second = str(uuid.uuid4()), str(uuid.uuid4())
+    text = f"A comparison [[@claim:{first}, @claim:{second}]]."
+    normalized = normalize_claim_markers(text)
+    assert f"[[@claim:{first}]][[@claim:{second}]]" in normalized
+    claim = {"claim_id":first,"evidence_id":"e1","source_id":"s1","chunk_id":"c1"}
+    findings = _claim_lineage_findings(text, [claim])
+    assert len(findings) == 1 and second in findings[0]
+    malformed = f"[[@claim:{first}, @claim:truncated]]"
+    assert normalize_claim_markers(malformed) == malformed
+    assert _claim_lineage_findings(malformed, [claim])
 
 
 @pytest.mark.parametrize("template,document_class", [("IEEE_CONFERENCE", "IEEEtran"), ("ACM_SIGCONF", "acmart")])
