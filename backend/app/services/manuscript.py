@@ -17,7 +17,9 @@ def normalize_claim_markers(markdown: str) -> str:
 def writer_claim_context(claims: list[dict]) -> list[dict]:
     """Give Writer one copyable citation identity, not competing internal UUIDs."""
     return [{"citation_marker": f"[[@claim:{claim['claim_id']}]]",
-             **{key: claim[key] for key in ("claim_text", "evidence_text", "source_title", "source_url", "source_author", "publication_date") if claim.get(key)}}
+             "claim": claim.get("claim") or claim.get("claim_text", ""),
+             "evidence_quote": claim.get("evidence_quote") or claim.get("evidence_text", ""),
+             **{key: claim[key] for key in ("source_title", "source_url", "source_author", "publication_date") if claim.get(key)}}
             for claim in claims if claim.get("claim_id") and claim.get("evidence_id")]
 
 _HEADINGS = {

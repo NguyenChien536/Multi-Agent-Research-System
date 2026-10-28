@@ -80,8 +80,10 @@ def test_a_negative_clause_does_not_hide_an_unsupported_positive_claim():
 
 def test_writer_receives_one_citation_identity_and_caption_is_not_interpretation():
     claim_id, evidence_id = str(uuid.uuid4()), str(uuid.uuid4())
-    context = writer_claim_context([{"claim_id":claim_id,"evidence_id":evidence_id,"source_id":str(uuid.uuid4()),"claim_text":"A grounded result."}])
+    context = writer_claim_context([{"claim_id":claim_id,"evidence_id":evidence_id,"source_id":str(uuid.uuid4()),"claim":"A grounded result.","evidence_quote":"The original supporting passage."}])
     assert context[0]["citation_marker"] == f"[[@claim:{claim_id}]]"
+    assert context[0]["claim"] == "A grounded result."
+    assert context[0]["evidence_quote"] == "The original supporting passage."
     assert evidence_id not in json.dumps(context)
     figs = build_scientific_figures(measured_context(), {})
     findings = validate_scientific_reporting("*Figure 1: This is a long caption with many words but it is not an explanatory analytical paragraph.*\n\n[[figure:evaluation]]", manuscript_contract("EMPIRICAL_COMPUTATIONAL","en"), measured_context(), figs)
