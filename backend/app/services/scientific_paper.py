@@ -70,7 +70,7 @@ def build_scientific_figures(context: dict, provenance: dict) -> list[dict]:
 def figure_instructions(figures: list[dict]) -> str:
     if not figures:
         return "No approved figures are available. Do not invent plots or figure assets."
-    lines = ["APPROVED FIGURES: use each supplied figure once. Write an explanatory paragraph referring to Figure N (or Hình N), then place its marker on a separate line in Methods/Results as appropriate."]
+    lines = ["APPROVED FIGURES: use each supplied figure once. Write a body paragraph of at least two sentences referring to Figure N (or Hình N), then place its marker on a separate line in Methods/Results as appropriate. The renderer supplies the caption: do not write another caption or use a caption in place of explanatory prose. The conceptual workflow depicts Sources -> Evidence -> Synthesis, not a topic-specific algorithm or experiment. Explain only what the actual figure shows and what it does not establish."]
     for figure in figures:
         lines.append(f"Figure {figure['number']} ({figure['kind']}): {figure['caption']} Marker: [[figure:{figure['id']}]]")
     return "\n".join(lines)
