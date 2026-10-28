@@ -76,7 +76,8 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
             parsed = urlsplit(url)
             # URL-aware line breaking avoids overflowing narrow publication columns.
             # Encoding braces/backslashes prevents a URL from becoming TeX source.
-            url_tex = r". \url{" + quote(url, safe="/:?-._~=&") + "}" if parsed.scheme in {"https", "http"} and parsed.hostname and not parsed.username else ""
+            encoded_url = quote(re.sub(r"%(?![0-9a-fA-F]{2})", "%25", url), safe="/:?-._~=&#%")
+            url_tex = r". \url{" + encoded_url + "}" if parsed.scheme in {"https", "http"} and parsed.hostname and not parsed.username else ""
             bibliography.append(r"\bibitem{" + key + "}" + tex_escape(text) + url_tex)
         if item.get("citation_label"):
             labels[item["citation_label"]] = seen[identity]

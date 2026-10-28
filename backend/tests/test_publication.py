@@ -138,13 +138,15 @@ def test_publication_source_uses_official_class_measured_figures_and_escaped_tex
     md = materialize_figures(draft, figures) + "\n\n" + r"$\input{/etc/passwd}$"
     data, manifest = build_publication_bundle(r"A title \write18{bad}", md,
         {"manuscript_contract": contract, "scientific_context": context, "scientific_figures": figures, "status": "NEEDS_REVIEW"},
-        [{"source_id": "s1", "source_title": "Known source", "citation_label": "[1]"}], template, version_id="v1", version_number=1)
+        [{"source_id": "s1", "source_title": "Known source", "source_url":"https://example.org/paper%20name#section", "citation_label": "[1]"}], template, version_id="v1", version_number=1)
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         tex = archive.read("main.tex").decode()
         assert "{" + document_class + "}" in tex
         assert r"\input{/etc/passwd}" not in tex
         assert r"\write18{bad}" not in tex
         assert r"\cite{ref1}" in tex
+        assert r"\url{https://example.org/paper%20name#section}" in tex
+        assert "paper%2520" not in tex
         assert "figures/evaluation.tex" in archive.namelist()
         assert json.loads(archive.read("figures/evaluation.json"))["ridge_mae"] == 1.5
         assert all(not name.startswith(("/", "..")) for name in archive.namelist())
