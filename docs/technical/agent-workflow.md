@@ -73,17 +73,19 @@ Rà soát source `ebb525a` ngày 08/10: đã có Supervisor/Researcher/Curator/A
 
 Đây là nhận xét đọc code, không phải kết quả chạy. Runtime cũ ghi tại [Baseline](../project/baseline-verification.md). Khắc phục theo [Implementation Plan](../project/implementation-plan.md); đo ích lợi của multi-agent theo [Evaluation Plan](../project/evaluation-plan.md).
 
-## 7. Quy cách bản thảo đã triển khai — 27/10/2026 (#61)
+## 7. Quy cách bản thảo — cập nhật 29/10/2026 (#61, #63)
 
-Supervisor gắn `manuscript_contract` phiên bản 1 vào plan. Contract được lưu cùng checkpoint và giữ qua bước duyệt/tiếp tục. Các chủ đề LLM đề xuất nằm bên trong phần phân tích; LLM không tự bỏ khung bài bắt buộc.
+Supervisor gắn `manuscript_contract` phiên bản 2 vào kế hoạch mới. Contract được lưu cùng checkpoint và giữ qua bước duyệt/tiếp tục. Các chủ đề LLM đề xuất nằm bên trong phần phân tích; LLM không tự bỏ khung bài bắt buộc. Bản thảo cũ giữ contract và kết quả đánh giá lúc tạo, không bị đánh giá lại ngầm bằng quy tắc mới.
 
 | Loại nghiên cứu | Dạng bản thảo mặc định | Các phần chính sau Title, Abstract, Keywords, Introduction |
 |---|---|---|
-| REVIEW | Tổng quan phân tích tài liệu / narrative review | Literature Search and Scope; Thematic Synthesis; Discussion; Limitations; Conclusion |
-| EMPIRICAL_COMPUTATIONAL | Bài thực nghiệm tính toán trong routine được hỗ trợ | Methods; Experimental Setup; Results; Discussion; Limitations; Conclusion |
-| EMPIRICAL_HUMAN | Bài thực nghiệm từ dữ liệu người dùng cung cấp | Methods; Results; Discussion; Limitations; Conclusion |
+| REVIEW | Tổng quan phân tích tài liệu / narrative review | Related Work; Literature Search and Scope; Thematic Synthesis; Discussion; Limitations; Conclusion |
+| EMPIRICAL_COMPUTATIONAL | Bài thực nghiệm tính toán trong routine được hỗ trợ | Related Work; Methods; Experimental Setup; Results; Discussion; Limitations; Conclusion |
+| EMPIRICAL_HUMAN | Bài thực nghiệm từ dữ liệu người dùng cung cấp | Related Work; Methods; Results; Discussion; Limitations; Conclusion |
 
 Các tiêu đề được bản địa hóa theo ngôn ngữ bài. References được dựng từ claim/evidence đã xác minh sau khi viết, không lấy bibliography do model tự tạo. Citation style và bố cục manuscript là hai cấu hình khác nhau; khung này không phải template xuất bản của một tạp chí cụ thể.
+
+Introduction đi từ bối cảnh đến vấn đề cụ thể, câu hỏi nghiên cứu (RQ1/RQ2), khoảng trống giới hạn trong tài liệu đã kiểm tra, cách tiếp cận và đóng góp thực tế. Related Work đối chiếu phương pháp, giả định và hạn chế bằng trích dẫn. Tổng quan đóng góp bằng tổng hợp/đối chiếu bằng chứng; một thiết kế chưa thử nghiệm được ghi là đề xuất, không thành Results.
 
 Writer phải dùng đoạn văn phát triển luận điểm, đối chiếu nguồn, diễn giải và nêu giới hạn. Danh sách ngắn cho câu hỏi nghiên cứu/protocol vẫn hợp lệ; nếu hơn 25% số từ phần văn bản chính nằm trong ít nhất ba mục liệt kê, bộ kiểm tra yêu cầu sửa. Đây là ngưỡng biên tập của sản phẩm, không phải quy tắc cấm danh sách trong mọi bài báo.
 
@@ -92,3 +94,12 @@ Writer phải dùng đoạn văn phát triển luận điểm, đối chiếu ng
 Critic kiểm toàn bộ bài cùng contract, provenance và các phát hiện từ bộ kiểm tra xác định. Thiếu tiêu đề/phần bắt buộc, phần rỗng, sai thứ tự, văn bản thiên về liệt kê hoặc dấu hiệu tự nhận phương pháp không có hồ sơ phải quay về Writer trong giới hạn hai vòng sửa. Trước khi giao bài, PostProcessor kiểm tra lại độc lập; lỗi còn tồn tại buộc `NEEDS_REVIEW`, dù LLM trả PASS. Bản cũ vẫn giữ kết quả review theo chính sách đã dùng khi tạo; khi tạo phiên bản mới thì áp dụng contract mới.
 
 Kiểm tra cấu trúc và heuristic phương pháp không chứng nhận độ đúng khoa học, độ tin cậy của nguồn hoặc phát hiện mọi cách diễn đạt sai. Critic vẫn là đánh giá nội bộ; người nghiên cứu cần rà soát phương pháp, bằng chứng và yêu cầu nơi dự định nộp. Nguyên tắc tham khảo: [ICMJE manuscript preparation](https://www.icmje.org/recommendations/browse/manuscript-preparation/preparing-for-submission.html) và [PRISMA 2020 checklist](https://www.prisma-statement.org/prisma-2020-checklist).
+
+### Hình, số liệu và mẫu trình bày
+
+- Sơ đồ xử lý bằng chứng được ghi rõ là hình khái niệm. Biểu đồ MAE chỉ được tạo khi routine đã chạy thành công và có cả baseline/model; giá trị, số hàng test và provenance được đóng băng cùng phiên bản. Không để LLM tự vẽ số liệu.
+- Writer phải giải thích từng Figure trong văn bản, dùng caption và marker tài sản do hệ thống cấp. Kiểm tra trước giao bài bắt hình thiếu/không giải thích, một số số liệu MAE sai, claim vượt trội hoặc ý nghĩa thống kê không có hồ sơ. Kiểm tra tái lập cùng seed không chứng minh ý nghĩa thống kê hay khả năng khái quát.
+- Người dùng có thể chọn **IEEE Conference** hoặc **ACM SIGCONF** và tải **ZIP nguồn LaTeX**, ảnh SVG/TikZ, dữ liệu biểu đồ và provenance của đúng phiên bản. API yêu cầu owner, không biên dịch TeX hoặc tải tài nguyên ngoài. Citation metadata được snapshot cho bản mới; bản cũ dùng dữ liệu citation đã lưu.
+- ZIP dùng class chính thức `IEEEtran` / `acmart`; biên dịch bằng XeLaTeX trên TeX Live/Overleaf. Đây chưa phải dịch vụ xuất PDF tự động trong backend. Mẫu đích cuối cùng vẫn phải theo hướng dẫn cụ thể của hội nghị/tạp chí; không thêm DOI, tác giả hay thông tin chấp nhận giả.
+
+Nguồn mẫu: [IEEE Authoring Tools and Templates](https://conferences.ieeeauthorcenter.ieee.org/write-your-paper/authoring-tools-and-templates/), [ACM Proceedings Template](https://www.acm.org/publications/proceedings-template). Tiêu chí minh bạch về giới hạn, baseline, dữ liệu và tái lập tham khảo [NeurIPS Paper Checklist](https://neurips.cc/public/guides/PaperChecklist); áp dụng checklist không đồng nghĩa bài đã được chấp nhận.

@@ -12,6 +12,7 @@ import {
 import { Badge, Card } from '@/components/ui/Components';
 import { Button } from '@/components/ui/Button';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
+import { PublicationArticle, PublicationExport } from '@/components/research/PublicationPaper';
 import { api } from '@/lib/api';
 import type { 
   CitationResponse, ResearchReportResponse, ResearchSourceResponse, 
@@ -989,8 +990,9 @@ export default function WorkspacePage() {
                       </div>
                     )}
 
+                    <PublicationExport taskId={task.id} version={report.version_number} isEn={false} />
                     <div className="bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm">
-                      <MarkdownViewer 
+                      <PublicationArticle metadata={report.review_metadata}
                         content={report.content_markdown} 
                         onCitationClick={(label) => {
                           setHighlightedRef(label);

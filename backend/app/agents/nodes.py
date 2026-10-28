@@ -15,7 +15,11 @@ from app.agents.state import ResearchState
 from app.core.config import settings
 from app.services.manuscript import (
     attach_manuscript_contract, editorial_instructions,
-    manuscript_provenance, validate_manuscript, normalize_claim_markers,
+    manuscript_provenance, validate_manuscript, normalize_claim_markers, writer_claim_context,
+)
+from app.services.scientific_paper import (
+    scientific_context, build_scientific_figures, figure_instructions,
+    materialize_figures, validate_scientific_reporting,
 )
 from app.services.agent_run import (
     estimate_cost,
@@ -1270,6 +1274,8 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     plan = state.get("plan", {})
     contract = plan.get("manuscript_contract")
     editorial_context = editorial_instructions(contract, manuscript_provenance(state)) if contract else ""
+    paper_context = scientific_context(state)
+    figures = build_scientific_figures(paper_context, manuscript_provenance(state)) if contract and contract.get("version", 1) >= 2 else []
     claims = [
         claim for claim in state.get("claims", [])
         if claim.get("claim_id") and claim.get("evidence_id")
@@ -1313,7 +1319,7 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     - Trích đoạn bị rút gọn: {(user_data.get('artifact_evidence') or {}).get('excerpt_truncated', False)}
 
     Yêu cầu đặc biệt:
-    1. Bắt buộc có các phần: Title, Abstract, Introduction, Research Questions & Hypotheses, Methods, Results, Discussion, Limitations, Conclusion, References.
+    1. Trình bày câu hỏi/giả thuyết, phương pháp, kết quả, diễn giải trong các phần tương ứng của MANUSCRIPT CONTRACT; không đổi cấu trúc bắt buộc.
     2. Trong phần Results, BẮT BUỘC ghi rõ provenance: kết quả nào dựa trên dữ liệu người dùng nạp vào và kết quả nào từ tổng quan phân tích.
     3. Tệp và tóm tắt là thông tin do người dùng cung cấp, CHƯA xác minh độc lập. Không gọi là kết quả hệ thống đã tái lập; không suy thêm số liệu từ trích đoạn thiếu. Nếu tệp và tóm tắt mâu thuẫn, nêu rõ và yêu cầu rà soát, không khẳng định kết luận.
     """
@@ -1339,7 +1345,7 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     - Phép kiểm tái lập độc lập (Repeatability Check): {repro_status} (dung sai tolerance <= 1e-8)
 
     Yêu cầu cấu trúc bắt buộc:
-    1. Bắt buộc có các phần: Title, Abstract, Introduction, Research Questions, Methods, Results, Discussion, Limitations, Conclusion, References.
+    1. Giữ đúng cấu trúc MANUSCRIPT CONTRACT, gồm Related Work và tách rõ Methods, Experimental Setup, Results, Discussion.
     2. Trong Methods & Results: BẮT BUỘC trình bày cả hai bộ số liệu (Baseline VÀ Ridge) một cách minh bạch, tuyệt đối không chọn lọc chỉ báo cáo mô hình tốt hơn.
     3. Trình bày trung thực kết luận {verdict} và kiểm tra tính tái lập {repro_status}.
     4. Giới hạn khoa học: Kết quả mang tính chất mô tả và dự đoán (predictive/exploratory), tuyệt đối không suy diễn quan hệ nhân quả (non-causal).
@@ -1353,13 +1359,15 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     Kiểu tài liệu tham khảo: {state.get('citation_style', 'IEEE')}; chỉ dùng marker luận điểm, bộ định dạng sẽ tạo trích dẫn cuối cùng.
 
     Cấu trúc bắt buộc: {plan.get('required_sections', [])}
-    Dữ liệu đã trích xuất (chỉ luận điểm có bằng chứng khớp chính xác với đoạn nguồn): {claims}
+    Dữ liệu đã trích xuất (chỉ luận điểm có bằng chứng khớp chính xác với đoạn nguồn): {writer_claim_context(claims)}
     Lưu ý từ vòng sửa trước (nếu có): {feedback}
     Các chủ đề cần tổng hợp/đối chiếu bên trong nội dung: {plan.get('suggested_topics', [])}
     {editorial_context}
     {empirical_section}
+    Phạm vi đánh giá thực tế (không biến repeatability thành statistical significance): {paper_context}
+    {figure_instructions(figures)}
 
-    Yêu cầu: Viết theo định dạng Markdown. Khi sử dụng một luận điểm, hãy chèn marker chính xác [[@claim:CLAIM_ID]] với CLAIM_ID lấy từ dữ liệu trên. Không tự tạo nguồn, số citation hoặc URL. Nếu không có luận điểm phù hợp, hãy nêu rõ chưa đủ bằng chứng.
+    Yêu cầu: Viết theo định dạng Markdown. Khi sử dụng một luận điểm, sao chép NGUYÊN VẸN citation_marker đi cùng luận điểm đó, kể cả ở Introduction và Related Work. Không dùng ID từ feedback hay tự tạo mã, nguồn, số citation hoặc URL. Introduction phải có câu nêu rõ đóng góp (contributions) thực tế và giới hạn của bài. Nếu không có luận điểm phù hợp, hãy nêu rõ chưa đủ bằng chứng.
     """
 
     try:
@@ -1405,6 +1413,8 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
             "current_agent": "writer",
             "draft_report_markdown": draft_markdown,
             "draft_truncated": truncated,
+            "scientific_context": paper_context,
+            "scientific_figures": figures,
         }
     except Exception as exc:
         duration_ms = int((time.monotonic() - start_ts) * 1000)
@@ -1437,6 +1447,7 @@ async def critic_node(state: ResearchState) -> Dict[str, Any]:
     token_totals = [0, 0]
     contract = (state.get("plan") or {}).get("manuscript_contract")
     manuscript_findings = validate_manuscript(draft, contract)
+    manuscript_findings += validate_scientific_reporting(draft, contract, state.get("scientific_context") or {}, state.get("scientific_figures") or [])
     try:
         sections = _report_sections(draft)
         if not sections:
@@ -1479,6 +1490,12 @@ Requested report length: {state.get('report_length', 'MEDIUM')}
 Manuscript contract: {contract}
 Deterministic editorial findings: {manuscript_findings}
 Actual search/source provenance: {manuscript_provenance(state)}
+Executed evaluation and limits: {state.get('scientific_context')}
+Figure inventory: {[{'number': f['number'], 'caption': f['caption'], 'kind': f['kind']} for f in state.get('scientific_figures', [])]}
+Check background -> problem -> explicit RQs -> cited bounded gap -> approach -> actual contributions.
+Require Related Work comparisons, an executed baseline for empirical superiority, honest exploratory
+scope for single-split results, and substantive interpretation of every figure/table. Planned work
+must never be written as successful experiments. Do not approve unsupported novelty/significance.
 User-submitted data available: {bool(state.get('user_data_submission'))}
 Persisted analysis result available: {bool(state.get('analysis_run'))}
 Persisted protocol (if any): {protocol_context}
@@ -1703,6 +1720,9 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
                             for claim_id in used_ids]
         no_grounded_citations = state.get("enforce_provider_budget") and not citation_records
         review_metadata = dict(state.get("critic_review_metadata") or {})
+        review_metadata["bibliography_snapshot"] = [{key: item.get(key) for key in (
+            "source_id", "source_title", "source_url", "source_author", "publication_date", "citation_label"
+        )} for item in citation_records]
         if no_grounded_citations:
             review_metadata.update(status="NEEDS_REVIEW", delivery_findings=["The manuscript contains no validated source citations."])
         if citation_records:
@@ -1714,9 +1734,13 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
 
         contract = (state.get("plan") or {}).get("manuscript_contract")
         manuscript_findings = validate_manuscript(final_md, contract)
+        figures = state.get("scientific_figures") or []
+        final_md = materialize_figures(final_md, figures)
+        manuscript_findings += validate_scientific_reporting(final_md, contract, state.get("scientific_context") or {}, figures)
         lineage_findings = _claim_lineage_findings(draft, state.get("claims", []))
         if contract:
             review_metadata.update(manuscript_contract=contract, method_provenance=manuscript_provenance(state))
+            review_metadata.update(scientific_context=state.get("scientific_context") or {}, scientific_figures=figures)
         if manuscript_findings:
             review_metadata.update(status="NEEDS_REVIEW", manuscript_findings=manuscript_findings)
         if lineage_findings:

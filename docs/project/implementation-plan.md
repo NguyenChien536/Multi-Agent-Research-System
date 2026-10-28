@@ -1,6 +1,6 @@
 # Kế hoạch triển khai đến production — Synthia
 
-**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 26/10/2026, nền develop@c5ff300 · **Mốc nộp/demo:** 10/11/2026.
+**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 29/10/2026, nền develop@cfda238, bổ sung #63 · **Mốc nộp/demo:** 10/11/2026.
 
 Đây là nguồn duy nhất về **việc cần làm, thứ tự và điều kiện phát hành**. [Roadmap](roadmap-and-progress.md) ghi việc đã làm; [biên bản](baseline-verification.md) ghi bằng chứng. P0–P7/G0–G7 giữ ý nghĩa trong [SRS](../requirements/SRS.md); P8–P10 bổ sung đường đến production. Lịch này thay lịch 12/10 đã lỗi thời.
 
@@ -17,7 +17,9 @@
 
 REVIEW dùng **Supervisor, Researcher, Evidence Analyst, Writer, Critic**. Methodologist/Data Analyst chỉ tham gia khi cần. Parser, validator, exporter và runner là module code. Giá trị đa tác tử cần đo qua phân công, evidence dùng chung và vòng phản biện có giới hạn; không lấy số agent làm thước đo chất lượng.
 
-**Không mở scope trước khi khép gate hiện tại:** không code tùy ý do AI sinh, GPU training, OCR, nhóm cộng tác hoặc marketplace. Ảnh minh họa/PDF trình bày đẹp để sau; ảnh cần attribution và cho người dùng bỏ. Không thay thực nghiệm thật bằng mock để báo hoàn thành.
+**Không mở scope trước khi khép gate hiện tại:** không code tùy ý do AI sinh, GPU training, OCR, nhóm cộng tác hoặc marketplace. #63 bổ sung hình phương pháp, biểu đồ từ kết quả đã chạy và ZIP nguồn LaTeX IEEE/ACM; chưa mở dịch vụ biên dịch PDF tự động. Ảnh tìm từ web để sau, cần attribution và cho người dùng bỏ. Không thay thực nghiệm thật bằng mock để báo hoàn thành.
+
+**Bài báo theo loại nghiên cứu (#61/#63):** bản mới dùng khung có Related Work; Introduction nêu câu hỏi, gap có nguồn và đóng góp đúng phạm vi. Writer/Critic/PostProcessor cùng kiểm cấu trúc, văn xuôi, giải thích hình, baseline/số liệu và các kết luận vượt bằng chứng. Bản tổng quan không bị ép có Results thực nghiệm; dữ liệu người dùng không bị coi là hệ thống đã tự xác minh. Mẫu IEEE/ACM xử lý bố cục; không thay việc đánh giá khoa học. Chi tiết quy cách và API xuất bản tại [Agent Workflow, mục 7](../technical/agent-workflow.md#7-quy-cách-bản-thảo--cập-nhật-29102026-61-63).
 
 ## 2. Kiến trúc và công nghệ
 

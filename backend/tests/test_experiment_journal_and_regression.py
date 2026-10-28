@@ -600,7 +600,7 @@ async def test_e2e_empirical_computational_workflow(monkeypatch):
 
         async def ainvoke(self, messages):
             prompt_text = messages[0].content
-            claim_ids = re.findall(r"'claim_id':\s*'([a-f0-9\-]+)'", prompt_text)
+            claim_ids = re.findall(r"\[\[@claim:([a-f0-9\-]+)\]\]", prompt_text)
             assert claim_ids, "Writer must receive persisted, source-grounded claim IDs"
             markers = " ".join(f"[[@claim:{cid}]]" for cid in claim_ids)
             content = (
@@ -610,7 +610,7 @@ async def test_e2e_empirical_computational_workflow(monkeypatch):
                 f"## Kết luận\nKết quả dự đoán và không suy luận nhân quả."
             )
             from tests.manuscript_helpers import complete_manuscript
-            return SimpleNamespace(content=complete_manuscript(content, "EMPIRICAL_COMPUTATIONAL"))
+            return SimpleNamespace(content=complete_manuscript(content, "EMPIRICAL_COMPUTATIONAL", prompt=prompt_text))
 
     monkeypatch.setattr(nodes_module, "get_fast_llm", lambda: FakeStructuredLLM())
     monkeypatch.setattr(nodes_module, "get_smart_llm", lambda: FakeSmartWriterLLM())

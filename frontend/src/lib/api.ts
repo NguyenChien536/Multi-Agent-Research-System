@@ -108,6 +108,11 @@ export const api = {
     getReportVersions: (id: string, signal?: AbortSignal) =>
       fetcher<ReportVersionMetadata[]>(`/research/${id}/report/versions`, { signal, cache: 'no-store' }),
 
+    getPublication: (id: string, version: number, template: 'IEEE_CONFERENCE' | 'ACM_SIGCONF', signal?: AbortSignal) =>
+      fetcher<{ filename: string; archive_base64: string; report_version_id: string; version_number: number }>(
+        `/research/${id}/report/versions/${version}/publication?template=${template}`, { signal, cache: 'no-store' },
+      ),
+
     getQuestionHistory: (id: string, version: number, offset = 0, signal?: AbortSignal) =>
       fetcher<ReportQuestionHistory>(`/research/${id}/report/versions/${version}/questions?offset=${offset}&limit=20`, { signal, cache: 'no-store' }),
 

@@ -89,6 +89,8 @@ class ResearchState(TypedDict, total=False):
     # === Viết & Phản biện (Ủy quyền cho Subgraph) ===
     draft_report_markdown: str        # Bản nháp từ Writer (có marker claim để tạo citation đã kiểm chứng)
     draft_truncated: bool
+    scientific_context: Dict[str, Any]
+    scientific_figures: List[Dict[str, Any]]
     critic_verdict: str               # 'PASS' | 'REVISE' | 'NEED_MORE_DATA'
     critic_feedback: List[str]        # Feedback chi tiết: câu nào sai, thiếu gì
     critic_missing_areas: List[str]   # Danh sách knowledge gaps -> sinh Delta Queries
