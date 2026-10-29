@@ -47,6 +47,11 @@ class ResearchState(TypedDict, total=False):
     citation_style: str
     max_sources: int
     enforce_provider_budget: bool
+    editorial_revision: bool
+    revision_instructions: str
+    revision_info: Dict[str, Any]
+    base_report_markdown: str
+    source_provenance: Dict[str, Any]
     dataset_artifact_id: Optional[str]
     budget: ResearchBudget            # Giới hạn tài nguyên toàn bộ task
     require_plan_approval: bool       # Bật chế độ Human-in-the-Loop (mặc định: False)

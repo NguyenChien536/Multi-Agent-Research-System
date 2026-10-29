@@ -100,6 +100,9 @@ def attach_manuscript_contract(plan: dict, research_type: str, language: str) ->
 
 def manuscript_provenance(state: dict) -> dict:
     """Describe actual inputs/actions, never turn planned queries into executed searches."""
+    if state.get("editorial_revision"):
+        from copy import deepcopy
+        return deepcopy(state.get("source_provenance") or {})
     sources = state.get("collected_sources") or []
     activity = state.get("search_activity") or []
     return {

@@ -166,6 +166,7 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
     manifest = {"report_version_id": version_id, "version_number": version_number, "template": template,
                 "official_template_source": profile["source"], "manuscript_contract": contract,
                 "review_status": metadata.get("status", "NEEDS_REVIEW"),
+                "revision": metadata.get("revision"),
                 "scientific_context": metadata.get("scientific_context", {}), "method_provenance": metadata.get("method_provenance", {}),
                 "figures": [{k: v for k, v in f.items() if k not in {"svg", "latex"}} for f in figures]}
     stream = io.BytesIO()

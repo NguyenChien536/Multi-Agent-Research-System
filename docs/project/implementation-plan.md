@@ -1,6 +1,6 @@
 # Kế hoạch triển khai đến production — Synthia
 
-**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 29/10/2026, nền develop@cfda238, bổ sung #63 · **Mốc nộp/demo:** 10/11/2026.
+**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 29/10/2026, nền develop@5b7fe75 / PR #64, bàn giao #65 · **Mốc nộp/demo:** 10/11/2026.
 
 Đây là nguồn duy nhất về **việc cần làm, thứ tự và điều kiện phát hành**. [Roadmap](roadmap-and-progress.md) ghi việc đã làm; [biên bản](baseline-verification.md) ghi bằng chứng. P0–P7/G0–G7 giữ ý nghĩa trong [SRS](../requirements/SRS.md); P8–P10 bổ sung đường đến production. Lịch này thay lịch 12/10 đã lỗi thời.
 
@@ -44,7 +44,7 @@ Nguồn kỹ thuật: [LangGraph persistence](https://docs.langchain.com/oss/pyt
 
 ## 3. Backlog audit phải xử lý trước
 
-Baseline audit ngày 22/10 có **74 backend tests, FE lint/build đạt**. Sau R1–R3, suite hiện có **109 backend tests**; G1–G7 vẫn chưa đạt đầy đủ và hệ thống chưa production-ready. Chi tiết baseline tại [biên bản audit](baseline-verification.md#kiem-tra-2026-10-22). R1–R8 là mã đầu việc tại đây, không phải số GitHub issue.
+Các bản ghi 22–26/10 dưới đây là **lịch sử audit và ước lượng**, không phải danh sách việc còn thiếu hiện tại. Nền PR #64 có 328 backend tests; lượt #65 có 343 backend tests và 16 frontend tests đạt cục bộ. Tiến độ gọn, bằng chứng provider thật và việc tiếp theo được tổng hợp tại [Roadmap](roadmap-and-progress.md). G1–G7 vẫn chưa nghiệm thu đầy đủ, hệ thống chưa production-ready. R1–R8 là mã đầu việc, không phải số GitHub issue.
 
 | Thứ tự | Vấn đề thực tế | Cách sửa đã chọn | Nghiệm thu |
 |---|---|---|---|
@@ -111,13 +111,13 @@ Hai lớp dùng chung task/run identity nhưng phục vụ nhu cầu khác nhau.
 
 M1 đọc trạng thái đã lưu ở backend và tự cập nhật định kỳ; trang tổng quan có phân trang, các số tổng hợp ghi rõ phạm vi trang. Bài WAITING không giữ worker và vẫn nằm trong danh sách để người dùng chuyển sang bài D hoặc bài khác. Nhật ký AgentRun hiện là lịch sử toàn bài; khi chưa có khóa run trên từng dòng, UI không được khẳng định đây chỉ là nhật ký của workflow run mới nhất. Chi phí là ước tính từ ledger; reservation đang chạy phải tách khỏi khoản đã đối chiếu. Output summary chỉ gồm counters/verdict được cho phép, không đưa lỗi provider thô hoặc đường dẫn storage vào monitor.
 
-Issue #55 giữ phạm vi Q&A theo report version. Yêu cầu sửa bài tiếp theo phải ghi rõ base version và serialize cấp version; đổi dữ liệu/phương pháp tạo run mới và không tái dùng Results cũ. Sau M1 phải đo lại lịch còn lại, không cộng các chức năng này vào cam kết deadline cũ mà không tính thời gian.
+Issue #55 giữ phạm vi Q&A theo report version. Issue #65 triển khai sửa văn bản có base version và serialize cấp version; đổi dữ liệu/phương pháp vẫn cần lượt research mới. Sau M1 phải đo lại lịch còn lại, không cộng các chức năng này vào cam kết deadline cũ mà không tính thời gian.
 
 **M1 đã merge:** PR #57 / `develop@c5ff300`; 132 backend tests, 11 frontend tests và 5/5 CI đạt. Đã có tổng quan nhiều bài, snapshot riêng theo owner và nhật ký có phân trang. Kiểm tra trực quan/browser E2E và dashboard vận hành M2/M3 vẫn còn; M1 không đóng toàn bộ FR-12/NFR-06.
 
 ### Hỏi đáp theo phiên bản — R7 / #55
 
-Người dùng chọn phiên bản bài báo, đặt câu hỏi cụ thể và xem câu trả lời cùng đoạn nguồn được trích dẫn. Bản thảo giữ nguyên; lịch sử gắn cố định với version ID. Lượt này triển khai FR-15 ở phạm vi hỏi đáp; yêu cầu sửa bài, đổi phương pháp/dữ liệu và export theo phiên bản vẫn cần issue riêng trước khi khép G6.
+Người dùng chọn phiên bản bài báo, đặt câu hỏi cụ thể và xem câu trả lời cùng đoạn nguồn được trích dẫn. Bản thảo giữ nguyên; lịch sử gắn cố định với version ID. #55 triển khai phần hỏi đáp của FR-15; #63 bổ sung publication source export và #65 bổ sung sửa cách trình bày theo base version. Đổi phương pháp/dữ liệu và gói tái lập đầy đủ vẫn cần nghiệm thu riêng trước khi khép G6. Chi tiết luồng sửa tại [Agent Workflow, mục 8](../technical/agent-workflow.md#8-chỉnh-sửa-bản-thảo-theo-phiên-bản--65).
 
 | Quyết định | Hành vi cần giữ |
 |---|---|
@@ -204,4 +204,4 @@ Evaluation khoa học theo [Evaluation Plan](evaluation-plan.md): pilot 4 câu r
 - [ ] Docs/UI mô tả đúng tính năng mở, giới hạn, cách xóa dữ liệu và trách nhiệm kiểm tra của người nghiên cứu.
 - [ ] Chiến quyết định go/no-go theo evidence; main/tag cùng artifact đã kiểm; health/smoke sau deploy đạt.
 
-**Chốt planning:** giữ hướng sản phẩm và kiến trúc, ưu tiên tính đúng/phục hồi/đo được của chức năng hiện tại. R1–R3 đã merge; tiếp theo R5 review toàn bài, rồi R4 runner/journal theo dependency. Chưa đủ điều kiện chốt phát hành production.
+**Chốt hướng triển khai 29/10:** giữ sản phẩm và kiến trúc; không xây lại R1–R6 đã có code. Sau lượt sửa bản thảo #65, ưu tiên gói tái lập/bàn giao còn thiếu của P6, evaluation P7 và nghiệm thu runtime/UI trên cùng candidate. Chưa đủ điều kiện chốt phát hành production; P8–P10 chỉ mở sau các gate liên quan.

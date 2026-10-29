@@ -71,7 +71,7 @@ Không dùng vòng feedback để “chứng minh” giả thuyết hoặc sửa
 
 Rà soát source `ebb525a` ngày 08/10: đã có Supervisor/Researcher/Curator/Analyst/Writer/Critic và graph, nhưng Curator hiện là code ingestion; chưa có đầy đủ method/data roles. Graph chưa gắn durable checkpointer; worker chưa đưa budget vào initial state; Analyst mất chunk UUID trong output; postprocessor chưa validate citation; Critic chỉ đọc prefix draft. Auth/ownership và lifecycle là blockers trước khi mở rộng roles.
 
-Đây là nhận xét đọc code, không phải kết quả chạy. Runtime cũ ghi tại [Baseline](../project/baseline-verification.md). Khắc phục theo [Implementation Plan](../project/implementation-plan.md); đo ích lợi của multi-agent theo [Evaluation Plan](../project/evaluation-plan.md).
+Đây là nhận xét lịch sử ngày 08/10, không phải trạng thái code ngày 29/10. Các sửa sau đó và bằng chứng hiện tại được tổng hợp tại [Roadmap](../project/roadmap-and-progress.md). Runtime cũ ghi tại [Baseline](../project/baseline-verification.md); đo ích lợi của multi-agent theo [Evaluation Plan](../project/evaluation-plan.md).
 
 ## 7. Quy cách bản thảo — cập nhật 29/10/2026 (#61, #63)
 
@@ -103,3 +103,15 @@ Kiểm tra cấu trúc và heuristic phương pháp không chứng nhận độ 
 - ZIP dùng class chính thức `IEEEtran` / `acmart`; biên dịch bằng XeLaTeX trên TeX Live/Overleaf. Đây chưa phải dịch vụ xuất PDF tự động trong backend. Mẫu đích cuối cùng vẫn phải theo hướng dẫn cụ thể của hội nghị/tạp chí; không thêm DOI, tác giả hay thông tin chấp nhận giả.
 
 Nguồn mẫu: [IEEE Authoring Tools and Templates](https://conferences.ieeeauthorcenter.ieee.org/write-your-paper/authoring-tools-and-templates/), [ACM Proceedings Template](https://www.acm.org/publications/proceedings-template). Tiêu chí minh bạch về giới hạn, baseline, dữ liệu và tái lập tham khảo [NeurIPS Paper Checklist](https://neurips.cc/public/guides/PaperChecklist); áp dụng checklist không đồng nghĩa bài đã được chấp nhận.
+
+## 8. Chỉnh sửa bản thảo theo phiên bản — #65
+
+Người dùng chọn bản thảo và yêu cầu sửa cách trình bày tại `/research/{id}/revisions`. Chỉ bản mới nhất được làm base cho yêu cầu mới; bản cũ vẫn xem, hỏi và xuất được. API GET/POST `/research/{id}/report/versions/{n}/revisions` yêu cầu owner, có request UUID chống gửi lặp, lịch sử phân trang và `private, no-store`. Mỗi bài chỉ có một request sửa active, tối đa 30 request. Thay đổi dữ liệu/phương pháp phải tạo lượt nghiên cứu mới.
+
+Luồng thực hiện: **lưu request và outbox cùng transaction → worker claim/lease → Writer → Critic và micro revision hữu hạn → PostProcessor/validator → version mới**. Entry editorial bỏ qua Supervisor/search/ingestion/Analyst/runner; macro loop có giới hạn 0 nên không tự tìm thêm bằng chứng. Thiếu bằng chứng thì giao bản cần rà soát, không tự dựng Results. Dùng ngân sách còn lại của bài, không reset cap/usage để sửa tiếp.
+
+Nguồn/claims/chunks chỉ được lấy từ Citation của đúng base version, kiểm lại chuỗi cùng task và quote nguyên văn. Bibliography metadata, contract và provenance giữ theo bản gốc; nhãn thư mục được khôi phục về claim markers để Writer tiếp tục dùng validator. Nhãn cùng source có thể ứng với nhiều claims của bản gốc; kiểm lineage không tự chứng minh diễn giải câu văn mới đúng về ngữ nghĩa.
+
+Các bản mới lưu `manuscript_input_snapshot` (plan, protocol, dữ liệu thực địa đã cung cấp, kết quả phân tích; không lưu lại CSV thô trong snapshot). Bản REVIEW lịch sử có contract và citations hợp lệ có thể sửa; bản tính toán cần frozen completed analysis; bản human-led cần frozen fieldwork input. Thiếu snapshot thì trả 409 và yêu cầu lượt research mới, không lấy dữ liệu hiện tại để điền ngược cho bài cũ. Sửa bài không ghi lại AnalysisRun/journal hay chạy lại routine.
+
+Checkpoint và request giữ workflow identity qua redelivery. Trước publish, worker kiểm task/attempt/lease và base vẫn là bản mới nhất, rồi lưu version/citations/request result cùng transaction. Hủy, xóa, hết budget hoặc mất base fence không được ghi đè version cũ. Version xuất bản mới có provenance nối về request và base version; PASSED vẫn chỉ là kiểm tra nội bộ.

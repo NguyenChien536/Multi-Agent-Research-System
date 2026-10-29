@@ -1,6 +1,7 @@
 import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, UserDataResumeRequest, ProtocolResponse, AnalysisRunResponse, ExperimentJournalEntryResponse, DatasetUploadResponse, TokenResponse, UserCreate, UserResponse } from '../types';
 import type { ResearchMonitor } from '../types/monitoring';
 import type { ReportQuestion, ReportQuestionHistory, ReportVersionMetadata } from '../types/report-questions';
+import type { ReportRevision } from '../types/report-revisions';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -107,6 +108,20 @@ export const api = {
 
     getReportVersions: (id: string, signal?: AbortSignal) =>
       fetcher<ReportVersionMetadata[]>(`/research/${id}/report/versions`, { signal, cache: 'no-store' }),
+
+    getReportVersion: (id: string, version: number, signal?: AbortSignal) =>
+      fetcher<ResearchReportResponse>(`/research/${id}/report/versions/${version}`, { signal, cache: 'no-store' }),
+
+    getReportVersionCitations: (id: string, version: number, signal?: AbortSignal) =>
+      fetcher<CitationResponse[]>(`/research/${id}/report/versions/${version}/citations`, { signal, cache: 'no-store' }),
+
+    getRevisionHistory: (id: string, version: number, signal?: AbortSignal) =>
+      fetcher<ReportRevision[]>(`/research/${id}/report/versions/${version}/revisions?limit=20`, { signal, cache: 'no-store' }),
+
+    reviseReport: (id: string, version: number, payload: { request_id: string; instructions: string }, signal?: AbortSignal) =>
+      fetcher<ReportRevision>(`/research/${id}/report/versions/${version}/revisions`, {
+        method: 'POST', body: JSON.stringify(payload), signal, cache: 'no-store',
+      }),
 
     getPublication: (id: string, version: number, template: 'IEEE_CONFERENCE' | 'ACM_SIGCONF', signal?: AbortSignal) =>
       fetcher<{ filename: string; archive_base64: string; report_version_id: string; version_number: number }>(
