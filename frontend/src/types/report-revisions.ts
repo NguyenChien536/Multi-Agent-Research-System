@@ -15,6 +15,11 @@ export function revisionActive(item: ReportRevision): boolean {
   return item.status === 'QUEUED' || item.status === 'RUNNING';
 }
 
+export function normalizeCitationLabel(label: string): string {
+  const value = label.trim();
+  return /^\d+$/.test(value) ? `[${value}]` : value;
+}
+
 export function revisionStatus(item: ReportRevision): string {
   const labels: Record<ReportRevision['status'], string> = {
     QUEUED: 'Đang chờ xử lý', RUNNING: 'Đang sửa và kiểm tra', COMPLETED: 'Đã tạo phiên bản mới',

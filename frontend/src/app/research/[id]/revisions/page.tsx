@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 import type { CitationResponse, ResearchReportResponse } from '@/types';
 import { safeSourceUrl } from '@/lib/report-questions';
 import type { ReportVersionMetadata } from '@/types/report-questions';
-import { revisionActive, revisionStatus, type ReportRevision } from '@/types/report-revisions';
+import { normalizeCitationLabel, revisionActive, revisionStatus, type ReportRevision } from '@/types/report-revisions';
 import { PublicationArticle, PublicationExport } from '@/components/research/PublicationPaper';
 
 export default function ManuscriptRevisions() {
@@ -146,11 +146,12 @@ export default function ManuscriptRevisions() {
         {article ? <><PublicationExport taskId={id} version={article.version_number} isEn={false} showRevisionLink={false} />
           <p className="mb-5 text-xs text-zinc-500">v{article.version_number} · {article.review_status}. Đây là bản thảo để người nghiên cứu rà soát.</p>
           <PublicationArticle content={article.content_markdown} metadata={article.review_metadata} onCitationClick={label => {
-            setSelectedCitation(label); document.getElementById('version-evidence')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setSelectedCitation(normalizeCitationLabel(label)); document.getElementById('version-evidence')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }} />
           <section id="version-evidence" className="mt-8 border-t pt-5" aria-label="Bằng chứng của phiên bản đang xem">
             <h2 className="font-semibold">Nguồn và bằng chứng của v{article.version_number}{selectedCitation ? ` · ${selectedCitation}` : ''}</h2>
             {selectedCitation && <button className="mt-2 text-sm underline" onClick={() => setSelectedCitation(null)}>Xem các trích dẫn khác</button>}
+            {selectedCitation && !citations.some(c => c.citation_label === selectedCitation) && <p role="status" className="mt-3 text-sm text-amber-800">Không tìm thấy trích dẫn này trong phiên bản đang xem. Hãy kiểm tra danh sách nguồn trước khi sử dụng.</p>}
             {(selectedCitation ? citations.filter(c => c.citation_label === selectedCitation) : citations).map(citation => {
               const href = safeSourceUrl(citation.source_url);
               return <div key={citation.id} className="mt-4 rounded border p-4 text-sm">
