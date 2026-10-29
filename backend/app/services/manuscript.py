@@ -5,8 +5,9 @@ These are product defaults, not certification of journal/reporting-guideline com
 import re
 import unicodedata
 from typing import Any
+from app.services.academic_writing import writing_brief
 
-CONTRACT_VERSION = 2
+CONTRACT_VERSION = 3
 
 
 def normalize_claim_markers(markdown: str) -> str:
@@ -85,6 +86,7 @@ def manuscript_contract(research_type: str, language: str) -> dict[str, Any]:
         "references_heading": _REFERENCE_HEADINGS[locale],
         "systematic_review_supported": False,
         "introduction_requirements": ["background", "problem_statement", "research_question", "bounded_research_gap", "approach_and_execution_status", "evidence_supported_contributions"],
+        "writing_brief": writing_brief(article_type),
     }
 
 

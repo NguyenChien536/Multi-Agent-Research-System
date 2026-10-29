@@ -115,3 +115,33 @@ Nguồn/claims/chunks chỉ được lấy từ Citation của đúng base versi
 Các bản mới lưu `manuscript_input_snapshot` (plan, protocol, dữ liệu thực địa đã cung cấp, kết quả phân tích; không lưu lại CSV thô trong snapshot). Bản REVIEW lịch sử có contract và citations hợp lệ có thể sửa; bản tính toán cần frozen completed analysis; bản human-led cần frozen fieldwork input. Thiếu snapshot thì trả 409 và yêu cầu lượt research mới, không lấy dữ liệu hiện tại để điền ngược cho bài cũ. Sửa bài không ghi lại AnalysisRun/journal hay chạy lại routine.
 
 Checkpoint và request giữ workflow identity qua redelivery. Trước publish, worker kiểm task/attempt/lease và base vẫn là bản mới nhất, rồi lưu version/citations/request result cùng transaction. Hủy, xóa, hết budget hoặc mất base fence không được ghi đè version cũ. Version xuất bản mới có provenance nối về request và base version; PASSED vẫn chỉ là kiểm tra nội bộ.
+
+## 9. Cách viết và trình bày học thuật — contract v3 (#69)
+
+Các lượt nghiên cứu mới lưu thêm `writing_brief` cùng contract. Writer và Critic đọc cùng mục tiêu cho từng phần, theo đúng loại nghiên cứu; brief là hướng dẫn biên tập, không phải dữ liệu nghiên cứu và không cấp thêm nguồn để trích dẫn. Bản đã lưu giữ contract cũ. Các ngưỡng kiểm tra xác định và Critic nội bộ vẫn không thay thế đánh giá học thuật của người nghiên cứu.
+
+| Nội dung | Áp dụng trong sản phẩm |
+|---|---|
+| Lập luận | Introduction dẫn tới RQ/gap có nguồn; đoạn phân tích nối luận điểm, bằng chứng và lý giải, nêu giả định/giới hạn. Related Work so sánh theo chiều chung, không liệt kê từng paper. Discussion trả lời RQ, xem xét phản chứng và giải thích thay thế |
+| Tổng quan | Tổng hợp theo chủ đề/câu hỏi, chỉ mô tả tìm kiếm thực sự đã ghi; kết luận là tổng hợp giới hạn. Không tự chuyển thành systematic review hay thêm số liệu PRISMA |
+| Tính toán | Methods/setup mô tả routine, dữ liệu, split/seed/baseline/metrics đã có; Results giữ cả kết quả âm. Không suy ý nghĩa thống kê từ một split hoặc một lần kiểm lặp |
+| Nghiên cứu ngoài hệ thống | Phân biệt protocol với nghiên cứu đã thực hiện; quy nguồn kết quả cho dữ liệu người dùng. Không tự thêm người tham gia, phê duyệt đạo đức hoặc kiểm định chưa chạy |
+| Figure | Style mới có trục MAE bắt đầu từ 0, vạch chia, giá trị trực tiếp và giới hạn single-split; sơ đồ là khái niệm xử lý bằng chứng. Có SVG title/description và ACM Description. Hình lặp/sai thứ tự phải sửa; không suy error bars từ một kết quả |
+| Bảng | Caption riêng dạng `Table N. ...` ngay trước bảng được giữ khi xuất LaTeX; văn xuôi phải giải thích ý nghĩa và provenance, tránh dùng bảng và hình trùng lặp không cần thiết |
+| Reference | IEEE giữ tác giả/năm khi có; nguồn author-date trùng nhãn có hậu tố a/b, vẫn giữ các claim links. Thiếu metadata được ghi trong review metadata/provenance; không tự bịa DOI, venue, tác giả hay ngày truy cập. ZIP có `references.json` để người nghiên cứu đối chiếu |
+| Phiên bản | `figure_style_version` nằm trong scientific context của bản mới; export bản lịch sử vẫn dựng theo style cũ. Nhãn author-date lịch sử mơ hồ phải báo lỗi thay vì âm thầm trỏ sang nguồn khác |
+
+Định dạng author-date hiện dùng trường tác giả chưa tách cấu trúc và hậu tố theo thứ tự trích dẫn; chưa phải bộ máy chuẩn hóa đầy đủ mọi quy tắc APA/Harvard. Bản mới cải thiện tính phân biệt nguồn, không chứng nhận reference đã đủ điều kiện nộp mọi venue. Các trường metadata thiếu phải được kiểm tra với nguồn gốc trước khi nộp.
+
+### Nguồn học cách viết và trình bày
+
+| Nguồn chính thống / bài nghiên cứu | Nguyên tắc rút ra, không sao chép nội dung |
+|---|---|
+| [IEEE: Structure Your Article](https://journals.ieeeauthorcenter.ieee.org/create-your-ieee-journal-article/create-the-text-of-your-article/structure-your-article/) | Chức năng của Abstract/Introduction/Methods/Results/Discussion; phương pháp có thể tái lập, kết luận tương xứng bằng chứng và chỉ dẫn nguồn trực tiếp liên quan |
+| [Scientific Reports: submission guidelines](https://www.nature.com/srep/author-instructions/submission-guidelines) | Cấu trúc tùy loại bài/venue; caption, đơn vị và mô tả xử lý thống kê; không dùng hình lấy từ web khi chưa có quyền phù hợp |
+| [ACM SIGACCESS: Describing Figures](https://www.sigaccess.org/welcome-to-sigaccess/resources/describing-figures/) | Mô tả cấu trúc/giá trị quan trọng, trục và xu hướng; không phụ thuộc màu hoặc lặp nguyên caption |
+| [Shao et al., STORM, NAACL 2024](https://aclanthology.org/2024.naacl-long.347/) | Học cách nối vấn đề với phương pháp, hình tổng quan và đánh giá; tách đóng góp khỏi hạn chế. Đây là bài mô tả hệ thống sinh nội dung Wikipedia, không phải bằng chứng hệ thống tự viết nghiên cứu mới |
+| [Bergstra & Bengio, JMLR 2012](https://www.jmlr.org/papers/v13/bergstra12a.html) | Học cách định nghĩa bài toán/giả định, so sánh trong ngân sách cụ thể và giới hạn kết luận theo tập dữ liệu; không mượn số liệu hoặc kết luận ưu thế cho Synthia |
+| [PRISMA 2020 checklist](https://www.prisma-statement.org/prisma-2020-checklist) | Phân biệt yêu cầu của tổng quan hệ thống với tổng quan phân tích hiện hỗ trợ; không dùng checklist làm chứng nhận tuân thủ |
+
+Chỉ học cấu trúc lập luận và nguyên tắc thiết kế hình. Không sao chép câu văn, ảnh, caption, bibliography hoặc số liệu của các bài mẫu vào bài của người dùng. Chỉ nguồn nằm trong evidence của đúng lượt nghiên cứu mới được trở thành citation. Những quy tắc này không đòi mọi lĩnh vực có cùng khung IMRaD hay mọi bài phải có biểu đồ thực nghiệm.

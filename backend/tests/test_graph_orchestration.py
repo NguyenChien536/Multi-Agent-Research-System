@@ -223,7 +223,7 @@ async def test_post_processor_keeps_only_known_claim_citations():
     assert "[99]" not in result["final_report_markdown"]
     assert "Model-invented reference" not in result["final_report_markdown"]
     assert "[@claim:" not in result["final_report_markdown"]
-    assert "## References\n\n[1] Verified source. https://example.org/source" in result["final_report_markdown"]
+    assert "## References\n\n[1] “Verified source”. [Online]. Available: https://example.org/source" in result["final_report_markdown"]
     assert [item["claim_id"] for item in result["citations"]] == [claim_id]
 
 
