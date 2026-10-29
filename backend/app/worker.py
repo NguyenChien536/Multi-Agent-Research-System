@@ -158,6 +158,7 @@ async def renew_worker_lease(task_id: str, attempt_number: int) -> None:
 async def run_langgraph_workflow(task_id: str) -> dict:
     """Hàm chạy async LangGraph và tương tác với DB."""
     heartbeat: asyncio.Task | None = None
+    revision_request = None
     claim_attempt: int | None = None
     workflow_run_id: uuid.UUID | None = None
     try:
@@ -300,7 +301,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             # Preload dataset CSV if user uploaded one for empirical computational research
             preloaded_dataset_csv = None
             uploaded_dataset_art_id = None
-            if getattr(task, "research_type", "REVIEW") == "EMPIRICAL_COMPUTATIONAL":
+            if getattr(task, "research_type", "REVIEW") == "EMPIRICAL_COMPUTATIONAL" and task.resume_action != "REVISE_REPORT":
                 dataset_art_res = await session.execute(
                     select(ExportArtifact)
                     .where(
@@ -355,6 +356,10 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 "collected_sources": preloaded_sources,
                 "visited_urls": visited_urls,
             }
+
+            from app.services.report_revisions import prepare_revision
+            revision_request, revision_state = await prepare_revision(session, task, workflow_run)
+            initial_state.update(revision_state)
 
             # 3. Kích hoạt (Invoke) Graph
             try:
@@ -465,6 +470,13 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     session.add(report)
                     await session.flush()
                 last_version = await session.scalar(select(func.max(ReportVersion.version_number)).where(ReportVersion.report_id == report.id))
+                if revision_request:
+                    from app.models.report_revision import ReportRevision
+                    await session.refresh(revision_request, with_for_update=True)
+                    base = await session.get(ReportVersion, revision_request.base_version_id)
+                    if (revision_request.status != "RUNNING" or revision_request.workflow_run_id != workflow_run.id
+                            or not base or base.report_id != report.id or base.version_number != last_version):
+                        raise RuntimeError("Editorial revision lost its base-version fence")
                 review_metadata = final_state.get("critic_review_metadata") or {}
                 article_title = next((line[2:].strip() for line in report_content.splitlines() if line.startswith("# ")), task.title)
                 report_version = ReportVersion(
@@ -536,7 +548,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
 
                 # Persist AnalysisRun, ExperimentJournalEntry, and experiment artifacts if routine ran
                 analysis_data = final_state.get("analysis_run")
-                if analysis_data:
+                if analysis_data and not revision_request:
                     metrics_bytes = json.dumps(analysis_data.get("metrics", {}), indent=2).encode("utf-8")
                     manifest_bytes = json.dumps(analysis_data.get("manifest", {}), indent=2).encode("utf-8")
                     chart_bytes = json.dumps(analysis_data.get("chart_data", {}), indent=2).encode("utf-8")
@@ -701,6 +713,10 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 workflow_run.status = task.status
                 workflow_run.completed_at = datetime.now(timezone.utc)
                 workflow_run.plan_version = task.plan_version
+                if revision_request:
+                    revision_request.result_version_id = report_version.id
+                    revision_request.status = task.status
+                    revision_request.completed_at = task.completed_at
                 await session.commit()
 
                 try:
@@ -716,6 +732,10 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     "final_agent": final_state.get("current_agent")
                 }
             except Exception as e:
+                # A Python/storage error can occur after flushing a version but
+                # before the final commit. Never commit that partial publication
+                # together with a FAILED task/request.
+                await session.rollback()
                 await session.refresh(task, with_for_update=True)
                 if task.status != "RUNNING" or task.attempt_number != claim_attempt:
                     return {"status": "SUPERSEDED", "task_id": task_id}
@@ -739,6 +759,10 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 task.resume_payload = None
                 workflow_run.status = "NEEDS_REVIEW" if isinstance(e, (ProviderBudgetExceeded, ResearchTaskStopped)) else "FAILED"
                 workflow_run.completed_at = datetime.now(timezone.utc)
+                if revision_request:
+                    revision_request.status = "FAILED"
+                    revision_request.error_code = "BUDGET_LIMIT" if isinstance(e, ProviderBudgetExceeded) else "WORKFLOW_FAILED"
+                    revision_request.completed_at = datetime.now(timezone.utc)
 
                 from app.models.agent_run import AgentRun
                 totals_res = await session.execute(
@@ -780,6 +804,11 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                         failed_task.resume_payload = None
                         summary = f"Research execution could not initialize/continue ({type(exc).__name__}). Check worker runtime logs."
                         failed_task.description = (failed_task.description or "") + "\n" + summary
+                        from app.models.report_revision import ReportRevision
+                        await failure_session.execute(update(ReportRevision).where(
+                            ReportRevision.research_task_id == failed_task.id,
+                            ReportRevision.status.in_(["QUEUED", "RUNNING"]),
+                        ).values(status="FAILED", error_code="INITIALIZATION_FAILED", completed_at=failed_task.completed_at))
                         if workflow_run_id is not None:
                             await failure_session.execute(update(WorkflowRun).where(
                                 WorkflowRun.id == workflow_run_id,

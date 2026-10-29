@@ -98,3 +98,21 @@ test('publication exports pin version/template and use authenticated noncached r
   assert.equal(request.headers.get('Authorization'), 'Bearer test-token');
   assert.equal(request.cache, 'no-store');
 });
+
+test('editorial revisions preserve base version, request UUID, auth and abort signal', async () => {
+  const c = client();
+  const controller = new AbortController();
+  const payload = { request_id: 'stable-revision-id', instructions: 'Clarify the original discussion.' };
+  await c.api.tasks.reviseReport('paper-id', 3, payload, controller.signal);
+  await c.api.tasks.getRevisionHistory('paper-id', 3, controller.signal);
+  await c.api.tasks.getReportVersion('paper-id', 3, controller.signal);
+  await c.api.tasks.getReportVersionCitations('paper-id', 3, controller.signal);
+  assert.ok(c.requests[0].url.endsWith('/report/versions/3/revisions'));
+  assert.deepEqual(JSON.parse(c.requests[0].body), payload);
+  assert.ok(c.requests[3].url.endsWith('/report/versions/3/citations'));
+  for (const request of c.requests) {
+    assert.equal(request.headers.get('Authorization'), 'Bearer test-token');
+    assert.equal(request.signal, controller.signal);
+    assert.equal(request.cache, 'no-store');
+  }
+});

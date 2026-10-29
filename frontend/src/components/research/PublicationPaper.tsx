@@ -3,9 +3,10 @@
 import { useState, type ComponentProps } from 'react';
 import { api } from '@/lib/api';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
+import Link from 'next/link';
 type ViewerProps = ComponentProps<typeof MarkdownViewer> & { academicStyle?: boolean };
 
-export function PublicationExport({ taskId, version, isEn }: { taskId: string; version?: number; isEn: boolean }) {
+export function PublicationExport({ taskId, version, isEn, showRevisionLink = true }: { taskId: string; version?: number; isEn: boolean; showRevisionLink?: boolean }) {
   const [template, setTemplate] = useState<'IEEE_CONFERENCE' | 'ACM_SIGCONF'>('IEEE_CONFERENCE');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -25,6 +26,9 @@ export function PublicationExport({ taskId, version, isEn }: { taskId: string; v
     } finally { setBusy(false); }
   };
   return <div className="print:hidden flex flex-wrap items-center gap-2 text-xs my-3">
+    {version && showRevisionLink && <Link href={`/research/${taskId}/revisions?version=${version}`} className="rounded border px-3 py-2 font-medium">
+      {isEn ? 'Revise & view versions' : 'Sửa bài & xem phiên bản'}
+    </Link>}
     <label className="font-medium" htmlFor="publication-template">{isEn ? 'Publication source' : 'Mẫu xuất bản'}</label>
     <select id="publication-template" value={template} onChange={e => setTemplate(e.target.value as typeof template)} disabled={busy} className="border rounded px-2 py-2 bg-white text-zinc-900">
       <option value="IEEE_CONFERENCE">IEEE Conference</option><option value="ACM_SIGCONF">ACM SIGCONF</option>
@@ -44,7 +48,7 @@ export function PublicationArticle({ metadata, ...props }: ViewerProps & { metad
     && value.svg.length < 200000 && !/<script|foreignObject|\bhref\s*=/i.test(value.svg)
   ).map(value => [value.id, value]));
   const pieces = props.content.split(/(!\[[^\]]*\]\(figures\/[a-z_-]+\.svg\))/g);
-  return <article className="font-serif leading-7 text-justify">{pieces.map((piece, index) => {
+  return <article className="font-serif leading-7">{pieces.map((piece, index) => {
     const match = piece.match(/^!\[[^\]]*\]\(figures\/([a-z_-]+)\.svg\)$/);
     const figure = match && figures.get(match[1]);
     if (!figure) return <MarkdownViewer key={index} {...props} content={piece} />;

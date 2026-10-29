@@ -80,6 +80,10 @@ def route_after_user_data(state: ResearchState) -> str:
     return "writer" if state.get("user_data_submission") else "wait_user_data"
 
 
+def entry_route(state: ResearchState) -> str:
+    return "writer" if state.get("editorial_revision") else "supervisor"
+
+
 def route_after_analyst(state: ResearchState) -> str:
     """
     Định tuyến sau Analyst:
@@ -166,7 +170,7 @@ def build_research_graph(checkpointer=None) -> StateGraph:
     workflow.add_node("macro_routing", macro_routing_node)
 
     # 2. Định nghĩa các Edges (Luồng đi)
-    workflow.set_entry_point("supervisor")
+    workflow.set_conditional_entry_point(entry_route, {"supervisor":"supervisor", "writer":"writer"})
 
     # Supervisor -> Rẽ nhánh: Chờ duyệt (HITL) hoặc Tiếp tục nghiên cứu
     workflow.add_conditional_edges(
