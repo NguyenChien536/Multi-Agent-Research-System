@@ -44,7 +44,7 @@ Nguồn kỹ thuật: [LangGraph persistence](https://docs.langchain.com/oss/pyt
 
 ## 3. Backlog audit phải xử lý trước
 
-Các bản ghi 22–26/10 dưới đây là **lịch sử audit và ước lượng**, không phải danh sách việc còn thiếu hiện tại. Nền PR #64 có 328 backend tests; lượt #65 có 343 backend tests và 16 frontend tests đạt cục bộ. Tiến độ gọn, bằng chứng provider thật và việc tiếp theo được tổng hợp tại [Roadmap](roadmap-and-progress.md). G1–G7 vẫn chưa nghiệm thu đầy đủ, hệ thống chưa production-ready. R1–R8 là mã đầu việc, không phải số GitHub issue.
+Các bản ghi 22–26/10 dưới đây là **lịch sử audit và ước lượng**, không phải danh sách việc còn thiếu hiện tại. Nền PR #64 có 328 backend tests; lượt #65 cùng hồi quy trích dẫn #67 có 343 backend tests và 17 frontend tests đạt cục bộ. Tiến độ gọn, bằng chứng provider thật và việc tiếp theo được tổng hợp tại [Roadmap](roadmap-and-progress.md). G1–G7 vẫn chưa nghiệm thu đầy đủ, hệ thống chưa production-ready. R1–R8 là mã đầu việc, không phải số GitHub issue.
 
 | Thứ tự | Vấn đề thực tế | Cách sửa đã chọn | Nghiệm thu |
 |---|---|---|---|

@@ -26,7 +26,7 @@ Tài liệu này trả lời **đã có gì, đã kiểm đến đâu, tiếp th
 |---|---|---|
 | Toàn bộ backend trên DB PostgreSQL/pgvector mới, migrate từ rỗng | **343 tests đạt** | Provider được thay bằng fixture xác định trong suite; không dùng DB dev để chạy pytest |
 | Các ca riêng cho sửa bài | **15 tests đạt** | Bao gồm checkpoint PostgreSQL, rollback khi publication lỗi và mô phỏng ngắt sau checkpoint; chưa thay cho kill/restart Celery process thực |
-| Frontend | **16 tests đạt**, production build và Docker image build đạt | Phần giao diện/ngôn ngữ đang chỉnh độc lập không tự được coi là đã phát hành |
+| Frontend | **17 tests đạt**, gồm hồi quy nhãn trích dẫn ở trang sửa bài; production build và Docker image build đạt | Phần giao diện/ngôn ngữ đang chỉnh độc lập không tự được coi là đã phát hành |
 | Provider thật: chỉnh bản thảo REVIEW | Task `f0142565-3e21-46b3-adc4-d51ee21a29a8`: v2 → v3, **PASSED nội bộ**, 1.172 từ | Hash nội dung v2 giữ nguyên; nguồn bản mới thuộc v2; lượt sửa chỉ có Writer/Critic/PostProcessor. Đây là smoke nhỏ, không đo ưu thế khoa học |
 | Export sau sửa | Đọc lại version mới và tải publication ZIP có xác thực thành công | Không chứng nhận chấp nhận xuất bản hoặc đủ yêu cầu của mọi venue |
 
