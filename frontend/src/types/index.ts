@@ -85,6 +85,8 @@ export interface TokenResponse {
 export interface ResearchReportResponse {
   id: string;
   research_task_id: string;
+  version_number?: number;
+  version_id?: string;
   title: string;
   content_markdown: string;
   executive_summary?: string | null;

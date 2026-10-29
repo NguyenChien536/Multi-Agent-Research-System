@@ -80,9 +80,9 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
 
         async def ainvoke(self, messages):
             prompt = str(messages)
-            claim_id_match = re.search(r"'claim_id': '([0-9a-f-]{36})'", prompt)
+            claim_id_match = re.search(r"\[\[@claim:([0-9a-f-]{36})\]\]", prompt)
             claim_ref = f" [[@claim:{claim_id_match.group(1)}]]" if claim_id_match else ""
-            return SimpleNamespace(content=complete_manuscript(f"Clinical Multi-Agent Systems\nEvidence found.{claim_ref}"))
+            return SimpleNamespace(content=complete_manuscript(f"Clinical Multi-Agent Systems\nEvidence found.{claim_ref}", prompt=prompt))
 
     monkeypatch.setattr(nodes_module, "get_fast_llm", FakeStructuredLLM)
     monkeypatch.setattr(nodes_module, "get_smart_llm", FakeWriterLLM)

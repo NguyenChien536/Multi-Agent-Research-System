@@ -6,12 +6,23 @@ import re
 import unicodedata
 from typing import Any
 
-CONTRACT_VERSION = 1
+CONTRACT_VERSION = 2
 
 
 def normalize_claim_markers(markdown: str) -> str:
     """Accept single/clustered bracket variants without inventing a claim identity."""
-    return re.sub(r"\[\[?@claim:([0-9a-fA-F-]{36})\]\]?", r"[[@claim:\1]]", markdown)
+    identifier = r"[0-9a-fA-F-]{36}"
+    pattern = rf"\[\[?@claim:({identifier}(?:\s*[,;]\s*(?:@claim:)?{identifier})*)\]\]?"
+    return re.sub(pattern, lambda match: "".join(f"[[@claim:{value.lower()}]]" for value in re.findall(identifier, match[1])), markdown)
+
+
+def writer_claim_context(claims: list[dict]) -> list[dict]:
+    """Give Writer one copyable citation identity, not competing internal UUIDs."""
+    return [{"citation_marker": f"[[@claim:{claim['claim_id']}]]",
+             "claim": claim.get("claim") or claim.get("claim_text", ""),
+             "evidence_quote": claim.get("evidence_quote") or claim.get("evidence_text", ""),
+             **{key: claim[key] for key in ("source_title", "source_url", "source_author", "publication_date") if claim.get(key)}}
+            for claim in claims if claim.get("claim_id") and claim.get("evidence_id")]
 
 _HEADINGS = {
     "abstract": ("Abstract", "Tóm tắt"),
@@ -40,6 +51,7 @@ _OTHER_HEADINGS = {
 _TRANSLATION_IDS = ("abstract", "keywords", "introduction", "review_methods", "synthesis", "methods", "setup", "results", "discussion", "limitations", "conclusion")
 _OTHER_HEADINGS = {locale: dict(zip(_TRANSLATION_IDS, labels, strict=True)) for locale, labels in _OTHER_HEADINGS.items()}
 _REFERENCE_HEADINGS = {"vi": "Tài liệu tham khảo", "en": "References", "fr": "Références", "de": "Literaturverzeichnis", "es": "Referencias", "ja": "参考文献", "zh": "参考文献", "ko": "참고문헌"}
+_RELATED_HEADINGS = {"vi": "Nghiên cứu liên quan", "en": "Related Work", "fr": "Travaux connexes", "de": "Verwandte Arbeiten", "es": "Trabajos relacionados", "ja": "関連研究", "zh": "相关研究", "ko": "관련 연구"}
 
 
 def _localized_heading(key: str, locale: str) -> str:
@@ -52,7 +64,7 @@ def manuscript_contract(research_type: str, language: str) -> dict[str, Any]:
     locale = language.lower().split("-")[0]
     if locale not in _REFERENCE_HEADINGS:
         locale = "en"
-    section_ids = ["abstract", "keywords", "introduction"]
+    section_ids = ["abstract", "keywords", "introduction", "related_work"]
     if research_type == "REVIEW":
         article_type = "NARRATIVE_REVIEW"
         section_ids += ["review_methods", "synthesis"]
@@ -69,9 +81,10 @@ def manuscript_contract(research_type: str, language: str) -> dict[str, Any]:
         "version": CONTRACT_VERSION,
         "article_type": article_type,
         "language": locale,
-        "sections": [{"id": key, "heading": _localized_heading(key, locale)} for key in section_ids],
+        "sections": [{"id": key, "heading": _RELATED_HEADINGS[locale] if key == "related_work" else _localized_heading(key, locale)} for key in section_ids],
         "references_heading": _REFERENCE_HEADINGS[locale],
         "systematic_review_supported": False,
+        "introduction_requirements": ["background", "problem_statement", "research_question", "bounded_research_gap", "approach_and_execution_status", "evidence_supported_contributions"],
     }
 
 
@@ -131,6 +144,26 @@ do not attribute their methods to this study. Explicitly state the non-systemati
 For empirical work, distinguish literature from supplied/executed results; use only the protocol,
 dataset provenance and actual routine outputs. Missing data/ethics approval must stay missing.
 The manuscript is an AI-assisted draft for researcher review; never imply external peer review.
+
+RESEARCH ARGUMENT (not a software feature description):
+Introduction must progress from field/background to a concrete unresolved problem, explicit research
+questions (label RQ1/RQ2), a research gap bounded to the retrieved literature, the approach, and
+what this manuscript actually contributes. Write these as connected paragraphs, not five bullet lists.
+State the gap with citations and uncertainty; do not assert that no prior work exists from a small corpus.
+For a narrative review, the approach/contribution is evidence synthesis and comparison, not a new
+algorithm or a claimed empirical advance. Put an untested integrated design explicitly in future work.
+Related Work must compare relevant studies by assumptions, methods, datasets and limitations with
+claim markers, and connect those limitations to the bounded gap. Avoid uncited paraphrase.
+Separate Methods (what was done), Results (what was measured), Discussion (interpretation), and
+Future Work (what is proposed). Do not write an experiment as completed unless its outputs exist.
+Empirical comparisons require a baseline, dataset/split/seed/metrics and limitations of the evaluation.
+A few examples or one train/test split cannot establish general superiority. Re-running the same seed
+checks repeatability, not statistical significance. Do not invent p-values, confidence intervals,
+multi-dataset results, ablations or participant/ethics approval. No 'best', 'perfect performance',
+'significantly better', or equivalent claims unsupported by comparative/statistical evidence.
+Every figure/table must be numbered, captioned, cited by number in a nearby explanatory paragraph
+and interpreted, including its limitations. Only use supplied figure assets and their measured data;
+conceptual/proposed diagrams must be labeled as such and never presented as experimental findings.
 """
 
 
@@ -178,13 +211,21 @@ def validate_manuscript(markdown: str, contract: dict | None) -> list[dict[str, 
             add("EMPTY_SECTION", f"Provide substantive content in {section['heading']}.")
         if section["id"] in {"review_methods", "methods", "abstract"}:
             method_parts.append(body)
-        if section["id"] in {"synthesis", "discussion", "results", "conclusion"}:
+        if section["id"] in {"synthesis", "related_work", "discussion", "results", "conclusion"}:
             lines = [line for line in body.splitlines() if line.strip() and not line.startswith(("#", "|"))]
             lists = [line for line in lines if re.match(r"\s*(?:[-*+]\s|\d+[.)]\s)", line)]
             listed_words = sum(len(line.split()) for line in lists)
             section_words = sum(len(line.split()) for line in lines)
             if len(lists) >= 2 and listed_words > 0.2 * max(section_words, 1):
                 add("ANALYTICAL_PROSE", f"Rewrite {section['heading']} as analytical paragraphs connecting evidence and interpretation, rather than a list.")
+        if contract.get("version", 1) >= 2 and section["id"] == "introduction":
+            folded = _fold(body)
+            if not re.search(r"\bRQ\s*\d+|research question|cau hoi nghien cuu|研究问题|研究課題|연구 질문|question de recherche|forschungsfrage|pregunta de investigacion", body, re.I):
+                add("RESEARCH_QUESTION", "State an explicit research question (RQ1), rather than describing software features alone.")
+            if not re.search(r"research gap|gap|khoang trong|han che.*nghien cuu|lacune|forschungsluck|brecha|研究.{0,6}(?:空白|不足|課題)|연구.{0,6}한계", folded):
+                add("RESEARCH_GAP", "Explain the research gap relative to cited prior work, bounded to the reviewed evidence.")
+            if not re.search(r"contribut|dong gop|beitrag|aportacion|贡献|貢献|기여", folded):
+                add("CONTRIBUTIONS", "State what this manuscript actually contributes, separately from proposed future work.")
     if positions != sorted(positions):
         add("SECTION_ORDER", "Keep the required manuscript sections in the contract order.")
     body_lines = [line for key, body in sections.items() if key not in {
@@ -197,7 +238,7 @@ def validate_manuscript(markdown: str, contract: dict | None) -> list[dict[str, 
         add("LIST_DOMINATED", "Rewrite the main argument as connected paragraphs; lists exceed 25% of narrative words.")
     # Search only the manuscript's own approach, not related-work discussion.
     for sentence in re.split(r"[.!?\n]", _fold("\n".join(method_parts))):
-        if re.search(r"\b(no[t]?|without|not|khong|chua|non[- ]systematic)\b", sentence):
+        if re.search(r"\b(no[t]?|without|not|khong|chua|non[- ]systematic|rather than|instead of|avoids? claiming|does not claim)\b", sentence):
             continue
         prior_work = re.search(r"(?:prior|previous|cited|published)\s+(?:systematic\s+)?(?:review|study|work)|(?:nghien cuu|tong quan)\s+(?:truoc|duoc trich dan)", sentence)
         own_action = re.search(r"(?:\bwe\b|this study|this review|our study|nghien cuu nay|chung toi)\s+(?:(?:have|has|had|was|is|been|also|then|directly|da|se|cung)\s+){0,4}(?:conduct|perform|follow|appl|ap dung|tuan thu|thuc hien)", sentence)

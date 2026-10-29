@@ -923,9 +923,9 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
         async def ainvoke(self, messages):
             prompt = str(messages)
             writer_prompts.append(prompt)
-            claim_id_match = re.search(r"'claim_id': '([0-9a-f-]{36})'", prompt)
+            claim_id_match = re.search(r"\[\[@claim:([0-9a-f-]{36})\]\]", prompt)
             assert claim_id_match, f"Writer must receive a persisted claim ID: {prompt}"
-            return SimpleNamespace(content=complete_manuscript(f"{report_markdown} [[@claim:{claim_id_match.group(1)}]]"))
+            return SimpleNamespace(content=complete_manuscript(f"{report_markdown} [[@claim:{claim_id_match.group(1)}]]", prompt=prompt))
 
     monkeypatch.setattr(nodes_module, "get_fast_llm", FakeStructuredLLM)
     monkeypatch.setattr(nodes_module, "get_smart_llm", FakeWriterLLM)

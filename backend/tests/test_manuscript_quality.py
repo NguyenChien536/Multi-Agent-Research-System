@@ -97,7 +97,7 @@ async def test_clustered_citations_preserve_all_supported_claims_and_trailing_pr
     monkeypatch.setattr(nodes, "_record_progress", AsyncMock())
     monkeypatch.setattr(nodes, "record_agent_run", AsyncMock())
     first, second = str(uuid.uuid4()), str(uuid.uuid4())
-    claims = [{"claim_id": cid, "evidence_id": "e", "source_id": "s", "chunk_id": "c", "source_title": "Source", "source_tag": "src_01"} for cid in (first, second)]
+    claims = [{"claim_id": cid, "evidence_id": f"e{index}", "source_id": f"s{index}", "chunk_id": f"c{index}", "source_title": f"Source {index}", "source_tag": f"src_0{index}"} for index, cid in enumerate((first, second), 1)]
     draft = f"Supported conclusion [[@claim:{first}], [@claim:{second}]]. The following interpretation must remain."
     assert not nodes._claim_lineage_findings(draft, claims)
     result = await nodes.post_processor_node({"draft_report_markdown": draft, "claims": claims, "critic_verdict": "PASS"})

@@ -89,3 +89,12 @@ test('question requests pin the explicit report version and preserve the idempot
   assert.ok(c.requests[1].url.endsWith('/research/paper-id/report/versions/1/questions?offset=20&limit=20'));
   assert.equal(c.requests[1].cache, 'no-store');
 });
+
+test('publication exports pin version/template and use authenticated noncached requests', async () => {
+  const c = client();
+  await c.api.tasks.getPublication('paper-id', 2, 'IEEE_CONFERENCE');
+  const request = c.requests[0];
+  assert.ok(request.url.endsWith('/research/paper-id/report/versions/2/publication?template=IEEE_CONFERENCE'));
+  assert.equal(request.headers.get('Authorization'), 'Bearer test-token');
+  assert.equal(request.cache, 'no-store');
+});
