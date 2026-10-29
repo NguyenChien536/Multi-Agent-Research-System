@@ -21,6 +21,8 @@ from app.services.scientific_paper import (
     scientific_context, build_scientific_figures, figure_instructions,
     materialize_figures, validate_scientific_reporting,
 )
+from app.services.academic_writing import writing_guidance
+from app.services.references import format_reference, reference_identity, reference_suffixes, reference_metadata_notes
 from app.services.agent_run import (
     estimate_cost,
     extract_tokens,
@@ -1378,6 +1380,7 @@ Requested edits: {state.get('revision_instructions')}
     Lưu ý từ vòng sửa trước (nếu có): {feedback}
     Các chủ đề cần tổng hợp/đối chiếu bên trong nội dung: {plan.get('suggested_topics', [])}
     {editorial_context}
+    {writing_guidance(contract)}
     {empirical_section}
     Phạm vi đánh giá thực tế (không biến repeatability thành statistical significance): {paper_context}
     {figure_instructions(figures)}
@@ -1503,7 +1506,8 @@ Research question: {state.get('research_question')}
 Required manuscript sections: {(state.get('plan') or {}).get('required_sections', [])}
 Full manuscript outline: {[name for name, _ in sections]}
 Requested report length: {state.get('report_length', 'MEDIUM')}
-Manuscript contract: {contract}
+Manuscript contract: {{'version': {contract.get('version') if contract else None}, 'article_type': {contract.get('article_type') if contract else None}, 'sections': {(contract or {}).get('sections', [])}}}
+{writing_guidance(contract, reviewer=True)}
 Deterministic editorial findings: {manuscript_findings}
 Actual search/source provenance: {manuscript_provenance(state)}
 Executed evaluation and limits: {state.get('scientific_context')}
@@ -1662,23 +1666,7 @@ Complete section content:
         raise
 
 def _format_reference(item, number, style):
-    """Format known webpage metadata; absent authors/dates stay explicitly absent."""
-    import re
-    title = item.get("source_title") or item.get("source_url") or item.get("source_tag", "Untitled")
-    url = item.get("source_url") or ""
-    if style == "IEEE":
-        return f"[{number}]", f"[{number}] {title}" + (f". {url}" if url else ".")
-    author = item.get("source_author")
-    year_match = re.search(r"\b(?:19|20)\d{2}\b", item.get("publication_date") or "")
-    year = year_match.group() if year_match else "n.d."
-    identity = author or title
-    # Bibliographic metadata is bounded by the source schema; cap the label to
-    # the persisted field size, keeping report text and citation API consistent.
-    label = f"({identity[:470]}, {year})"
-    if style == "APA":
-        return label, f"{identity}. ({year}). " + (f"{title}. " if author else "") + url
-    accessed = datetime.now(timezone.utc).strftime("%d %B %Y")
-    return label, f"{identity} ({year}) " + (f"{title}. " if author else "") + f"[Online]. {url} (Accessed: {accessed})."
+    return format_reference(item, number, style)
 
 
 async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
@@ -1713,7 +1701,9 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
                 source_numbers[source_key] = len(source_numbers) + 1
                 reference_claims.append(claim_id)
             citation_numbers[claim_id] = source_numbers[source_key]
-        formatted = {claim_id: _format_reference(claims_by_id[claim_id], number, state.get("citation_style", "IEEE"))
+        suffixes = reference_suffixes([claims_by_id[cid] for cid in reference_claims], state.get("citation_style", "IEEE"))
+        formatted = {claim_id: format_reference(claims_by_id[claim_id], number, state.get("citation_style", "IEEE"),
+                    suffix=suffixes.get(reference_identity(claims_by_id[claim_id]), ""))
                      for claim_id, number in citation_numbers.items()}
 
         def replace_marker(match: re.Match[str]) -> str:
@@ -1743,6 +1733,7 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
                             for claim_id in used_ids]
         no_grounded_citations = state.get("enforce_provider_budget") and not citation_records
         review_metadata = dict(state.get("critic_review_metadata") or {})
+        review_metadata["reference_metadata_notes"] = reference_metadata_notes([claims_by_id[cid] for cid in reference_claims])
         from copy import deepcopy
         review_metadata["manuscript_input_snapshot"] = {key:deepcopy(state.get(key)) for key in (
             "research_type", "language", "citation_style", "report_length", "plan", "protocol",

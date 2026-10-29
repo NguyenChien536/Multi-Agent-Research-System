@@ -7,6 +7,7 @@ import json
 import re
 import zipfile
 from urllib.parse import quote, urlsplit
+from app.services.references import reference_metadata_notes
 
 TEMPLATES = {
     "IEEE_CONFERENCE": {"class": "IEEEtran", "options": "conference", "source": "https://conferences.ieeeauthorcenter.ieee.org/write-your-paper/authoring-tools-and-templates/"},
@@ -80,11 +81,18 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
             url_tex = r". \url{" + encoded_url + "}" if parsed.scheme in {"https", "http"} and parsed.hostname and not parsed.username else ""
             bibliography.append(r"\bibitem{" + key + "}" + tex_escape(text) + url_tex)
         if item.get("citation_label"):
+            if item["citation_label"] in labels and labels[item["citation_label"]] != seen[identity]:
+                raise ValueError("Ambiguous author-date label refers to multiple sources")
             labels[item["citation_label"]] = seen[identity]
     sections = re.split(r"(?m)^##\s+(.+?)\s*$", markdown)
     abstract, keywords, body = "", "", []
+    preamble_text = re.sub(r"(?m)^#\s+.*$", "", sections[0]).strip()
     if len(sections) == 1:
-        body.append(tex_escape(re.sub(r"(?m)^#\s+.*$", "", markdown)))
+        # Historical short manuscripts may lack H2s; still resolve their
+        # persisted citations and approved assets through the same safe parser.
+        sections = ["", "", preamble_text]
+    elif preamble_text:
+        sections = ["", "", preamble_text, *sections[1:]]
     reference_heading = contract.get("references_heading", "References")
     for index in range(1, len(sections), 2):
         heading, text = sections[index].strip(), sections[index + 1].strip()
@@ -96,9 +104,11 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
             continue
         if heading in {reference_heading, "References", "Tài liệu tham khảo"}:
             continue
-        body.append(r"\section{" + tex_escape(heading) + "}")
-        lines = text.splitlines(); in_list = False; in_code = False; table_rows = []
+        if heading:
+            body.append(r"\section{" + tex_escape(heading) + "}")
+        lines = text.splitlines(); in_list = False; in_code = False; table_rows = []; table_caption = None
         def flush_table():
+            nonlocal table_caption
             if not table_rows:
                 return
             ncols = max(len(row) for row in table_rows)
@@ -106,19 +116,27 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
                 raise ValueError("Table exceeds supported publication layout; split it into smaller tables")
             env = "table*" if ncols >= 4 else "table"
             width = r"\textwidth" if ncols >= 4 else r"\linewidth"
-            body.extend([r"\begin{" + env + r"}[tb]\centering", r"\caption{Reported comparison; interpretation and data provenance are given in the text.}",
+            caption = table_caption or "Reported comparison; interpretation and data provenance are given in the text."
+            body.extend([r"\begin{" + env + r"}[tb]\centering", r"\caption{" + _inline(caption, labels) + "}",
                          r"\begin{tabularx}{" + width + r"}{" + "X" * ncols + r"}\hline"])
             for row in table_rows:
                 body.append(" & ".join(_inline(cell, labels) for cell in row + [""] * (ncols - len(row))) + r" \\")
             body.extend([r"\hline\end{tabularx}", r"\end{" + env + "}"])
             table_rows.clear()
-        for line in lines:
+            table_caption = None
+        for line_index, line in enumerate(lines):
             if line.startswith("```"):
                 in_code = not in_code
                 continue
             if in_code:
                 # Render code as escaped text, never a raw verbatim/TeX escape route.
                 body.append(r"\noindent\texttt{" + tex_escape(line) + r"}\par")
+                continue
+            caption_match = re.fullmatch(r"\s*(?:\*\*)?(?:Table|Bảng)\s+\d+[.:]\s+(.+?)(?:\*\*)?\s*", line, re.I)
+            following = next((candidate for candidate in lines[line_index + 1:] if candidate.strip()), "") if caption_match else ""
+            if caption_match and following.lstrip().startswith("|"):
+                flush_table()
+                table_caption = caption_match[1]
                 continue
             if line.strip().startswith("|"):
                 cells = [c.strip() for c in line.strip().strip("|").split("|")]
@@ -135,7 +153,10 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
                 if fig is None:
                     raise ValueError("Manuscript references an unavailable figure")
                 body += [r"\begin{figure}[htbp]\centering", r"\input{figures/" + image[1] + ".tex}",
-                         r"\caption{" + tex_escape(fig["caption"]) + r"}\label{fig:" + image[1] + "}", r"\end{figure}"]
+                         r"\caption{" + tex_escape(fig["caption"]) + r"}\label{fig:" + image[1] + "}"]
+                if template == "ACM_SIGCONF":
+                    body.append(r"\Description{" + tex_escape(fig.get("alt", fig["caption"])) + "}")
+                body.append(r"\end{figure}")
             elif line.startswith("### "):
                 body.append(r"\subsection{" + tex_escape(line[4:]) + "}")
             elif line.startswith("#### "):
@@ -167,6 +188,7 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
                 "official_template_source": profile["source"], "manuscript_contract": contract,
                 "review_status": metadata.get("status", "NEEDS_REVIEW"),
                 "revision": metadata.get("revision"),
+                "reference_metadata_notes": reference_metadata_notes(citations),
                 "scientific_context": metadata.get("scientific_context", {}), "method_provenance": metadata.get("method_provenance", {}),
                 "figures": [{k: v for k, v in f.items() if k not in {"svg", "latex"}} for f in figures]}
     stream = io.BytesIO()
@@ -174,6 +196,7 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
         archive.writestr("main.tex", tex)
         archive.writestr("manuscript.md", markdown)
         archive.writestr("provenance.json", json.dumps(manifest, ensure_ascii=False, indent=2))
+        archive.writestr("references.json", json.dumps(citations, ensure_ascii=False, indent=2))
         # Figure TeX is reconstructed from validated server data, never executed
         # from arbitrary model/user-generated source.
         from app.services.scientific_paper import build_scientific_figures
