@@ -34,6 +34,17 @@ def test_missing_unknown_and_duplicate_judgments_cannot_count_as_complete_review
     assert not evaluate_evidence_reviews(prepared, [review.model_copy(update={"statement_id": "unknown"})])["coverage_complete"]
 
 
+def test_multiple_evidence_records_for_one_claim_are_kept_and_bounded():
+    first = claim()
+    second = {**first, "evidence_id": "e2", "source_id": "s2", "evidence_quote": "A conflicting observation."}
+    text = f"A qualified statement [[@claim:{first['claim_id']}]]"
+    prepared = prepare_evidence_review(text, [first, second], central_headings=[], draft=text)
+    assert len(prepared["evidence"]) == 2
+    assert {e["source_id"] for e in prepared["evidence"]} == {"s", "s2"}
+    limited = prepare_evidence_review(text, [first, second], central_headings=[], draft=text, max_evidence=1)
+    assert limited["coverage_findings"]
+
+
 def test_context_overflow_and_partial_support_cannot_pass():
     c = claim()
     text = f"## Results\n\n{'Very long text ' * 400}[[@claim:{c['claim_id']}]]"

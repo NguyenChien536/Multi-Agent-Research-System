@@ -15,7 +15,10 @@ class EvidenceReview(BaseModel):
 def prepare_evidence_review(section_text: str, claims: list[dict], *, central_headings: list[str],
                             draft: str, max_units: int = 16, max_evidence: int = 24) -> dict:
     """Select cited evidence by identity, never by its position in a global list."""
-    records = {str(c.get("claim_id")): c for c in claims if c.get("claim_id")}
+    records = {}
+    for item in claims:
+        if item.get("claim_id"):
+            records.setdefault(str(item["claim_id"]), []).append(item)
     marker = r"\[\[@claim:([^\]]+)\]\]"
     draft_refs = list(dict.fromkeys(re.findall(marker, draft)))
     units, requested, findings = [], [], []
@@ -44,8 +47,22 @@ def prepare_evidence_review(section_text: str, claims: list[dict], *, central_he
     if len(requested) > max_evidence:
         findings.append("This batch exceeds the evidence-context limit; do not infer complete support.")
     evidence = []
-    for claim_id in requested[:max_evidence]:
-        item = records.get(claim_id)
+    candidates = []
+    seen_evidence = set()
+    for claim_id in requested:
+        if claim_id not in records:
+            findings.append(f"Claim {claim_id} is absent from supplied evidence.")
+        for item in records.get(claim_id, []):
+            key = (claim_id, item.get("evidence_id"), item.get("source_id"), item.get("chunk_id"),
+                   item.get("evidence_quote") or item.get("evidence_text"))
+            if key not in seen_evidence:
+                candidates.append((claim_id, item))
+                seen_evidence.add(key)
+    # A claim may have several evidence/source records; retain them all within
+    # the same bound rather than silently replacing earlier support.
+    if len(candidates) > max_evidence:
+        findings.append("Evidence record count exceeds the context limit.")
+    for claim_id, item in candidates[:max_evidence]:
         if not item or not all(item.get(k) for k in ("evidence_id", "source_id", "chunk_id")):
             findings.append(f"Claim {claim_id} has no complete evidence lineage.")
             continue
