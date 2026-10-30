@@ -1,3 +1,4 @@
+from tests.manuscript_helpers import supported_critic_response
 import io
 import json
 import uuid
@@ -46,7 +47,7 @@ async def test_writer_and_critic_use_the_same_frozen_brief(monkeypatch):
     async def invoke(state, llm, messages, **kwargs):
         prompts.append(messages[0].content)
         if "internal report quality-control" in messages[0].content:
-            return nodes.CriticVerdict(verdict="PASS")
+            return supported_critic_response(messages)
         return SimpleNamespace(content=complete_manuscript("A bounded interpretation.", language="en"))
     monkeypatch.setattr(nodes, "invoke_llm_with_budget", invoke)
     plan = attach_manuscript_contract({}, "REVIEW", "en")

@@ -1,3 +1,4 @@
+from tests.manuscript_helpers import supported_critic_response
 """Integration tests for Human-in-the-Loop (HITL) Plan Approval and Workflow Pause/Resume (P4 / Gate G4)."""
 
 import re
@@ -71,7 +72,7 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
                     )
                 ])
             if self.schema is nodes_module.CriticVerdict:
-                return nodes_module.CriticVerdict(verdict="PASS", feedback=[], missing_areas=[])
+                return supported_critic_response(_messages)
             raise AssertionError(f"Unexpected schema: {self.schema}")
 
     class FakeWriterLLM:
