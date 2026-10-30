@@ -1,3 +1,4 @@
+from tests.manuscript_helpers import supported_critic_response
 import uuid
 import unicodedata
 from types import SimpleNamespace
@@ -128,7 +129,7 @@ async def test_critic_and_final_delivery_cannot_pass_a_bad_manuscript(monkeypatc
              "draft_report_markdown": f"# Topic\n\n## Introduction\nSupported statement [[@claim:{claim_id}]].",
              "claims": [{"claim_id": claim_id, "evidence_id": "e", "source_id": "s", "chunk_id": "c", "source_tag": "src_01", "source_title": "Source"}]}
     review = await nodes.critic_node(state)
-    assert review["critic_verdict"] == "REVISE"
+    assert review["critic_verdict"] == "NEEDS_REVIEW"  # Required support judgments were omitted.
     assert review["critic_review_metadata"]["manuscript_findings"]
     delivered = await nodes.post_processor_node({**state, "critic_verdict": "PASS"})
     assert delivered["status"] == "NEEDS_REVIEW"
@@ -149,11 +150,11 @@ async def test_editorial_revision_and_contract_survive_graph_interrupt(monkeypat
     async def noop(state):
         return {}
     async def analyst(state):
-        return {"claims": [{"claim_id": claim_id, "evidence_id": "e", "source_id": "s", "chunk_id": "c", "source_tag": "src_01", "source_title": "Source"}]}
+        return {"claims": [{"claim_id": claim_id, "evidence_id": "e", "source_id": "s", "chunk_id": "c", "source_tag": "src_01", "source_title": "Source", "evidence_quote": "A controlled finding from the supplied source."}]}
     writes = []
     async def invoke(state, llm, messages, **kwargs):
         if "internal report quality-control" in messages[0].content:
-            return nodes.CriticVerdict(verdict="PASS")
+            return supported_critic_response(messages)
         assert "ACTUAL PROVENANCE" in messages[0].content
         assert state["plan"]["manuscript_contract"]["article_type"] == "NARRATIVE_REVIEW"
         writes.append(1)

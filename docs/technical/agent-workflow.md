@@ -101,6 +101,12 @@ Writer/Critic được yêu cầu giữ riêng giả định/định lý, giả 
 
 Critic kiểm toàn bộ bài cùng contract, provenance và các phát hiện từ bộ kiểm tra xác định. Thiếu tiêu đề/phần bắt buộc, phần rỗng, sai thứ tự, văn bản thiên về liệt kê hoặc dấu hiệu tự nhận phương pháp không có hồ sơ phải quay về Writer trong giới hạn hai vòng sửa. Trước khi giao bài, PostProcessor kiểm tra lại độc lập; lỗi còn tồn tại buộc `NEEDS_REVIEW`, dù LLM trả PASS. Bản cũ vẫn giữ kết quả review theo chính sách đã dùng khi tạo; khi tạo phiên bản mới thì áp dụng contract mới.
 
+Contract mới có `evidence_review_policy` v1: mỗi đoạn có claim marker và đoạn diễn giải trong Discussion/Conclusion được gán identity ổn định. Critic nhận bằng chứng theo đúng claim được trích trong đoạn; bỏ giới hạn lấy 50 claim đầu của bài đối với chính sách này. Đoạn diễn giải không trích nguồn được đối chiếu với các claim đã dùng trong bài và kết quả thực nghiệm được cung cấp. Không có bằng chứng để đối chiếu phải đánh giá là thiếu/không xác minh được, không tự bổ sung kiến thức bên ngoài.
+
+Mỗi batch tối đa 16 đoạn và 24 evidence records, mỗi đoạn tối đa 4.000 ký tự. Vượt giới hạn được ghi thiếu coverage và chặn PASS; không được coi phần bị cắt là đã kiểm tra. Critic trả `SUPPORTED`, `PARTIAL`, `UNSUPPORTED`, `CONTRADICTED` hoặc `UNVERIFIABLE`, kèm lý do cho từng đoạn. Nhận xét thiếu, identity lạ/trùng hoặc evidence thiếu quote chuyển `NEEDS_REVIEW`; partial/unsupported/contradicted yêu cầu Writer sửa trong micro-loop đã giới hạn. Không tự coi nhận xét của LLM là chứng minh khoa học.
+
+`evidence_support_review` lưu số đoạn kỳ vọng/đã kiểm, judgments, coverage và hash bản nháp trong metadata phiên bản. PostProcessor chỉ chấp nhận audit đầy đủ, hỗ trợ kết luận và khớp hash bản nháp hiện tại; audit cũ không dùng lại cho bài đã sửa. Contract lịch sử không có policy giữ chế độ cũ. Provider response tối đa 2.048 output tokens/batch cho policy mới, vẫn qua budget guard, không thêm một agent hoặc lượt LLM riêng.
+
 Kiểm tra cấu trúc và heuristic phương pháp không chứng nhận độ đúng khoa học, độ tin cậy của nguồn hoặc phát hiện mọi cách diễn đạt sai. Critic vẫn là đánh giá nội bộ; người nghiên cứu cần rà soát phương pháp, bằng chứng và yêu cầu nơi dự định nộp. Nguyên tắc tham khảo: [ICMJE manuscript preparation](https://www.icmje.org/recommendations/browse/manuscript-preparation/preparing-for-submission.html) và [PRISMA 2020 checklist](https://www.prisma-statement.org/prisma-2020-checklist).
 
 ### Hình, số liệu và mẫu trình bày

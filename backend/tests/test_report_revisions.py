@@ -1,3 +1,4 @@
+from tests.manuscript_helpers import supported_critic_response
 """Version/ownership/lifecycle checks; provider boundaries are deterministic."""
 import asyncio
 import uuid
@@ -128,7 +129,7 @@ def install_editorial_providers(monkeypatch, paper, *, cancel=False, research_ty
         monkeypatch.setattr(graph_module,name,forbidden)
     async def invoke(state,llm,messages,**kwargs):
         if llm=='critic':
-            return nodes.CriticVerdict(verdict='PASS',feedback=[],missing_areas=[])
+            return supported_critic_response(messages)
         prompt=messages[0].content
         assert 'EDITORIAL REVISION' in prompt and 'Original article' not in prompt  # Base body, not a fabricated title/summary.
         assert 'An original finding' in prompt and 'Clarify the Introduction' in prompt

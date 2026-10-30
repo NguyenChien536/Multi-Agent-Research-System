@@ -1,3 +1,4 @@
+from tests.manuscript_helpers import supported_critic_response
 """LangGraph orchestration and workflow-persistence tests (Issue #2).
 
 Design principles
@@ -241,7 +242,7 @@ async def test_critic_reviews_late_sections_and_reports_findings(monkeypatch):
             return nodes_module.CriticVerdict(
                 verdict="REVISE", feedback=["Correct the unsupported result in the final section."], missing_areas=[]
             )
-        return nodes_module.CriticVerdict(verdict="PASS", feedback=[], missing_areas=[])
+        return supported_critic_response(messages)
 
     fake_llm.ainvoke = AsyncMock(side_effect=_review)
     monkeypatch.setattr(nodes_module, "_record_progress", AsyncMock())
@@ -913,7 +914,7 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
                     )
                 ])
             if self.schema is nodes_module.CriticVerdict:
-                return nodes_module.CriticVerdict(verdict="PASS", feedback=[], missing_areas=[])
+                return supported_critic_response(_messages)
             raise AssertionError(f"Unexpected structured output schema: {self.schema}")
 
     class FakeWriterLLM:

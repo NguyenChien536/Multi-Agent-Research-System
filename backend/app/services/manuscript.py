@@ -87,11 +87,15 @@ def manuscript_contract(research_type: str, language: str) -> dict[str, Any]:
         "systematic_review_supported": False,
         "introduction_requirements": ["background", "problem_statement", "research_question", "bounded_research_gap", "approach_and_execution_status", "evidence_supported_contributions"],
         "writing_brief": writing_brief(article_type),
+        "evidence_review_policy": {"version": 1, "scope": "cited_passages_and_discussion_conclusion"},
     }
 
 
 def attach_manuscript_contract(plan: dict, research_type: str, language: str) -> dict:
-    contract = manuscript_contract(research_type, language)
+    from copy import deepcopy
+    # Approval/resume must keep its recorded editorial policy; new plans get
+    # the current policy, while historical plans are not silently upgraded.
+    contract = deepcopy(plan["manuscript_contract"]) if plan.get("manuscript_contract") else manuscript_contract(research_type, language)
     return {
         **plan,
         "suggested_topics": plan.get("suggested_topics", plan.get("required_sections", [])),

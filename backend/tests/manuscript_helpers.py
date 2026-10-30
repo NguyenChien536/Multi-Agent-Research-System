@@ -1,6 +1,19 @@
 """Small synthetic manuscripts for integration tests; not scientific quality examples."""
 import re
+import json
 from app.services.manuscript import manuscript_contract
+
+
+def supported_critic_response(messages):
+    """Synthetic support judgments for orchestration tests, not semantic accuracy."""
+    from app.agents.nodes import CriticVerdict
+    text = messages[0].content
+    match = re.search(r"^EVIDENCE_REVIEW_UNITS_JSON: (.*)$", text, re.M)
+    units = json.loads(match[1]) if match else []
+    return CriticVerdict(verdict="PASS", evidence_reviews=[{
+        "statement_id": unit["statement_id"], "judgment": "SUPPORTED",
+        "reason": "Controlled fixture judgment for workflow testing.",
+    } for unit in units])
 
 
 def complete_manuscript(content, research_type="REVIEW", language="vi", prompt=""):
