@@ -24,6 +24,7 @@ from app.services.scientific_paper import (
 from app.services.academic_writing import writing_guidance
 from app.services.research_quality import unique_quote_claims, canonicalize_quote_markers, inject_search_ledger, query_coverage, bounded_quality_batches, LEDGER_HEADINGS
 from app.services.evidence_review import EvidenceReview, prepare_evidence_review, evaluate_evidence_reviews, audit_matches_draft
+from app.services.structured_output import compatible_structured_output
 from app.services.references import format_reference, reference_identity, reference_suffixes, reference_metadata_notes
 from app.services.agent_run import (
     estimate_cost,
@@ -93,7 +94,7 @@ class BudgetedFallbackLLM:
 
     def with_structured_output(self, schema: Any):
         return BudgetedFallbackLLM(
-            [(model_name, model.with_structured_output(schema)) for model_name, model in self.models]
+            [(model_name, compatible_structured_output(model_name, model, schema)) for model_name, model in self.models]
         )
 
     async def ainvoke(self, messages: Any, **kwargs: Any):

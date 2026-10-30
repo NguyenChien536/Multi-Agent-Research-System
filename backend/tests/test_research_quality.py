@@ -136,6 +136,8 @@ def test_search_ledger_preserves_figures_and_is_idempotent():
     draft = "## Literature Search and Scope\n\nAn exploratory narrative search.\n\n[[figure:workflow]]\n\n## Discussion\n\nBounded findings."
     result = inject_search_ledger(draft, state)
     assert "[[figure:workflow]]" in result and "optimizer" in result and "2026-10-30" in result
+    assert "| Provider | Exact query |" in result
+    assert "- OpenAlex" not in result
     assert inject_search_ledger(result, state) == result
 
 

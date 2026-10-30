@@ -12,6 +12,16 @@ LEDGER_LABELS = {
     "ko": ("실행한 검색 기록", "체계적 선별 없이 문헌을 수집하였다. 수치는 쿼리별 반환 레코드 수이며 독립적으로 평가한 연구 수가 아니다. 출판 연도 제한은 필터에 명시된 경우에만 적용한다."),
 }
 LEDGER_HEADINGS = [value[0] for value in LEDGER_LABELS.values()]
+LEDGER_COLUMNS = {
+    "en": ("Provider", "Exact query", "Executed at", "Filters", "Status", "Counts: candidates / duplicates / fetched / accepted"),
+    "vi": ("Dịch vụ", "Truy vấn chính xác", "Thời điểm chạy", "Bộ lọc", "Trạng thái", "Số lượng: ứng viên / trùng / tải được / giữ lại"),
+    "fr": ("Fournisseur", "Requête exacte", "Date d’exécution", "Filtres", "État", "Nombres : candidats / doublons / récupérés / retenus"),
+    "de": ("Anbieter", "Exakte Suchanfrage", "Ausgeführt am", "Filter", "Status", "Anzahl: Kandidaten / Duplikate / abgerufen / übernommen"),
+    "es": ("Proveedor", "Consulta exacta", "Fecha de ejecución", "Filtros", "Estado", "Cantidades: candidatos / duplicados / recuperados / aceptados"),
+    "ja": ("サービス", "正確な検索式", "実行時刻", "フィルター", "状態", "件数：候補 / 重複 / 取得 / 採用"),
+    "zh": ("服务", "完整查询", "执行时间", "筛选参数", "状态", "数量：候选 / 重复 / 获取 / 纳入"),
+    "ko": ("제공자", "정확한 검색어", "실행 시각", "필터", "상태", "건수: 후보 / 중복 / 수집 / 채택"),
+}
 LEDGER_PATTERN = r"(?ms)^### (?:" + "|".join(re.escape(h) for h in LEDGER_HEADINGS) + r")\s*\n.*?(?=^### |\Z)"
 
 
@@ -118,16 +128,19 @@ def search_ledger_section(state):
     activity = state.get("search_activity") or []
     locale = str(state.get("language", "en")).lower().split("-")[0]
     heading, intro = LEDGER_LABELS.get(locale, LEDGER_LABELS["en"])
+    columns = LEDGER_COLUMNS.get(locale, LEDGER_COLUMNS["en"])
     def cell(value):
         return str(value if value is not None else "—").replace("|", "\\|").replace("\n", " ").replace("\r", " ")
-    rows = [f"### {heading}", "", intro, ""]
+    rows = [f"### {heading}", "", intro, "", "| " + " | ".join(columns) + " |",
+            "| " + " | ".join("---" for _ in columns) + " |"]
     import json
     for event in activity:
-        rows.append("- " + "; ".join(cell(v) for v in (
+        rows.append("| " + " | ".join(cell(v) for v in (
             event.get("provider"), event.get("query") or "; ".join(event.get("queries", [])),
             event.get("executed_at") or event.get("completed_at"),
             json.dumps(event.get("filters", {}), ensure_ascii=False), event.get("status"),
-            f"candidates={event.get('candidate_count', 0)}, duplicates={event.get('duplicate_count', 0)}, fetched={event.get('fetched_count', 0)}, accepted={event.get('accepted_count', 0)}")))
+            " / ".join(cell(event.get(key)) for key in ("candidate_count", "duplicate_count", "fetched_count", "accepted_count"))
+        )) + " |")
     return "\n".join(rows)
 
 
