@@ -286,7 +286,7 @@ def get_smart_llm():
 
 class SupervisorPlan(BaseModel):
     research_angle: str = Field(description="Góc nhìn và phương pháp tiếp cận đề tài")
-    search_queries: List[str] = Field(description="Danh sách các truy vấn tìm kiếm (tối đa 5)")
+    search_queries: List[str] = Field(max_length=5, description="Danh sách các truy vấn tìm kiếm (tối đa 5)")
     required_sections: List[str] = Field(description="Các mục bắt buộc phải có trong báo cáo")
 
 class CriticVerdict(BaseModel):
@@ -503,22 +503,36 @@ async def researcher_node(state: ResearchState) -> Dict[str, Any]:
                 "attempt_number": state.get("attempt_number", 1),
             }
         if budget_context:
-            search_results = await execute_parallel_searches(
-                queries, max_results_per_query=3, budget_context=budget_context
+            search_response = await execute_parallel_searches(
+                queries, max_results_per_query=5, budget_context=budget_context,
+                include_activity=True,
             )
         else:
-            search_results = await execute_parallel_searches(queries, max_results_per_query=3)
+            search_response = await execute_parallel_searches(
+                queries, max_results_per_query=5, include_activity=True,
+            )
+        if isinstance(search_response, tuple):
+            search_results, provider_activity = search_response
+        else:  # Compatible with test doubles and legacy adapters.
+            search_results = search_response
+            provider_activity = []
 
         # Bỏ qua các URL đã thu thập trước đó (Seen URL Cache)
         visited = state.get("visited_urls", set())
         new_urls_map = {}
+        seen_counts: dict[tuple[str, str | None], int] = {}
         for res in search_results:
-            url_str = str(res.url)
-            if url_str not in visited and url_str not in new_urls_map:
+            url_str = str(res.full_text_url or res.url)
+            doi_key = f"doi:{res.doi.casefold().removeprefix('https://doi.org/')}" if res.doi else None
+            if url_str in visited or (doi_key and doi_key in visited):
+                key = (res.provider or "web", res.query)
+                seen_counts[key] = seen_counts.get(key, 0) + 1
+            elif url_str not in new_urls_map:
                 new_urls_map[url_str] = res
 
         # 2. Cào nội dung (Scraping) song song
-        urls_to_scrape = list(new_urls_map.keys())
+        # Bound network fan-out even when several indexes return many candidates.
+        urls_to_scrape = list(new_urls_map.keys())[:max(5, remaining_sources * 2)]
         if budget_context:
             from app.services.provider_budget import assert_task_active
             await assert_task_active(budget_context["task_id"], budget_context["attempt_number"])
@@ -528,18 +542,51 @@ async def researcher_node(state: ResearchState) -> Dict[str, Any]:
         new_sources = []
         base_idx = len(state.get("collected_sources", []))
 
-        for url, content in scraped_data.items():
+        accepted_counts: dict[tuple[str, str | None], int] = {}
+        fetched_counts: dict[tuple[str, str | None], int] = {}
+        failed_counts: dict[tuple[str, str | None], int] = {}
+        abstract_counts: dict[tuple[str, str | None], int] = {}
+        for url in urls_to_scrape:
+            res = new_urls_map[url]
+            key = (res.provider or "web", res.query)
+            if scraped_data.get(url):
+                fetched_counts[key] = fetched_counts.get(key, 0) + 1
+            else:
+                failed_counts[key] = failed_counts.get(key, 0) + 1
+        for url in urls_to_scrape:
+            res = new_urls_map[url]
+            provider = res.provider or "web"
+            content = scraped_data.get(url)
+            is_pdf_candidate = bool(res.full_text_url)
+            text_scope = ("FULL_TEXT" if is_pdf_candidate else "LANDING_PAGE") if res.source_type == "PAPER" else "WEB_PAGE"
+            if not content and res.source_type == "PAPER" and len((res.content or "").strip()) >= 80:
+                content = res.content.strip()
+                text_scope = "ABSTRACT"
+            if not content:
+                continue
             if len(new_sources) >= remaining_sources:
                 break
             base_idx += 1
-            res = new_urls_map[url]
             source_tag = f"src_{base_idx:02d}"
+            provider_query = (provider, res.query)
+            accepted_counts[provider_query] = accepted_counts.get(provider_query, 0) + 1
+            if text_scope == "ABSTRACT":
+                abstract_counts[provider_query] = abstract_counts.get(provider_query, 0) + 1
 
             new_sources.append({
-                "url": url,
+                "url": str(res.url),
                 "title": res.title,
-                "content": content,
-                "source_tag": source_tag
+                "content": content[:200_000],
+                "source_tag": source_tag,
+                "author": "; ".join(res.authors)[:255] if res.authors else None,
+                "publication_date": res.published_date,
+                "doi": res.doi,
+                "venue": res.venue,
+                "search_provider": provider,
+                "full_text_url": str(res.full_text_url) if res.full_text_url else None,
+                "source_type": res.source_type,
+                "text_scope": text_scope,
+                "query": res.query,
             })
 
         current_iter = state.get("current_iteration", 0) + 1
@@ -553,7 +600,7 @@ async def researcher_node(state: ResearchState) -> Dict[str, Any]:
             status="SUCCESS",
             iteration=current_iter,
             attempt_number=state.get("attempt_number", 1),
-            model="tavily-search-api",
+            model="scholarly-and-web-search",
             started_at=started_at,
             completed_at=completed_at,
             duration_ms=duration_ms,
@@ -563,7 +610,7 @@ async def researcher_node(state: ResearchState) -> Dict[str, Any]:
             input_summary={"queries": queries},
             output_summary={"sources_scraped": len(new_sources), "visited_urls": len(urls_to_scrape)},
             tool_calls=[
-                {"tool": "tavily_search", "queries_count": len(queries)},
+                {"tool": "scholarly_and_web_search", "queries_count": len(queries)},
                 {"tool": "scraper", "scraped_count": len(urls_to_scrape)},
             ],
         )
@@ -571,13 +618,30 @@ async def researcher_node(state: ResearchState) -> Dict[str, Any]:
         return {
             "current_agent": "researcher",
             "collected_sources": new_sources,  # Annotated[list, operator.add]
-            "visited_urls": set(urls_to_scrape), # Annotated[set, merge_sets]
-            "search_activity": [{
-                "provider": "Tavily web search",
+            "visited_urls": set(urls_to_scrape) | {
+                f"doi:{res.doi.casefold().removeprefix('https://doi.org/')}"
+                for res in new_urls_map.values() if res.doi
+            }, # URLs and scholarly DOI identities prevent repeat ingestion.
+            "search_activity": [
+                {
+                    **event,
+                    "fetched_count": fetched_counts.get((event.get("provider", ""), event.get("query")), 0),
+                    "accepted_count": accepted_counts.get((event.get("provider", ""), event.get("query")), 0),
+                    "fetch_failed_count": failed_counts.get((event.get("provider", ""), event.get("query")), 0),
+                    "abstract_only_count": abstract_counts.get((event.get("provider", ""), event.get("query")), 0),
+                    "previously_seen_count": seen_counts.get((event.get("provider", ""), event.get("query")), 0),
+                    "completed_at": completed_at.isoformat(),
+                }
+                for event in provider_activity
+            ] or [{
+                "provider": "search providers",
                 "queries": queries,
-                "candidate_url_count": len(new_urls_map),
-                "sources_collected": len(new_sources),
+                "candidate_count": len(search_results),
+                "fetched_count": len(new_sources),
+                "accepted_count": len(new_sources),
+                "previously_seen_count": sum(seen_counts.values()),
                 "completed_at": completed_at.isoformat(),
+                "status": "SUCCESS",
             }],
             "current_iteration": current_iter
         }
@@ -643,7 +707,15 @@ async def curator_node(state: ResearchState) -> Dict[str, Any]:
                     source_tag=src["source_tag"],
                     title=src.get("title", ""),
                     url=src.get("url", ""),
-                    content_snippet=src.get("content", "")[:500]
+                    author=src.get("author"),
+                    publication_date=src.get("publication_date"),
+                    doi=src.get("doi"),
+                    venue=src.get("venue"),
+                    search_provider=src.get("search_provider"),
+                    full_text_url=src.get("full_text_url"),
+                    source_type=src.get("source_type") or "WEBSITE",
+                    content_snippet=src.get("content", "")[:500],
+                    text_scope=src.get("text_scope"),
                 )
                 db.add(db_source)
                 await db.flush()  # Để lấy db_source.id
@@ -1481,6 +1553,9 @@ async def critic_node(state: ResearchState) -> Dict[str, Any]:
                 "source_id": item.get("source_id"),
                 "chunk_id": item.get("chunk_id"),
                 "source": str(item.get("source_title") or item.get("source_url") or "")[:300],
+                "text_scope": item.get("text_scope"),
+                "doi": item.get("doi"),
+                "venue": item.get("venue"),
             }
             for item in claims[:50]
         ]
@@ -1741,7 +1816,8 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
         if state.get("editorial_revision"):
             review_metadata["revision"] = deepcopy(state.get("revision_info") or {})
         review_metadata["bibliography_snapshot"] = [{key: item.get(key) for key in (
-            "source_id", "source_title", "source_url", "source_author", "publication_date", "citation_label"
+            "source_id", "source_title", "source_url", "source_author", "publication_date",
+            "venue", "doi", "citation_label"
         )} for item in citation_records]
         if no_grounded_citations:
             review_metadata.update(status="NEEDS_REVIEW", delivery_findings=["The manuscript contains no validated source citations."])

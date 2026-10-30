@@ -72,8 +72,8 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
         if identity not in seen:
             key = f"ref{len(seen)+1}"
             seen[identity] = key
-            text = ". ".join(str(item[k]) for k in ("source_author", "source_title", "publication_date") if item.get(k))
-            url = str(item.get("source_url") or "")
+            text = ". ".join(str(item[k]) for k in ("source_author", "source_title", "venue", "publication_date") if item.get(k))
+            url = ("https://doi.org/" + str(item["doi"]).removeprefix("https://doi.org/")) if item.get("doi") else str(item.get("source_url") or "")
             parsed = urlsplit(url)
             # URL-aware line breaking avoids overflowing narrow publication columns.
             # Encoding braces/backslashes prevents a URL from becoming TeX source.

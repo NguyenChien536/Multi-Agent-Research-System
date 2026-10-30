@@ -33,6 +33,15 @@ class Settings(BaseSettings):
 
     # AI Model Providers & Keys
     TAVILY_API_KEY: str | None = None
+    TAVILY_SEARCH_DEPTH: str = "basic"
+    # Optional comma-separated domains for a second, narrowly scoped Tavily search.
+    # Leave empty to avoid extra API calls; OpenAlex/Crossref provide the scholarly index path.
+    TAVILY_ACADEMIC_DOMAINS: str = ""
+    OPENALEX_API_KEY: str | None = None
+    CROSSREF_MAILTO: str | None = None
+    SCHOLARLY_SEARCH_TIMEOUT_SECONDS: float = 20.0
+    # Conservative search request estimate; Crossref/free calls release it.
+    SCHOLARLY_REQUEST_COST_USD: float = 0.001
     ANTHROPIC_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None

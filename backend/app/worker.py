@@ -295,8 +295,17 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     "url": src.url,
                     "content": src.content_snippet or "",
                     "source_type": src.source_type,
+                    "doi": src.doi,
+                    "venue": src.venue,
+                    "search_provider": src.search_provider,
+                    "full_text_url": src.full_text_url,
+                    "text_scope": src.text_scope,
                 })
                 visited_urls.add(src.url)
+                if src.full_text_url:
+                    visited_urls.add(src.full_text_url)
+                if src.doi:
+                    visited_urls.add(f"doi:{src.doi.casefold()}")
 
             # Preload dataset CSV if user uploaded one for empirical computational research
             preloaded_dataset_csv = None
