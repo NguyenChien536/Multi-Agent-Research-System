@@ -90,3 +90,30 @@ def test_historical_contract_does_not_require_new_review_policy():
     assert "evidence_review_policy" not in resumed["manuscript_contract"]
     assert resumed["manuscript_contract"] == historical
     assert resumed["manuscript_contract"] is not historical
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("policy", [False, True])
+@pytest.mark.parametrize("token_attribute", ["max_tokens", "max_output_tokens"])
+async def test_critic_provider_cap_matches_reserved_output_budget(monkeypatch, policy, token_attribute):
+    """Reservation alone must not leave a provider free to generate 4096 tokens."""
+    from types import SimpleNamespace
+
+    client = SimpleNamespace(**{token_attribute: 4096})
+    captured = []
+    client.with_structured_output = lambda _: captured.append(getattr(client, token_attribute)) or client
+    chain = nodes.BudgetedFallbackLLM([("fixture", client)])
+    invoke = AsyncMock(return_value=nodes.CriticVerdict(verdict="PASS"))
+    monkeypatch.setattr(nodes, "get_fast_llm", lambda: chain)
+    monkeypatch.setattr(nodes, "get_active_model_name", lambda **_: "fixture")
+    monkeypatch.setattr(nodes, "invoke_llm_with_budget", invoke)
+    monkeypatch.setattr(nodes, "_record_progress", AsyncMock())
+    monkeypatch.setattr(nodes, "record_agent_run", AsyncMock())
+    plan = attach_manuscript_contract({}, "REVIEW", "en")
+    if not policy:
+        plan["manuscript_contract"].pop("evidence_review_policy")
+    await nodes.critic_node({"plan": plan, "draft_report_markdown": "## Methods\n\nAn exploratory narrative review."})
+    expected = 2048 if policy else 768
+    assert captured == [expected]
+    assert invoke.await_count > 0
+    assert all(call.kwargs["output_tokens"] == expected for call in invoke.await_args_list)

@@ -44,7 +44,7 @@ def prepare_evidence_review(section_text: str, claims: list[dict], *, central_he
         from app.services.research_quality import guarantee_risks
         risks = guarantee_risks(paragraph) if policy_version >= 2 else []
         units.append({"statement_id": identity, "section": heading, "guarantee_risks": risks,
-                      "passage": paragraph[:4000], "claim_ids": context_refs,
+                      "passage": paragraph[:4000], "claim_ids": context_refs, "cited_claim_ids": refs,
                       "kind": "cited_passage" if refs else "interpretation"})
     if len(units) > max_units:
         findings.append("This batch exceeds the passage-review limit; unreviewed passages require review.")
@@ -102,7 +102,7 @@ def evaluate_evidence_reviews(prepared: dict, reviews: list[EvidenceReview]) -> 
         if prepared.get("policy_version", 1) >= 2 and review.judgment == "SUPPORTED":
             unit = next(u for u in prepared["units"] if u["statement_id"] == review.statement_id)
             valid_ids = {e["claim_id"] for e in prepared["evidence"]} & set(unit["claim_ids"])
-            if (unit["claim_ids"] and not review.supporting_claim_ids) or not set(review.supporting_claim_ids) <= valid_ids:
+            if (unit["cited_claim_ids"] and not review.supporting_claim_ids) or not set(review.supporting_claim_ids) <= valid_ids:
                 findings.append(f"Support for {review.statement_id} lacks valid passage-specific evidence identities.")
             if unit.get("guarantee_risks") and not review.assumptions_preserved:
                 findings.append(f"Assumptions were not checked for {review.statement_id}.")

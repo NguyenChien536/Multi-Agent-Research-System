@@ -86,6 +86,49 @@ def test_uncited_optimizer_paragraph_is_included_and_support_ids_are_checked():
     assert not evaluate_evidence_reviews(p, [review])["coverage_complete"]
 
 
+def test_own_methods_can_be_supported_by_provenance_without_unrelated_citation():
+    cid = str(uuid.uuid4())
+    methods = "## Methods\n\nWe queried OpenAlex and Crossref on 30 October 2026."
+    draft = methods + f"\n\n## Background\n\nAn earlier limited result [[@claim:{cid}]]."
+    claims = [{"claim_id": cid, "evidence_id": "e", "source_id": "s", "chunk_id": "c",
+               "evidence_quote": "An earlier limited result."}]
+    prepared = prepare_evidence_review(methods, claims, central_headings=[], draft=draft, policy_version=2)
+    unit = prepared["units"][0]
+    assert unit["claim_ids"] == [cid] and unit["cited_claim_ids"] == []
+    review = EvidenceReview(statement_id=unit["statement_id"], judgment="SUPPORTED",
+                            reason="The supplied execution provenance confirms the search.")
+    assert evaluate_evidence_reviews(prepared, [review])["all_supported"]
+    invented = review.model_copy(update={"supporting_claim_ids": ["invented"]})
+    assert not evaluate_evidence_reviews(prepared, [invented])["coverage_complete"]
+
+
+def test_directly_cited_passage_still_requires_supplied_support_identity():
+    cid = str(uuid.uuid4())
+    text = f"## Background\n\nA limited prior finding [[@claim:{cid}]]."
+    claims = [{"claim_id": cid, "evidence_id": "e", "source_id": "s", "chunk_id": "c",
+               "evidence_quote": "A limited prior finding."}]
+    prepared = prepare_evidence_review(text, claims, central_headings=[], draft=text, policy_version=2)
+    unit = prepared["units"][0]
+    assert unit["cited_claim_ids"] == [cid]
+    review = EvidenceReview(statement_id=unit["statement_id"], judgment="SUPPORTED", reason="Supported prior finding.")
+    assert not evaluate_evidence_reviews(prepared, [review])["coverage_complete"]
+    assert evaluate_evidence_reviews(prepared, [review.model_copy(update={"supporting_claim_ids": [cid]})])["all_supported"]
+
+
+def test_uncited_guarantee_still_blocked_without_full_text_despite_provenance_exception():
+    cid = str(uuid.uuid4())
+    passage = "## Discussion\n\nThe hybrid guarantees stability under true preferences."
+    draft = passage + f"\n\nA source is discussed elsewhere [[@claim:{cid}]]."
+    claims = [{"claim_id": cid, "evidence_id": "e", "source_id": "s", "chunk_id": "c",
+               "text_scope": "ABSTRACT", "evidence_quote": "Random proposal selection balances ex ante opportunities."}]
+    prepared = prepare_evidence_review(passage, claims, central_headings=[], draft=draft, policy_version=2)
+    review = EvidenceReview(statement_id=prepared["units"][0]["statement_id"], judgment="SUPPORTED",
+                            reason="Fixture false positive", assumptions_preserved=True)
+    result = evaluate_evidence_reviews(prepared, [review])
+    assert result["coverage_complete"] and not result["all_supported"]
+    assert result["substantive_findings"]
+
+
 def test_search_ledger_preserves_figures_and_is_idempotent():
     state = {"language": "en", "plan": attach_manuscript_contract({}, "REVIEW", "en"), "search_activity": [
         {"provider": "OpenAlex", "query": "optimizer", "status": "SUCCESS", "candidate_count": 8,
