@@ -12,6 +12,14 @@ logger = logging.getLogger(__name__)
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 MAX_REDIRECTS = 3
 
+
+class ExtractedText(str):
+    """String-compatible extraction result with the verified response format."""
+    def __new__(cls, value: str, text_scope: str):
+        result = super().__new__(cls, value)
+        result.text_scope = text_scope
+        return result
+
 class SSRFError(Exception):
     """Lỗi khi phát hiện URL có dấu hiệu SSRF."""
     pass
@@ -173,7 +181,7 @@ class ScraperTool:
             if bytes(body[:5]) == b"%PDF-":
                 from app.services.pdf_parser import extract_text_from_pdf
                 parsed_pdf = await asyncio.to_thread(extract_text_from_pdf, bytes(body))
-                return parsed_pdf["text"]
+                return ExtractedText(parsed_pdf["text"], "FULL_TEXT")
             # Bước 3: Trích xuất nội dung bằng trafilatura (Đồng bộ, nhưng chạy rất nhanh)
             # Nếu HTML quá lớn, có thể cân nhắc run_in_executor
             extracted_text = trafilatura.extract(
@@ -188,7 +196,7 @@ class ScraperTool:
                 logger.warning("Không trích xuất được văn bản từ host %s", self._hostname_for_log(url))
                 return None
 
-            return extracted_text
+            return ExtractedText(extracted_text, "WEB_PAGE")
 
         except SSRFError as e:
             logger.error("SSRF alert for host %s: %s", self._hostname_for_log(url), str(e))

@@ -140,6 +140,8 @@ def validate_scientific_reporting(markdown: str, contract: dict | None, context:
     def add(code, message):
         findings.append({"code": code, "message": message})
     prose = re.sub(r"(?m)^!\[.*\]\(figures/[^)]+\)\s*$|\[\[figure:[^\]]+\]\]", "", markdown)
+    if figures and re.search(r"(?s)```[^`]*[│▼─][^`]*```", markdown):
+        add("REDUNDANT_TEXT_DIAGRAM", "Use the supplied numbered figure and explain it; remove the duplicate ASCII workflow diagram.")
     for f in figures:
         marker = f"[[figure:{f['id']}]]"
         asset = f"](figures/{f['id']}.svg)"

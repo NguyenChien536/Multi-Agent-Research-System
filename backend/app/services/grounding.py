@@ -117,6 +117,7 @@ async def persist_grounded_claims(
             "venue": source.venue,
             "search_provider": source.search_provider,
             "text_scope": source.text_scope,
+            "discovery_queries": source.discovery_queries or [],
             "chunk_id": str(chunk.id),
         })
 

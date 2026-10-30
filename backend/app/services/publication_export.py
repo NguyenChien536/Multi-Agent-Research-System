@@ -6,6 +6,7 @@ import io
 import json
 import re
 import zipfile
+from html import unescape
 from urllib.parse import quote, urlsplit
 from app.services.references import reference_metadata_notes
 
@@ -72,7 +73,7 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
         if identity not in seen:
             key = f"ref{len(seen)+1}"
             seen[identity] = key
-            text = ". ".join(str(item[k]) for k in ("source_author", "source_title", "venue", "publication_date") if item.get(k))
+            text = ". ".join(unescape(str(item[k])) for k in ("source_author", "source_title", "venue", "publication_date") if item.get(k))
             url = ("https://doi.org/" + str(item["doi"]).removeprefix("https://doi.org/")) if item.get("doi") else str(item.get("source_url") or "")
             parsed = urlsplit(url)
             # URL-aware line breaking avoids overflowing narrow publication columns.

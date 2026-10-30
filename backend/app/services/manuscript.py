@@ -22,7 +22,7 @@ def writer_claim_context(claims: list[dict]) -> list[dict]:
     return [{"citation_marker": f"[[@claim:{claim['claim_id']}]]",
              "claim": claim.get("claim") or claim.get("claim_text", ""),
              "evidence_quote": claim.get("evidence_quote") or claim.get("evidence_text", ""),
-             **{key: claim[key] for key in ("source_title", "source_url", "source_author", "publication_date", "source_type", "doi", "venue", "search_provider", "text_scope") if claim.get(key)}}
+             **{key: claim[key] for key in ("source_title", "source_url", "source_author", "publication_date", "source_type", "doi", "venue", "search_provider", "text_scope", "related_claims") if claim.get(key)}}
             for claim in claims if claim.get("claim_id") and claim.get("evidence_id")]
 
 _HEADINGS = {
@@ -87,7 +87,8 @@ def manuscript_contract(research_type: str, language: str) -> dict[str, Any]:
         "systematic_review_supported": False,
         "introduction_requirements": ["background", "problem_statement", "research_question", "bounded_research_gap", "approach_and_execution_status", "evidence_supported_contributions"],
         "writing_brief": writing_brief(article_type),
-        "evidence_review_policy": {"version": 1, "scope": "cited_passages_and_discussion_conclusion"},
+        "evidence_review_policy": {"version": 2, "scope": "all_prose_and_cited_tables_with_guarantee_guards"},
+        "research_quality_policy": {"version": 1, "source_balance": "round_robin_discovery_queries"},
     }
 
 
@@ -111,6 +112,7 @@ def manuscript_provenance(state: dict) -> dict:
         return deepcopy(state.get("source_provenance") or {})
     sources = state.get("collected_sources") or []
     activity = state.get("search_activity") or []
+    from app.services.research_quality import unique_quote_claims, query_coverage
     successful_indexes = sorted({
         str(item.get("provider")) for item in activity
         if item.get("provider") in {"OpenAlex", "Crossref"} and item.get("status") == "SUCCESS"
@@ -135,8 +137,10 @@ def manuscript_provenance(state: dict) -> dict:
         "full_text_source_count": sum(src.get("text_scope") == "FULL_TEXT" for src in sources),
         "abstract_only_source_count": sum(src.get("text_scope") == "ABSTRACT" for src in sources),
         "landing_page_source_count": sum(src.get("text_scope") == "LANDING_PAGE" for src in sources),
-        "selection_policy": "Provider-ranked candidates; scholarly records first, then web; deduplicate DOI/title/URL; retain retrievable text or indexed abstracts within the configured source and fetch caps. This is availability-based collection, not methodological quality screening.",
+        "selection_policy": "Provider-ranked candidates interleaved across discovery queries before and after fetching; deduplicate DOI/title/URL; retain retrievable text or indexed abstracts within the configured source and fetch caps. This is availability-based collection, not methodological quality screening.",
         "verified_claim_count": len({item.get("claim_id") for item in state.get("claims", []) if item.get("evidence_id")}),
+        "distinct_quote_evidence_count": len(unique_quote_claims([c for c in state.get("claims", []) if c.get("evidence_id")])),
+        "query_coverage": query_coverage(state),
         "search_activity_this_run": activity,
         "direct_scholarly_index_queries": successful_indexes,
         "search_provider_summary": provider_counts,
@@ -267,7 +271,10 @@ def validate_manuscript(markdown: str, contract: dict | None) -> list[dict[str, 
                 add("CONTRIBUTIONS", "State what this manuscript actually contributes, separately from proposed future work.")
     if positions != sorted(positions):
         add("SECTION_ORDER", "Keep the required manuscript sections in the contract order.")
-    body_lines = [line for key, body in sections.items() if key not in {
+    from app.services.research_quality import LEDGER_PATTERN
+    narrative_sections = {key: re.sub(LEDGER_PATTERN, "", body)
+                          if contract.get("research_quality_policy") else body for key, body in sections.items()}
+    body_lines = [line for key, body in narrative_sections.items() if key not in {
         _heading_key(contract["references_heading"]), _heading_key(_localized_heading("keywords", contract["language"]))
     } for line in body.splitlines() if line.strip() and not line.startswith(("#", "|"))]
     total_words = sum(len(line.split()) for line in body_lines)

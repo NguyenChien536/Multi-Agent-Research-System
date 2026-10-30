@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, Text, Integer, Float, DateTime, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
 
@@ -24,6 +24,7 @@ class ResearchSource(Base):
     search_provider = Column(String(50), nullable=True)
     full_text_url = Column(Text, nullable=True)
     text_scope = Column(String(20), nullable=True)  # FULL_TEXT | ABSTRACT | LANDING_PAGE | WEB_PAGE | UPLOAD
+    discovery_queries = Column(JSONB, nullable=False, default=list, server_default="[]")
     content_snippet = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
     relevance_score = Column(Float, default=0.0, nullable=False)

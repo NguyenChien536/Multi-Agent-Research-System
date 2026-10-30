@@ -300,6 +300,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     "search_provider": src.search_provider,
                     "full_text_url": src.full_text_url,
                     "text_scope": src.text_scope,
+                    "discovery_queries": src.discovery_queries or [],
                 })
                 visited_urls.add(src.url)
                 if src.full_text_url:
