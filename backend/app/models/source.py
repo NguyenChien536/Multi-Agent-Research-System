@@ -19,6 +19,11 @@ class ResearchSource(Base):
     source_type = Column(String(50), default="WEBSITE", nullable=False)  # ARTICLE, PAPER, NEWS, OFFICIAL, WEBSITE, IMAGE
     author = Column(String(255), nullable=True)
     publication_date = Column(String(50), nullable=True)
+    doi = Column(String(255), nullable=True, index=True)
+    venue = Column(String(500), nullable=True)
+    search_provider = Column(String(50), nullable=True)
+    full_text_url = Column(Text, nullable=True)
+    text_scope = Column(String(20), nullable=True)  # FULL_TEXT | ABSTRACT | LANDING_PAGE | WEB_PAGE | UPLOAD
     content_snippet = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
     relevance_score = Column(Float, default=0.0, nullable=False)

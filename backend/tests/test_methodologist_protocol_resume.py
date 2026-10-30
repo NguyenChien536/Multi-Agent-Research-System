@@ -123,7 +123,7 @@ async def test_empirical_human_protocol_pause_and_resume(monkeypatch):
     monkeypatch.setattr(nodes_module, "get_fast_llm", lambda: FakeStructuredLLM())
     monkeypatch.setattr(nodes_module, "get_smart_llm", lambda: FakeSmartWriterLLM())
 
-    async def fake_search(_queries, max_results_per_query=3, budget_context=None):
+    async def fake_search(_queries, max_results_per_query=3, budget_context=None, **kwargs):
         return [
             SearchResult(
                 url="https://clinical-ai.example.org/study",

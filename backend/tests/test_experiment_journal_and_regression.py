@@ -615,7 +615,7 @@ async def test_e2e_empirical_computational_workflow(monkeypatch):
     monkeypatch.setattr(nodes_module, "get_fast_llm", lambda: FakeStructuredLLM())
     monkeypatch.setattr(nodes_module, "get_smart_llm", lambda: FakeSmartWriterLLM())
 
-    async def fake_search(_queries, max_results_per_query=3, budget_context=None):
+    async def fake_search(_queries, max_results_per_query=3, budget_context=None, **kwargs):
         return [
             SearchResult(
                 url="https://tabular-ml.example.org/study",

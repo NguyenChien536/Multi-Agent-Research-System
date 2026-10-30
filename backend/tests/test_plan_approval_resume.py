@@ -87,7 +87,7 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
     monkeypatch.setattr(nodes_module, "get_fast_llm", FakeStructuredLLM)
     monkeypatch.setattr(nodes_module, "get_smart_llm", FakeWriterLLM)
 
-    async def fake_search(_queries, max_results_per_query=3, budget_context=None):
+    async def fake_search(_queries, max_results_per_query=3, budget_context=None, **kwargs):
         return [SearchResult(
             title="Clinical Multi-Agent Systems",
             url="https://health-ai.org/paper1",

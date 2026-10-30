@@ -46,6 +46,11 @@ class ResearchSourceItemResponse(BaseModel):
     source_type: str = "WEBSITE"
     author: Optional[str] = None
     publication_date: Optional[str] = None
+    doi: Optional[str] = None
+    venue: Optional[str] = None
+    search_provider: Optional[str] = None
+    full_text_url: Optional[str] = None
+    text_scope: Optional[str] = None
     content_snippet: Optional[str] = None
     summary: Optional[str] = None
     relevance_score: float = 0.0

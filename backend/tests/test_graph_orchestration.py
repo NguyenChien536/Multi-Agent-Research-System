@@ -381,7 +381,7 @@ def _patch_external_boundaries(monkeypatch, critic_sequence=("PASS",)):
     monkeypatch.setattr(nodes_module, "build_llm_chain", _build_llm_chain)
 
     # Patch search — returns empty list (no actual HTTP calls)
-    async def _fake_search(queries, max_results_per_query=3, budget_context=None):
+    async def _fake_search(queries, max_results_per_query=3, budget_context=None, **kwargs):
         return []
 
     # Patch scraper — returns empty dict (no actual HTTP calls)
@@ -930,7 +930,7 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
     monkeypatch.setattr(nodes_module, "get_fast_llm", FakeStructuredLLM)
     monkeypatch.setattr(nodes_module, "get_smart_llm", FakeWriterLLM)
 
-    async def fake_search(_queries, max_results_per_query=3, budget_context=None):
+    async def fake_search(_queries, max_results_per_query=3, budget_context=None, **kwargs):
         return [SearchResult(
             title="Example paper",
             url="https://example.org/paper",

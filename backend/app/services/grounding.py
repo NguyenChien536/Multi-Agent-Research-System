@@ -112,6 +112,11 @@ async def persist_grounded_claims(
             "source_url": source.url,
             "source_author": source.author,
             "publication_date": source.publication_date,
+            "source_type": source.source_type,
+            "doi": source.doi,
+            "venue": source.venue,
+            "search_provider": source.search_provider,
+            "text_scope": source.text_scope,
             "chunk_id": str(chunk.id),
         })
 
