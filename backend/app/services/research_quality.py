@@ -22,7 +22,7 @@ LEDGER_COLUMNS = {
     "zh": ("服务", "完整查询", "执行时间", "筛选参数", "状态", "数量：候选 / 重复 / 获取 / 纳入"),
     "ko": ("제공자", "정확한 검색어", "실행 시각", "필터", "상태", "건수: 후보 / 중복 / 수집 / 채택"),
 }
-LEDGER_PATTERN = r"(?ms)^### (?:" + "|".join(re.escape(h) for h in LEDGER_HEADINGS) + r")\s*\n.*?(?=^### |\Z)"
+LEDGER_PATTERN = r"(?ms)^### (?:" + "|".join(re.escape(h) for h in LEDGER_HEADINGS) + r")\s*\n.*?(?=^#{1,3}\s|\Z)"
 
 
 def bounded_quality_batches(sections, max_chars=2600, max_passages=12):
@@ -131,7 +131,8 @@ def search_ledger_section(state):
     columns = LEDGER_COLUMNS.get(locale, LEDGER_COLUMNS["en"])
     def cell(value):
         return str(value if value is not None else "—").replace("|", "\\|").replace("\n", " ").replace("\r", " ")
-    rows = [f"### {heading}", "", intro, "", "| " + " | ".join(columns) + " |",
+    table_label = {"vi": "Bảng", "fr": "Tableau", "de": "Tabelle", "es": "Tabla", "ja": "表", "zh": "表", "ko": "표"}.get(locale, "Table")
+    rows = [f"### {heading}", "", f"**{table_label} S1. {heading}.**", "", f"{table_label} S1: {intro}", "", "| " + " | ".join(columns) + " |",
             "| " + " | ".join("---" for _ in columns) + " |"]
     import json
     for event in activity:

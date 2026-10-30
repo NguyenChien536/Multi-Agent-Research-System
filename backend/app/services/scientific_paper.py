@@ -187,7 +187,11 @@ def validate_scientific_reporting(markdown: str, contract: dict | None, context:
                 for value in re.findall(rf"\b{label}\b[^\n.]{{0,50}}\bMAE\b\s*(?:=|of|is|là|:)\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)", body, re.I):
                     if not math.isclose(float(value), float(expected), rel_tol=1e-3, abs_tol=1e-3):
                         add("METRIC_MISMATCH", "A reported MAE differs from the executed result; copy measured values and label their scope.")
-    if re.search(r"(?m)^\s*\|.+\|\s*$", markdown) and not re.search(r"(?:Table|Bảng)\s*\d+", prose, re.I):
+    # The generated supplementary search table has its own caption/explanation.
+    # It must neither trigger nor satisfy validation of model-authored tables.
+    from app.services.research_quality import LEDGER_PATTERN
+    table_content = re.sub(LEDGER_PATTERN, "", markdown) if contract.get("research_quality_policy") else markdown
+    if re.search(r"(?m)^\s*\|.+\|\s*$", table_content) and not re.search(r"(?:Table|Bảng)\s*\d+", table_content, re.I):
         add("TABLE_UNEXPLAINED", "Number and caption each table and explain it in the surrounding text.")
     for sentence in re.split(r"[.!?\n;]|\bbut\b|\bhowever\b|\bnhưng\b|\btuy nhiên\b", prose, flags=re.I):
         lowered = sentence.lower()

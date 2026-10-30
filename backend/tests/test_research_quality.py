@@ -146,6 +146,18 @@ def test_historical_contract_is_not_injected_with_a_new_ledger():
     assert inject_search_ledger("Old manuscript", state) == "Old manuscript"
 
 
+def test_generated_search_table_does_not_mask_an_unexplained_table_after_methods():
+    from app.services.scientific_paper import validate_scientific_reporting
+    plan = attach_manuscript_contract({}, "REVIEW", "en")
+    state = {"language": "en", "plan": plan, "search_activity": [{"provider": "OpenAlex", "query": "q"}]}
+    draft = "## Literature Search and Scope\n\nAn exploratory collection.\n\n## Discussion\n\nBounded interpretation."
+    output = inject_search_ledger(draft, state)
+    assert "Table S1" in output
+    validate = lambda text: {f["code"] for f in validate_scientific_reporting(text, plan["manuscript_contract"], {}, [])}
+    assert "TABLE_UNEXPLAINED" not in validate(output)
+    assert "TABLE_UNEXPLAINED" in validate(output + "\n\n| Method | Finding |\n| --- | --- |\n| A | B |")
+
+
 def test_many_short_paragraphs_are_all_reviewed_in_bounded_batches():
     from app.services.research_quality import bounded_quality_batches
     body = "\n\n".join(f"Controlled paragraph number {i}." for i in range(30))
