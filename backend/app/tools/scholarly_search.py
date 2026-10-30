@@ -152,6 +152,7 @@ class ScholarlySearch:
                 "filters": {"per_page": min(max(limit, 1), 25)},
                 "candidate_count": 0, "normalized_count": 0, "status": "FAILED",
                 "error": type(exc).__name__,
+                "http_status": getattr(getattr(exc, "response", None), "status_code", None),
             }
         finally:
             if should_close:
@@ -181,6 +182,7 @@ class ScholarlySearch:
                 "filters": {"rows": min(max(limit, 1), 25)},
                 "candidate_count": 0, "normalized_count": 0, "status": "FAILED",
                 "error": type(exc).__name__,
+                "http_status": getattr(getattr(exc, "response", None), "status_code", None),
             }
         finally:
             if should_close:
@@ -203,6 +205,7 @@ async def execute_scholarly_searches(
     queries: list[str], max_results_per_query: int = 8,
     budget_context: dict[str, Any] | None = None,
 ) -> tuple[list[SearchResult], list[dict[str, Any]]]:
+    provider_slots = {"search_openalex": asyncio.Semaphore(3), "search_crossref": asyncio.Semaphore(2)}
     async def guarded(method, query):
         reservation = None
         if budget_context:
@@ -214,7 +217,8 @@ async def execute_scholarly_searches(
         try:
             if budget_context:
                 await assert_task_active(budget_context["task_id"], budget_context["attempt_number"])
-            response = await method(query, max_results_per_query)
+            async with provider_slots.get(method.__name__, asyncio.Semaphore(2)):
+                response = await method(query, max_results_per_query)
         finally:
             if reservation:
                 await settle_provider_call(
@@ -227,6 +231,17 @@ async def execute_scholarly_searches(
             await assert_task_active(budget_context["task_id"], budget_context["attempt_number"])
         return response
 
+    async def run_query(method, query):
+        records, event = await guarded(method, query)
+        event["attempt"] = 1
+        events = [event]
+        if event.get("status") == "FAILED" and event.get("http_status") in {429, 502, 503, 504}:
+            await asyncio.sleep(1)
+            records, retry = await guarded(method, query)
+            retry["attempt"] = 2
+            events.append(retry)
+        return records, events
+
     timeout = httpx.Timeout(settings.SCHOLARLY_SEARCH_TIMEOUT_SECONDS)
     async with httpx.AsyncClient(
         timeout=timeout,
@@ -235,7 +250,7 @@ async def execute_scholarly_searches(
     ) as client:
         service = ScholarlySearch(client)
         calls = [
-            guarded(method, query)
+            run_query(method, query)
             for query in queries
             for method in (service.search_openalex, service.search_crossref)
         ]
@@ -249,8 +264,9 @@ async def execute_scholarly_searches(
                 raise response
             logger.warning("Scholarly provider call failed: %s", type(response).__name__)
             continue
-        provider_records, event = response
-        activity.append(event)
+        provider_records, events = response
+        activity.extend(events)
+        event = events[-1]
         for record in provider_records:
             lookup_keys = [_dedupe_key(record), _title_key(record.title)]
             if record.doi:
@@ -265,6 +281,7 @@ async def execute_scholarly_searches(
                 primary = previous if chosen_provider == previous.provider else record
                 secondary = record if primary is previous else previous
                 merged = primary.model_copy(update={
+                    "matched_queries": list(dict.fromkeys(previous.matched_queries + ([previous.query] if previous.query else []) + record.matched_queries + ([record.query] if record.query else []))),
                     "authors": primary.authors or secondary.authors,
                     "published_date": primary.published_date or secondary.published_date,
                     "venue": primary.venue or secondary.venue,

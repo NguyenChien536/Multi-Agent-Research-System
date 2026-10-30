@@ -92,7 +92,8 @@ async def revision_inputs(db, task, base):
         sources[str(source.id)] = {"db_id":str(source.id),"source_tag":source.source_tag,
             "title":source.title,"url":source.url,"source_type":source.source_type,
             "doi":source.doi,"venue":source.venue,"search_provider":source.search_provider,
-            "full_text_url":source.full_text_url,"text_scope":source.text_scope}
+            "full_text_url":source.full_text_url,"text_scope":source.text_scope,
+            "discovery_queries":source.discovery_queries or []}
         label_markers.setdefault(citation.citation_label, []).append(f"[[@claim:{claim.id}]]")
     if valid_citations != {item.id for item in citations}:
         raise HTTPException(409, "A base citation no longer has verified, owner-scoped evidence")

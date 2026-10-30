@@ -1,9 +1,10 @@
 """Conservative formatting of known source metadata; no bibliographic enrichment."""
 import re
+from html import unescape
 
 
 def _text(value) -> str:
-    return " ".join(str(value or "").split())
+    return " ".join(unescape(str(value or "")).split())
 
 
 def reference_identity(item: dict) -> str:

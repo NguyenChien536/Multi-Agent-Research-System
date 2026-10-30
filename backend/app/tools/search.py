@@ -106,10 +106,13 @@ class TavilySearchTool:
 async def execute_parallel_searches(
     queries: List[str], max_results_per_query: int = 3,
     budget_context: dict[str, Any] | None = None,
-    *, include_activity: bool = False,
+    *, include_activity: bool = False, search_depth: str | None = None,
 ) -> List[SearchResult] | tuple[List[SearchResult], list[dict[str, Any]]]:
     """Search scholarly indexes plus the web; optionally return an audit trail."""
     tool = TavilySearchTool()
+    depth = search_depth or settings.TAVILY_SEARCH_DEPTH
+    if depth not in {"basic", "advanced", "fast", "ultra-fast"}:
+        raise ValueError("Unsupported Tavily search depth")
     from app.tools.scholarly_search import execute_scholarly_searches
 
     activity: list[dict[str, Any]] = []
@@ -119,7 +122,7 @@ async def execute_parallel_searches(
             calls.append((query, "Tavily", tool.search(
                 query=query,
                 max_results=max_results_per_query,
-                search_depth=settings.TAVILY_SEARCH_DEPTH,
+                search_depth=depth,
                 budget_context=budget_context,
                 raise_errors=True,
             )))
@@ -128,7 +131,7 @@ async def execute_parallel_searches(
                 calls.append((query, "Tavily academic-domain search", tool.search(
                     query=query,
                     max_results=max_results_per_query,
-                    search_depth=settings.TAVILY_SEARCH_DEPTH,
+                    search_depth=depth,
                     include_domains=domains,
                     budget_context=budget_context,
                     raise_errors=True,
@@ -137,7 +140,7 @@ async def execute_parallel_searches(
             activity.append({
                 "provider": "Tavily", "query": query, "status": "NOT_CONFIGURED",
                 "candidate_count": 0, "fetched_count": 0,
-                "filters": {"search_depth": settings.TAVILY_SEARCH_DEPTH},
+                "filters": {"search_depth": depth},
             })
 
     tavily_responses = await asyncio.gather(*(call[2] for call in calls), return_exceptions=True)
@@ -150,7 +153,7 @@ async def execute_parallel_searches(
             activity.append({
                 "provider": provider, "query": query, "status": "FAILED",
                 "candidate_count": 0, "fetched_count": 0,
-                "filters": {"search_depth": settings.TAVILY_SEARCH_DEPTH},
+                "filters": {"search_depth": depth},
                 "error": type(response).__name__,
             })
             continue
@@ -159,7 +162,7 @@ async def execute_parallel_searches(
             "provider": provider, "query": query, "status": "SUCCESS",
             "candidate_count": len(response), "fetched_count": 0,
             "filters": {
-                "search_depth": settings.TAVILY_SEARCH_DEPTH,
+                "search_depth": depth,
                 "include_domains": [item.strip() for item in settings.TAVILY_ACADEMIC_DOMAINS.split(",") if item.strip()] if provider.endswith("domain search") else [],
             },
         })
@@ -173,6 +176,7 @@ async def execute_parallel_searches(
     # Deduplicate using DOI first, then normalized title, then canonical URL.
     from app.tools.scholarly_search import _title_key, _clean_doi
     seen: set[str] = set()
+    key_to_result = {}
     duplicate_counts: dict[tuple[str, str | None], int] = {}
     unique: list[SearchResult] = []
     duplicate_count = 0
@@ -183,16 +187,23 @@ async def execute_parallel_searches(
         if result.title.strip():
             keys.add(_title_key(result.title))
         if keys & seen:
+            existing = next(key_to_result[k] for k in keys if k in key_to_result)
+            existing.matched_queries = list(dict.fromkeys(existing.matched_queries + ([existing.query] if existing.query else []) + result.matched_queries + ([result.query] if result.query else [])))
             duplicate_count += 1
             duplicate_key = (result.provider, result.query)
             duplicate_counts[duplicate_key] = duplicate_counts.get(duplicate_key, 0) + 1
             continue
         seen.update(keys)
+        result.matched_queries = list(dict.fromkeys(result.matched_queries + ([result.query] if result.query else [])))
+        for key in keys:
+            key_to_result[key] = result
         unique.append(result)
     for event in activity:
         event["duplicate_count"] = event.get("duplicate_count", 0) + duplicate_counts.get((event.get("provider", ""), event.get("query")), 0)
     if not activity and duplicate_count:
         activity.append({"provider": "search", "status": "SUCCESS", "duplicate_count": duplicate_count})
     if include_activity:
-        return unique, activity
-    return unique
+        from app.services.research_quality import balance_by_query
+        return balance_by_query(unique, queries, lambda r: r.matched_queries or [r.query]), activity
+    from app.services.research_quality import balance_by_query
+    return balance_by_query(unique, queries, lambda r: r.matched_queries or [r.query])

@@ -13,6 +13,7 @@ def supported_critic_response(messages):
     return CriticVerdict(verdict="PASS", evidence_reviews=[{
         "statement_id": unit["statement_id"], "judgment": "SUPPORTED",
         "reason": "Controlled fixture judgment for workflow testing.",
+        "supporting_claim_ids": unit.get("claim_ids", []), "assumptions_preserved": True,
     } for unit in units])
 
 

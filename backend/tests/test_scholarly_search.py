@@ -36,9 +36,11 @@ async def test_web_duplicate_does_not_displace_scholarly_metadata(monkeypatch):
     monkeypatch.setattr(scholarly_search, "execute_scholarly_searches", AsyncMock(return_value=([
         SearchResult(title="Same Paper", url="https://example.org/paper", doi="10.1234/x", provider="OpenAlex", query="q")],
         [{"provider": "OpenAlex", "query": "q", "status": "SUCCESS", "candidate_count": 1}])))
-    results, activity = await search.execute_parallel_searches(["q"], include_activity=True)
+    results, activity = await search.execute_parallel_searches(["q"], include_activity=True, search_depth="advanced")
     assert len(results) == 1 and results[0].doi == "10.1234/x"
     assert next(e for e in activity if e["provider"] == "Tavily")["duplicate_count"] == 1
+    assert search.TavilySearchTool.search.await_args.kwargs["search_depth"] == "advanced"
+    assert next(e for e in activity if e["provider"] == "Tavily")["filters"]["search_depth"] == "advanced"
 
 
 @pytest.mark.asyncio
@@ -164,3 +166,30 @@ async def test_openalex_provider_failure_is_recorded_not_fabricated():
     assert event["status"] == "FAILED"
     assert event["candidate_count"] == 0
     assert event["error"] == "HTTPStatusError"
+    assert event["http_status"] == 429
+
+
+@pytest.mark.asyncio
+async def test_transient_scholarly_failure_gets_one_audited_budgeted_retry(monkeypatch):
+    from app.tools import scholarly_search as module
+    attempts = 0
+    async def openalex(self, query, limit):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return [], {"provider": "OpenAlex", "query": query, "status": "FAILED", "http_status": 429}
+        return [SearchResult(title="Recovered source", url="https://example.org/retry", provider="OpenAlex", query=query)], {"provider": "OpenAlex", "query": query, "status": "SUCCESS"}
+    async def crossref(self, query, limit):
+        return [], {"provider": "Crossref", "query": query, "status": "SUCCESS"}
+    monkeypatch.setattr(module.ScholarlySearch, "search_openalex", openalex)
+    monkeypatch.setattr(module.ScholarlySearch, "search_crossref", crossref)
+    monkeypatch.setattr(module.asyncio, "sleep", AsyncMock())
+    reserve = AsyncMock(side_effect=["one", "two", "three"])
+    settle = AsyncMock()
+    monkeypatch.setattr(module, "reserve_provider_call", reserve)
+    monkeypatch.setattr(module, "settle_provider_call", settle)
+    monkeypatch.setattr(module, "assert_task_active", AsyncMock())
+    records, activity = await module.execute_scholarly_searches(["q"], budget_context={"task_id": "fixture", "attempt_number": 1})
+    assert len(records) == 1 and attempts == 2
+    assert [a["attempt"] for a in activity if a["provider"] == "OpenAlex"] == [1, 2]
+    assert reserve.await_count == settle.await_count == 3

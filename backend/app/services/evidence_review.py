@@ -10,10 +10,13 @@ class EvidenceReview(BaseModel):
     statement_id: str
     judgment: Literal["SUPPORTED", "PARTIAL", "UNSUPPORTED", "CONTRADICTED", "UNVERIFIABLE"]
     reason: str = Field(min_length=1, max_length=1000)
+    supporting_claim_ids: list[str] = Field(default_factory=list, max_length=24)
+    assumptions_preserved: bool = False
 
 
 def prepare_evidence_review(section_text: str, claims: list[dict], *, central_headings: list[str],
-                            draft: str, max_units: int = 16, max_evidence: int = 24) -> dict:
+                            draft: str, max_units: int = 16, max_evidence: int = 24,
+                            policy_version: int = 1, excluded_headings: list[str] | None = None) -> dict:
     """Select cited evidence by identity, never by its position in a global list."""
     records = {}
     for item in claims:
@@ -21,7 +24,7 @@ def prepare_evidence_review(section_text: str, claims: list[dict], *, central_he
             records.setdefault(str(item["claim_id"]), []).append(item)
     marker = r"\[\[@claim:([^\]]+)\]\]"
     draft_refs = list(dict.fromkeys(re.findall(marker, draft)))
-    units, requested, findings = [], [], []
+    units, requested, findings, substantive = [], [], [], []
     heading = ""
     for index, paragraph in enumerate(section_text.split("\n\n")):
         lines = paragraph.splitlines()
@@ -29,17 +32,19 @@ def prepare_evidence_review(section_text: str, claims: list[dict], *, central_he
             heading = lines[0][3:].strip()
             paragraph = "\n".join(lines[1:]).strip()
         refs = list(dict.fromkeys(re.findall(marker, paragraph)))
-        if not paragraph or (not refs and heading not in central_headings):
+        if not paragraph or heading in (excluded_headings or []) or (policy_version < 2 and not refs and heading not in central_headings):
             continue
-        if paragraph.startswith(("|", "![", "[[figure:")):
+        if paragraph.startswith(("![", "[[figure:")) or (policy_version < 2 and paragraph.startswith("|")):
             continue
         identity = hashlib.sha256(f"{index}:{heading}:{paragraph}".encode()).hexdigest()[:20]
         context_refs = refs or draft_refs
         requested.extend(context_refs)
         if len(paragraph) > 4000:
             findings.append(f"Passage {identity} exceeds the evidence-review text limit.")
-        units.append({"statement_id": identity, "section": heading,
-                      "passage": paragraph[:4000], "claim_ids": context_refs,
+        from app.services.research_quality import guarantee_risks
+        risks = guarantee_risks(paragraph) if policy_version >= 2 else []
+        units.append({"statement_id": identity, "section": heading, "guarantee_risks": risks,
+                      "passage": paragraph[:4000], "claim_ids": context_refs, "cited_claim_ids": refs,
                       "kind": "cited_passage" if refs else "interpretation"})
     if len(units) > max_units:
         findings.append("This batch exceeds the passage-review limit; unreviewed passages require review.")
@@ -73,8 +78,15 @@ def prepare_evidence_review(section_text: str, claims: list[dict], *, central_he
         if len(claim) > 2000 or len(quote) > 3000:
             findings.append(f"Evidence for {claim_id} exceeds the context limit.")
         evidence.append({"claim_id": claim_id, "claim": claim[:2000], "quote": quote[:3000],
-                         **{k: item.get(k) for k in ("source_id", "chunk_id", "source_title", "text_scope", "doi")}})
-    return {"units": units[:max_units], "evidence": evidence, "coverage_findings": findings}
+                         **{k: item.get(k) for k in ("source_id", "chunk_id", "source_title", "text_scope", "source_type", "doi")}})
+    for unit in units[:max_units]:
+        if unit["guarantee_risks"]:
+            full_context = [e for e in evidence if e["claim_id"] in unit["claim_ids"] and
+                            (e.get("text_scope") in {"FULL_TEXT", "UPLOAD"} or e.get("source_type") == "PDF")]
+            if not full_context:
+                substantive.append(f"[{unit['section']}] A strong technical guarantee requires full-text context and explicit assumptions, or weaker wording: {unit['guarantee_risks'][0]}")
+    return {"units": units[:max_units], "evidence": evidence, "coverage_findings": findings,
+            "expected_units": len(units), "policy_version": policy_version, "substantive_findings": substantive}
 
 
 def evaluate_evidence_reviews(prepared: dict, reviews: list[EvidenceReview]) -> dict:
@@ -87,11 +99,19 @@ def evaluate_evidence_reviews(prepared: dict, reviews: list[EvidenceReview]) -> 
             continue
         seen.add(review.statement_id)
         accepted.append(review.model_dump())
+        if prepared.get("policy_version", 1) >= 2 and review.judgment == "SUPPORTED":
+            unit = next(u for u in prepared["units"] if u["statement_id"] == review.statement_id)
+            valid_ids = {e["claim_id"] for e in prepared["evidence"]} & set(unit["claim_ids"])
+            if (unit["cited_claim_ids"] and not review.supporting_claim_ids) or not set(review.supporting_claim_ids) <= valid_ids:
+                findings.append(f"Support for {review.statement_id} lacks valid passage-specific evidence identities.")
+            if unit.get("guarantee_risks") and not review.assumptions_preserved:
+                findings.append(f"Assumptions were not checked for {review.statement_id}.")
     if expected - seen:
         findings.append(f"Missing support judgments for {len(expected - seen)} passages.")
-    return {"expected_passages": len(expected), "reviewed_passages": len(seen),
+    return {"expected_passages": prepared.get("expected_units", len(expected)), "reviewed_passages": len(seen),
             "coverage_complete": not findings, "findings": findings, "judgments": accepted,
-            "all_supported": not findings and all(r["judgment"] == "SUPPORTED" for r in accepted)}
+            "substantive_findings": prepared.get("substantive_findings", []),
+            "all_supported": not findings and not prepared.get("substantive_findings") and all(r["judgment"] == "SUPPORTED" for r in accepted)}
 
 
 def audit_matches_draft(metadata: dict, draft: str) -> bool:

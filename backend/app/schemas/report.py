@@ -51,6 +51,7 @@ class ResearchSourceItemResponse(BaseModel):
     search_provider: Optional[str] = None
     full_text_url: Optional[str] = None
     text_scope: Optional[str] = None
+    discovery_queries: list[str] = Field(default_factory=list)
     content_snippet: Optional[str] = None
     summary: Optional[str] = None
     relevance_score: float = 0.0
