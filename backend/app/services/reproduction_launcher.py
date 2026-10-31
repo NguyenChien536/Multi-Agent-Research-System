@@ -81,5 +81,13 @@ if __name__ == "__main__":
         print("Replay PASSED" if passed else "Replay FAILED: see reproduced/comparison.json")
         raise SystemExit(0 if passed else 1)
     except Exception as exc:
+        # A failed retry must not leave a previous comparison marked PASSED.
+        try:
+            output = Path(__file__).resolve().parent / "reproduced"
+            output.mkdir(exist_ok=True)
+            write_json(output / "comparison.json", {"passed": False, "execution_status": "FAILED",
+                "error_type": type(exc).__name__, "error": str(exc)})
+        except OSError:
+            print("Could not save the failed attempt; any existing output belongs to an earlier attempt.")
         print(f"Replay could not complete: {type(exc).__name__}: {exc}")
         raise SystemExit(2)

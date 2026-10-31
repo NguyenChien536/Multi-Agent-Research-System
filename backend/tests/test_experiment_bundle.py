@@ -1,4 +1,5 @@
 import io
+import hashlib
 import json
 import subprocess
 import sys
@@ -81,10 +82,24 @@ async def test_private_version_bundle_replays_without_project_dependencies(tmp_p
         assert comparison["passed"]
         assert (unpack / "reproduced/residuals.svg").exists()
         assert (unpack / "reproduced/predicted-vs-actual.svg").exists()
+        expected_path, manifest_path = unpack / "expected_result.json", unpack / "bundle_manifest.json"
+        original_expected, original_manifest = expected_path.read_bytes(), manifest_path.read_bytes()
+        changed = json.loads(original_expected)
+        changed["raw_metrics"]["baseline"]["mae"] += 1.0
+        expected_path.write_text(json.dumps(changed), encoding="utf-8")
+        inventory = json.loads(original_manifest)
+        inventory["checksums"]["expected_result.json"] = hashlib.sha256(expected_path.read_bytes()).hexdigest()
+        manifest_path.write_text(json.dumps(inventory), encoding="utf-8")
+        different = subprocess.run([sys.executable, "-I", str(unpack / "reproduce.py")], capture_output=True, text=True, timeout=20)
+        assert different.returncode == 1, different.stdout + different.stderr
+        assert json.loads((unpack / "reproduced/comparison.json").read_text())["passed"] is False
+        expected_path.write_bytes(original_expected); manifest_path.write_bytes(original_manifest)
         original = (unpack / "input.csv").read_bytes()
         (unpack / "input.csv").write_bytes(original + b"\n")
         run = subprocess.run([sys.executable, "-I", str(unpack / "reproduce.py")], capture_output=True, text=True, timeout=20)
         assert run.returncode == 2 and "Integrity check failed" in run.stdout
+        failed = json.loads((unpack / "reproduced/comparison.json").read_text())
+        assert failed["passed"] is False and failed["execution_status"] == "FAILED"
 
 
 @pytest.mark.asyncio
