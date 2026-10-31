@@ -1,6 +1,6 @@
 # Tiến độ triển khai — Synthia
 
-**Cập nhật: 29/10/2026.** Nền đầu lượt: `develop@5b7fe75` / PR #64. Phần bàn giao tiếp theo: issue #65, chỉnh sửa bản thảo theo phiên bản. Hạn demo: 10/11/2026.
+**Cập nhật: 31/10/2026.** Nền develop@f252223 / PR #76; đang khép P6 với issue #77. Hạn demo: 10/11/2026.
 
 Tài liệu này trả lời **đã có gì, đã kiểm đến đâu, tiếp theo làm gì**. Thứ tự và điều kiện phát hành nằm trong [Implementation Plan](implementation-plan.md). Các biên bản ngày 22–24/10 là lịch sử, không phải trạng thái code hiện tại.
 
@@ -20,6 +20,12 @@ Tài liệu này trả lời **đã có gì, đã kiểm đến đâu, tiếp th
 
 **Chưa đủ điều kiện phát hành production hoặc nâng `main` thành bản demo đã nghiệm thu.** Các chức năng có code và tests không tự đóng toàn bộ G0–G7.
 
+## Bằng chứng cập nhật 31/10
+
+- Nền `develop@f252223`: PR #66/#68 (sửa bài và citation theo phiên bản), #70 (viết học thuật), #72 (nguồn học thuật/provenance), #74/#76 (kiểm hỗ trợ và cân bằng truy vấn) đã merge; **413 backend tests, 5/5 CI đạt** trên PR #76. Pilot Gemini thật phân biệt được phát biểu có điều kiện với kết luận hybrid vượt bằng chứng; chưa phải semantic benchmark.
+- Issue #77 bổ sung gói thí nghiệm theo version: input/code/environment đóng băng trước chạy, kết quả đầy đủ, journal theo mốc version, checksum, launcher độc lập và SVG đo từ chart data. Bài cũ thiếu snapshot báo rõ, không dùng code/data mới để lấp chỗ trống. Xem kiểm thử và CI của PR liên kết issue #77 để biết trạng thái nghiệm thu cuối cùng.
+- Lượt kiểm tập trung ban đầu: **38 tests backend liên quan đạt**; chạy thật routine và chạy lại ZIP bằng Python độc lập, giữ kết quả âm, kiểm sai quyền/tamper/missing snapshots/version isolation. **20 frontend tests và TypeScript đạt** cục bộ; toàn bộ backend trên DB PostgreSQL mới đạt **425 tests**. CI của candidate mới phải đạt trước merge. Đây chưa phải browser E2E hay nghiệm thu production.
+
 ## 2. Bằng chứng của lượt bàn giao #65
 
 | Kiểm tra | Kết quả | Giới hạn |
@@ -36,7 +42,7 @@ CI của PR là cổng trước merge; release `main` vẫn cần demo UI/API/br
 
 | Ưu tiên | Việc cần hoàn thiện | Người dùng nhận được gì? | Điều kiện nghiệm thu |
 |---|---|---|---|
-| 1 | Khép P6: gói bàn giao/tái lập thực nghiệm theo version | Tải đúng input được phép, config, routine/launcher, metrics, biểu đồ, manifest và journal của lần chạy | Đúng owner/version/hash; không trộn artifacts của lần mới hơn; không xuất kết quả chạy thất bại như thành công |
+| 1 | Nghiệm thu P6 / #77: gói bàn giao/tái lập thực nghiệm theo version | Tải đúng input được phép, config, routine/launcher, metrics, biểu đồ, manifest và journal của lần chạy | Đúng owner/version/hash; không trộn artifacts của lần mới hơn; không xuất kết quả chạy thất bại như thành công |
 | 2 | P7: đánh giá theo Evaluation Plan | Biết chất lượng, nguồn hỗ trợ, chi phí, thời gian và giá trị multi-agent trên bộ câu hỏi cố định | Baseline/ablation cùng model/corpus/cap; giữ cả lỗi/kết quả âm và giới hạn mẫu |
 | 3 | Nghiệm thu runtime/UI còn thiếu | Ba luồng REVIEW, tính toán, human-led hoạt động sau lỗi/khôi phục | Browser + broker + restart/concurrency/fault tests; không đóng gate chỉ từ mock tests |
 | 4 | P8 → P9 → P10 | Staging, backup/restore, monitoring vận hành, pilot rồi phát hành giới hạn | Cùng image digest, rollback, cảnh báo thật, tải/chi phí đã đo và quyết định go/no-go |

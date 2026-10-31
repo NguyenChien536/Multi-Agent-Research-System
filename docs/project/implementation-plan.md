@@ -1,6 +1,6 @@
 # Kế hoạch triển khai đến production — Synthia
 
-**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 29/10/2026, nền develop@5b7fe75 / PR #64, bàn giao #65 · **Mốc nộp/demo:** 10/11/2026.
+**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 31/10/2026, nền develop@f252223 / PR #76; P6 issue #77 · **Mốc nộp/demo:** 10/11/2026.
 
 Đây là nguồn duy nhất về **việc cần làm, thứ tự và điều kiện phát hành**. [Roadmap](roadmap-and-progress.md) ghi việc đã làm; [biên bản](baseline-verification.md) ghi bằng chứng. P0–P7/G0–G7 giữ ý nghĩa trong [SRS](../requirements/SRS.md); P8–P10 bổ sung đường đến production. Lịch này thay lịch 12/10 đã lỗi thời.
 
@@ -20,6 +20,8 @@ REVIEW dùng **Supervisor, Researcher, Evidence Analyst, Writer, Critic**. Metho
 **Không mở scope trước khi khép gate hiện tại:** không code tùy ý do AI sinh, GPU training, OCR, nhóm cộng tác hoặc marketplace. #63 bổ sung hình phương pháp, biểu đồ từ kết quả đã chạy và ZIP nguồn LaTeX IEEE/ACM; chưa mở dịch vụ biên dịch PDF tự động. Ảnh tìm từ web để sau, cần attribution và cho người dùng bỏ. Không thay thực nghiệm thật bằng mock để báo hoàn thành.
 
 **Bài báo theo loại nghiên cứu (#61/#63):** bản mới dùng khung có Related Work; Introduction nêu câu hỏi, gap có nguồn và đóng góp đúng phạm vi. Writer/Critic/PostProcessor cùng kiểm cấu trúc, văn xuôi, giải thích hình, baseline/số liệu và các kết luận vượt bằng chứng. Bản tổng quan không bị ép có Results thực nghiệm; dữ liệu người dùng không bị coi là hệ thống đã tự xác minh. Mẫu IEEE/ACM xử lý bố cục; không thay việc đánh giá khoa học. Chi tiết quy cách và API xuất bản tại [Agent Workflow, mục 7](../technical/agent-workflow.md#7-quy-cách-bản-thảo--cập-nhật-29102026-61-63).
+
+**Cập nhật 31/10 — cuối P6, chuẩn bị P7:** PR #66/#68/#70/#72/#74/#76 đã merge develop; nền `f252223` có 413 backend tests và 5/5 CI đạt. Nguồn học thuật/nhật ký tìm kiếm và kiểm bằng chứng đã được bổ sung; vẫn cần đánh giá REVIEW thật sau sửa. Issue #77 bổ sung gói tái lập theo report version: đóng băng CSV/code/environment trước chạy, giữ raw results/journal, kiểm hash và chạy lại độc lập. Sau nghiệm thu gói này, ưu tiên evaluation P7, browser/runtime ba luồng và fault/restart/concurrency; chưa mở P8–P10 hoặc coi G0–G7 đã khép.
 
 ## 2. Kiến trúc và công nghệ
 
