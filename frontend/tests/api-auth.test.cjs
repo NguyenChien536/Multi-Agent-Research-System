@@ -21,7 +21,7 @@ function client({ status = 200, response = {}, token = 'test-token' } = {}) {
     },
     fetch: async (url, config) => {
       requests.push({ url, ...config });
-      return { ok: status < 400, status, json: async () => response };
+      return { ok: status < 400, status, json: async () => response, blob: async () => response };
     },
   };
   vm.runInNewContext(compiled, context);
@@ -34,6 +34,32 @@ test('protected auth/me and task requests both include the session token', async
   await c.api.tasks.list();
   assert.equal(c.requests.length, 2);
   for (const request of c.requests) assert.equal(request.headers.get('Authorization'), 'Bearer test-token');
+});
+
+test('experiment downloads pin version, keep binary data, disable cache and include auth/abort', async () => {
+  const blob = new Blob(['private zip bytes']);
+  const c = client({ response: blob });
+  const controller = new AbortController();
+  assert.equal(await c.api.tasks.getExperimentBundle('paper', 3, controller.signal), blob);
+  const request = c.requests[0];
+  assert.ok(request.url.endsWith('/research/paper/report/versions/3/experiment-bundle'));
+  assert.equal(request.headers.get('Authorization'), 'Bearer test-token');
+  assert.equal(request.cache, 'no-store');
+  assert.equal(request.signal, controller.signal);
+});
+
+test('experiment export expiry uses the shared session-expired behavior', async () => {
+  const c = client({ status: 401, response: { detail: 'expired' } });
+  await assert.rejects(c.api.tasks.getExperimentBundle('paper', 1), error => error.status === 401);
+  assert.equal(c.storage.has('synthia_access_token'), false);
+  assert.equal(c.redirects.length, 1);
+});
+
+test('experiment availability requests preserve report version and server reason', async () => {
+  const c = client({ response: { available: false, computational: true, reason: 'Missing historical snapshot' } });
+  const data = await c.api.tasks.getExperimentBundleAvailability('paper', 2);
+  assert.ok(c.requests[0].url.endsWith('/research/paper/report/versions/2/experiment-bundle/availability'));
+  assert.equal(data.reason, 'Missing historical snapshot');
 });
 
 test('login/register are public; successful login replaces the session', async () => {

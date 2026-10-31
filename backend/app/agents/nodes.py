@@ -1085,6 +1085,7 @@ async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
 
     analysis_run_id: str | None = None
     frozen_manifest: Dict[str, Any] | None = None
+    reproduction_snapshot = None
     try:
         if not dataset_csv:
             raise InvalidInputError("A user-provided CSV dataset is required for computational empirical analysis")
@@ -1112,6 +1113,9 @@ async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
                 session.add(run_record)
                 await session.flush()
                 analysis_run_id = str(run_record.id)
+                from app.services.experiment_bundle import freeze_reproduction_inputs
+                reproduction_snapshot = await freeze_reproduction_inputs(
+                    session, run_record.research_task_id, run_record.id, dataset_csv)
                 session.add_all([
                     ExperimentJournalEntry(
                         research_task_id=run_record.research_task_id,
@@ -1119,8 +1123,9 @@ async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
                         sequence=1,
                         kind="PLAN_FROZEN",
                         actor="METHODOLOGIST",
-                        payload={"manifest": frozen_manifest},
-                        artifact_ids=[str(parsed_dataset_artifact_id)] if parsed_dataset_artifact_id else [],
+                        payload={"manifest": frozen_manifest, "reproduction_snapshot": reproduction_snapshot},
+                        artifact_ids=([str(parsed_dataset_artifact_id)] if parsed_dataset_artifact_id else []) +
+                            [reproduction_snapshot["input"]["artifact_id"], reproduction_snapshot["routine"]["artifact_id"]],
                     ),
                     ExperimentJournalEntry(
                         research_task_id=run_record.research_task_id,
@@ -1139,6 +1144,9 @@ async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
                 await session.commit()
 
         params = frozen_manifest["parameters"]
+        if reproduction_snapshot:
+            from app.services.experiment_bundle import assert_frozen_routine
+            assert_frozen_routine(reproduction_snapshot)
         run_result = await run_tabular_regression_isolated(
             dataset_csv,
             target_column=frozen_manifest["target_column"],
@@ -1150,6 +1158,8 @@ async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
         if run_result.get("manifest") != frozen_manifest:
             raise RuntimeError("Executed routine manifest differs from the pre-run frozen plan")
         passed, diff = await verify_tabular_repeatability_isolated(dataset_csv, run_result)
+        if reproduction_snapshot:
+            assert_frozen_routine(reproduction_snapshot)
         completed_at = datetime.now(timezone.utc)
 
         analysis_run = {
@@ -1236,6 +1246,10 @@ async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
                 persisted_run.reproducibility_status = analysis_run["reproducibility_status"]
                 persisted_run.reproducibility_diff = diff
                 persisted_run.completed_at = completed_at
+                from app.services.experiment_bundle import save_snapshot_file, json_bytes
+                result_ref = await save_snapshot_file(session, persisted_run.research_task_id,
+                    f"result-{analysis_run_id}.json", json_bytes(run_result), "REPRO_RESULT")
+                journal_entries[2]["payload"]["reproduction_result"] = result_ref
                 session.add_all([
                     ExperimentJournalEntry(
                         research_task_id=persisted_run.research_task_id,
@@ -1244,7 +1258,8 @@ async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
                         kind=entry["kind"],
                         actor=entry["actor"],
                         payload=entry["payload"],
-                        artifact_ids=[str(persisted_run.dataset_artifact_id)] if persisted_run.dataset_artifact_id else [],
+                        artifact_ids=([str(persisted_run.dataset_artifact_id)] if persisted_run.dataset_artifact_id else []) +
+                            ([result_ref["artifact_id"]] if entry["kind"] == "EXECUTION_RESULT" else []),
                     )
                     for entry in journal_entries[2:]
                 ])

@@ -2,7 +2,7 @@
 
 **Synthia — Multi-Agent Research System** hỗ trợ người nghiên cứu đi từ câu hỏi/tài liệu đến bản thảo bài báo có nguồn, có kết quả thực nghiệm khi phương pháp yêu cầu. Đây là đề tài học phần ATI; bản thảo vẫn cần người nghiên cứu kiểm tra.
 
-**Cập nhật 24/10/2026:** R1–R3 đã merge vào `develop` (R3: PR #44, commit `b2e39b7`). Backend suite đạt 109 tests trên PostgreSQL/pgvector tạm; PR #44 đạt CI 5/5, gồm frontend và Compose build. **Chưa sẵn sàng production.**
+**Cập nhật 31/10/2026:** nền `develop@f252223` / PR #76 có **413 backend tests và 5/5 CI đạt**. Đã có hỏi/sửa bài theo phiên bản, nguồn học thuật và kiểm hỗ trợ bằng chứng. Đang nghiệm thu **P6 / issue #77 — gói tái lập thực nghiệm theo phiên bản**, sau đó ưu tiên đánh giá P7 và nghiệm thu runtime/UI ba luồng. **Chưa sẵn sàng production.**
 
 ## Chỉ cần mở ba tài liệu thường xuyên
 
@@ -14,9 +14,9 @@
 
 ## Việc ngay tiếp theo
 
-1. Thực hiện **R5 / issue #45**: Critic review toàn bài theo từng section, có no-delta stop và kiểm tra evidence/method/results.
-2. Chạy REVIEW E2E với provider thật trong cap; tiếp tục **R4** runner/journal độc lập theo [Implementation Plan](project/implementation-plan.md).
-3. Qua evaluation → staging → dùng thử giới hạn → production. **10/11 là mốc nộp/demo, chưa phải cam kết production.**
+1. Nghiệm thu **P6 / #77**: xuất đúng dataset/code/config/kết quả/journal của version và chạy lại ZIP độc lập; bài cũ thiếu snapshot phải báo rõ.
+2. Đánh giá REVIEW thật sau sửa; thực hiện **P7** so single-agent, multi-agent đầy đủ và tắt macro loop trên corpus/model/cap được kiểm soát.
+3. Khép các kiểm tra browser/runtime, restart/concurrency và ba luồng trước staging → dùng thử giới hạn → production. **10/11 là mốc nộp/demo, chưa phải cam kết production.**
 
 Quy trình Git: issue nhỏ → branch chức năng/sửa lỗi → tests/review → PR develop. Chỉ đưa lên main khi CI và demo end-to-end trên đúng candidate đạt. Xem [CONTRIBUTING](../CONTRIBUTING.md).
 

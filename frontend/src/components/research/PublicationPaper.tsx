@@ -4,6 +4,7 @@ import { useState, type ComponentProps } from 'react';
 import { api } from '@/lib/api';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import Link from 'next/link';
+import { ExperimentBundleExport } from './ExperimentBundleExport';
 type ViewerProps = ComponentProps<typeof MarkdownViewer> & { academicStyle?: boolean };
 
 export function PublicationExport({ taskId, version, isEn, showRevisionLink = true }: { taskId: string; version?: number; isEn: boolean; showRevisionLink?: boolean }) {
@@ -37,6 +38,7 @@ export function PublicationExport({ taskId, version, isEn, showRevisionLink = tr
       {busy ? (isEn ? 'Preparing…' : 'Đang tạo…') : (isEn ? 'Download LaTeX + figures' : 'Tải LaTeX + hình vẽ')}
     </button>
     <span className="text-zinc-500">{isEn ? 'Compile the ZIP with XeLaTeX / Overleaf.' : 'Biên dịch ZIP bằng XeLaTeX / Overleaf.'}</span>
+    <ExperimentBundleExport taskId={taskId} version={version} isEn={isEn} />
     {error && <p role="alert" className="w-full text-red-700">{error}</p>}
   </div>;
 }

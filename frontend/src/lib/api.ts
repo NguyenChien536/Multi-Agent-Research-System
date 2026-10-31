@@ -26,7 +26,7 @@ function clearAccessToken(): void {
   if (typeof window !== 'undefined') window.sessionStorage.removeItem(TOKEN_KEY);
 }
 
-async function fetcher<T>(endpoint: string, options?: RequestInit): Promise<T> {
+async function fetcher<T>(endpoint: string, options?: RequestInit, responseKind: 'json' | 'blob' = 'json'): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
 
   const headers = new Headers(options?.headers);
@@ -42,7 +42,7 @@ async function fetcher<T>(endpoint: string, options?: RequestInit): Promise<T> {
 
   try {
     const response = await fetch(url, config);
-    const data = await response.json().catch(() => null);
+    const data = response.ok && responseKind === 'blob' ? await response.blob() : await response.json().catch(() => null);
 
     if (!response.ok) {
       if (response.status === 401 && !isPublicAuth) {
@@ -127,6 +127,13 @@ export const api = {
       fetcher<{ filename: string; archive_base64: string; report_version_id: string; version_number: number }>(
         `/research/${id}/report/versions/${version}/publication?template=${template}`, { signal, cache: 'no-store' },
       ),
+
+    getExperimentBundleAvailability: (id: string, version: number, signal?: AbortSignal) =>
+      fetcher<{ available: boolean; computational: boolean; reason?: string }>(
+        `/research/${id}/report/versions/${version}/experiment-bundle/availability`, { signal, cache: 'no-store' }),
+
+    getExperimentBundle: (id: string, version: number, signal?: AbortSignal) =>
+      fetcher<Blob>(`/research/${id}/report/versions/${version}/experiment-bundle`, { signal, cache: 'no-store' }, 'blob'),
 
     getQuestionHistory: (id: string, version: number, offset = 0, signal?: AbortSignal) =>
       fetcher<ReportQuestionHistory>(`/research/${id}/report/versions/${version}/questions?offset=${offset}&limit=20`, { signal, cache: 'no-store' }),
