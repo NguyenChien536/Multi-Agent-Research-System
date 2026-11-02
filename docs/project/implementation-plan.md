@@ -15,7 +15,7 @@
 | 04/11 | Sửa blockers, regression/UI/restart cần thiết, đóng candidate cùng revision FE/API/worker; hoàn tất báo cáo/kịch bản/gói nộp | Chạy trọn kịch bản và CI đạt trước main; công khai phần chưa đạt thay vì gắn nhãn hoàn thành |
 | 05/11 | Diễn tập, dự phòng sự cố và bàn giao cuối kỳ | Bản đã kiểm, dữ liệu/output đã tạo thật và bằng chứng có thể kiểm lại |
 
-**#84 đang nghiệm thu:** contract v4 có đề cương phân cấp theo loại bài, kiểm mục nhỏ có nội dung và giữ ngữ cảnh mục cha khi Critic review; bổ sung chẩn đoán context/token và tách chúng khỏi quota tài khoản. 118 focused tests đạt; full suite trước các ca bổ sung cuối đạt 505; CI cuối là cổng trước merge. Đây là cải thiện cơ chế viết/kiểm, chưa phải bằng chứng chất lượng học thuật đã đạt trên mọi đề tài. Bộ chọn nguồn và evidence coverage vẫn phải kiểm bằng bài thật.
+**#84 / PR #85 — code c72e936 đã qua kiểm:** contract v4 có đề cương phân cấp theo loại bài, kiểm mục nhỏ có nội dung và giữ ngữ cảnh mục cha khi Critic review; bổ sung chẩn đoán context/token và tách chúng khỏi quota tài khoản. 118 focused tests đạt; toàn bộ backend 513, frontend 20 và 5/5 CI đạt trên code c72e936. Các lần chạy dùng fixture không phải kết quả nghiên cứu. Đây là cải thiện cơ chế viết/kiểm, chưa phải bằng chứng chất lượng học thuật đã đạt trên mọi đề tài. Issue #86 tiếp tục bộ chọn nguồn và evidence coverage; #83 đo/chấm pilot thật trong cap đã chốt.
 
 ## 1. Định hướng đã chốt
 

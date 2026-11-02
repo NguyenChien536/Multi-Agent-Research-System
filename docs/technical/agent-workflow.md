@@ -170,6 +170,8 @@ Chỉ học cấu trúc lập luận và nguyên tắc thiết kế hình. Khôn
 
 ### 9.1. Bố cục phân cấp và lập luận — contract v4, 02/11/2026 (#84)
 
+Code c72e936 / PR #85 có 118 ca focused, 513 backend tests, 20 frontend tests và 5/5 CI đạt. Đây là nghiệm thu cơ chế viết/kiểm phần mềm; chưa có đánh giá chất lượng bài thật sau sửa.
+
 Kế hoạch nghiên cứu mới có `section_outline`: mục cha, các mục nhỏ theo câu hỏi/chủ đề và mục đích lập luận. Supervisor đề xuất ngay trong lần lập kế hoạch hiện có, không mở một vòng gọi model mới. Đây là đề cương dự kiến trước tìm nguồn, không phải kết quả nghiên cứu. Writer phải điều chỉnh theo bằng chứng thực có; không tạo số liệu hoặc suy luận không được hỗ trợ để lấp đầy đề cương. H2 giữ vai trò của từng phần, H3 phát triển các luận điểm/câu hỏi cụ thể; H4 chỉ dùng khi cần bên dưới H3.
 
 | Phần | Cách triển khai trong bài |

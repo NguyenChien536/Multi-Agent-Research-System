@@ -20,7 +20,7 @@ Tài liệu này trả lời **đã có gì, đã kiểm đến đâu, tiếp th
 
 **Chưa đủ điều kiện phát hành production hoặc nâng `main` thành bản demo đã nghiệm thu.** Các chức năng có code và tests không tự đóng toàn bộ G0–G7.
 
-**Cập nhật #84:** đang kiểm contract v4 và hierarchy theo từng loại bài; đã đạt 118 focused tests và 505 tests toàn bộ trước các ca cuối; chưa chấm bài thật sau thay đổi. Writer của bài được audit nhận 5 evidence records từ 3 nguồn; giới hạn chính ở lượng bằng chứng và tổ chức nội dung, chưa có bằng chứng context overflow. Xem Agent Workflow §9.1–9.2.
+**Cập nhật #84 / PR #85:** code c72e936 với contract v4/hierarchy theo loại bài đạt 118 focused tests, 513 backend tests, 20 frontend tests và 5/5 CI; chưa chấm bài thật sau thay đổi. Writer của bài được audit nhận 5 evidence records từ 3 nguồn; giới hạn chính ở lượng bằng chứng và tổ chức nội dung, chưa có bằng chứng context overflow. Xem Agent Workflow §9.1–9.2.
 
 ## Bằng chứng cập nhật 02/11
 
@@ -51,7 +51,7 @@ CI của PR là cổng trước merge; release `main` vẫn cần demo UI/API/br
 
 | Ưu tiên | Việc cần hoàn thiện | Người dùng nhận được gì? | Điều kiện nghiệm thu |
 |---|---|---|---|
-| 1 | P7 / #79: nền protocol/thu output/chấm; sau đó adapter A/B/C và corpus thật | Có bộ dữ liệu và bảng so sánh kiểm tra lại được | Nền CLI qua CI; runner đúng model/corpus/cap, pilot/held-out tách biệt; giữ failures và kết quả âm |
+| 1 | #86: nguồn/bằng chứng đủ các khái niệm; tích hợp và nghiệm thu FE/API trên cùng candidate | Bài có lập luận và nguồn liên quan, luồng người dùng chạy thật | Chấm bài đa chủ đề/loại; không lấy đủ query hoặc số ref làm bằng chứng chất lượng |
 | 2 | P7: đánh giá theo Evaluation Plan | Biết chất lượng, nguồn hỗ trợ, chi phí, thời gian và giá trị multi-agent trên bộ câu hỏi cố định | Baseline/ablation cùng model/corpus/cap; giữ cả lỗi/kết quả âm và giới hạn mẫu |
 | 3 | Nghiệm thu runtime/UI còn thiếu | Ba luồng REVIEW, tính toán, human-led hoạt động sau lỗi/khôi phục | Browser + broker + restart/concurrency/fault tests; không đóng gate chỉ từ mock tests |
 | 4 | P8 → P9 → P10 | Staging, backup/restore, monitoring vận hành, pilot rồi phát hành giới hạn | Cùng image digest, rollback, cảnh báo thật, tải/chi phí đã đo và quyết định go/no-go |
