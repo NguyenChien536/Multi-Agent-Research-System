@@ -50,13 +50,15 @@ def run(args):
     request("/api/v1/research", expect=401)
     check("same-origin web, dependency readiness and authentication")
     suffix = uuid.uuid4().hex[:10]
-    account = {"username": "release_" + suffix, "email": f"release_{suffix}@example.com", "password": uuid.uuid4().hex + "Aa1!"}
-    request("/api/v1/auth/register", "POST", account, expect=201)
+    account = (json.loads(Path(args.account_file).read_text(encoding="utf-8-sig")) if args.account_file else
+               {"username": "release_" + suffix, "email": f"release_{suffix}@example.com", "password": uuid.uuid4().hex + "Aa1!"})
+    if not args.account_file:
+        request("/api/v1/auth/register", "POST", account, expect=201)
     token = request("/api/v1/auth/login", "POST", {k: account[k] for k in ("email", "password")})["access_token"]
     (output / "account.json").write_text(json.dumps(account, indent=2), encoding="utf-8")
     me = request("/api/v1/auth/me", token=token)
     assert me["email"] == account["email"]
-    assert request("/api/v1/research", token=token) == []
+    request("/api/v1/research", token=token)
     check("register, login and persisted profile")
     questions = {
         "REVIEW": "Under what conditions does retrieval-augmented generation reduce factual errors compared with language-model-only answering? Review published evidence from 2020 to 2026, distinguish citation correctness from factual support, and report conflicting findings and evaluation limitations.",
@@ -64,7 +66,8 @@ def run(args):
         "EMPIRICAL_HUMAN": "How could a small exploratory survey examine students' perceived usefulness and limitations of AI research assistants? Prepare a feasible protocol, informed-consent guidance and descriptive analysis plan, then wait for user-provided data. Do not invent participants, ethics approval or findings.",
     }
     tasks = {}
-    for kind, question in questions.items():
+    selected = {args.generate: questions[args.generate]} if args.generate else questions
+    for kind, question in selected.items():
         tasks[kind] = request("/api/v1/research", "POST", {
             "title": "Release verification: " + kind,
             "research_question": question, "research_type": kind, "language": "en",
@@ -75,13 +78,14 @@ def run(args):
         }, token, 201)
         request(f"/api/v1/research/{tasks[kind]['id']}/monitor", token=token)
     evidence["task_ids"] = {k: v["id"] for k, v in tasks.items()}
-    assert len(request("/api/v1/research", token=token)) == 3
-    check("three study modes, workspace persistence and monitor")
+    listed = {task["id"] for task in request("/api/v1/research?limit=100", token=token)}
+    assert {task["id"] for task in tasks.values()}.issubset(listed)
+    check("selected study modes, workspace persistence and monitor")
     # Another user must never see a task or its monitor, even with a valid token.
     other = {**account, "username": "other_" + suffix, "email": "other_" + suffix + "@example.com"}
     request("/api/v1/auth/register", "POST", other, expect=201)
     other_token = request("/api/v1/auth/login", "POST", {k: other[k] for k in ("email", "password")})["access_token"]
-    task_id = tasks["REVIEW"]["id"]
+    task_id = next(iter(tasks.values()))["id"]
     for path in (f"/research/{task_id}", f"/research/{task_id}/monitor", f"/research/{task_id}/report"):
         request("/api/v1" + path, token=other_token, expect=404)
     check("cross-user task, report and monitor isolation")
@@ -141,4 +145,5 @@ if __name__ == "__main__":
     parser.add_argument("--output", default="scratch/release-local/smoke")
     parser.add_argument("--generate", choices=("REVIEW", "EMPIRICAL_COMPUTATIONAL", "EMPIRICAL_HUMAN"))
     parser.add_argument("--timeout", type=int, default=960)
+    parser.add_argument("--account-file", help="Private JSON with an existing local test account; never prints its credentials")
     run(parser.parse_args())
