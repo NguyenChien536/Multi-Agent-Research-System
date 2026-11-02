@@ -2,7 +2,7 @@
 
 **Synthia — Multi-Agent Research System** hỗ trợ người nghiên cứu đi từ câu hỏi/tài liệu đến bản thảo bài báo có nguồn, có kết quả thực nghiệm khi phương pháp yêu cầu. Đây là đề tài học phần ATI; bản thảo vẫn cần người nghiên cứu kiểm tra.
 
-**Cập nhật 02/11/2026:** nền `develop@08cbb8e` / PR #80 có **458 backend tests, 20 frontend tests và 5/5 CI đạt**. Đã có gói tái lập thực nghiệm và nền freeze/thu output/chấm so sánh; **P7 / #81** bổ sung bộ chạy A/B/C trên cùng nguồn/model/cap, đang qua audit và kiểm thử. Chưa có kết quả benchmark khoa học hoặc kết luận multi-agent tốt hơn single-agent. **Chưa sẵn sàng production.**
+**Cập nhật 02/11/2026 — P7 / #81, PR #82:** bộ chạy A/B/C dùng cùng nguồn/model/cap đã qua **485 backend tests, 20 frontend tests và 5/5 CI** trên code `e457f17`; thêm 60 ca focused evaluation đạt. Issue **#83** tiếp tục pilot thật có ngân sách và chấm output. Chưa có kết quả benchmark khoa học hoặc kết luận multi-agent tốt hơn single-agent. **Chưa sẵn sàng production.**
 
 ## Chỉ cần mở ba tài liệu thường xuyên
 
@@ -14,7 +14,7 @@
 
 ## Việc ngay tiếp theo
 
-1. **P7 / #81**: nghiệm thu bộ chạy A/B/C; [Evaluation Plan](project/evaluation-plan.md) §7–8 ghi lệnh chuẩn bị, thực thi và chấm. Smoke fixture không phải kết quả đánh giá thật.
+1. **P7 / #83**: chốt profile/ngân sách và chạy pilot thật; [Evaluation Plan](project/evaluation-plan.md) §7–8 ghi cách thực thi và chấm. Bộ chạy #81 đã kiểm thử; smoke fixture không phải kết quả đánh giá thật.
 2. Chốt model/giá trần/ngân sách tổng và corpus; freeze source sạch đúng commit, chạy pilot có giới hạn trước held-out, giữ cả lỗi và kết quả không thuận lợi.
 3. Khép các kiểm tra browser/runtime, restart/concurrency và ba luồng trước staging → dùng thử giới hạn → production. **10/11 là mốc nộp/demo, chưa phải cam kết production.**
 

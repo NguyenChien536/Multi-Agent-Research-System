@@ -1,10 +1,10 @@
 # Kế hoạch triển khai đến production — Synthia
 
-**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 02/11/2026, nền develop@08cbb8e / PR #80; bộ chạy P7 issue #81 · **Mốc nộp/demo:** 10/11/2026.
+**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 02/11/2026, code đã kiểm e457f17 / PR #82; pilot P7 issue #83 · **Mốc nộp/demo:** 10/11/2026.
 
 Đây là nguồn duy nhất về **việc cần làm, thứ tự và điều kiện phát hành**. [Roadmap](roadmap-and-progress.md) ghi việc đã làm; [biên bản](baseline-verification.md) ghi bằng chứng. P0–P7/G0–G7 giữ ý nghĩa trong [SRS](../requirements/SRS.md); P8–P10 bổ sung đường đến production. Lịch này thay lịch 12/10 đã lỗi thời.
 
-**Cập nhật 02/11 — bộ chạy P7 / #81:** dùng đúng production graph cho B/C, một controller cho A, cùng corpus/model/cap; database đánh giá riêng, không có live source/embedding, ledger tổng không reset qua retry. Đã đạt 482 backend tests trên DB sạch và 20 frontend tests; 60 ca focused của bản cuối đã đạt, CI là cổng trước merge. Chưa chạy pilot trả phí hoặc có kết quả khoa học; bước tiếp theo là chốt profile/ngân sách, freeze code/corpus, chạy pilot rồi chấm và held-out. Chi tiết tại Evaluation Plan §8; không tự đóng G7 hoặc đưa lên main.
+**Cập nhật 02/11 — bộ chạy P7 / #81:** dùng đúng production graph cho B/C, một controller cho A, cùng corpus/model/cap; database đánh giá riêng, không có live source/embedding, ledger tổng không reset qua retry. Code e457f17 đạt 485 backend tests, 20 frontend tests, 60 ca focused evaluation và 5/5 CI; CLI plan chạy thật trong Docker với 0 provider calls. Chưa chạy pilot trả phí hoặc có kết quả khoa học; issue #83 tiếp tục chốt profile/ngân sách, freeze code/corpus, chạy pilot rồi chấm và held-out. Chi tiết tại Evaluation Plan §8; không tự đóng G7 hoặc đưa lên main.
 
 ## 1. Định hướng đã chốt
 

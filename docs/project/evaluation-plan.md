@@ -127,6 +127,8 @@ Protocol, outputs, packet, key và grades dùng checksum và chống ghi đè, n
 
 ## 8. Chạy ba cấu hình trên nguồn cố định — issue #81
 
+**Kiểm phần mềm 02/11/2026:** code `e457f17` / PR #82 có 485 backend tests, 20 frontend tests và 5/5 CI đạt; 60 ca focused evaluation và CLI plan trong Docker không gọi provider. Đây là bằng chứng bộ chạy, chưa phải kết quả pilot/held-out. Issue #83 tiếp tục thực nghiệm và chấm.
+
 Bộ chạy `python -m app.evaluation.execute` thực hiện **một câu hỏi × một cấu hình × một attempt** mỗi lệnh. Không tự chạy toàn bộ 36 bài. Các tests dùng provider giả để kiểm phần mềm, không tạo kết quả nghiên cứu. Chỉ chạy thật khi đã chốt model, giá dùng làm trần tính chi phí, ngân sách tổng, câu hỏi và nguồn; không suy ra multi-agent tốt hơn từ các tests này.
 
 | Cấu hình | Cách chạy đã triển khai |
