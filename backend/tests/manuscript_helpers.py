@@ -32,6 +32,10 @@ def complete_manuscript(content, research_type="REVIEW", language="vi", prompt="
             text += " " + " ".join(re.findall(r"\[\[@claim:[^\]]+\]\]", body))
         if section["id"] in {"synthesis", "results", "related_work"}:
             text += "\n\n" + body
+        if section["id"] in contract.get("structure_policy", {}).get("sections", {}):
+            # Synthetic hierarchy for software tests, not a writing-quality model.
+            text = "### Evidence and procedure in the controlled fixture\n\n" + text
+            text += "\n\n### Scope and interpretation of the controlled fixture\n\n" + paragraph
         figure_ids = list(dict.fromkeys(re.findall(r"\[\[figure:([a-z_-]+)\]\]", prompt)))
         for number, figure_id in enumerate(figure_ids, 1):
             if (figure_id == "workflow" and section["id"] in {"review_methods", "methods"}) or (figure_id == "evaluation" and section["id"] == "results"):

@@ -5,9 +5,10 @@ These are product defaults, not certification of journal/reporting-guideline com
 import re
 import unicodedata
 from typing import Any
-from app.services.academic_writing import writing_brief
+from app.services.academic_writing import writing_brief, structure_policy
 
-CONTRACT_VERSION = 3
+CONTRACT_VERSION = 4
+REVIEW_OUTPUT_CONTRACT = f"REVIEW-v{CONTRACT_VERSION}"
 
 
 def normalize_claim_markers(markdown: str) -> str:
@@ -87,6 +88,7 @@ def manuscript_contract(research_type: str, language: str) -> dict[str, Any]:
         "systematic_review_supported": False,
         "introduction_requirements": ["background", "problem_statement", "research_question", "bounded_research_gap", "approach_and_execution_status", "evidence_supported_contributions"],
         "writing_brief": writing_brief(article_type),
+        "structure_policy": structure_policy(article_type),
         "evidence_review_policy": {"version": 2, "scope": "all_prose_and_cited_tables_with_guarantee_guards"},
         "research_quality_policy": {"version": 1, "source_balance": "round_robin_discovery_queries"},
     }
@@ -161,6 +163,10 @@ Start with exactly one '# <specific scientific title>', without 'Research report
 Use these exact H2 headings, in this order (the keywords may be one semicolon-separated line):
 {headings}
 Use H3 subsections for topic-specific arguments within synthesis/methods/results/discussion.
+Develop substantial sections using this genre-specific hierarchy policy: {contract.get('structure_policy', {})}
+The proposed Supervisor outline is provisional. Adapt it to the evidence actually supplied;
+do not invent facts or experiments to satisfy a planned subsection. Topic-specific H3 headings
+should reveal the comparison/question being developed, not merely repeat their parent H2.
 References are generated from validated claim markers after writing; do not invent a bibliography.
 
 Write connected academic prose in the requested language. Each analytical paragraph should make
@@ -228,7 +234,8 @@ def validate_manuscript(markdown: str, contract: dict | None) -> list[dict[str, 
     def add(code, message):
         findings.append({"code": code, "message": message})
     # Fenced code must not masquerade as manuscript headings or paragraphs.
-    text = re.sub(r"(?ms)^```.*?^```\s*$", "", markdown)
+    from app.services.manuscript_structure import strip_fenced_blocks
+    text = strip_fenced_blocks(markdown)
     if len(re.findall(r"(?m)^#\s+\S.+$", text)) != 1:
         add("TITLE", "Use exactly one H1 containing the article title.")
     matches = list(re.finditer(r"(?m)^##\s+(.+?)\s*$", text))
@@ -304,4 +311,6 @@ def validate_manuscript(markdown: str, contract: dict | None) -> list[dict[str, 
         if re.search(r"scopus|pubmed|ieee xplore|science ?direct|web of science|arxiv", sentence) and re.search(r"search|tim kiem|truy van", sentence):
             add("UNSUPPORTED_DATABASE_SEARCH", "Describe recorded web search; do not claim direct academic database searches that were not executed.")
             break
+    from app.services.manuscript_structure import validate_hierarchy
+    findings.extend(validate_hierarchy(markdown, contract))
     return findings

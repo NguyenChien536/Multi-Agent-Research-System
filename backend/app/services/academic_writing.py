@@ -31,18 +31,65 @@ _METHODS = {
     },
 }
 
+# Original rhetorical blueprints informed by publisher instructions and papers.
+# These are roles for subsections, not text/headings/results to copy verbatim.
+_STRUCTURE = {
+    "NARRATIVE_REVIEW": {
+        "review_methods": "Separate the actual scope/source-discovery procedure from selection boundaries and how evidence was synthesized. Name executed indexes/queries and limits, not an invented screening protocol.",
+        "synthesis": "Create question-specific themes or comparison dimensions. Within each theme compare supported findings, assumptions, disagreements and missing evidence; avoid one subsection per paper.",
+    },
+    "COMPUTATIONAL_STUDY": {
+        "methods": "Separate the problem/variables/assumptions from the routine actually executed. Explain inputs, outputs, objective and methodological choices without describing an unexecuted proposed method as tested.",
+        "setup": "Separate dataset/split/preprocessing from baselines/parameters/metrics. Include only recorded details, units and reproducibility settings; identify leakage safeguards and unrecorded information.",
+        "results": "Group observations by research question or measured comparison: primary outcomes against the baseline, then documented robustness/repeatability/negative results when available. Never invent a second experiment to fill a heading.",
+    },
+    "EMPIRICAL_STUDY": {
+        "methods": "Separate study design/data provenance/population from documented measures/collection/analysis. Attribute researcher-supplied information and explain consent/ethics status when documented.",
+        "results": "Organize actual supplied observations by question/theme/outcome, with provenance and uncertainty. Separate sample/data completeness from substantive findings when both are documented. Do not convert a protocol into completed fieldwork.",
+    },
+}
+
+_LENGTHS = {
+    "SHORT": {"word_target": "600–900", "output_tokens": 8192},
+    "MEDIUM": {"word_target": "1400–2000", "output_tokens": 12288},
+    "LONG": {"word_target": "2400–3200", "output_tokens": 16384},
+}
+
+
+def writing_limits(contract, length):
+    """Use frozen word/output profiles; absent historical profiles keep old limits."""
+    profiles = ((contract or {}).get("writing_brief") or {}).get("length_profiles")
+    if profiles:
+        return profiles[length]["word_target"], profiles[length]["output_tokens"]
+    return {"SHORT": ("400–600", 4096), "MEDIUM": ("800–1100", 8192),
+            "LONG": ("1400–1800", 12288)}[length]
+
+
+def structure_policy(article_type):
+    if article_type not in _STRUCTURE:
+        raise ValueError("Unsupported academic writing structure")
+    return {"version": 1, "expand_after_characters": 350,
+            "minimum_subsection_prose_characters": 50, "maximum_subsections": 6,
+            "sections": {key: {"minimum_subsections": 2, "purpose": purpose}
+                         for key, purpose in _STRUCTURE[article_type].items()}}
+
 
 def writing_brief(article_type: str) -> dict:
     if article_type not in _METHODS:
         raise ValueError("Unsupported academic writing profile")
     return deepcopy({
-        "version": 1, "article_type": article_type,
+        "version": 2, "article_type": article_type,
+        "length_profiles": _LENGTHS,
+        "length_rule": "Word ranges are targets for an evidence-sufficient manuscript, not a minimum to fill with speculation. Write less and identify missing evidence when necessary. Preserve the total task token/cost/time budget; a longer configured output cap does not authorize more unsupported claims or unbounded revisions.",
         "section_goals": {**_COMMON, **_METHODS[article_type]},
         "paragraph_rule": "Develop a question-relevant claim, its evidence with attribution, the reasoning that connects them, and its scope or uncertainty. Vary paragraph form naturally; do not repeat a four-sentence formula or decorative transitions.",
         "visual_rule": "Use figures to explain an argument or measured comparison, not decorate the paper. Introduce and interpret every numbered figure/table near first use, in numerical order. Captions state what, how, scope and provenance; accessible descriptions explain key structure/values without relying on color. Never infer error bars from one result. Put a table caption on its own line in the form 'Table N. <specific caption>' directly before its Markdown table; do not use a generic 'comparison' caption.",
         "reference_rule": "Cite only supplied verified claim markers where evidence is used. Check that the quoted evidence supports the specific inference and population/setting; a valid URL is not proof of support. Preserve disagreement. Never cite a paper just to make the bibliography look scholarly or copy an exemplar's bibliography.",
         "technical_claim_rule": "State theorem assumptions and the specific model/variant. Keep stability, strategy-proofness, welfare and demographic fairness distinct. A guarantee for transformed inputs does not imply a guarantee for the original inputs. A qualitative synthesis cannot prove that a proposed hybrid resolves a trade-off. Require a cited formal result or executed evaluation for such a conclusion; otherwise describe it as a hypothesis with validation still needed.",
         "method_specification_rule": "When proposing a technical method, define its inputs, outputs, constraints, objective directions and measurable variables; mark proposed formulas as unexecuted. Define each fairness measure explicitly rather than equating balanced satisfaction with demographic fairness. Distinguish alternative pipeline designs and their different assumptions. Missing definitions are limitations, never silently filled with alleged results.",
+        "hierarchy_rule": "Plan a coherent H2/H3 hierarchy before composing prose. Use the section policy to develop 2–4 informative H3 subsections in substantial analytical/method sections. Titles should identify the actual theme, mechanism, comparison or finding; never copy an exemplar's topic or force the same subsection labels on every subject. A parent heading may introduce children without its own paragraph. Keep short Abstract/Keywords/Introduction/Conclusion coherent; do not split every introductory rhetorical move into a separate heading. Use H4 only where needed beneath H3, without skipping levels. A short section need not be fragmented for a heading count.",
+        "argument_rule": "Each developed subsection must answer a question relevant to this manuscript, attribute the available evidence, explain comparison or mechanism, and close with an implication or unresolved issue. Connect subsections with a progression toward the RQs rather than repetitive summaries. More headings do not replace substantive analysis. Missing evidence must remain an explicit limitation and must not be expanded into invented detail.",
+        "exemplar_rule": "Learn genre, hierarchy, paragraph function, figure/table placement and citation practice from exemplars. Rebuild the argument for the current question and evidence; never transplant exemplar sentences, participant counts, metrics, references or unexecuted study designs. This is a general academic profile, not a claim of exact compliance with a named journal or a user exemplar that was never supplied.",
         "review_criteria": [
             "question_to_conclusion_alignment", "evidence_to_inference_support",
             "comparison_and_counterevidence", "method_and_execution_honesty",

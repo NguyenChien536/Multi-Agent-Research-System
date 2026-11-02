@@ -27,7 +27,7 @@ from tests.test_publication import measured_context
 def test_brief_matches_the_article_method_and_does_not_supply_research_evidence(kind, expected, absent):
     contract = manuscript_contract(kind, "vi")
     brief = contract["writing_brief"]
-    assert contract["version"] == 3
+    assert contract["version"] == 4
     assert expected in brief["section_goals"] and absent not in brief["section_goals"]
     assert "reference_identity" in " ".join(brief["review_criteria"])
     assert "http" not in json.dumps(brief) and "STORM" not in json.dumps(brief)

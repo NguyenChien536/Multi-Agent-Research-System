@@ -12,6 +12,7 @@ from pathlib import Path
 from app.evaluation.protocol import ARMS, Controls, case_for, digest, protocol
 from app.evaluation.corpus import RETRIEVAL_PROFILE
 from app.evaluation.execution_budget import Campaign
+from app.services.manuscript import REVIEW_OUTPUT_CONTRACT
 
 
 def code_fingerprint():
@@ -95,8 +96,8 @@ def main(argv=None):
         frozen = protocol(args.bundle)
         Controls.model_validate(frozen["controls"])
         case = case_for(frozen, args.case)
-        if frozen["controls"]["retrieval_profile"] != RETRIEVAL_PROFILE or frozen["controls"]["output_contract"] != "REVIEW-v3":
-            raise ValueError("This executor requires REVIEW-v3 and " + RETRIEVAL_PROFILE)
+        if frozen["controls"]["retrieval_profile"] != RETRIEVAL_PROFILE or frozen["controls"]["output_contract"] != REVIEW_OUTPUT_CONTRACT:
+            raise ValueError("This executor requires " + REVIEW_OUTPUT_CONTRACT + " and " + RETRIEVAL_PROFILE)
         # Validate prices even when planning. No directories/provider clients/DB
         # are opened in dry-plan mode.
         Campaign(Path(args.bundle) / "campaign", digest(frozen), args.campaign_cap, args.input_rate, args.output_rate)
