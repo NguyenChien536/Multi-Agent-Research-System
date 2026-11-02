@@ -49,6 +49,21 @@ _STRUCTURE = {
     },
 }
 
+_LENGTHS = {
+    "SHORT": {"word_target": "600–900", "output_tokens": 8192},
+    "MEDIUM": {"word_target": "1400–2000", "output_tokens": 12288},
+    "LONG": {"word_target": "2400–3200", "output_tokens": 16384},
+}
+
+
+def writing_limits(contract, length):
+    """Use frozen word/output profiles; absent historical profiles keep old limits."""
+    profiles = ((contract or {}).get("writing_brief") or {}).get("length_profiles")
+    if profiles:
+        return profiles[length]["word_target"], profiles[length]["output_tokens"]
+    return {"SHORT": ("400–600", 4096), "MEDIUM": ("800–1100", 8192),
+            "LONG": ("1400–1800", 12288)}[length]
+
 
 def structure_policy(article_type):
     if article_type not in _STRUCTURE:
@@ -64,6 +79,8 @@ def writing_brief(article_type: str) -> dict:
         raise ValueError("Unsupported academic writing profile")
     return deepcopy({
         "version": 2, "article_type": article_type,
+        "length_profiles": _LENGTHS,
+        "length_rule": "Word ranges are targets for an evidence-sufficient manuscript, not a minimum to fill with speculation. Write less and identify missing evidence when necessary. Preserve the total task token/cost/time budget; a longer configured output cap does not authorize more unsupported claims or unbounded revisions.",
         "section_goals": {**_COMMON, **_METHODS[article_type]},
         "paragraph_rule": "Develop a question-relevant claim, its evidence with attribution, the reasoning that connects them, and its scope or uncertainty. Vary paragraph form naturally; do not repeat a four-sentence formula or decorative transitions.",
         "visual_rule": "Use figures to explain an argument or measured comparison, not decorate the paper. Introduce and interpret every numbered figure/table near first use, in numerical order. Captions state what, how, scope and provenance; accessible descriptions explain key structure/values without relying on color. Never infer error bars from one result. Put a table caption on its own line in the form 'Table N. <specific caption>' directly before its Markdown table; do not use a generic 'comparison' caption.",

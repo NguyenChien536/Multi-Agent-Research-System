@@ -22,7 +22,7 @@ from app.services.scientific_paper import (
     scientific_context, build_scientific_figures, figure_instructions,
     materialize_figures, validate_scientific_reporting,
 )
-from app.services.academic_writing import writing_guidance
+from app.services.academic_writing import writing_guidance, writing_limits
 from app.services.research_quality import unique_quote_claims, canonicalize_quote_markers, inject_search_ledger, query_coverage, bounded_quality_batches, LEDGER_HEADINGS
 from app.services.evidence_review import EvidenceReview, prepare_evidence_review, evaluate_evidence_reviews, audit_matches_draft
 from app.services.structured_output import compatible_structured_output
@@ -1394,11 +1394,7 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     user_data = state.get("user_data_submission")
     analysis_run = state.get("analysis_run")
     length = state.get("report_length", "MEDIUM")
-    word_target, output_limit = {
-        "SHORT": ("400–600", 4096),
-        "MEDIUM": ("800–1100", 8192),
-        "LONG": ("1400–1800", 12288),
-    }[length]
+    word_target, output_limit = writing_limits(contract, length)
     if isinstance(llm, BudgetedFallbackLLM):
         for _, model in llm.models:
             if hasattr(model, "max_output_tokens"):

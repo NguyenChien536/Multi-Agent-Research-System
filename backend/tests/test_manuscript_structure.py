@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.agents import nodes
-from app.services.academic_writing import writing_guidance
+from app.services.academic_writing import writing_guidance, writing_limits
 from app.services.manuscript import attach_manuscript_contract, manuscript_contract, validate_manuscript
 from app.services.manuscript_structure import review_sections, validate_hierarchy
 from tests.manuscript_helpers import complete_manuscript, supported_critic_response
@@ -146,10 +146,22 @@ async def test_writer_receives_outline_as_provisional_and_records_context_diagno
     await nodes.writer_node(state)
     summary = record.call_args.kwargs
     assert summary["input_summary"]["prompt_characters"] > 0
-    assert summary["input_summary"]["requested_output_tokens"] == 8192
+    assert summary["input_summary"]["requested_output_tokens"] == 12288
     assert summary["input_summary"]["evidence_sources"] == 0
     assert summary["output_summary"]["reported_model"] == "fixture-snapshot"
     assert summary["output_summary"]["truncated"] is False
+
+
+@pytest.mark.parametrize("kind", ["REVIEW", "EMPIRICAL_COMPUTATIONAL", "EMPIRICAL_HUMAN"])
+def test_detailed_profiles_are_frozen_and_historical_output_caps_do_not_change(kind):
+    contract = manuscript_contract(kind, "en")
+    assert writing_limits(contract, "MEDIUM") == ("1400–2000", 12288)
+    assert writing_limits(contract, "LONG") == ("2400–3200", 16384)
+    assert writing_limits({"version": 3}, "MEDIUM") == ("800–1100", 8192)
+    contract["writing_brief"]["length_profiles"]["LONG"]["word_target"] = "FROZEN_WORD_TARGET"
+    frozen = attach_manuscript_contract({"manuscript_contract": contract}, kind, "en")
+    assert writing_limits(frozen["manuscript_contract"], "LONG")[0] == "FROZEN_WORD_TARGET"
+    assert writing_limits(manuscript_contract(kind, "en"), "LONG")[0] == "2400–3200"
 
 
 @pytest.mark.asyncio
