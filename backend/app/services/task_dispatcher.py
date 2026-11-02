@@ -40,6 +40,8 @@ async def recover_unclaimed_dispatches(
                 .join(TaskDispatchOutbox, TaskDispatchOutbox.research_task_id == ResearchTask.id)
                 .where(
                     ResearchTask.status == "QUEUED",
+                    ResearchTask.deleted_at.is_(None),
+                    or_(ResearchTask.worker_lease_until.is_(None), ResearchTask.worker_lease_until <= now),
                     TaskDispatchOutbox.event_type == "START_RESEARCH",
                     TaskDispatchOutbox.dispatched_at <= stale_before,
                     TaskDispatchOutbox.dispatched_at >= recover_after,
@@ -77,13 +79,13 @@ async def recover_unclaimed_dispatches(
                 .join(TaskDispatchOutbox, TaskDispatchOutbox.research_task_id == ResearchTask.id)
                 .where(
                     ResearchTask.status == "QUEUED",
+                    ResearchTask.deleted_at.is_(None),
+                    or_(ResearchTask.worker_lease_until.is_(None), ResearchTask.worker_lease_until <= now),
                     TaskDispatchOutbox.event_type == "START_RESEARCH",
                     TaskDispatchOutbox.dispatched_at <= stale_before,
-                    TaskDispatchOutbox.dispatched_at >= recover_after,
-                    TaskDispatchOutbox.unclaimed_retries >= max_retries,
                     or_(
-                        TaskDispatchOutbox.last_error.is_(None),
-                        TaskDispatchOutbox.last_error != diagnostic,
+                        TaskDispatchOutbox.dispatched_at < recover_after,
+                        TaskDispatchOutbox.unclaimed_retries >= max_retries,
                     ),
                 )
                 .order_by(TaskDispatchOutbox.dispatched_at)
@@ -94,15 +96,19 @@ async def recover_unclaimed_dispatches(
                 exhausted_query = exhausted_query.where(ResearchTask.user_id == user_id)
             exhausted_result = await session.execute(exhausted_query)
             for task, event in exhausted_result.all():
-                event.last_error = diagnostic
+                expired = event.dispatched_at < recover_after
+                event.last_error = "Automatic redelivery window expired; explicit retry required" if expired else diagnostic
                 # Do not leave a paper looking busy forever when no worker has
                 # accepted it after the bounded redelivery window.
                 from app.services.provider_budget import pause_budget_config
                 task.status = "FAILED"
-                task.current_step = "DISPATCH_FAILED"
+                task.current_step = "DISPATCH_EXPIRED" if expired else "DISPATCH_FAILED"
+                task.worker_lease_until = None
                 task.completed_at = now
                 task.budget_config = pause_budget_config(task.budget_config, now=now)
-                task.description = (task.description or "") + "\nNo worker accepted the job after bounded redelivery; check worker availability before retrying."
+                task.description = (task.description or "") + (
+                    "\nAutomatic dispatch recovery expired. The previous job will not be replayed; review its history and remaining budget before explicitly restarting."
+                    if expired else "\nNo worker accepted the job after bounded redelivery; check worker availability before retrying.")
                 logger.error(
                     "Stale task dispatch exhausted retries event=%s task=%s unclaimed_retries=%s",
                     event.id,

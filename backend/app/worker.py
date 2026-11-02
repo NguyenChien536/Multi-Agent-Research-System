@@ -39,7 +39,18 @@ async def _ensure_checkpoint_schema() -> None:
 
     async with AsyncPostgresSaver.from_conn_string(settings.POSTGRES_SYNC_URL) as checkpointer:
         await checkpointer.conn.execute("SET lock_timeout = '30s'")
-        await checkpointer.conn.execute("SELECT pg_advisory_lock(736421905)")
+        # A blocking SELECT pg_advisory_lock keeps a transaction open while
+        # waiting. CREATE INDEX CONCURRENTLY in checkpoint migrations can then
+        # wait for that transaction, forming a deadlock with the lock owner.
+        # Try-lock statements finish/commit immediately before polling again.
+        deadline = asyncio.get_running_loop().time() + 30
+        while True:
+            cursor = await checkpointer.conn.execute("SELECT pg_try_advisory_lock(736421905) AS acquired")
+            if (await cursor.fetchone())["acquired"]:
+                break
+            if asyncio.get_running_loop().time() >= deadline:
+                raise TimeoutError("Checkpoint schema initialization lock timed out")
+            await asyncio.sleep(0.05)
         try:
             await checkpointer.setup()
         finally:
