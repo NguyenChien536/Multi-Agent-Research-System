@@ -2,7 +2,7 @@
 
 **Synthia — Multi-Agent Research System** hỗ trợ người nghiên cứu đi từ câu hỏi/tài liệu đến bản thảo bài báo có nguồn, có kết quả thực nghiệm khi phương pháp yêu cầu. Đây là đề tài học phần ATI; bản thảo vẫn cần người nghiên cứu kiểm tra.
 
-**Cập nhật 02/11/2026:** nền `develop@bb63c99` / PR #78 có **425 backend tests, 20 frontend tests và 5/5 CI đạt**; đã có gói tái lập thực nghiệm theo phiên bản. Đang triển khai **P7 / issue #79 — nền đóng băng protocol, thu output và chấm so sánh**. Chưa có kết quả benchmark khoa học hoặc kết luận multi-agent tốt hơn single-agent. **Chưa sẵn sàng production.**
+**Cập nhật 02/11/2026:** nền `develop@08cbb8e` / PR #80 có **458 backend tests, 20 frontend tests và 5/5 CI đạt**. Đã có gói tái lập thực nghiệm và nền freeze/thu output/chấm so sánh; **P7 / #81** bổ sung bộ chạy A/B/C trên cùng nguồn/model/cap, đang qua audit và kiểm thử. Chưa có kết quả benchmark khoa học hoặc kết luận multi-agent tốt hơn single-agent. **Chưa sẵn sàng production.**
 
 ## Chỉ cần mở ba tài liệu thường xuyên
 
@@ -14,8 +14,8 @@
 
 ## Việc ngay tiếp theo
 
-1. **P7 / #79**: hoàn tất kiểm nền evaluation CLI; [Evaluation Plan §7](project/evaluation-plan.md#7-công-cụ-chuẩn-bị-và-chấm-đánh-giá--issue-79) ghi lệnh, schema và giới hạn. Smoke fixture không phải kết quả đánh giá thật.
-2. Chuẩn bị câu hỏi/nguồn thật, nối adapter chạy A/B/C với workflow/model/nguồn đã kiểm soát; chạy pilot trước held-out, giữ cả lỗi và kết quả không thuận lợi.
+1. **P7 / #81**: nghiệm thu bộ chạy A/B/C; [Evaluation Plan](project/evaluation-plan.md) §7–8 ghi lệnh chuẩn bị, thực thi và chấm. Smoke fixture không phải kết quả đánh giá thật.
+2. Chốt model/giá trần/ngân sách tổng và corpus; freeze source sạch đúng commit, chạy pilot có giới hạn trước held-out, giữ cả lỗi và kết quả không thuận lợi.
 3. Khép các kiểm tra browser/runtime, restart/concurrency và ba luồng trước staging → dùng thử giới hạn → production. **10/11 là mốc nộp/demo, chưa phải cam kết production.**
 
 Quy trình Git: issue nhỏ → branch chức năng/sửa lỗi → tests/review → PR develop. Chỉ đưa lên main khi CI và demo end-to-end trên đúng candidate đạt. Xem [CONTRIBUTING](../CONTRIBUTING.md).

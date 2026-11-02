@@ -61,6 +61,7 @@ class Case(StrictModel):
 class Specification(StrictModel):
     mode: Literal["smoke", "pilot", "study"]
     code_revision: str = Field(pattern=r"^[a-f0-9]{40}$")
+    executor_code_sha256: str | None = Field(default=None, pattern=SHA)
     controls: Controls
     sources: list[Source] = Field(min_length=1, max_length=50)
     cases: list[Case] = Field(min_length=1, max_length=12)
@@ -86,6 +87,7 @@ class Run(StrictModel):
     report_path: str | None = None
     trace_path: str
     error: str | None = Field(default=None, max_length=2000)
+    execution_control_violations: list[str] = Field(default_factory=list, max_length=20)
 
 
 class EvidenceQuote(StrictModel):
@@ -241,7 +243,7 @@ def record(root, metadata_path):
     trace = json.loads(input_file(run.trace_path))
     if run.status in DELIVERED and not report.strip():
         raise ValueError("Delivered run requires a manuscript")
-    violations = []
+    violations = list(run.execution_control_violations)
     expected = frozen["controls"]
     if run.observed_controls.model_dump() != expected:
         violations.append("model/revision/temperature/output/retrieval/caps differ")

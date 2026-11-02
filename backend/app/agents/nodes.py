@@ -13,6 +13,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from pydantic import BaseModel, Field
 from app.agents.state import ResearchState
 from app.core.config import settings
+from app.core.runtime import current_runtime
 from app.services.manuscript import (
     attach_manuscript_contract, editorial_instructions,
     manuscript_provenance, validate_manuscript, normalize_claim_markers, writer_claim_context,
@@ -45,6 +46,8 @@ logger = logging.getLogger(__name__)
 
 
 async def _record_progress(state: ResearchState, step: str, iteration: int | None = None) -> None:
+    if runtime := current_runtime():
+        runtime.progress(step, iteration)
     from app.services.progress import record_agent_progress
 
     updated = await record_agent_progress(
@@ -166,6 +169,8 @@ def _provider_model_names(provider: str, is_smart: bool) -> list[str]:
 
 
 def build_llm_chain(is_smart: bool = False):
+    if runtime := current_runtime():
+        return runtime.llm
     providers = [p.strip().lower() for p in settings.LLM_PROVIDER_PRIORITY.split(",")]
     models: list[tuple[str, Any]] = []
     
@@ -227,6 +232,8 @@ async def invoke_llm_with_budget(
     output_tokens: int = DEFAULT_CALL_OUTPUT_TOKENS,
 ):
     """Invoke an LLM and charge its pre-call reservation, including test doubles."""
+    if runtime := current_runtime():
+        return await runtime.invoke(llm, messages, output_tokens=output_tokens)
     if not state.get("enforce_provider_budget") or not state.get("task_id"):
         return await llm.ainvoke(messages)
 
@@ -889,7 +896,12 @@ async def analyst_node(state: ResearchState) -> Dict[str, Any]:
 
         # Chạy song song tất cả các queries
         tasks = [process_query(q) for q in queries]
-        results = await asyncio.gather(*tasks)
+        # Drain sibling calls before leaving the node. A fail-fast gather would
+        # otherwise let in-flight providers outlive the task/runtime scope.
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for result in results:
+            if isinstance(result, BaseException):
+                raise result
         from app.services.grounding import persist_grounded_claims
 
         if state.get("enforce_provider_budget"):

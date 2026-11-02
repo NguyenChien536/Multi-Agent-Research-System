@@ -37,6 +37,9 @@ DEFAULT_PRICING = {"prompt": 0.15, "completion": 0.60}
 
 def get_active_model_name(is_smart: bool = False) -> str:
     """Determine the active model name based on provider priority and tier."""
+    from app.core.runtime import current_runtime
+    if runtime := current_runtime():
+        return runtime.model_name
     providers = [p.strip().lower() for p in settings.LLM_PROVIDER_PRIORITY.split(",")]
     primary_provider = providers[0] if providers else "gemini"
 
@@ -131,6 +134,14 @@ async def record_agent_run(
         return None
 
     now = datetime.now(timezone.utc)
+    from app.core.runtime import current_runtime
+    if runtime := current_runtime():
+        # The task-local evaluator records raw provider usage for each attempt.
+        # Node-level historical heuristics are not measured evaluation usage.
+        input_tokens, output_tokens, estimated_cost = 0, 0, 0.0
+        output_summary = {**(output_summary or {}), "usage_accounting": "private evaluation provider trace"}
+        if agent_name == "Curator":
+            model = "local-frozen-chunks-no-embedding"
     run_record = AgentRun(
         research_task_id=parsed_task_id,
         agent_name=agent_name,

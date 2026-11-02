@@ -213,6 +213,9 @@ class ScraperTool:
 
 async def fetch_urls_parallel(urls: list[str], max_concurrent: int = 5) -> dict[str, str]:
     """Cào nhiều URL cùng lúc có giới hạn số luồng (Semaphore)."""
+    from app.core.runtime import current_runtime
+    if runtime := current_runtime():
+        return await runtime.fetch(urls)
     scraper = ScraperTool()
     semaphore = asyncio.Semaphore(max_concurrent)
     results = {}

@@ -1,6 +1,6 @@
 # Tiến độ triển khai — Synthia
 
-**Cập nhật: 02/11/2026.** Nền develop@bb63c99 / PR #78; đang làm nền P7 với issue #79. Hạn demo: 10/11/2026.
+**Cập nhật: 02/11/2026.** Nền develop@08cbb8e / PR #80; đang nghiệm thu bộ chạy P7 issue #81. Hạn demo: 10/11/2026.
 
 Tài liệu này trả lời **đã có gì, đã kiểm đến đâu, tiếp theo làm gì**. Thứ tự và điều kiện phát hành nằm trong [Implementation Plan](implementation-plan.md). Các biên bản ngày 22–24/10 là lịch sử, không phải trạng thái code hiện tại.
 
@@ -23,8 +23,9 @@ Tài liệu này trả lời **đã có gì, đã kiểm đến đâu, tiếp th
 ## Bằng chứng cập nhật 02/11
 
 - **P6 / PR #78 đã merge tại `bb63c99`:** 425 backend tests, 20 frontend tests và 5/5 CI đạt. Export theo owner/version, đóng băng input/code/result, kiểm hash, giữ kết quả âm, journal cutoff; chạy ZIP độc lập thực sự, không dùng LLM để giả kết quả tính toán.
-- **P7 / #79 đang kiểm:** CLI đóng băng nguồn/câu hỏi/expected points/model/cap/revision, lưu mọi attempt và trace, packet che nhãn theo split, chấm thủ công và paired summary. 29 focused tests ban đầu đạt; toàn bộ backend cục bộ đạt 454 trước các ca bổ sung cuối, 33 focused tests của bản cuối đạt; CLI smoke thực sự chạy trong Docker và báo đủ 3 ô missing, không sinh kết quả khoa học. Final CI là cổng trước merge.
-- **Chưa có benchmark thật:** init chỉ tạo nguồn/bài smoke tổng hợp cho test phần mềm. Chưa có adapter chạy thật A/B/C trên frozen corpus, chưa chốt bộ 4 pilot + 8 held-out và chưa chấm kết quả thật; không dùng smoke để tuyên bố multi-agent tốt hơn.
+- **P7 / #79 đã merge qua PR #80:** freeze/record/blind/score/summarize; 458 backend tests, 20 frontend tests, 5/5 CI đạt. Giữ attempt đầu, reruns, missing/failures, delta âm và split riêng; chưa có kết quả khoa học.
+- **P7 / #81 đang nghiệm thu:** A controller và B/C production graph chạy trên frozen lexical corpus với model/cap chung; scope riêng cho DB/providers, ledger tổng bền vững, timeout/failure/rerun và draft chưa đạt được giữ. Toàn bộ backend đạt 482, frontend 20; 60 ca focused bản cuối đã đạt, còn CI trước merge. Không dùng các fixture này như bằng chứng chất lượng nghiên cứu.
+- **Chưa có benchmark thật:** chưa chốt/chạy model trả phí trên pilot/held-out và chưa chấm output thật. Chọn profile/ngân sách, freeze code/corpus rồi chạy có giới hạn; G7, browser/runtime/fault và P8–P10 chưa đóng.
 
 ## Bằng chứng cập nhật 31/10
 

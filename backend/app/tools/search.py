@@ -109,6 +109,9 @@ async def execute_parallel_searches(
     *, include_activity: bool = False, search_depth: str | None = None,
 ) -> List[SearchResult] | tuple[List[SearchResult], list[dict[str, Any]]]:
     """Search scholarly indexes plus the web; optionally return an audit trail."""
+    from app.core.runtime import current_runtime
+    if runtime := current_runtime():
+        return await runtime.search(queries, max_results_per_query, include_activity=include_activity)
     tool = TavilySearchTool()
     depth = search_depth or settings.TAVILY_SEARCH_DEPTH
     if depth not in {"basic", "advanced", "fast", "ultra-fast"}:
