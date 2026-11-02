@@ -36,6 +36,19 @@ test('protected auth/me and task requests both include the session token', async
   for (const request of c.requests) assert.equal(request.headers.get('Authorization'), 'Bearer test-token');
 });
 
+test('artifact downloads use shared authenticated binary handling and expire sessions consistently', async () => {
+  const blob = new Blob(['private artifact']);
+  const c = client({response: blob});
+  assert.equal(await c.api.tasks.downloadArtifact('paper', 'artifact'), blob);
+  assert.ok(c.requests[0].url.endsWith('/research/paper/artifacts/artifact/download'));
+  assert.equal(c.requests[0].headers.get('Authorization'), 'Bearer test-token');
+  assert.equal(c.requests[0].cache, 'no-store');
+  const expired = client({status: 401});
+  await assert.rejects(expired.api.tasks.downloadArtifact('paper', 'artifact'));
+  assert.equal(expired.storage.size, 0);
+  assert.equal(expired.redirects.length, 1);
+});
+
 test('experiment downloads pin version, keep binary data, disable cache and include auth/abort', async () => {
   const blob = new Blob(['private zip bytes']);
   const c = client({ response: blob });

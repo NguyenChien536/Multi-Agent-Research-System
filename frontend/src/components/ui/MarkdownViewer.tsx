@@ -3,10 +3,46 @@
 import React from 'react';
 import { ExternalLink } from 'lucide-react';
 
-interface MarkdownViewerProps {
+export interface HeadingItem {
+  title: string;
+  level: number;
+  slug: string;
+}
+
+export function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)+/g, '');
+}
+
+export function extractHeadings(markdown: string): HeadingItem[] {
+  if (!markdown) return [];
+  const headings: HeadingItem[] = [];
+  const lines = markdown.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('# ')) {
+      const title = trimmed.slice(2).replace(/\*\*/g, '').trim();
+      if (title) headings.push({ title, level: 1, slug: slugify(title) });
+    } else if (trimmed.startsWith('## ')) {
+      const title = trimmed.slice(3).replace(/\*\*/g, '').trim();
+      if (title) headings.push({ title, level: 2, slug: slugify(title) });
+    } else if (trimmed.startsWith('### ')) {
+      const title = trimmed.slice(4).replace(/\*\*/g, '').trim();
+      if (title) headings.push({ title, level: 3, slug: slugify(title) });
+    }
+  }
+  return headings;
+}
+
+export interface MarkdownViewerProps {
   content: string;
   onCitationClick?: (citationRef: string) => void;
   className?: string;
+  academicStyle?: boolean;
 }
 
 function renderInline(text: string, onCitationClick?: (citationRef: string) => void): React.ReactNode[] {
@@ -19,7 +55,7 @@ function renderInline(text: string, onCitationClick?: (citationRef: string) => v
 
     // Bold: **text**
     if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={index} className="font-semibold text-zinc-900">{part.slice(2, -2)}</strong>;
+      return <strong key={index} className="font-semibold text-zinc-950">{part.slice(2, -2)}</strong>;
     }
 
     // Italic: *text*
@@ -45,8 +81,8 @@ function renderInline(text: string, onCitationClick?: (citationRef: string) => v
           key={index}
           type="button"
           onClick={() => onCitationClick?.(label)}
-          className="inline-flex items-center align-baseline px-1.5 py-0.2 mx-0.5 text-xs font-semibold rounded bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
-          title={`Xem trích dẫn [${label}]`}
+          className="inline-flex items-center align-baseline px-1.5 py-0.5 mx-0.5 text-xs font-semibold rounded bg-zinc-100 text-zinc-800 border border-zinc-200/90 hover:bg-zinc-200 transition-colors cursor-pointer hover:shadow-2xs"
+          title={`Citation [${label}]`}
         >
           [{label}]
         </button>
@@ -75,7 +111,7 @@ function renderInline(text: string, onCitationClick?: (citationRef: string) => v
   });
 }
 
-export function MarkdownViewer({ content, onCitationClick, className = '' }: MarkdownViewerProps) {
+export function MarkdownViewer({ content, onCitationClick, className = '', academicStyle = true }: MarkdownViewerProps) {
   const lines = content.split('\n');
   const elements: React.ReactNode[] = [];
 
@@ -89,19 +125,19 @@ export function MarkdownViewer({ content, onCitationClick, className = '' }: Mar
   const flushList = () => {
     if (inList && listItems.length > 0) {
       const items = listItems.map((item, idx) => (
-        <li key={idx} className="text-zinc-700 leading-relaxed">
+        <li key={idx} className="text-zinc-800 leading-relaxed text-[15px] md:text-[16px]">
           {renderInline(item, onCitationClick)}
         </li>
       ));
       if (inList === 'ul') {
         elements.push(
-          <ul key={`ul-${elements.length}`} className="list-disc list-outside pl-6 my-3 space-y-1.5">
+          <ul key={`ul-${elements.length}`} className="list-disc list-outside pl-6 my-4 space-y-2 text-zinc-800">
             {items}
           </ul>
         );
       } else {
         elements.push(
-          <ol key={`ol-${elements.length}`} className="list-decimal list-outside pl-6 my-3 space-y-1.5">
+          <ol key={`ol-${elements.length}`} className="list-decimal list-outside pl-6 my-4 space-y-2 text-zinc-800">
             {items}
           </ol>
         );
@@ -116,12 +152,12 @@ export function MarkdownViewer({ content, onCitationClick, className = '' }: Mar
       const headerRow = tableRows[0];
       const bodyRows = tableRows.slice(1);
       elements.push(
-        <div key={`table-${elements.length}`} className="overflow-x-auto my-4 border border-zinc-200 rounded-xl">
+        <div key={`table-${elements.length}`} className="overflow-x-auto my-6 border border-zinc-200 rounded-xl bg-white shadow-sm">
           <table className="w-full text-left border-collapse text-sm">
             <thead>
-              <tr className="bg-zinc-50 border-b border-zinc-200">
+              <tr className="bg-zinc-50/80 border-b-2 border-zinc-300">
                 {headerRow.map((cell, cIdx) => (
-                  <th key={cIdx} className="px-4 py-2.5 font-semibold text-zinc-900 border-r border-zinc-200 last:border-r-0">
+                  <th key={cIdx} className="px-4 py-3 font-semibold text-zinc-950 border-r border-zinc-200 last:border-r-0">
                     {renderInline(cell.trim(), onCitationClick)}
                   </th>
                 ))}
@@ -129,9 +165,9 @@ export function MarkdownViewer({ content, onCitationClick, className = '' }: Mar
             </thead>
             <tbody className="divide-y divide-zinc-200">
               {bodyRows.map((row, rIdx) => (
-                <tr key={rIdx} className="hover:bg-zinc-50/50">
+                <tr key={rIdx} className="hover:bg-zinc-50/60 transition-colors">
                   {row.map((cell, cIdx) => (
-                    <td key={cIdx} className="px-4 py-2 text-zinc-700 border-r border-zinc-200 last:border-r-0">
+                    <td key={cIdx} className="px-4 py-2.5 text-zinc-800 border-r border-zinc-200 last:border-r-0">
                       {renderInline(cell.trim(), onCitationClick)}
                     </td>
                   ))}
@@ -154,7 +190,7 @@ export function MarkdownViewer({ content, onCitationClick, className = '' }: Mar
     if (line.startsWith('```')) {
       if (inCodeBlock) {
         elements.push(
-          <pre key={`code-${elements.length}`} className="bg-zinc-900 text-zinc-100 p-4 rounded-xl text-xs font-mono overflow-x-auto my-4 leading-relaxed">
+          <pre key={`code-${elements.length}`} className="bg-zinc-900 text-zinc-100 p-4 sm:p-5 rounded-xl text-xs sm:text-sm font-mono overflow-x-auto my-5 leading-relaxed shadow-sm">
             <code>{codeBlockContent.join('\n')}</code>
           </pre>
         );
@@ -191,36 +227,60 @@ export function MarkdownViewer({ content, onCitationClick, className = '' }: Mar
     // Headings
     if (line.startsWith('# ')) {
       flushList();
+      const text = line.slice(2).trim();
+      const slug = slugify(text);
       elements.push(
-        <h1 key={`h1-${elements.length}`} className="text-2xl md:text-3xl font-bold tracking-tight text-zinc-900 mt-8 mb-4 pb-2 border-b border-zinc-200">
-          {renderInline(line.slice(2), onCitationClick)}
+        <h1
+          id={slug}
+          key={`h1-${elements.length}`}
+          className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-950 mt-10 mb-4 pb-3 border-b border-zinc-200/90 scroll-mt-24 font-sans"
+        >
+          {renderInline(text, onCitationClick)}
         </h1>
       );
       continue;
     }
     if (line.startsWith('## ')) {
       flushList();
+      const text = line.slice(3).trim();
+      const slug = slugify(text);
       elements.push(
-        <h2 key={`h2-${elements.length}`} className="text-xl md:text-2xl font-bold tracking-tight text-zinc-850 mt-6 mb-3">
-          {renderInline(line.slice(3), onCitationClick)}
+        <h2
+          id={slug}
+          key={`h2-${elements.length}`}
+          className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 mt-8 mb-3.5 pb-1 border-b border-zinc-100 scroll-mt-24 font-sans"
+        >
+          {renderInline(text, onCitationClick)}
         </h2>
       );
       continue;
     }
     if (line.startsWith('### ')) {
       flushList();
+      const text = line.slice(4).trim();
+      const slug = slugify(text);
       elements.push(
-        <h3 key={`h3-${elements.length}`} className="text-lg md:text-xl font-semibold text-zinc-800 mt-5 mb-2">
-          {renderInline(line.slice(4), onCitationClick)}
+        <h3
+          id={slug}
+          key={`h3-${elements.length}`}
+          className="text-lg sm:text-xl font-semibold tracking-tight text-zinc-900 mt-6 mb-2.5 scroll-mt-24 font-sans"
+        >
+          {renderInline(text, onCitationClick)}
         </h3>
       );
       continue;
     }
     if (line.startsWith('#### ')) {
       flushList();
+      const text = line.slice(5).trim();
+      const slug = slugify(text);
       elements.push(
-        <h4 key={`h4-${elements.length}`} className="text-base font-semibold text-zinc-800 mt-4 mb-2">
-          {renderInline(line.slice(5), onCitationClick)}
+        <h4
+          id={slug}
+          key={`h4-${elements.length}`}
+          className="text-base font-semibold text-zinc-800 mt-5 mb-2 scroll-mt-24"
+        >
+          {renderInline(text, onCitationClick)}
         </h4>
       );
       continue;
@@ -229,7 +289,7 @@ export function MarkdownViewer({ content, onCitationClick, className = '' }: Mar
     // Horizontal rule
     if (line === '---' || line === '***' || line === '___') {
       flushList();
-      elements.push(<hr key={`hr-${elements.length}`} className="my-6 border-zinc-200" />);
+      elements.push(<hr key={`hr-${elements.length}`} className="my-8 border-zinc-200" />);
       continue;
     }
 
@@ -237,7 +297,7 @@ export function MarkdownViewer({ content, onCitationClick, className = '' }: Mar
     if (line.startsWith('> ')) {
       flushList();
       elements.push(
-        <blockquote key={`bq-${elements.length}`} className="border-l-4 border-blue-500 bg-blue-50/40 pl-4 py-2 my-3 rounded-r-lg text-zinc-700 italic">
+        <blockquote key={`bq-${elements.length}`} className="border-l-4 border-zinc-700 bg-zinc-50/90 pl-5 py-3 my-4 rounded-r-xl text-zinc-750 font-normal shadow-2xs">
           {renderInline(line.slice(2), onCitationClick)}
         </blockquote>
       );
@@ -270,7 +330,7 @@ export function MarkdownViewer({ content, onCitationClick, className = '' }: Mar
     // Standard Paragraph
     flushList();
     elements.push(
-      <p key={`p-${elements.length}`} className="text-sm md:text-base leading-7 text-zinc-700 my-2.5">
+      <p key={`p-${elements.length}`} className="text-[15px] sm:text-[16px] leading-[1.75] text-zinc-800 my-4 text-left font-normal">
         {renderInline(line, onCitationClick)}
       </p>
     );
@@ -280,7 +340,7 @@ export function MarkdownViewer({ content, onCitationClick, className = '' }: Mar
   flushTable();
 
   return (
-    <article className={`prose prose-zinc max-w-none font-sans ${className}`}>
+    <article className={`prose prose-zinc max-w-none ${className}`}>
       {elements}
     </article>
   );

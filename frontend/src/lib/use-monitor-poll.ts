@@ -39,10 +39,14 @@ export function useMonitorPoll<T>(load: (signal: AbortSignal) => Promise<T>, int
       } catch (reason) {
         if (active) {
           const status = reason && typeof reason === 'object' && 'status' in reason ? reason.status : null;
-          setError(Number(status) === 404 ? 'Bài nghiên cứu không tồn tại hoặc bạn không có quyền xem.'
-            : Number(status) === 401 ? 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.'
-            : Number(status) === 403 ? 'Bạn không có quyền xem bài nghiên cứu này.'
-            : 'Không thể tải tiến độ mới. Kiểm tra kết nối và thử lại.');
+          const isEn = typeof window !== 'undefined' && localStorage.getItem('synthia_lang') === 'en';
+          setError(Number(status) === 404
+            ? (isEn ? 'Research project not found or access denied.' : 'Bài nghiên cứu không tồn tại hoặc bạn không có quyền xem.')
+            : Number(status) === 401
+            ? (isEn ? 'Session expired. Please log in again.' : 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+            : Number(status) === 403
+            ? (isEn ? 'You do not have permission to view this project.' : 'Bạn không có quyền xem bài nghiên cứu này.')
+            : (isEn ? 'Unable to refresh progress. Check your connection and try again.' : 'Không thể tải tiến độ mới. Kiểm tra kết nối và thử lại.'));
           if ([401, 403, 404, 422].includes(Number(status))) {
             setData(null);
             setLastSuccess(null);
