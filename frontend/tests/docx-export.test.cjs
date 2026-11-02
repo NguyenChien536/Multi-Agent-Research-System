@@ -32,3 +32,14 @@ test('Word export preserves the manuscript bibliography without fabricated ident
   }
   assert.ok(xml.includes('AI-assisted draft'));
 });
+
+test('Word export retains table headings, metrics and aligned Markdown separator semantics', async () => {
+  const blob = await exported.createPaperDocx({title: 'Metric table', markdownContent:
+    '## Results\n\n| Method | **RMSE** |\n| :--- | ---: |\n| Baseline | 1.2345 |\n| Ridge | 0.3456 |'});
+  const archive = await JSZip.loadAsync(await blob.arrayBuffer());
+  const xml = await archive.file('word/document.xml').async('string');
+  for (const value of ['Method', 'RMSE', 'Baseline', '1.2345', 'Ridge', '0.3456']) {
+    assert.ok(xml.includes(value), `Missing table value ${value}`);
+  }
+  assert.ok(!xml.includes(':---'), 'Markdown alignment separator must not become a data row');
+});

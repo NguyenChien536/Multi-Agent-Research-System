@@ -183,9 +183,7 @@ export async function createPaperDocx(options: DocxExportOptions): Promise<Blob>
           children: headerRow.map(cell => new TableCell({
             children: [
               new Paragraph({
-                children: parseInlineRuns(cell.trim()).map(r => {
-                  return new TextRun({ ...r, bold: true, size: 20 });
-                }),
+                children: parseInlineRuns(cell.trim()),
                 spacing: { before: 60, after: 60 }
               })
             ],
@@ -205,7 +203,7 @@ export async function createPaperDocx(options: DocxExportOptions): Promise<Blob>
             children: row.map(cell => new TableCell({
               children: [
                 new Paragraph({
-                  children: parseInlineRuns(cell.trim()).map(r => new TextRun({ ...r, size: 20 })),
+                  children: parseInlineRuns(cell.trim()),
                   spacing: { before: 40, after: 40 }
                 })
               ]
@@ -234,7 +232,7 @@ export async function createPaperDocx(options: DocxExportOptions): Promise<Blob>
 
     // Table rows
     if (line.startsWith('|') && line.endsWith('|')) {
-      if (/^\|[-|\s]+\|$/.test(line)) {
+      if (line.slice(1, -1).split('|').every(cell => /^:?-{3,}:?$/.test(cell.trim()))) {
         continue; // skip separator row
       }
       const cells = line.slice(1, -1).split('|');

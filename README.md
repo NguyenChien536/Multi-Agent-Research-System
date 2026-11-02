@@ -25,6 +25,8 @@
 </div>
 ---
 
+**Demo cuối kỳ bằng Docker local:** dùng [hướng dẫn release](docs/technical/local-release.md) và `scripts/release.ps1`. Địa chỉ release mặc định là `http://127.0.0.1:3080`; dữ liệu tách riêng môi trường phát triển ở cổng 3000/8000. Hướng dẫn có sơ đồ kiến trúc đang chạy, giới hạn chức năng, kiểm thử và backup/restore.
+
 ## 📖 Mục lục
 
 - [💡 Đặt vấn đề & Giải pháp](#-đặt-vấn-đề--giải-pháp)

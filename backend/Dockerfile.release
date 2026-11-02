@@ -15,11 +15,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-ARG VCS_URL
-ARG VCS_REF=unknown
-LABEL org.opencontainers.image.source=$VCS_URL
-LABEL org.opencontainers.image.revision=$VCS_REF
-
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpq5 \
     && rm -rf /var/lib/apt/lists/*
@@ -34,6 +29,11 @@ COPY alembic.ini .
 RUN useradd --system --uid 10001 --create-home appuser \
     && mkdir -p /app/storage/artifacts \
     && chown -R appuser:appuser /app
+
+ARG VCS_URL
+ARG VCS_REF=unknown
+LABEL org.opencontainers.image.source=$VCS_URL
+LABEL org.opencontainers.image.revision=$VCS_REF
 
 USER appuser
 EXPOSE 8000
