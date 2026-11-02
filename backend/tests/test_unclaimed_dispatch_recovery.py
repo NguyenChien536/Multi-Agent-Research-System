@@ -117,14 +117,59 @@ async def test_old_unclaimed_dispatch_is_never_automatically_replayed(
     )
 
     old_dispatch = datetime.now(timezone.utc) - timedelta(hours=2)
-    user_id, _, event_id = await create_dispatched_task(old_dispatch)
+    user_id, task_id, event_id = await create_dispatched_task(old_dispatch)
 
     assert not await task_dispatcher.dispatch_one_outbox_event(user_id=user_id)
     event = await load_event(event_id)
     assert event.dispatched_at == old_dispatch
     assert event.unclaimed_retries == 0
-    assert event.last_error is None
+    assert event.last_error == "Automatic redelivery window expired; explicit retry required"
     assert published == []
+    async with AsyncSessionLocal() as db:
+        task = await db.get(ResearchTask, task_id)
+        assert task.status == "FAILED" and task.current_step == "DISPATCH_EXPIRED"
+        description = task.description
+    assert not await task_dispatcher.dispatch_one_outbox_event(user_id=user_id)
+    async with AsyncSessionLocal() as db:
+        assert (await db.get(ResearchTask, task_id)).description == description
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("protected", ["RUNNING", "WAITING_APPROVAL", "DELETED", "ACTIVE_LEASE", "OTHER_OWNER"])
+async def test_legacy_reconciliation_does_not_touch_owned_active_waiting_or_deleted_work(protected):
+    user_id, task_id, event_id = await create_dispatched_task(datetime.now(timezone.utc) - timedelta(days=3))
+    budget = {"max_cost_usd": 0.25, "_provider_usage": {"cost_usd": 0.1, "llm_calls": 4}}
+    async with AsyncSessionLocal() as db:
+        task = await db.get(ResearchTask, task_id)
+        task.budget_config = budget
+        if protected in {"RUNNING", "WAITING_APPROVAL"}: task.status = protected
+        if protected == "DELETED": task.deleted_at = datetime.now(timezone.utc)
+        if protected == "ACTIVE_LEASE": task.worker_lease_until = datetime.now(timezone.utc) + timedelta(minutes=5)
+        before_status = task.status
+        await db.commit()
+    await task_dispatcher.recover_unclaimed_dispatches(user_id=uuid.uuid4() if protected == "OTHER_OWNER" else user_id)
+    async with AsyncSessionLocal() as db:
+        task = await db.get(ResearchTask, task_id)
+        assert task.status == before_status and task.budget_config == budget
+        assert (await db.get(TaskDispatchOutbox, event_id)).unclaimed_retries == 0
+
+
+@pytest.mark.asyncio
+async def test_legacy_failure_preserves_budget_attempts_and_existing_data():
+    user_id, task_id, event_id = await create_dispatched_task(datetime.now(timezone.utc) - timedelta(days=3))
+    budget = {"max_cost_usd": 0.25, "_provider_usage": {"cost_usd": 0.1, "llm_calls": 4}}
+    async with AsyncSessionLocal() as db:
+        task = await db.get(ResearchTask, task_id)
+        task.budget_config, task.attempt_number, task.plan = budget, 3, {"recorded": "original plan"}
+        await db.commit()
+    await asyncio.gather(task_dispatcher.recover_unclaimed_dispatches(user_id=user_id),
+                         task_dispatcher.recover_unclaimed_dispatches(user_id=user_id))
+    async with AsyncSessionLocal() as db:
+        task = await db.get(ResearchTask, task_id)
+        assert task.status == "FAILED" and task.attempt_number == 3
+        assert task.plan == {"recorded": "original plan"}
+        assert task.budget_config["_provider_usage"]["cost_usd"] == 0.1
+        assert task.budget_config["_provider_usage"]["llm_calls"] == 4
 
 
 @pytest.mark.asyncio

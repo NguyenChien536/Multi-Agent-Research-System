@@ -97,7 +97,7 @@ async def test_worker_recovery_is_bounded(monkeypatch):
 @pytest.mark.asyncio
 async def test_concurrent_checkpoint_initialization_is_serialized(monkeypatch):
     monkeypatch.setattr(worker, "_CHECKPOINT_SCHEMA_READY", False)
-    await asyncio.gather(worker._ensure_checkpoint_schema(), worker._ensure_checkpoint_schema())
+    await asyncio.gather(*(worker._ensure_checkpoint_schema() for _ in range(4)))
     assert worker._CHECKPOINT_SCHEMA_READY
 
 
