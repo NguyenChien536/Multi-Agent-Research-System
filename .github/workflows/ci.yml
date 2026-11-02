@@ -132,3 +132,32 @@ jobs:
         run: docker compose build backend frontend
       - name: Check worker runtime from the built image
         run: docker compose run --rm --no-deps worker python -m app.services.runtime_check
+
+  release-runtime:
+    name: Release runtime
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_ENV_FILE: .env.release-ci
+      RELEASE_REVISION: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialize isolated release configuration
+        run: |
+          printf 'APP_SECRET_KEY=%s\nPOSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 24)" > .env.release-ci
+      - name: Build and boot release without development mounts
+        run: docker compose --env-file .env.release-ci -f compose.release.yml -p synthia-ci up -d --build --wait --wait-timeout 240
+      - name: Exercise gateway, authentication, ownership and monitoring without paid providers
+        run: python scripts/release-smoke.py --output scratch/ci-smoke
+      - name: Dependency readiness fails when broker is stopped
+        run: |
+          docker compose --env-file .env.release-ci -f compose.release.yml -p synthia-ci stop redis
+          code=$(curl --silent --output /tmp/readiness.json --write-out '%{http_code}' http://127.0.0.1:3080/api/v1/ready)
+          test "$code" = 503
+          docker compose --env-file .env.release-ci -f compose.release.yml -p synthia-ci up -d --wait --wait-timeout 180
+          curl --fail http://127.0.0.1:3080/api/v1/ready
+      - name: Print sanitized release diagnostics on failure
+        if: failure()
+        run: docker compose --env-file .env.release-ci -f compose.release.yml -p synthia-ci logs --tail 80
+      - name: Stop isolated release
+        if: always()
+        run: docker compose --env-file .env.release-ci -f compose.release.yml -p synthia-ci down -v

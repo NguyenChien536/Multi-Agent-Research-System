@@ -101,6 +101,8 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def require_production_secret(self) -> "Settings":
+        if self.ENVIRONMENT == "production" and (self.DEBUG or self.MOCK_PROVIDERS):
+            raise ValueError("Production requires DEBUG=false and MOCK_PROVIDERS=false")
         if self.ENVIRONMENT != "development" and (
             len(self.APP_SECRET_KEY) < 32
             or self.APP_SECRET_KEY in {
