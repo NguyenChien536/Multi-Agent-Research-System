@@ -27,6 +27,12 @@ logger = logging.getLogger(__name__)
 class EmbedderTool:
     """Công cụ băm nhỏ văn bản (Chunking) và Vector Embedding."""
 
+    def __new__(cls, *args, **kwargs):
+        from app.core.runtime import current_runtime
+        if runtime := current_runtime():
+            return runtime.embedder()
+        return super().__new__(cls)
+
     def __init__(self, api_key: str | None = None):
         self.dimension = settings.EMBEDDING_DIMENSION
         self.embeddings = None

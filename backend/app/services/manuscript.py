@@ -132,6 +132,7 @@ def manuscript_provenance(state: dict) -> dict:
         counts["previously_seen"] += int(item.get("previously_seen_count", 0) or 0)
         counts["failed_queries"] += int(item.get("status") == "FAILED")
     return {
+        "retrieval_execution_context": state.get("source_provenance") or {},
         "available_source_count": len(sources),
         "uploaded_pdf_count": sum(src.get("source_type") == "PDF" for src in sources),
         "full_text_source_count": sum(src.get("text_scope") == "FULL_TEXT" for src in sources),
