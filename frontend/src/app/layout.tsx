@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { LanguageProvider } from "@/lib/i18n";
 
 export const metadata: Metadata = {
   title: "Synthia | Automated Research System",
-  description: "Hệ thống nghiên cứu tự động chuyên sâu, tổng hợp thông tin và trích dẫn bằng AI.",
+  description: "Advanced multi-agent research platform for scientific inquiry, synthesis, and evidence-backed writing.",
 };
 
 export default function RootLayout({
@@ -12,8 +13,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="vi">
-      <body>{children}</body>
+    <html lang="en">
+      <body>
+        <LanguageProvider>
+          {children}
+        </LanguageProvider>
+      </body>
     </html>
   );
 }

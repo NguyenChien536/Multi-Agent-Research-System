@@ -5,7 +5,7 @@ import hashlib
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from sqlalchemy import func, select
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
@@ -377,6 +377,23 @@ class MethodologistProtocol(BaseModel):
 # 3. NODE FUNCTIONS (100% Async, Không Placeholder)
 # ---------------------------------------------------------------------------
 
+LANGUAGE_DIRECTIVES: Dict[str, str] = {
+    "en": "English. Write the entire scientific report, title, abstract, sections, headings, tables, analysis, and conclusion strictly in academic English.",
+    "vi": "Tiếng Việt. Viết toàn bộ bài báo khoa học, tiêu đề, tóm tắt, các mục, bảng biểu, phân tích và kết luận bằng văn phong khoa học Tiếng Việt chuẩn mực.",
+    "ja": "Japanese (日本語). 論文全体、要約、本文、見出し、考察、結論を学術的な日本語で正確に執筆してください。",
+    "zh": "Chinese (中文). 请使用规范学术中文撰写完整学术论文、摘要、标题、正文各章节、分析及结论。",
+    "fr": "French (Français). Rédiger l'intégralité de l'article scientifique, le titre, le résumé, les sections et la conclusion en français académique.",
+    "de": "German (Deutsch). Verfassen Sie die gesamte wissenschaftliche Arbeit, Abstract, Abschnitte und Fazit auf akademischem Deutsch.",
+    "es": "Spanish (Español). Redactar todo el artículo científico, título, resumen, secciones y conclusiones en español académico.",
+    "ko": "Korean (한국어). 논문 전체, 초록, 본문, 각 장 및 결론을 학술적인 한국어로 정확하게 작성해 주십시오.",
+}
+
+def format_language_instruction(code: Optional[str]) -> str:
+    if not code:
+        return LANGUAGE_DIRECTIVES["en"]
+    normalized = str(code).lower().strip()
+    return LANGUAGE_DIRECTIVES.get(normalized, f"{code}. Write the entire paper strictly in {code}.")
+
 async def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     """
     Supervisor Agent: Đóng vai trò lập kế hoạch và định hướng ban đầu.
@@ -409,7 +426,7 @@ async def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     Đề tài: {state.get('research_question')}
     Loại nghiên cứu: {research_type}
     Độ sâu: {state.get('research_depth')}
-    Ngôn ngữ: {state.get('language')}{feedback_section}
+    Ngôn ngữ xuất bản bài báo (Output Paper Language): {format_language_instruction(state.get('language'))}{feedback_section}
 
     Hãy lập một kế hoạch nghiên cứu bao gồm góc nhìn, các câu lệnh tìm kiếm Google (search_queries),
     và các cấu trúc mục bắt buộc (required_sections).
@@ -984,7 +1001,7 @@ async def methodologist_node(state: ResearchState) -> Dict[str, Any]:
     Hãy xây dựng Đề cương nghiên cứu khoa học (Study Protocol) chi tiết cho đề tài sau:
     Câu hỏi nghiên cứu: {state.get('research_question')}
     Loại nghiên cứu: {research_type}
-    Ngôn ngữ: {state.get('language', 'vi')}
+    Ngôn ngữ xuất bản (Output Language): {format_language_instruction(state.get('language', 'en'))}
 
     Bối cảnh từ các tài liệu đã tổng hợp:
     {[c.get('claim_text', '') for c in claims[:10]]}
@@ -1472,7 +1489,7 @@ Requested edits: {state.get('revision_instructions')}
     prompt = f"""
     Bạn là một Nhà văn học thuật chuyên nghiệp. Hãy viết báo cáo nghiên cứu về đề tài: {state.get('research_question')}
     Loại nghiên cứu: {research_type}
-    Ngôn ngữ: {state.get('language')}
+    Ngôn ngữ xuất bản bài báo (Target Output Language): {format_language_instruction(state.get('language'))}
     Độ dài mục tiêu: {word_target} từ ({length}); ưu tiên đầy đủ các mục, không thêm thông tin thiếu bằng chứng để đạt số từ.
     Kiểu tài liệu tham khảo: {state.get('citation_style', 'IEEE')}; chỉ dùng marker luận điểm, bộ định dạng sẽ tạo trích dẫn cuối cùng.
 

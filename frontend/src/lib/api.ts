@@ -83,6 +83,8 @@ export const api = {
     me: () => fetcher<UserResponse>('/auth/me'),
   },
   tasks: {
+    downloadArtifact: (id: string, artifactId: string) =>
+      fetcher<Blob>(`/research/${id}/artifacts/${artifactId}/download`, {cache: 'no-store'}, 'blob'),
     create: (data: ResearchTaskCreate) =>
       fetcher<ResearchTaskResponse>('/research', {
         method: 'POST',

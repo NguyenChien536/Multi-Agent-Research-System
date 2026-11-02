@@ -1,40 +1,100 @@
+'use client';
+
 import { Activity, AlertTriangle, RefreshCw } from 'lucide-react';
 import { statusLabel } from '@/lib/monitoring';
+import { useLanguage } from '@/lib/i18n';
 
 export function StatusPill({ status }: { status: string }) {
-  const tone = status === 'RUNNING' || status === 'QUEUED' ? 'bg-blue-50 text-blue-700 border-blue-100'
-    : status === 'COMPLETED' || status === 'SUCCESS' ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-    : status === 'FAILED' ? 'bg-red-50 text-red-700 border-red-100'
-    : status.startsWith('WAITING') || status === 'NEEDS_REVIEW' ? 'bg-amber-50 text-amber-800 border-amber-100'
-    : 'bg-zinc-100 text-zinc-600 border-zinc-200';
-  return <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${tone}`}>
-    <span className={`h-1.5 w-1.5 rounded-full bg-current ${status === 'RUNNING' ? 'animate-pulse' : ''}`} />
-    {statusLabel(status)}
-  </span>;
+  const { language } = useLanguage();
+
+  const dotColor = status === 'RUNNING'
+    ? 'bg-blue-600 animate-pulse'
+    : status === 'QUEUED'
+    ? 'bg-zinc-400'
+    : status === 'COMPLETED' || status === 'SUCCESS'
+    ? 'bg-emerald-600'
+    : status === 'FAILED'
+    ? 'bg-red-600'
+    : status.startsWith('WAITING') || status === 'NEEDS_REVIEW'
+    ? 'bg-amber-600'
+    : 'bg-zinc-400';
+
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 bg-zinc-100/90 px-2.5 py-0.5 text-xs font-medium text-zinc-800">
+      <span className={`h-1.5 w-1.5 rounded-full ${dotColor}`} />
+      <span>{statusLabel(status, language)}</span>
+    </span>
+  );
 }
 
 export function PollStatus({ error, lastSuccess, refresh }: {
-  error: string; lastSuccess: Date | null; refresh: () => void;
+  error: string;
+  lastSuccess: Date | null;
+  refresh: () => void;
 }) {
-  return <div className="space-y-3">
-    <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-500">
-      <span className="flex items-center gap-2"><Activity size={14} />
-        {lastSuccess ? `Đồng bộ lúc ${lastSuccess.toLocaleTimeString('vi-VN')}` : error ? 'Chưa có dữ liệu đồng bộ' : 'Đang kết nối máy chủ…'}
-      </span>
-      <button onClick={refresh} className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-zinc-700 hover:bg-zinc-50">
-        <RefreshCw size={13} /> Cập nhật
-      </button>
-    </div>
-    {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-      <AlertTriangle size={18} className="shrink-0 mt-0.5" />
-      <div><p className="font-medium">Chưa đồng bộ được trạng thái mới</p>
-        <p className="mt-1">{error}</p>
-        {lastSuccess && <p className="mt-1">Dữ liệu bên dưới là lần nhận thành công gần nhất. Hệ thống sẽ thử kết nối lại.</p>}
+  const { language } = useLanguage();
+  const isEn = language === 'en';
+
+  return (
+    <div className="space-y-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-700 bg-white px-4 py-2 rounded-xl border border-zinc-200 shadow-2xs font-normal">
+        <span className="flex items-center gap-2">
+          <Activity size={14} className={error ? 'text-amber-600' : 'text-emerald-600'} />
+          {lastSuccess ? (
+            <span>
+              {isEn ? 'Last synchronized: ' : 'Đồng bộ lúc: '}
+              <strong className="font-mono text-zinc-800 font-medium">
+                {lastSuccess.toLocaleTimeString(isEn ? 'en-US' : 'vi-VN')}
+              </strong>
+              <span className="text-zinc-500 font-normal">
+                {isEn ? ' (Auto-refreshes periodically)' : ' (Tự động cập nhật)'}
+              </span>
+            </span>
+          ) : error ? (
+            <span className="text-amber-700 font-medium">
+              {isEn ? 'Unable to reach monitoring server' : 'Chưa kết nối được với máy chủ giám sát'}
+            </span>
+          ) : (
+            <span className="text-zinc-600 font-normal">
+              {isEn ? 'Connecting to monitoring service...' : 'Đang kết nối lấy dữ liệu giám sát...'}
+            </span>
+          )}
+        </span>
+
+        <button
+          type="button"
+          onClick={refresh}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 transition-colors shadow-2xs cursor-pointer"
+        >
+          <RefreshCw size={12} className="text-zinc-500" />
+          <span>{isEn ? 'Refresh now' : 'Làm mới ngay'}</span>
+        </button>
       </div>
-    </div>}
-  </div>;
+
+      {error && (
+        <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/80 p-3.5 text-xs text-amber-900 shadow-2xs font-normal">
+          <AlertTriangle size={17} className="shrink-0 text-amber-600 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-semibold text-amber-900">
+              {isEn ? 'Connection issue or delayed sync' : 'Mất kết nối hoặc chậm đồng bộ'}
+            </p>
+            <p className="text-amber-800">{error}</p>
+            {lastSuccess && (
+              <p className="text-amber-800/90 pt-0.5">
+                {isEn
+                  ? `Showing cached data from last successful fetch (${lastSuccess.toLocaleTimeString('en-US')}). Retrying in background.`
+                  : `Dữ liệu đang hiển thị là dữ liệu lưu tạm từ lần nhận gần nhất (${lastSuccess.toLocaleTimeString('vi-VN')}). Hệ thống đang thử lại ngầm.`}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-export function formatTime(value: string | null | undefined) {
-  return value ? new Date(value).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'medium' }) : 'Chưa ghi nhận';
+export function formatTime(value: string | null | undefined, lang: 'en' | 'vi' = 'en') {
+  if (!value) return lang === 'en' ? 'Not recorded' : 'Chưa ghi nhận';
+  const locale = lang === 'en' ? 'en-US' : 'vi-VN';
+  return new Date(value).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'medium' });
 }

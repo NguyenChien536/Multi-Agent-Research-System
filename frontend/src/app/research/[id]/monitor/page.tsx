@@ -3,88 +3,746 @@
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Activity, ArrowLeft, ArrowUpRight, AlertTriangle, CheckCircle2, Circle, Clock, FileText } from 'lucide-react';
+import {
+  Activity, ArrowLeft, ArrowUpRight, AlertTriangle, CheckCircle2, Circle, Clock,
+  FileText, ExternalLink, ChevronLeft, ChevronRight, Info,
+  BookOpen, FileCheck, AlertCircle, RefreshCw
+} from 'lucide-react';
 import { api } from '@/lib/api';
 import { currentStage, stagesFor, stageKey, activityStage, outputLabel } from '@/lib/monitoring';
 import { useMonitorPoll } from '@/lib/use-monitor-poll';
 import { PollStatus, StatusPill, formatTime } from '@/components/monitoring/MonitorUI';
+import { useLanguage } from '@/lib/i18n';
 
-const ACTIONS: Record<string, { title: string; text: string; button: string }> = {
-  REVIEW_PLAN: { title: 'Kế hoạch đang chờ bạn duyệt', text: 'Xem hướng nghiên cứu và truy vấn. Bạn có thể duyệt hoặc gửi góp ý trong workspace.', button: 'Xem kế hoạch' },
-  UPLOAD_DATA: { title: 'Đang chờ dữ liệu nghiên cứu', text: 'Thực hiện theo protocol, tải tệp kết quả và khai báo nguồn dữ liệu để tiếp tục. Trong lúc chờ, bạn có thể làm bài khác.', button: 'Mở bài và thêm dữ liệu' },
-  START_RESEARCH: { title: 'Bài chưa bắt đầu chạy', text: 'Kiểm tra câu hỏi, nguồn riêng và cấu hình trước khi bắt đầu.', button: 'Mở bài nghiên cứu' },
-  CHECK_FAILURE: { title: 'Lần thực hiện này gặp lỗi', text: 'Xem bước gần nhất và nhật ký bên dưới. Đây là trạng thái đã ghi nhận; nguyên nhân chi tiết cần đối chiếu log vận hành.', button: 'Mở bài nghiên cứu' },
-  CANCELLED: { title: 'Bài đã được hủy', text: 'Các kết quả đã lưu vẫn được giữ. Bạn có thể xem lại bài trước khi quyết định bước tiếp theo.', button: 'Xem bài nghiên cứu' },
-  REVIEW_LIMIT: { title: 'Đã dừng do giới hạn tài nguyên', text: 'Hệ thống đã ghi nhận giới hạn ngân sách hoặc thời gian hoạt động. Kiểm tra các kết quả đã có trước khi sử dụng.', button: 'Kiểm tra bài nghiên cứu' },
-  REVIEW_REPORT: { title: 'Bản thảo cần bạn kiểm tra', text: 'Đọc nội dung, trích dẫn và nhận xét phản biện trước khi sử dụng bản thảo.', button: 'Kiểm tra bản thảo' },
-  REVIEW_RUN: { title: 'Cần kiểm tra lần thực hiện', text: 'Chưa ghi nhận bản thảo hoàn chỉnh. Hãy xem các bước và kết quả hiện có.', button: 'Mở bài nghiên cứu' },
-  READ_REPORT: { title: 'Bản thảo đã được tạo', text: 'Bạn có thể mở bài để đọc, đối chiếu bằng chứng và tải các tệp kết quả.', button: 'Đọc bản thảo' },
-  REPORT_UNAVAILABLE: { title: 'Chưa tìm thấy bản thảo đã lưu', text: 'Trạng thái hoàn thành và dữ liệu báo cáo chưa khớp. Cần kiểm tra trước khi sử dụng.', button: 'Mở bài nghiên cứu' },
-  WAIT: { title: 'Hệ thống đang tiếp tục xử lý', text: 'Bạn có thể rời trang hoặc làm bài khác. Trạng thái và các kết quả đã ghi nhận sẽ được tải lại khi quay lại.', button: 'Mở workspace' },
+interface ActionItem {
+  title: string;
+  text: string;
+  button: string;
+  tone: 'amber' | 'blue' | 'red' | 'emerald' | 'zinc';
+}
+
+const ACTIONS_EN: Record<string, ActionItem> = {
+  REVIEW_PLAN: {
+    title: 'Research plan is awaiting your approval',
+    text: 'Supervisor proposed initial search queries and section outlines. You can approve or adjust the research scope in the workspace.',
+    button: 'Review & Approve Plan',
+    tone: 'amber'
+  },
+  UPLOAD_DATA: {
+    title: 'Awaiting empirical fieldwork dataset (Gate G4)',
+    text: 'Methodologist completed protocol. Please upload survey data or results to proceed. In the meantime, this task is saved and you can work on other projects.',
+    button: 'Upload Data (Gate G4)',
+    tone: 'amber'
+  },
+  START_RESEARCH: {
+    title: 'Research has not been started yet',
+    text: 'Review the question, custom documents, and configuration before starting execution.',
+    button: 'Start Research',
+    tone: 'blue'
+  },
+  CHECK_FAILURE: {
+    title: 'Execution halted due to an issue',
+    text: 'Inspect the latest step and activity log below. You can open the task to retry or modify settings.',
+    button: 'Inspect Error',
+    tone: 'red'
+  },
+  CANCELLED: {
+    title: 'Research was paused / cancelled',
+    text: 'All retrieved sources, citations, and previous drafts remain intact. You can resume at any time.',
+    button: 'View Research',
+    tone: 'zinc'
+  },
+  REVIEW_LIMIT: {
+    title: 'Halted due to resource ceiling',
+    text: 'Budget or maximum iteration limit was reached. Check current artifacts before proceeding.',
+    button: 'Review Task',
+    tone: 'amber'
+  },
+  REVIEW_REPORT: {
+    title: 'Draft ready for review',
+    text: 'Critic feedback is recorded. Open workspace to inspect paper content, citations, and peer review remarks.',
+    button: 'Review Draft',
+    tone: 'blue'
+  },
+  REVIEW_RUN: {
+    title: 'Review execution cycle',
+    text: 'Completed execution cycle. Check stages and generated artifacts.',
+    button: 'View Research',
+    tone: 'amber'
+  },
+  READ_REPORT: {
+    title: 'Scientific report completed',
+    text: 'All stages finished successfully. You can open workspace to read full draft, verify evidence, and export to DOCX/PDF/Markdown.',
+    button: 'Read Report',
+    tone: 'emerald'
+  },
+  REPORT_UNAVAILABLE: {
+    title: 'Report draft not found',
+    text: 'Task completion status and stored report data did not match. Open task to inspect saved outputs.',
+    button: 'Inspect Task',
+    tone: 'amber'
+  },
+  WAIT: {
+    title: 'System is processing in background',
+    text: 'Agents are running autonomously. You can safely switch to another project; progress and artifacts are saved automatically.',
+    button: 'Open Workspace',
+    tone: 'blue'
+  },
+};
+
+const ACTIONS_VI: Record<string, ActionItem> = {
+  REVIEW_PLAN: {
+    title: 'Kế hoạch nghiên cứu đang chờ bạn duyệt',
+    text: 'Supervisor đã lập đề cương và truy vấn tìm kiếm. Bạn có thể duyệt tiếp hoặc gửi góp ý điều chỉnh hướng nghiên cứu trong workspace.',
+    button: 'Xem & Duyệt kế hoạch',
+    tone: 'amber'
+  },
+  UPLOAD_DATA: {
+    title: 'Đang chờ bạn nạp dữ liệu thực địa (Gate G4)',
+    text: 'Methodologist đã thiết lập protocol. Vui lòng tải lên tệp dữ liệu CSV/JSON hoặc khảo sát để tiếp tục. Trong lúc chờ, bài nghiên cứu vẫn được lưu và bạn có thể chạy bài khác.',
+    button: 'Mở bài và nạp dữ liệu G4',
+    tone: 'amber'
+  },
+  START_RESEARCH: {
+    title: 'Bài nghiên cứu chưa được kích hoạt',
+    text: 'Kiểm tra câu hỏi nghiên cứu, tệp tài liệu riêng và cấu hình mô hình trước khi cho agent bắt đầu hoạt động.',
+    button: 'Mở bài & Bắt đầu nghiên cứu',
+    tone: 'blue'
+  },
+  CHECK_FAILURE: {
+    title: 'Lần thực hiện này đã dừng do phát sinh lỗi',
+    text: 'Xem bước gần nhất và nhật ký hoạt động bên dưới để xác định tác tử gặp sự cố. Bạn có thể mở bài nghiên cứu để chạy lại hoặc sửa cấu hình.',
+    button: 'Mở bài để xử lý lỗi',
+    tone: 'red'
+  },
+  CANCELLED: {
+    title: 'Nghiên cứu đã được chủ động dừng / hủy',
+    text: 'Toàn bộ dữ liệu, nguồn trích dẫn và các bản nháp trước đó vẫn được giữ nguyên vẹn. Bạn có thể kích hoạt lại bài nghiên cứu bất cứ lúc nào.',
+    button: 'Xem lại bài nghiên cứu',
+    tone: 'zinc'
+  },
+  REVIEW_LIMIT: {
+    title: 'Đã dừng do chạm trần giới hạn tài nguyên',
+    text: 'Hệ thống ghi nhận nghiên cứu đã đạt ngân sách tối đa hoặc vượt số lượt token/vòng lặp cho phép. Hãy kiểm tra các kết quả hiện có trong bài.',
+    button: 'Kiểm tra bài nghiên cứu',
+    tone: 'amber'
+  },
+  REVIEW_REPORT: {
+    title: 'Bản thảo bài báo cần bạn kiểm tra và phản biện',
+    text: 'Agent Critic đã có nhận xét. Hãy mở bài để đọc nội dung bài báo khoa học, đối chiếu trích dẫn và quyết định xuất bản.',
+    button: 'Kiểm tra bản thảo bài báo',
+    tone: 'blue'
+  },
+  REVIEW_RUN: {
+    title: 'Cần kiểm tra lần thực hiện này',
+    text: 'Chưa ghi nhận bản thảo hoàn chỉnh sau chu kỳ. Hãy xem chi tiết các bước xử lý và bằng chứng đã thu thập được.',
+    button: 'Mở bài nghiên cứu',
+    tone: 'amber'
+  },
+  READ_REPORT: {
+    title: 'Bản thảo nghiên cứu khoa học đã hoàn thành',
+    text: 'Tất cả các chặng đã hoàn tất thành công. Bạn có thể mở bài để đọc bài báo hoàn chỉnh, tra cứu cây bằng chứng và tải tệp Markdown/DOCX/PDF.',
+    button: 'Đọc bản thảo hoàn chỉnh',
+    tone: 'emerald'
+  },
+  REPORT_UNAVAILABLE: {
+    title: 'Chưa tìm thấy bản thảo bài báo đã lưu',
+    text: 'Trạng thái hoàn thành và dữ liệu báo cáo chưa đồng bộ. Vui lòng mở lại bài nghiên cứu để kiểm tra kết quả lưu trữ.',
+    button: 'Mở bài nghiên cứu',
+    tone: 'amber'
+  },
+  WAIT: {
+    title: 'Hệ thống tác tử AI đang tiếp tục xử lý ngầm',
+    text: 'Các tác tử đang phối hợp làm việc tự động. Bạn hoàn toàn có thể chuyển sang nghiên cứu bài khác; tiến trình và kết quả sẽ tự động lưu lại.',
+    button: 'Mở Workspace bài viết',
+    tone: 'blue'
+  },
 };
 
 export default function ResearchMonitorPage() {
   const { id } = useParams<{ id: string }>();
+  const { language, t } = useLanguage();
+
   const [historyPage, setHistoryPage] = useState({ taskId: id, offset: 0 });
   const offset = historyPage.taskId === id ? historyPage.offset : 0;
+
   const load = useCallback((signal: AbortSignal) => api.tasks.getMonitor(id, offset, 20, signal), [id, offset]);
   const { data, error, loading, lastSuccess, refresh } = useMonitorPoll(load, 4000);
-  const snapshot = data?.task_id === id ? data : null;
-  const action = snapshot ? ACTIONS[snapshot.next_action] || ACTIONS.WAIT : null;
-  const current = currentStage(snapshot?.current_step);
 
-  return <main className="h-full overflow-y-auto bg-zinc-50 px-4 py-7 sm:px-8">
-    <div className="mx-auto max-w-6xl space-y-6">
-      <Link href="/research/monitor" className="inline-flex items-center gap-2 text-sm text-zinc-500 hover:text-zinc-900"><ArrowLeft size={15} /> Tất cả bài nghiên cứu</Link>
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-widest text-blue-600">Theo dõi thực hiện</p>
-          <h1 className="mt-2 break-words text-2xl font-semibold tracking-tight sm:text-3xl">{snapshot?.title || 'Tiến độ bài nghiên cứu'}</h1>
-          {snapshot?.workflow && <p className="mt-2 text-xs text-zinc-500">Lần nghiên cứu {snapshot.workflow.run_number} · Kế hoạch v{snapshot.workflow.plan_version} · Bắt đầu {formatTime(snapshot.workflow.started_at)}</p>}
-        </div>{snapshot && <StatusPill status={snapshot.status} />}
-      </header>
-      <PollStatus error={error} lastSuccess={lastSuccess} refresh={refresh} />
-      {loading && !snapshot && <p role="status" className="rounded-2xl border bg-white p-8 text-zinc-500">Đang tải tiến độ…</p>}
-      {snapshot && action && <>
-        {snapshot.worker_lease_expired && <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><AlertTriangle size={20} className="shrink-0" /><p>Thời hạn nhận việc của worker đã hết. Hệ thống có thể cần phục hồi lần chạy; chưa đủ cơ sở kết luận agent vẫn đang hoạt động.</p></div>}
-        <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm">
-          <div className="grid gap-6 p-6 lg:grid-cols-2">
-            <div><span className="inline-flex items-center gap-2 text-xs font-medium text-blue-600"><Activity size={15} /> {snapshot.status === 'RUNNING' ? 'Bước xử lý gần nhất' : 'Bước đã ghi nhận gần nhất'}</span>
-              <h2 className="mt-3 text-2xl font-semibold">{current?.name || (snapshot.status === 'QUEUED' ? 'Chờ lượt thực hiện' : 'Chưa ghi nhận bước xử lý')}</h2>
-              <p className="mt-2 text-sm leading-6 text-zinc-500">{current?.description || 'Các bước thực tế sẽ xuất hiện khi workflow bắt đầu ghi nhận tiến độ.'}</p>
-              <div className="mt-4 flex flex-wrap gap-2 text-xs text-zinc-500"><span className="rounded-lg bg-zinc-100 px-3 py-2">Vòng nghiên cứu {snapshot.current_iteration}</span><span className="rounded-lg bg-zinc-100 px-3 py-2">Lượt worker {snapshot.attempt_number}</span></div>
-            </div>
-            <div className="rounded-xl border border-blue-100 bg-blue-50/60 p-5"><h2 className="font-semibold text-zinc-900">{action.title}</h2><p className="mt-2 text-sm leading-6 text-zinc-600">{action.text}</p>
-              <Link href={`/research/${id}`} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-zinc-700">{action.button}<ArrowUpRight size={15} /></Link>
-            </div>
+  const snapshot = data?.task_id === id ? data : null;
+  const actionsDict = language === 'en' ? ACTIONS_EN : ACTIONS_VI;
+  const action = snapshot ? (actionsDict[snapshot.next_action] || actionsDict.WAIT) : null;
+  const current = currentStage(snapshot?.current_step);
+  const activeStages = stagesFor(snapshot?.research_type);
+  const activeStageKey = stageKey(snapshot?.current_step);
+
+  const isEn = language === 'en';
+
+  return (
+    <main className="h-full overflow-y-auto bg-zinc-50/60 p-4 sm:p-6 lg:p-8">
+      <div className="w-full max-w-[1720px] mx-auto space-y-6">
+
+        {/* Navigation Breadcrumb Bar */}
+        <nav aria-label="Breadcrumbs" className="flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-600 bg-white px-4 py-2 rounded-xl border border-zinc-200 shadow-2xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/dashboard" className="text-zinc-600 hover:text-zinc-900 font-medium transition-colors">
+              {t('nav_dashboard')}
+            </Link>
+            <span className="text-zinc-300">/</span>
+            <Link href="/research/monitor" className="inline-flex items-center gap-1.5 text-zinc-600 hover:text-zinc-900 font-medium transition-colors">
+              <Activity size={13} className="text-blue-600" /> {t('nav_all_monitors')}
+            </Link>
+            <span className="text-zinc-300">/</span>
+            <span className="text-zinc-900 font-semibold truncate max-w-xs sm:max-w-md">
+              {snapshot?.title || `#${id.slice(0, 8)}`}
+            </span>
           </div>
-          <div className="border-t border-zinc-100 bg-zinc-50/50 px-6 py-4"><div className="flex flex-wrap gap-2">{stagesFor(snapshot.research_type).map(stage => <span key={stage.key} className={`rounded-lg border px-3 py-2 text-xs ${stage.key === stageKey(snapshot.current_step) ? 'border-blue-200 bg-blue-50 font-medium text-blue-800' : 'border-zinc-200 bg-white text-zinc-400'}`}>{stage.name}</span>)}</div>
-            <p className="mt-3 text-xs leading-5 text-zinc-500">Workflow có thể quay lại tìm nguồn hoặc sửa bản thảo. Chặng tô sáng là bước gần nhất, không phải phần trăm hoàn thành. Các khối xử lý tài liệu, runner và kiểm trích dẫn là module hỗ trợ agent.</p>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <Link
+              href={`/research/${id}`}
+              className="inline-flex items-center gap-1 text-xs font-medium text-zinc-700 hover:text-zinc-900 bg-zinc-50 px-2.5 py-1 rounded-md border border-zinc-200 transition-colors"
+            >
+              <span>{t('nav_workspace')}</span>
+              <ArrowUpRight size={13} />
+            </Link>
           </div>
-        </section>
-        <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Kết quả đã lưu">
-          {[['Nguồn thu thập', snapshot.counts.sources], ['Luận điểm có bằng chứng', snapshot.counts.verified_claims], ['Phiên bản bài báo', snapshot.counts.report_versions], ['Tệp kết quả', snapshot.counts.artifacts]].map(([label, count]) => <div key={label} className="rounded-xl border border-zinc-200 bg-white p-5"><p className="text-xs text-zinc-500">{label}</p><p className="mt-2 text-2xl font-semibold">{count}</p></div>)}
-        </section>
-        {(snapshot.counts.pending_sources > 0 || snapshot.counts.failed_sources > 0) && <p className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">Tài liệu: {snapshot.counts.pending_sources} đang xử lý, {snapshot.counts.failed_sources} xử lý lỗi. Nguồn chưa sẵn sàng chưa được coi là bằng chứng.</p>}
-        <div className="grid items-start gap-6 lg:grid-cols-3">
-          <section className="rounded-2xl border border-zinc-200 bg-white lg:col-span-2" aria-label="Nhật ký hoạt động">
-            <div className="border-b border-zinc-100 p-5"><h2 className="flex items-center gap-2 font-semibold"><Clock size={18} className="text-blue-600" /> Nhật ký hoạt động</h2><p className="mt-2 text-xs leading-5 text-zinc-500">Mới nhất trước · Gồm các lần thực hiện đã lưu của bài này. Chi tiết thường xuất hiện khi một bước kết thúc; đây là tóm tắt thao tác và kết quả, không phải suy nghĩ nội bộ của AI.</p></div>
-            {!snapshot.activities.length && <div className="p-7 text-sm leading-6 text-zinc-500">Chưa có hoạt động được lưu ở trang này. Bước hiện tại được hiển thị phía trên ngay cả khi agent chưa kết thúc.</div>}
-            <ol className="divide-y divide-zinc-100">{snapshot.activities.map(activity => <li key={activity.id} className="flex gap-3 p-5">
-              <span className={`mt-1 rounded-full p-2 ${activity.status === 'FAILED' ? 'bg-red-50 text-red-600' : activity.status === 'SUCCESS' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}>{activity.status === 'SUCCESS' ? <CheckCircle2 size={16} /> : <Circle size={16} />}</span>
-              <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-sm font-semibold">{activityStage(activity.agent)?.name || 'Hoạt động hệ thống'}</h3><StatusPill status={activity.status} /></div>
-                <p className="mt-1 text-xs text-zinc-400">{activityStage(activity.agent)?.agent || 'System'} · {formatTime(activity.started_at)} · {Math.max(0, activity.duration_ms / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} giây · Vòng {activity.iteration}</p>
-                <div className="mt-3 flex flex-wrap gap-2">{Object.entries(activity.output).map(([key, value]) => <span key={key} className="rounded-lg bg-zinc-50 px-2.5 py-1.5 text-xs text-zinc-600">{outputLabel(key, value)}</span>)}</div>
-                {activity.has_error && <p className="mt-2 text-xs text-red-700">Bước này có ghi nhận lỗi. Chi tiết kỹ thuật được lưu trong log vận hành.</p>}
+        </nav>
+
+        {/* Top Header Card */}
+        <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-xl border border-zinc-200 shadow-2xs">
+          <div className="min-w-0 space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-100 text-zinc-700 uppercase tracking-wider">
+                {snapshot?.research_type === 'REVIEW'
+                  ? (isEn ? 'Literature Review' : 'Tổng quan lý thuyết')
+                  : snapshot?.research_type === 'EMPIRICAL_COMPUTATIONAL'
+                  ? (isEn ? 'Computational Empirical' : 'Thực nghiệm tính toán')
+                  : snapshot?.research_type === 'EMPIRICAL_HUMAN'
+                  ? (isEn ? 'Fieldwork (Gate G4)' : 'Thực nghiệm con người (Gate G4)')
+                  : (isEn ? 'Research Project' : 'Đề tài nghiên cứu')}
+              </span>
+              {snapshot?.workflow && (
+                <>
+                  <span className="text-zinc-300">•</span>
+                  <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-100 text-zinc-700">
+                    {t('mon_detail_run')} #{snapshot.workflow.run_number}
+                  </span>
+                  <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-100 text-zinc-700">
+                    {t('mon_detail_plan')}{snapshot.workflow.plan_version}
+                  </span>
+                </>
+              )}
+            </div>
+
+            <h1 className="break-words text-xl sm:text-2xl font-bold tracking-tight text-zinc-900">
+              {snapshot?.title || (isEn ? 'Loading research details...' : 'Đang tải thông tin bài nghiên cứu...')}
+            </h1>
+
+            {snapshot?.workflow && (
+              <p className="text-xs text-zinc-600 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span>{t('mon_detail_started')}: <strong className="font-normal text-zinc-800">{formatTime(snapshot.workflow.started_at, language)}</strong></span>
+                {snapshot.workflow.completed_at && (
+                  <>
+                    <span className="text-zinc-300">•</span>
+                    <span>{t('mon_detail_completed')}: <strong className="font-normal text-zinc-800">{formatTime(snapshot.workflow.completed_at, language)}</strong></span>
+                  </>
+                )}
+                <span className="text-zinc-300">•</span>
+                <span>{t('mon_detail_sample')}: <strong className="font-normal text-zinc-800">{formatTime(snapshot.observed_at, language)}</strong></span>
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            {snapshot && <StatusPill status={snapshot.status} />}
+            <Link
+              href={`/research/${id}`}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 text-xs font-medium text-white hover:bg-zinc-800 transition-all shadow-2xs"
+            >
+              <span>{t('nav_workspace')}</span>
+              <ArrowUpRight size={14} />
+            </Link>
+          </div>
+        </header>
+
+        {/* Polling & Sync Status Banner */}
+        <PollStatus error={error} lastSuccess={lastSuccess} refresh={refresh} />
+
+        {/* Loading Initial State */}
+        {loading && !snapshot && (
+          <div role="status" className="flex items-center justify-center gap-2.5 rounded-xl border border-zinc-200 bg-white p-12 text-center text-xs sm:text-sm font-medium text-zinc-600 shadow-2xs">
+            <RefreshCw size={18} className="animate-spin text-blue-600" />
+            <span>{isEn ? 'Loading monitoring status...' : 'Đang tải dữ liệu tiến độ từ máy chủ...'}</span>
+          </div>
+        )}
+
+        {/* Loaded Content */}
+        {snapshot && action && (
+          <>
+            {/* Worker Lease Expired Alert Box */}
+            {snapshot.worker_lease_expired && (
+              <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-xs sm:text-sm text-amber-900 shadow-2xs">
+                <AlertTriangle size={20} className="shrink-0 text-amber-600 mt-0.5" />
+                <div className="space-y-0.5">
+                  <h3 className="font-semibold text-amber-900">
+                    {t('mon_lease_warning_title')}
+                  </h3>
+                  <p className="text-xs text-amber-800 leading-relaxed">
+                    {t('mon_lease_warning_desc')}
+                  </p>
+                </div>
               </div>
-            </li>)}</ol>
-            <div className="flex items-center justify-between gap-2 border-t border-zinc-100 p-4 text-xs text-zinc-500"><button disabled={!offset} onClick={() => setHistoryPage({ taskId: id, offset: Math.max(0, offset - 20) })} className="rounded-lg border px-3 py-2 disabled:opacity-40">Mới hơn</button><span>{snapshot.activities.length ? `${offset + 1}–${offset + snapshot.activities.length} / ${snapshot.activity_total}` : '0 hoạt động ở trang này'}</span><button disabled={offset + 20 >= snapshot.activity_total} onClick={() => setHistoryPage({ taskId: id, offset: offset + 20 })} className="rounded-lg border px-3 py-2 disabled:opacity-40">Cũ hơn</button></div>
-          </section>
-          <aside className="space-y-4">
-            <section className="rounded-2xl border border-zinc-200 bg-white p-5"><h2 className="font-semibold">Tài nguyên đã ghi nhận</h2><p className="mt-4 text-3xl font-semibold">${snapshot.estimated_cost_usd.toFixed(4)}</p><p className="mt-1 text-xs text-zinc-500">Chi phí ước tính · {snapshot.accounting_source === 'PROVIDER_LEDGER' ? 'sổ theo dõi provider' : 'lịch sử agent'}</p><dl className="mt-5 space-y-3 text-sm"><div className="flex justify-between"><dt className="text-zinc-500">Đặt chỗ chưa đối chiếu</dt><dd>${snapshot.reserved_cost_usd.toFixed(4)}</dd></div><div className="flex justify-between"><dt className="text-zinc-500">Token đã ghi nhận</dt><dd>{snapshot.recorded_tokens.toLocaleString('vi-VN')}</dd></div><div className="flex justify-between"><dt className="text-zinc-500">Lần phân tích</dt><dd>{snapshot.counts.experiments}</dd></div></dl><p className="mt-4 text-xs leading-5 text-zinc-400">Chi phí có thể cập nhật sau khi request hoàn tất; không phải hóa đơn chính thức.</p></section>
-            <section className="rounded-2xl border border-zinc-200 bg-white p-5"><h2 className="flex items-center gap-2 font-semibold"><FileText size={16} /> Mốc thời gian</h2><dl className="mt-4 space-y-3 text-xs"><div><dt className="text-zinc-400">Tạo bài</dt><dd className="mt-1">{formatTime(snapshot.created_at)}</dd></div><div><dt className="text-zinc-400">Trạng thái cập nhật</dt><dd className="mt-1">{formatTime(snapshot.updated_at)}</dd></div><div><dt className="text-zinc-400">Kết thúc ghi nhận</dt><dd className="mt-1">{formatTime(snapshot.completed_at)}</dd></div></dl></section>
-          </aside>
-        </div>
-      </>}
-    </div>
-  </main>;
+            )}
+
+            {/* Highlight Stage Card & Action Callout (2-column layout) */}
+            <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xs">
+              <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-12">
+
+                {/* Left Highlight Block (7 cols) */}
+                <div className="lg:col-span-7 flex flex-col justify-between space-y-3">
+                  <div>
+                    <div className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-800 bg-zinc-100 px-2.5 py-0.5 rounded-full border border-zinc-200">
+                      <Activity size={12} className={snapshot.status === 'RUNNING' ? 'animate-pulse text-blue-600' : 'text-zinc-500'} />
+                      <span>{t('mon_current_step')}</span>
+                    </div>
+
+                    <h2 className="mt-2 text-xl sm:text-2xl font-semibold text-zinc-900">
+                      {current
+                        ? (isEn ? (current.name_en || current.name) : current.name)
+                        : (snapshot.status === 'QUEUED'
+                          ? (isEn ? 'Queued awaiting available worker' : 'Đang xếp hàng chờ worker nhận việc')
+                          : (isEn ? 'Step not recorded yet' : 'Chưa ghi nhận bước xử lý'))}
+                    </h2>
+
+                    <p className="mt-1 text-xs sm:text-[13px] text-zinc-700 font-normal leading-relaxed">
+                      {current
+                        ? (isEn ? (current.description_en || current.description) : current.description)
+                        : (isEn ? 'Execution steps will appear as soon as the pipeline starts running.' : 'Các bước thực tế sẽ xuất hiện ngay khi workflow bắt đầu ghi nhận tiến độ.')}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-zinc-700 font-medium">
+                    <span className="rounded-md bg-zinc-100 px-2.5 py-1 text-zinc-800 border border-zinc-200">
+                      {t('mon_agent_assigned')}: {current?.agent || (isEn ? 'Dispatcher' : 'Hệ thống')}
+                    </span>
+                    <span className="rounded-md bg-zinc-100 px-2.5 py-1 text-zinc-800 border border-zinc-200">
+                      {t('mon_iteration')} {snapshot.current_iteration}
+                    </span>
+                    <span className="rounded-md bg-zinc-100 px-2.5 py-1 text-zinc-800 border border-zinc-200">
+                      {t('mon_attempt')} #{snapshot.attempt_number}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Right Action Callout Card (5 cols) */}
+                <div className="lg:col-span-5 rounded-xl p-4 sm:p-5 border border-zinc-200 bg-zinc-50/80 flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <span className={`h-2 w-2 rounded-full ${
+                        action.tone === 'amber' ? 'bg-amber-600' :
+                        action.tone === 'red' ? 'bg-red-600' :
+                        action.tone === 'emerald' ? 'bg-emerald-600' : 'bg-blue-600'
+                      }`} />
+                      <h3 className="font-semibold text-sm sm:text-base text-zinc-900">
+                        {action.title}
+                      </h3>
+                    </div>
+
+                    <p className="text-xs sm:text-[13px] text-zinc-700 font-normal leading-relaxed">
+                      {action.text}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-zinc-200 flex flex-wrap items-center justify-between gap-2">
+                    <Link
+                      href={`/research/${id}`}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-2 text-xs font-medium text-white hover:bg-zinc-800 transition-colors shadow-2xs"
+                    >
+                      <span>{action.button}</span>
+                      <ArrowUpRight size={13} />
+                    </Link>
+
+                    <span className="text-xs text-zinc-600 font-normal">
+                      {isEn ? 'Saved automatically' : 'Tự động lưu trữ'}
+                    </span>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Research Workflow Pipeline */}
+              <div className="border-t border-zinc-200 bg-zinc-50/40 p-5">
+                <div className="mb-2.5 flex items-center justify-between">
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-700">
+                    {t('mon_pipeline_title')} ({activeStages.length})
+                  </h3>
+                  <span className="text-xs text-zinc-700 font-medium">
+                    {t('mon_current_step')}: <strong className="font-semibold text-zinc-900">{current ? (isEn ? (current.name_en || current.name) : current.name) : (isEn ? 'Pending' : 'Chưa xác định')}</strong>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-2">
+                  {activeStages.map((stage, idx) => {
+                    const isActive = stage.key === activeStageKey;
+                    return (
+                      <div
+                        key={stage.key}
+                        className={`rounded-lg p-2.5 border transition-all ${
+                          isActive
+                            ? 'border-zinc-900 bg-zinc-100 text-zinc-900 ring-1 ring-zinc-900/10'
+                            : 'border-zinc-200 bg-white hover:border-zinc-300 text-zinc-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                          <span className={`text-xs font-mono font-medium ${isActive ? 'text-zinc-900 font-semibold' : 'text-zinc-600'}`}>
+                            #{idx + 1}
+                          </span>
+                          {isActive && (
+                            <span className="text-xs px-1.5 py-0.2 rounded font-medium bg-zinc-900 text-white uppercase tracking-wider">
+                              {t('mon_current_badge')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs font-semibold truncate text-zinc-900">
+                          {isEn ? (stage.name_en || stage.name) : stage.name}
+                        </div>
+                        <div className="text-xs text-zinc-600 truncate mt-0.5 font-medium">
+                          {stage.agent}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Constraint note on non-linear backtracking */}
+                <div className="mt-3 flex items-start gap-2 rounded-lg bg-zinc-100 border border-zinc-200 p-2.5 text-xs text-zinc-700 font-normal leading-relaxed">
+                  <Info size={14} className="text-zinc-600 shrink-0 mt-0.5" />
+                  <span>{t('mon_backtrack_note')}</span>
+                </div>
+              </div>
+            </section>
+
+            {/* Saved Results Metric Cards */}
+            <section aria-label="Artifacts" className="space-y-2.5">
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-sm sm:text-base font-semibold text-zinc-900 flex items-center gap-1.5">
+                  <FileText size={16} className="text-zinc-600" />
+                  <span>{t('mon_counts_title')}</span>
+                </h2>
+                <span className="text-xs text-zinc-500">
+                  {t('mon_counts_desc')}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                {/* Metric 1: Sources */}
+                <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-2xs">
+                  <div className="text-xs font-medium text-zinc-600 uppercase tracking-wider mb-1">
+                    {t('mon_sources')}
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-zinc-900">
+                    {snapshot.counts.sources ?? 0}
+                  </div>
+                </div>
+
+                {/* Metric 2: Verified Claims */}
+                <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-2xs">
+                  <div className="text-xs font-medium text-zinc-600 uppercase tracking-wider mb-1">
+                    {t('mon_claims')}
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-zinc-900">
+                    {snapshot.counts.verified_claims ?? 0}
+                  </div>
+                </div>
+
+                {/* Metric 3: Report Versions */}
+                <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-2xs">
+                  <div className="text-xs font-medium text-zinc-600 uppercase tracking-wider mb-1">
+                    {t('mon_reports')}
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-zinc-900">
+                    {snapshot.counts.report_versions ?? 0}
+                  </div>
+                </div>
+
+                {/* Metric 4: Artifacts */}
+                <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-2xs">
+                  <div className="text-xs font-medium text-zinc-600 uppercase tracking-wider mb-1">
+                    {t('mon_artifacts')}
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-zinc-900">
+                    {snapshot.counts.artifacts ?? 0}
+                  </div>
+                </div>
+
+                {/* Metric 5: Experiments */}
+                <div className="rounded-xl border border-zinc-200 bg-white p-4 shadow-2xs col-span-2 sm:col-span-1">
+                  <div className="text-xs font-medium text-zinc-600 uppercase tracking-wider mb-1">
+                    {t('mon_experiments')}
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-zinc-900">
+                    {snapshot.counts.experiments ?? 0}
+                  </div>
+                </div>
+              </div>
+
+              {/* Warning on pending/failed sources */}
+              {(snapshot.counts.pending_sources > 0 || snapshot.counts.failed_sources > 0) && (
+                <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-900 shadow-2xs">
+                  <AlertCircle size={16} className="shrink-0 text-amber-600 mt-0.5" />
+                  <div>
+                    {snapshot.counts.pending_sources > 0 && <span>{snapshot.counts.pending_sources} {isEn ? 'documents processing. ' : 'tài liệu đang xử lý. '}</span>}
+                    {snapshot.counts.failed_sources > 0 && <span>{snapshot.counts.failed_sources} {isEn ? 'documents failed formatting. ' : 'tài liệu lỗi định dạng. '}</span>}
+                    {isEn ? 'Only successfully indexed documents are verified as scientific evidence.' : 'Nguồn chưa hoàn tất xử lý sẽ chưa được tác tử Analyst đưa vào hệ thống bằng chứng khoa học.'}
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* Bottom 2-Column Section: Activity Log (2/3) + Resources Sidebar (1/3) */}
+            <div className="grid items-start gap-5 lg:grid-cols-3">
+
+              {/* Left Column: Activity Log Timeline (2/3 width) */}
+              <section className="rounded-xl border border-zinc-200 bg-white shadow-2xs lg:col-span-2 overflow-hidden" aria-label="Activity Log">
+                <div className="border-b border-zinc-200 bg-zinc-50/60 p-4 sm:p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h2 className="flex items-center gap-2 font-semibold text-sm sm:text-base text-zinc-900">
+                      <Clock size={16} className="text-blue-600" />
+                      <span>{t('mon_activity_log')}</span>
+                    </h2>
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-zinc-200 text-zinc-800">
+                      {snapshot.activity_total}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-600 leading-relaxed">
+                    {t('mon_activity_sub')}
+                  </p>
+                </div>
+
+                {!snapshot.activities.length ? (
+                  <div className="p-8 text-center text-xs sm:text-sm text-zinc-500 space-y-1">
+                    <Clock size={24} className="mx-auto text-zinc-400 mb-2" />
+                    <p>{t('mon_no_activities')}</p>
+                  </div>
+                ) : (
+                  <ol className="divide-y divide-zinc-100">
+                    {snapshot.activities.map((activity) => {
+                      const stageMeta = activityStage(activity.agent);
+                      return (
+                        <li key={activity.id} className="p-4 sm:p-5 hover:bg-zinc-50/60 transition-colors">
+                          <div className="flex items-start gap-3">
+                            {/* Icon status indicator */}
+                            <span className="mt-0.5 rounded-lg p-1.5 shrink-0 bg-zinc-100 text-zinc-700 border border-zinc-200">
+                              {activity.status === 'SUCCESS' ? (
+                                <CheckCircle2 size={15} className="text-emerald-600" />
+                              ) : activity.status === 'FAILED' ? (
+                                <AlertTriangle size={15} className="text-red-600" />
+                              ) : (
+                                <Circle size={15} className="text-blue-600 animate-pulse" />
+                              )}
+                            </span>
+
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              {/* Header row */}
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <h3 className="text-xs sm:text-sm font-semibold text-zinc-900">
+                                    {stageMeta
+                                      ? (isEn ? (stageMeta.name_en || stageMeta.name) : stageMeta.name)
+                                      : (isEn ? 'System Operation' : 'Hoạt động hệ thống')}
+                                  </h3>
+                                  <span className="px-1.5 py-0.2 rounded text-[11px] font-medium bg-zinc-100 text-zinc-700 border border-zinc-200">
+                                    {stageMeta?.agent || activity.agent}
+                                  </span>
+                                </div>
+                                <StatusPill status={activity.status} />
+                              </div>
+
+                              {/* Metadata line */}
+                              <p className="text-xs text-zinc-700 font-medium flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                                <span>{formatTime(activity.started_at, language)}</span>
+                                <span>•</span>
+                                <span>{Math.max(0, activity.duration_ms / 1000).toFixed(1)}s</span>
+                                <span>•</span>
+                                <span>{t('mon_iteration')} {activity.iteration}</span>
+                              </p>
+
+                              {/* Output summary badges */}
+                              {activity.output && Object.keys(activity.output).length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                  {Object.entries(activity.output).map(([key, value]) => {
+                                    const strVal = String(value);
+                                    const isVerdictPass = key === 'verdict' && ['PASS', 'PASSED'].includes(strVal);
+                                    const isVerdictRevise = key === 'verdict' && ['REVISE', 'NEED_MORE_DATA', 'NEEDS_REVIEW'].includes(strVal);
+                                    const isVerdictFail = key === 'verdict' && strVal === 'FAILED';
+
+                                    const dotColor = isVerdictPass
+                                      ? 'bg-emerald-600'
+                                      : isVerdictRevise
+                                      ? 'bg-amber-600'
+                                      : isVerdictFail
+                                      ? 'bg-red-600'
+                                      : null;
+
+                                    return (
+                                      <span
+                                        key={key}
+                                        className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-zinc-100/90 px-2 py-0.5 text-xs font-medium text-zinc-800"
+                                      >
+                                        {dotColor && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dotColor}`} />}
+                                        {outputLabel(key, value, language)}
+                                      </span>
+                                    );
+                                  })}
+                                </div>
+                              )}
+
+                              {/* Error callout if step logged error */}
+                              {activity.has_error && (
+                                <div className="rounded-md bg-red-50 border border-red-200 p-2 text-xs text-red-800 flex items-center gap-1.5">
+                                  <AlertCircle size={13} className="shrink-0 text-red-600" />
+                                  <span>{isEn ? 'This step reported an execution error. Technical logs are saved in system ledger.' : 'Bước này có ghi nhận lỗi nghiệp vụ. Chi tiết kỹ thuật được lưu trong log vận hành.'}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+
+                {/* Pagination Controls */}
+                <div className="flex items-center justify-between gap-3 border-t border-zinc-200 bg-zinc-50/60 p-3.5 text-xs text-zinc-600">
+                  <button
+                    type="button"
+                    disabled={!offset}
+                    onClick={() => setHistoryPage({ taskId: id, offset: Math.max(0, offset - 20) })}
+                    className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-40 disabled:pointer-events-none shadow-2xs"
+                  >
+                    <ChevronLeft size={13} /> {t('mon_newer')}
+                  </button>
+
+                  <span className="font-medium">
+                    {snapshot.activities.length
+                      ? `${offset + 1}–${offset + snapshot.activities.length} / ${snapshot.activity_total}`
+                      : '0'}
+                  </span>
+
+                  <button
+                    type="button"
+                    disabled={offset + 20 >= snapshot.activity_total}
+                    onClick={() => setHistoryPage({ taskId: id, offset: offset + 20 })}
+                    className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 font-medium text-zinc-700 hover:bg-zinc-50 transition-colors disabled:opacity-40 disabled:pointer-events-none shadow-2xs"
+                  >
+                    {t('mon_older')} <ChevronRight size={13} />
+                  </button>
+                </div>
+              </section>
+
+              {/* Right Column: Resources & Milestones Sidebar (1/3 width) */}
+              <aside className="space-y-4">
+
+                {/* Card 1: Resource Ledger */}
+                <section className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-2xs" aria-label="Resources">
+                  <div className="flex items-center justify-between mb-3">
+                    <h2 className="font-semibold text-sm sm:text-base text-zinc-900">
+                      {t('mon_cost_ledger')}
+                    </h2>
+                  </div>
+
+                  <div className="p-3.5 rounded-lg bg-zinc-50 border border-zinc-200">
+                    <div className="text-xs text-zinc-600">
+                      {t('mon_cost_est')}
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-zinc-900 mt-0.5">
+                      ${snapshot.estimated_cost_usd.toFixed(4)}
+                    </div>
+                    <div className="text-[11px] text-zinc-500 mt-0.5">
+                      {t('mon_cost_source')}: {snapshot.accounting_source === 'PROVIDER_LEDGER'
+                        ? (isEn ? 'Provider settlement ledger' : 'Sổ đối soát API Provider')
+                        : (isEn ? 'Agent estimates' : 'Lịch sử ước tính Agent')}
+                    </div>
+                  </div>
+
+                  <dl className="mt-3 divide-y divide-zinc-100 text-xs">
+                    <div className="flex justify-between py-2">
+                      <dt className="text-zinc-600">{t('mon_cost_reserved')}</dt>
+                      <dd className="font-mono font-medium text-zinc-900">${snapshot.reserved_cost_usd.toFixed(4)}</dd>
+                    </div>
+                    <div className="flex justify-between py-2">
+                      <dt className="text-zinc-600">{t('mon_cost_tokens')}</dt>
+                      <dd className="font-mono font-medium text-zinc-900">{snapshot.recorded_tokens.toLocaleString(isEn ? 'en-US' : 'vi-VN')}</dd>
+                    </div>
+                    <div className="flex justify-between py-2">
+                      <dt className="text-zinc-600">{t('mon_experiments')}</dt>
+                      <dd className="font-mono font-medium text-zinc-900">{snapshot.counts.experiments ?? 0}</dd>
+                    </div>
+                  </dl>
+
+                  <p className="mt-2.5 text-[11px] text-zinc-500 leading-relaxed">
+                    {t('mon_cost_disclaimer')}
+                  </p>
+                </section>
+
+                {/* Card 2: System Milestones */}
+                <section className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-2xs" aria-label="Milestones">
+                  <h2 className="font-semibold text-sm sm:text-base text-zinc-900 mb-3">
+                    {t('mon_milestones')}
+                  </h2>
+
+                  <dl className="space-y-2 text-xs">
+                    <div className="border-b border-zinc-100 pb-1.5">
+                      <dt className="text-zinc-500">{isEn ? 'Created' : 'Khởi tạo bài'}</dt>
+                      <dd className="text-zinc-800 font-medium">{formatTime(snapshot.created_at, language)}</dd>
+                    </div>
+                    <div className="border-b border-zinc-100 pb-1.5">
+                      <dt className="text-zinc-500">{isEn ? 'Last status update' : 'Cập nhật trạng thái'}</dt>
+                      <dd className="text-zinc-800 font-medium">{formatTime(snapshot.updated_at, language)}</dd>
+                    </div>
+                    <div className="border-b border-zinc-100 pb-1.5">
+                      <dt className="text-zinc-500">{isEn ? 'Backend sample time' : 'Thời điểm lấy mẫu'}</dt>
+                      <dd className="text-zinc-800 font-medium">{formatTime(snapshot.observed_at, language)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-zinc-500">{isEn ? 'Completion time' : 'Kết thúc ghi nhận'}</dt>
+                      <dd className="text-zinc-800 font-medium">{formatTime(snapshot.completed_at, language)}</dd>
+                    </div>
+                  </dl>
+                </section>
+
+                {/* Card 3: Quick Guidance */}
+                <section className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-2xs">
+                  <h3 className="font-semibold text-xs text-zinc-900 uppercase tracking-wider mb-1.5">
+                    {t('mon_parallel_title')}
+                  </h3>
+                  <p className="text-xs text-zinc-600 leading-relaxed font-normal">
+                    {t('mon_parallel_desc')}
+                  </p>
+                  <div className="mt-3 pt-2.5 border-t border-zinc-100 flex flex-col gap-1.5">
+                    <Link
+                      href={`/research/${id}`}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-zinc-800 transition-colors shadow-2xs"
+                    >
+                      <span>{t('nav_workspace')}</span>
+                      <ArrowUpRight size={13} />
+                    </Link>
+                    <Link
+                      href="/research/monitor"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 transition-colors"
+                    >
+                      {t('nav_all_monitors')}
+                    </Link>
+                  </div>
+                </section>
+
+              </aside>
+            </div>
+          </>
+        )}
+
+      </div>
+    </main>
+  );
 }
