@@ -1,6 +1,6 @@
 # Kế hoạch triển khai đến production — Synthia
 
-**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 31/10/2026, nền develop@f252223 / PR #76; P6 issue #77 · **Mốc nộp/demo:** 10/11/2026.
+**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 02/11/2026, nền develop@bb63c99 / PR #78; nền P7 issue #79 · **Mốc nộp/demo:** 10/11/2026.
 
 Đây là nguồn duy nhất về **việc cần làm, thứ tự và điều kiện phát hành**. [Roadmap](roadmap-and-progress.md) ghi việc đã làm; [biên bản](baseline-verification.md) ghi bằng chứng. P0–P7/G0–G7 giữ ý nghĩa trong [SRS](../requirements/SRS.md); P8–P10 bổ sung đường đến production. Lịch này thay lịch 12/10 đã lỗi thời.
 
@@ -22,6 +22,8 @@ REVIEW dùng **Supervisor, Researcher, Evidence Analyst, Writer, Critic**. Metho
 **Bài báo theo loại nghiên cứu (#61/#63):** bản mới dùng khung có Related Work; Introduction nêu câu hỏi, gap có nguồn và đóng góp đúng phạm vi. Writer/Critic/PostProcessor cùng kiểm cấu trúc, văn xuôi, giải thích hình, baseline/số liệu và các kết luận vượt bằng chứng. Bản tổng quan không bị ép có Results thực nghiệm; dữ liệu người dùng không bị coi là hệ thống đã tự xác minh. Mẫu IEEE/ACM xử lý bố cục; không thay việc đánh giá khoa học. Chi tiết quy cách và API xuất bản tại [Agent Workflow, mục 7](../technical/agent-workflow.md#7-quy-cách-bản-thảo--cập-nhật-29102026-61-63).
 
 **Cập nhật 31/10 — cuối P6, chuẩn bị P7:** PR #66/#68/#70/#72/#74/#76 đã merge develop; nền `f252223` có 413 backend tests và 5/5 CI đạt. Nguồn học thuật/nhật ký tìm kiếm và kiểm bằng chứng đã được bổ sung; vẫn cần đánh giá REVIEW thật sau sửa. Issue #77 bổ sung gói tái lập theo report version: đóng băng CSV/code/environment trước chạy, giữ raw results/journal, kiểm hash và chạy lại độc lập. Sau nghiệm thu gói này, ưu tiên evaluation P7, browser/runtime ba luồng và fault/restart/concurrency; chưa mở P8–P10 hoặc coi G0–G7 đã khép.
+
+**Cập nhật 02/11 — nền P7:** #77 đã merge qua PR #78; 425 backend tests, 20 frontend tests, 5/5 CI đạt và gói thực nghiệm chạy lại độc lập được kiểm. Issue #79 triển khai CLI freeze/record/blind/score/summarize; giữ attempt đầu và reruns, lỗi/thiếu/chưa chấm, chênh lệch âm và tách pilot/held-out. Đây là nền quản lý bằng chứng đánh giá, chưa có runner A/B/C trên corpus thật hoặc kết quả benchmark. Tiếp theo: hoàn thiện adapter production-aligned và corpus/câu hỏi thật → pilot → held-out/chấm → kiểm browser/runtime/fault còn thiếu. Chi tiết và giới hạn tại Evaluation Plan §7; G7/P8–P10 chưa đóng.
 
 ## 2. Kiến trúc và công nghệ
 

@@ -1,6 +1,6 @@
 # Tiến độ triển khai — Synthia
 
-**Cập nhật: 31/10/2026.** Nền develop@f252223 / PR #76; đang khép P6 với issue #77. Hạn demo: 10/11/2026.
+**Cập nhật: 02/11/2026.** Nền develop@bb63c99 / PR #78; đang làm nền P7 với issue #79. Hạn demo: 10/11/2026.
 
 Tài liệu này trả lời **đã có gì, đã kiểm đến đâu, tiếp theo làm gì**. Thứ tự và điều kiện phát hành nằm trong [Implementation Plan](implementation-plan.md). Các biên bản ngày 22–24/10 là lịch sử, không phải trạng thái code hiện tại.
 
@@ -16,9 +16,15 @@ Tài liệu này trả lời **đã có gì, đã kiểm đến đâu, tiếp th
 | Theo dõi tiến độ | Tổng quan nhiều bài, trạng thái/stage, lịch sử agent, ngân sách và cảnh báo từ dữ liệu đã lưu | PR #57. Dashboard vận hành, cảnh báo thực sự gửi được và tải staging còn ở P8–P10 |
 | Hỏi bài đã viết | Hỏi đáp dựa trên phiên bản bài và nguồn/chunk của phiên bản đó; lịch sử và chống gửi lặp | PR #58. Câu trả lời vẫn cần người dùng đối chiếu bằng chứng |
 | Sửa cách trình bày bài | Issue #65: chọn phiên bản, gửi yêu cầu, Writer/Critic/validator tạo bản mới; nguồn và dữ liệu đóng băng theo bản gốc | Kiểm thử quyền, cạnh tranh, stale base, budget, hủy/xóa và mô phỏng crash/redelivery. Một lượt provider thật tạo v3 từ v2, v2 giữ nguyên |
-| Xuất bản thảo | Markdown và ZIP nguồn IEEE/ACM kèm hình/dữ liệu biểu đồ/provenance theo version | PR #64; đã biên dịch và xem PDF mẫu. Chưa có dịch vụ tự biên dịch PDF trong backend; gói chạy lại thực nghiệm đầy đủ còn cần hoàn thiện |
+| Xuất bản thảo | Markdown và ZIP nguồn IEEE/ACM kèm hình/dữ liệu biểu đồ/provenance theo version | PR #64; đã biên dịch và xem PDF mẫu. Chưa có dịch vụ tự biên dịch PDF trong backend; gói tái lập thực nghiệm đã có ở PR #78, xem bằng chứng bên dưới |
 
 **Chưa đủ điều kiện phát hành production hoặc nâng `main` thành bản demo đã nghiệm thu.** Các chức năng có code và tests không tự đóng toàn bộ G0–G7.
+
+## Bằng chứng cập nhật 02/11
+
+- **P6 / PR #78 đã merge tại `bb63c99`:** 425 backend tests, 20 frontend tests và 5/5 CI đạt. Export theo owner/version, đóng băng input/code/result, kiểm hash, giữ kết quả âm, journal cutoff; chạy ZIP độc lập thực sự, không dùng LLM để giả kết quả tính toán.
+- **P7 / #79 đang kiểm:** CLI đóng băng nguồn/câu hỏi/expected points/model/cap/revision, lưu mọi attempt và trace, packet che nhãn theo split, chấm thủ công và paired summary. 29 focused tests ban đầu đạt; toàn bộ backend cục bộ đạt 454 trước các ca bổ sung cuối, 33 focused tests của bản cuối đạt; CLI smoke thực sự chạy trong Docker và báo đủ 3 ô missing, không sinh kết quả khoa học. Final CI là cổng trước merge.
+- **Chưa có benchmark thật:** init chỉ tạo nguồn/bài smoke tổng hợp cho test phần mềm. Chưa có adapter chạy thật A/B/C trên frozen corpus, chưa chốt bộ 4 pilot + 8 held-out và chưa chấm kết quả thật; không dùng smoke để tuyên bố multi-agent tốt hơn.
 
 ## Bằng chứng cập nhật 31/10
 
@@ -42,7 +48,7 @@ CI của PR là cổng trước merge; release `main` vẫn cần demo UI/API/br
 
 | Ưu tiên | Việc cần hoàn thiện | Người dùng nhận được gì? | Điều kiện nghiệm thu |
 |---|---|---|---|
-| 1 | Nghiệm thu P6 / #77: gói bàn giao/tái lập thực nghiệm theo version | Tải đúng input được phép, config, routine/launcher, metrics, biểu đồ, manifest và journal của lần chạy | Đúng owner/version/hash; không trộn artifacts của lần mới hơn; không xuất kết quả chạy thất bại như thành công |
+| 1 | P7 / #79: nền protocol/thu output/chấm; sau đó adapter A/B/C và corpus thật | Có bộ dữ liệu và bảng so sánh kiểm tra lại được | Nền CLI qua CI; runner đúng model/corpus/cap, pilot/held-out tách biệt; giữ failures và kết quả âm |
 | 2 | P7: đánh giá theo Evaluation Plan | Biết chất lượng, nguồn hỗ trợ, chi phí, thời gian và giá trị multi-agent trên bộ câu hỏi cố định | Baseline/ablation cùng model/corpus/cap; giữ cả lỗi/kết quả âm và giới hạn mẫu |
 | 3 | Nghiệm thu runtime/UI còn thiếu | Ba luồng REVIEW, tính toán, human-led hoạt động sau lỗi/khôi phục | Browser + broker + restart/concurrency/fault tests; không đóng gate chỉ từ mock tests |
 | 4 | P8 → P9 → P10 | Staging, backup/restore, monitoring vận hành, pilot rồi phát hành giới hạn | Cùng image digest, rollback, cảnh báo thật, tải/chi phí đã đo và quyết định go/no-go |
