@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 from app.evaluation.protocol import freeze, record, blind, score, summarize, write_new, Specification, Run, Grade
+from app.services.manuscript import REVIEW_OUTPUT_CONTRACT
 
 
 def initialize(directory):
@@ -14,7 +15,7 @@ def initialize(directory):
     (root / "source.txt").write_text(source, encoding="utf-8")
     spec = {"mode": "smoke", "code_revision": "0" * 40,
         "controls": {"model": "SET_BEFORE_REAL_EVALUATION", "model_revision": "unavailable", "temperature": 0.2,
-            "language": "en", "output_contract": "REVIEW-v3", "retrieval_profile": "frozen-corpus-required",
+            "language": "en", "output_contract": REVIEW_OUTPUT_CONTRACT, "retrieval_profile": "frozen-corpus-required",
             "max_llm_calls": 40, "max_input_tokens": 100000, "max_output_tokens": 50000,
             "max_cost_usd": 1.0, "timeout_seconds": 900},
         "sources": [{"id": "alpha", "path": "source.txt", "origin": "synthetic", "url": "fixture:alpha",

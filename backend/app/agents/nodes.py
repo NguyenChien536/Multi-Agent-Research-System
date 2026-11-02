@@ -294,10 +294,17 @@ def get_smart_llm():
 # 2. SCHEMAS (Pydantic v2) CHO CÁC AGENT
 # ---------------------------------------------------------------------------
 
+class ArgumentSection(BaseModel):
+    section_id: str = Field(max_length=40, description="Semantic parent: review_methods, synthesis, methods, setup, results or discussion, consistent with study type")
+    subsection_titles: List[str] = Field(min_length=2, max_length=4, description="Concise, topic-specific analytical H3 headings in output language; no alleged findings before evidence")
+    purpose: str = Field(max_length=500, description="Question/comparison this parent section must develop; not fabricated evidence or results")
+
+
 class SupervisorPlan(BaseModel):
     research_angle: str = Field(description="Góc nhìn và phương pháp tiếp cận đề tài")
     search_queries: List[str] = Field(max_length=5, description="Danh sách các truy vấn tìm kiếm (tối đa 5)")
     required_sections: List[str] = Field(description="Các mục bắt buộc phải có trong báo cáo")
+    section_outline: List[ArgumentSection] = Field(default_factory=list, max_length=6, description="Provisional topic-specific hierarchy; Writer must adapt it to retrieved evidence")
 
 class CriticVerdict(BaseModel):
     verdict: str = Field(description="PASS, REVISE, NEED_MORE_DATA, or NEEDS_REVIEW")
@@ -307,34 +314,8 @@ class CriticVerdict(BaseModel):
 
 
 def _report_sections(markdown: str, max_chars: int = 5000) -> list[tuple[str, str]]:
-    """Split the complete manuscript into bounded chunks without dropping its ending."""
-    import re
-
-    parts = re.split(r"(?m)^(#{1,6})\s+(.+?)\s*$", markdown)
-    sections: list[tuple[str, str]] = []
-    if len(parts) == 1:
-        if markdown.strip():
-            sections.append(("Full report", markdown.strip()))
-    else:
-        if parts[0].strip():
-            sections.append(("Preamble", parts[0].strip()))
-        for index in range(1, len(parts), 3):
-            sections.append((parts[index + 1].strip(), parts[index + 2].strip()))
-
-    chunks: list[tuple[str, str]] = []
-    for heading, body in sections:
-        if not body:
-            chunks.append((heading, "(No section body.)"))
-            continue
-        while len(body) > max_chars:
-            split_at = body.rfind("\n", 0, max_chars)
-            if split_at < max_chars // 2:
-                split_at = max_chars
-            chunks.append((heading, body[:split_at].strip()))
-            body = body[split_at:].strip()
-        if body:
-            chunks.append((heading, body))
-    return chunks
+    from app.services.manuscript_structure import review_sections
+    return review_sections(markdown, max_chars)
 
 
 def _review_batches(sections: list[tuple[str, str]], max_chars: int = 9000) -> list[tuple[list[str], str]]:
@@ -438,6 +419,10 @@ async def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     use author names only when known, never invent them. Web retrieval is not direct database search.
     Với REVIEW: định hướng tổng quan phân tích tài liệu (narrative review), không tự nhận tổng quan hệ thống/PRISMA.
     Các chủ đề cần phân tích sẽ được đặt bên trong cấu trúc bài báo học thuật do hệ thống quy định.
+    Provide section_outline with 2–4 concise topic-specific H3 titles per substantial parent section.
+    Use synthesis/review_methods for REVIEW, methods/setup/results for computational work,
+    and methods/results for human-led work. Do not invent results or assume a method was executed.
+    Plan the questions/comparisons each section should develop; Writer will adapt to actual evidence.
     """
 
     try:
@@ -1499,6 +1484,7 @@ Requested edits: {state.get('revision_instructions')}
     Dữ liệu đã trích xuất (chỉ luận điểm có bằng chứng khớp chính xác với đoạn nguồn): {writer_claim_context(claims)}
     Lưu ý từ vòng sửa trước (nếu có): {feedback}
     Các chủ đề cần tổng hợp/đối chiếu bên trong nội dung: {plan.get('suggested_topics', [])}
+    Đề cương lập luận dự kiến (chỉ là kế hoạch, điều chỉnh theo bằng chứng thực có): {plan.get('section_outline', [])}
     {editorial_context}
     {writing_guidance(contract)}
     {empirical_section}
@@ -1546,8 +1532,17 @@ Requested edits: {state.get('revision_instructions')}
             input_tokens=in_tok,
             output_tokens=out_tok,
             estimated_cost=cost,
-            input_summary={"claims_count": len(claims)},
-            output_summary={"draft_words": len(draft_markdown.split()), "truncated": truncated},
+            input_summary={"claims_count": len(claims),
+                "evidence_sources": len({c.get("source_id") for c in claims if c.get("source_id")}),
+                "distinct_evidence_quotes": len({(c.get("source_id"), c.get("evidence_quote") or c.get("evidence_text"))
+                    for c in claims if c.get("evidence_quote") or c.get("evidence_text")}),
+                "prompt_characters": len(prompt), "estimated_prompt_tokens": estimate_tokens(prompt),
+                "requested_output_tokens": output_limit, "target_words": word_target,
+                "proposed_outline_sections": len(plan.get("section_outline") or [])},
+            output_summary={"draft_words": len(draft_markdown.split()), "truncated": truncated,
+                "finish_reason": finish_reason or "unavailable",
+                "reported_model": str((getattr(response, "response_metadata", None) or {}).get("model_name") or
+                                      (getattr(response, "response_metadata", None) or {}).get("model_version") or "unavailable")},
             tool_calls=[],
         )
 
@@ -1603,7 +1598,7 @@ async def critic_node(state: ResearchState) -> Dict[str, Any]:
         policy_version = ((contract or {}).get("evidence_review_policy") or {}).get("version", 1)
         sections = _report_sections(draft)
         if policy_version >= 2:
-            sections = [(name, text) for name, text in sections if name not in LEDGER_HEADINGS]
+            sections = [(name, text) for name, text in sections if name.rsplit(" / ", 1)[-1] not in LEDGER_HEADINGS]
         if not sections:
             sections = [("Full report", "(The writer produced an empty report.)")]
         claims = state.get("claims", [])
@@ -1912,6 +1907,9 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
             return f"@@VALID_CITATION_{number}@@" if number is not None else ""
 
         final_md = marker_pattern.sub(replace_marker, draft)
+        # Several grounded claims can cite the same source consecutively. Keep
+        # every claim/evidence record, but print its reference label only once.
+        final_md = re.sub(r"(@@VALID_CITATION_\d+@@)(?:\s*\1)+", r"\1", final_md)
         # Remove all model-authored numbered citations, then restore only markers
         # that resolved to validated claim/evidence records.
         final_md = re.sub(r"\[\d+\]", "", final_md)

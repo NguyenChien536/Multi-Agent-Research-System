@@ -167,3 +167,35 @@ Các lượt nghiên cứu mới lưu thêm `writing_brief` cùng contract. Writ
 | [PRISMA 2020 checklist](https://www.prisma-statement.org/prisma-2020-checklist) | Phân biệt yêu cầu của tổng quan hệ thống với tổng quan phân tích hiện hỗ trợ; không dùng checklist làm chứng nhận tuân thủ |
 
 Chỉ học cấu trúc lập luận và nguyên tắc thiết kế hình. Không sao chép câu văn, ảnh, caption, bibliography hoặc số liệu của các bài mẫu vào bài của người dùng. Chỉ nguồn nằm trong evidence của đúng lượt nghiên cứu mới được trở thành citation. Những quy tắc này không đòi mọi lĩnh vực có cùng khung IMRaD hay mọi bài phải có biểu đồ thực nghiệm.
+
+### 9.1. Bố cục phân cấp và lập luận — contract v4, 02/11/2026 (#84)
+
+Kế hoạch nghiên cứu mới có `section_outline`: mục cha, các mục nhỏ theo câu hỏi/chủ đề và mục đích lập luận. Supervisor đề xuất ngay trong lần lập kế hoạch hiện có, không mở một vòng gọi model mới. Đây là đề cương dự kiến trước tìm nguồn, không phải kết quả nghiên cứu. Writer phải điều chỉnh theo bằng chứng thực có; không tạo số liệu hoặc suy luận không được hỗ trợ để lấp đầy đề cương. H2 giữ vai trò của từng phần, H3 phát triển các luận điểm/câu hỏi cụ thể; H4 chỉ dùng khi cần bên dưới H3.
+
+| Phần | Cách triển khai trong bài |
+|---|---|
+| Abstract | Tự đứng được: câu hỏi/mục đích → cách thực sự đã làm → phát hiện/tổng hợp chính có căn cứ → ý nghĩa có giới hạn. Viết phù hợp với phần thân, không thêm số liệu hoặc novelty |
+| Introduction | Các đoạn liên kết đi từ bối cảnh → vấn đề và hạn chế nghiên cứu trước có nguồn → gap có giới hạn → RQ → cách tiếp cận/đóng góp thực tế. Không ép năm bước này thành năm tiêu đề nhỏ ngắn, rời rạc |
+| Related Work | Đối chiếu theo tiêu chí có ý nghĩa: giả định, phương pháp, dữ liệu/bối cảnh, bằng chứng và hạn chế. Mục nhỏ có thể nêu một dòng phương pháp hoặc một cuộc tranh luận; tránh một mục nhỏ cho mỗi paper |
+| REVIEW: phạm vi/phương pháp | Phân biệt cách xác định phạm vi/tìm nguồn thực tế với cách lựa chọn, giới hạn nguồn và tổng hợp. Nhật ký kỹ thuật là thông tin bổ trợ, không thay nội dung phương pháp |
+| REVIEW: tổng hợp | Các mục nhỏ được đặt theo câu hỏi, cơ chế, chiều so sánh hoặc bất đồng có bằng chứng; mỗi mục giải thích điểm thống nhất/khác biệt, giả định, hàm ý và điều chưa biết. Không chuyển thành Results của thí nghiệm chưa làm |
+| Tính toán: Methods / Setup | Tách định nghĩa bài toán/biến/giả định/routine đã chạy khỏi dữ liệu, preprocessing, split, baseline, cấu hình và metrics. Chi tiết chỉ được đưa vào nếu có trong provenance |
+| Tính toán: Results | Mục nhỏ theo RQ hoặc phép so sánh đo được; trình bày baseline và mô hình trên cùng thiết lập, kết quả âm/không kết luận và kiểm lặp thực sự có. Không tạo ablation, uncertainty hay biểu đồ mới khi chưa thực hiện |
+| Dữ liệu người dùng: Methods / Results | Tách thiết kế/nguồn dữ liệu/mẫu khỏi đo lường, thu thập, phân tích và ethics đã được cung cấp. Kết quả tổ chức theo câu hỏi/chủ đề/outcome thực có, ghi rõ phần do người dùng báo cáo và phần hệ thống thực sự phân tích |
+| Discussion | Trả lời RQ từ bằng chứng; giải thích cơ chế hoặc cách hiểu có điều kiện, so với nghiên cứu trước, xem xét giải thích thay thế và khả năng áp dụng. Không chỉ lặp Results |
+| Limitations / Conclusion | Nêu giới hạn cụ thể làm yếu kết luận nào; kết luận quay lại câu hỏi với mức khẳng định tương xứng. Không thêm bằng chứng hoặc đề xuất chưa thực nghiệm như kết quả |
+| Figure / table / references | Đặt gần luận điểm được minh họa, giải thích trong văn bản, caption có phạm vi/provenance; reference hỗ trợ đúng phát biểu. Gộp nhãn trích dẫn liền nhau của cùng nguồn nhưng giữ đủ claim/evidence links |
+
+Các phần phân tích/phương pháp đủ dài dùng khoảng 2–4 mục H3 có nội dung; bộ kiểm tra chỉ bắt dấu hiệu quan sát được như mục trống, thiếu phân cấp, trùng mục hoặc phân mảnh quá mức. Ngưỡng 350 ký tự/mục cha, 50 ký tự văn xuôi/mục con và tối đa 6 mục con là heuristic sản phẩm, không phải tiêu chuẩn học thuật hoặc chứng nhận viết hay. Mục ngắn không bị ép chia nhỏ. Tiêu đề bài và mục cha có mục con không trở thành đoạn “No section body” gửi Critic; ngữ cảnh mục cha được giữ khi review từng mục con. Code fences không được giả làm đề mục của bài.
+
+Học bố cục từ các ví dụ khác phương pháp: [Ruder, tổng quan các thuật toán gradient descent](https://arxiv.org/html/1609.04747v2) cho cách tổng hợp theo họ phương pháp/đánh đổi; [STORM, NAACL 2024](https://arxiv.org/html/2402.14207v1) cho phân cấp phương pháp, thiết lập và phân tích đánh giá; [Bloom, Han & Liang, Nature 2024](https://www.nature.com/articles/s41586-024-07500-2) cho quan hệ giữa câu hỏi, thiết kế nghiên cứu, kết quả và giới hạn trong nghiên cứu thực nghiệm. Chỉ rút ra vai trò cấu trúc, không nhập kết quả/mẫu/số liệu/citation của các bài đó vào output. [Nature Methods: content types](https://www.nature.com/nmeth/content) cũng cho thấy quy tắc subheading phụ thuộc venue; profile mặc định của Synthia không tự nhận tuân thủ y hệt mọi tạp chí.
+
+Nếu người dùng muốn theo một bài mẫu cụ thể, cần có bài mẫu và xác định cùng loại phương pháp; hiện chưa có chức năng tự trích style/template từ file bài mẫu. Profile mới không được coi là đã đọc một exemplar mà người dùng chưa cung cấp. Bài cũ giữ nguyên contract; sửa phiên bản cũ vẫn giữ policy đã snapshot. Nghiên cứu mới dùng contract v4; evaluation phải freeze `REVIEW-v4` và revision mới, không dùng protocol `REVIEW-v3` cũ để đo code mới.
+
+### 9.2. Context, bằng chứng và giới hạn tài khoản
+
+Context là giới hạn một request; ngân sách token của ResearchTask là giới hạn cộng dồn nhiều request. Free/paid tier chủ yếu cần kiểm qua quota/model access/rate limits của tài khoản, không suy ra context chỉ từ chữ “free”. Tham khảo [Google: tokens/context](https://ai.google.dev/gemini-api/docs/tokens), [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits) và [pricing/tier](https://ai.google.dev/gemini-api/docs/pricing).
+
+Lượt kiểm tra metadata model ngày 02/11 trả input limit 1.048.576 và output limit 65.536 cho hai model đang cấu hình `gemini-3.5-flash` và `gemini-3.5-flash-lite`; đó không phải xác nhận quota/billing tier hoặc cam kết chất lượng. Writer của sản phẩm vẫn đặt output riêng SHORT=4096, MEDIUM=8192, LONG=12288 và kiểm budget trước provider call. Bài được audit ngày 02/11 có Writer input 8.014 token, output 2.345, không báo truncated; sau gộp trùng Writer nhận 5 claim/evidence records từ 3 nguồn. Chưa có bằng chứng context overflow trong lượt đó; model không thể tự bổ sung tài liệu mà pipeline chưa đưa vào.
+
+Writer mới ghi số nguồn/quote, kích thước prompt, token dự phòng, output limit, finish reason và model được provider báo khi có; không lưu raw prompt hay secrets vào log. Các số đo này hỗ trợ chẩn đoán thiếu nguồn, mất thông tin khi trích xuất, quota, output truncation và khả năng model riêng biệt. Cải thiện hierarchy chưa chứng minh chất lượng học thuật tốt hơn; cần chạy/chấm bài thật trên các thể loại/chủ đề theo Evaluation Plan. Không tự tăng cap hoặc đổi model để che lỗi pipeline.

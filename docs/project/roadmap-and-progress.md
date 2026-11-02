@@ -1,6 +1,6 @@
 # Tiến độ triển khai — Synthia
 
-**Cập nhật: 02/11/2026.** Code đã kiểm e457f17 / PR #82; bộ chạy P7 đã qua CI, tiếp theo pilot issue #83. Hạn demo: 10/11/2026.
+**Cập nhật: 02/11/2026.** Code đã kiểm e457f17 / PR #82; bộ chạy P7 đã qua CI, tiếp theo pilot issue #83. Hạn cuối kỳ mới: 05/11/2026; mục tiêu chốt bản nộp trước hết 04/11.
 
 Tài liệu này trả lời **đã có gì, đã kiểm đến đâu, tiếp theo làm gì**. Thứ tự và điều kiện phát hành nằm trong [Implementation Plan](implementation-plan.md). Các biên bản ngày 22–24/10 là lịch sử, không phải trạng thái code hiện tại.
 
@@ -19,6 +19,8 @@ Tài liệu này trả lời **đã có gì, đã kiểm đến đâu, tiếp th
 | Xuất bản thảo | Markdown và ZIP nguồn IEEE/ACM kèm hình/dữ liệu biểu đồ/provenance theo version | PR #64; đã biên dịch và xem PDF mẫu. Chưa có dịch vụ tự biên dịch PDF trong backend; gói tái lập thực nghiệm đã có ở PR #78, xem bằng chứng bên dưới |
 
 **Chưa đủ điều kiện phát hành production hoặc nâng `main` thành bản demo đã nghiệm thu.** Các chức năng có code và tests không tự đóng toàn bộ G0–G7.
+
+**Cập nhật #84:** đang kiểm contract v4 và hierarchy theo từng loại bài; đã đạt 118 focused tests và 505 tests toàn bộ trước các ca cuối; chưa chấm bài thật sau thay đổi. Writer của bài được audit nhận 5 evidence records từ 3 nguồn; giới hạn chính ở lượng bằng chứng và tổ chức nội dung, chưa có bằng chứng context overflow. Xem Agent Workflow §9.1–9.2.
 
 ## Bằng chứng cập nhật 02/11
 

@@ -12,11 +12,13 @@
 | Đang làm đến đâu, phần nào đã kiểm chứng? | [Roadmap và tiến độ](project/roadmap-and-progress.md) — có code / đã kiểm / còn thiếu |
 | Kiến trúc, dữ liệu và luồng chạy như thế nào? | [System Design](architecture/system-design.md) — thiết kế mục tiêu để triển khai/vẽ sơ đồ |
 
+**Mốc cuối kỳ mới:** chốt bản nộp trước hết 04/11, bàn giao/dự phòng 05/11 theo yêu cầu 3 ngày. Đang nghiệm thu #84 về bố cục/lập luận từng loại bài; output thật vẫn cần đọc và chấm.
+
 ## Việc ngay tiếp theo
 
 1. **P7 / #83**: chốt profile/ngân sách và chạy pilot thật; [Evaluation Plan](project/evaluation-plan.md) §7–8 ghi cách thực thi và chấm. Bộ chạy #81 đã kiểm thử; smoke fixture không phải kết quả đánh giá thật.
 2. Chốt model/giá trần/ngân sách tổng và corpus; freeze source sạch đúng commit, chạy pilot có giới hạn trước held-out, giữ cả lỗi và kết quả không thuận lợi.
-3. Khép các kiểm tra browser/runtime, restart/concurrency và ba luồng trước staging → dùng thử giới hạn → production. **10/11 là mốc nộp/demo, chưa phải cam kết production.**
+3. Khép các kiểm tra browser/runtime, restart/concurrency và ba luồng trước staging → dùng thử giới hạn → production. **05/11 là hạn cuối kỳ mới; bản nộp phải chốt trước hết 04/11. Production có các gate riêng.**
 
 Quy trình Git: issue nhỏ → branch chức năng/sửa lỗi → tests/review → PR develop. Chỉ đưa lên main khi CI và demo end-to-end trên đúng candidate đạt. Xem [CONTRIBUTING](../CONTRIBUTING.md).
 

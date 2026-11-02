@@ -1,10 +1,21 @@
 # Kế hoạch triển khai đến production — Synthia
 
-**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 02/11/2026, code đã kiểm e457f17 / PR #82; pilot P7 issue #83 · **Mốc nộp/demo:** 10/11/2026.
+**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 02/11/2026, code đã kiểm e457f17 / PR #82; pilot P7 issue #83 · **Mốc bàn giao cuối kỳ mới:** 05/11/2026; chốt bản nộp trước hết 04/11.
 
 Đây là nguồn duy nhất về **việc cần làm, thứ tự và điều kiện phát hành**. [Roadmap](roadmap-and-progress.md) ghi việc đã làm; [biên bản](baseline-verification.md) ghi bằng chứng. P0–P7/G0–G7 giữ ý nghĩa trong [SRS](../requirements/SRS.md); P8–P10 bổ sung đường đến production. Lịch này thay lịch 12/10 đã lỗi thời.
 
 **Cập nhật 02/11 — bộ chạy P7 / #81:** dùng đúng production graph cho B/C, một controller cho A, cùng corpus/model/cap; database đánh giá riêng, không có live source/embedding, ledger tổng không reset qua retry. Code e457f17 đạt 485 backend tests, 20 frontend tests, 60 ca focused evaluation và 5/5 CI; CLI plan chạy thật trong Docker với 0 provider calls. Chưa chạy pilot trả phí hoặc có kết quả khoa học; issue #83 tiếp tục chốt profile/ngân sách, freeze code/corpus, chạy pilot rồi chấm và held-out. Chi tiết tại Evaluation Plan §8; không tự đóng G7 hoặc đưa lên main.
+
+**Hạn cuối kỳ mới — người dùng chốt 02/11:** hoàn tất bản nộp trước hết ngày **04/11/2026**, dành **05/11** cho diễn tập và dự phòng (mốc T+3). Đây là bàn giao kết thúc môn học; lịch 10/11 phía dưới là lịch sử. Nghiệm thu đầy đủ ba nhóm nghiên cứu đã công bố, không lấy một bài ghép cặp làm đại diện mọi loại bài. P8–P10 là đường production sau bản nộp, không thay thế việc hoàn tất phạm vi đồ án.
+
+| Ngày | Công việc ưu tiên | Bằng chứng cần có |
+|---|---|---|
+| 02/11 | Chất lượng viết theo thể loại (#84), xử lý lỗi Critic đọc hierarchy; tích hợp và rà soát FE/API trên candidate; bổ sung nguồn/bằng chứng còn thiếu | CI, một bài REVIEW thật được đọc/chấm, lỗi trọng yếu được ghi và sửa |
+| 03/11 | Luồng tính toán có CSV/metrics/baseline/charts/journal/rerun; human-led chờ/nạp dữ liệu/resume; nhiều bài độc lập; pilot A/B/C trong ngân sách đã chốt | Output thật của từng luồng, trace và kết quả đánh giá; không dùng fixture như nghiên cứu |
+| 04/11 | Sửa blockers, regression/UI/restart cần thiết, đóng candidate cùng revision FE/API/worker; hoàn tất báo cáo/kịch bản/gói nộp | Chạy trọn kịch bản và CI đạt trước main; công khai phần chưa đạt thay vì gắn nhãn hoàn thành |
+| 05/11 | Diễn tập, dự phòng sự cố và bàn giao cuối kỳ | Bản đã kiểm, dữ liệu/output đã tạo thật và bằng chứng có thể kiểm lại |
+
+**#84 đang nghiệm thu:** contract v4 có đề cương phân cấp theo loại bài, kiểm mục nhỏ có nội dung và giữ ngữ cảnh mục cha khi Critic review; bổ sung chẩn đoán context/token và tách chúng khỏi quota tài khoản. 118 focused tests đạt; full suite trước các ca bổ sung cuối đạt 505; CI cuối là cổng trước merge. Đây là cải thiện cơ chế viết/kiểm, chưa phải bằng chứng chất lượng học thuật đã đạt trên mọi đề tài. Bộ chọn nguồn và evidence coverage vẫn phải kiểm bằng bài thật.
 
 ## 1. Định hướng đã chốt
 
@@ -90,7 +101,7 @@ Không xây lại phần đã có. Các số dưới là **ước lượng trư�
 | P7 — đánh giá/bản nộp | Có thiết kế evaluation | Freeze dataset/rubric, baseline/ablation, browser/runtime QA, báo cáo kết quả | Các gate tương ứng | 10–16 | G7 |
 | **Tổng (ước lượng 23/10, trước R3)** | | | | **74–116** | **Khoảng 89–140 giờ có 20% dự phòng; cần cập nhật 25/10** |
 
-### Lịch mục tiêu đến 10/11
+### Lịch cũ đến 10/11 — tham khảo lịch sử, đã được thay bởi mốc cuối kỳ phía trên
 
 23/10 đến 10/11 cách nhau 18 ngày. Giả định 3–4 giờ/ngày cho khoảng 54–72 giờ, **chưa đủ chắc chắn cho 89–140 giờ ước lượng**. Đây là rủi ro tiến độ, không phải cam kết mọi gate sẽ kịp.
 

@@ -18,6 +18,7 @@ from app.evaluation.execution_budget import Meter, PinnedLLM
 from app.evaluation.protocol import ARMS, Controls, case_for, digest, protocol, record, run_key
 from app.models import ResearchTask, User
 from app.services.provider_budget import ProviderBudgetExceeded
+from app.services.manuscript import REVIEW_OUTPUT_CONTRACT
 
 
 class ControllerClaim(BaseModel):
@@ -149,7 +150,7 @@ async def execute_slot(root, case_id, arm, attempt, *, sessions, client, campaig
     controls = Controls.model_validate(frozen["controls"]).model_dump()
     if arm not in ARMS or type(attempt) is not int or not 1 <= attempt <= 20:
         raise ValueError("Unknown arm or invalid attempt")
-    if controls["retrieval_profile"] != RETRIEVAL_PROFILE or controls["output_contract"] != "REVIEW-v3":
+    if controls["retrieval_profile"] != RETRIEVAL_PROFILE or controls["output_contract"] != REVIEW_OUTPUT_CONTRACT:
         raise ValueError("Unsupported retrieval/output profile; set it before freezing")
     if campaign.identity["protocol_digest"] != digest(frozen):
         raise ValueError("Campaign protocol differs")
