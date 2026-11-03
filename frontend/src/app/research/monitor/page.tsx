@@ -200,7 +200,7 @@ export default function MonitorOverview() {
                           {isComputational
                             ? (language === 'en' ? 'Computational' : 'Thực nghiệm tính toán')
                             : isFieldwork
-                            ? (language === 'en' ? 'Fieldwork (Gate G4)' : 'Thực nghiệm thực địa (G4)')
+                            ? (language === 'en' ? 'Fieldwork' : 'Thực nghiệm thực địa')
                             : (language === 'en' ? 'Literature Review' : 'Tổng quan tài liệu')}
                         </span>
 

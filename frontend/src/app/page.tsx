@@ -240,7 +240,7 @@ export default function Home() {
                         ? (isEn ? 'Literature Review' : 'Tổng quan tài liệu')
                         : researchType === 'EMPIRICAL_COMPUTATIONAL'
                         ? (isEn ? 'Computational' : 'Thực nghiệm tính toán')
-                        : (isEn ? 'Fieldwork (Gate G4)' : 'Thực nghiệm thực địa (Gate G4)')}
+                        : (isEn ? 'Fieldwork' : 'Thực nghiệm thực địa')}
                     </span>
                   </span>
 
@@ -329,7 +329,7 @@ export default function Home() {
                     >
                       <div className="flex items-center justify-between">
                         <div className="font-semibold text-xs sm:text-sm">
-                          {isEn ? 'Fieldwork (Gate G4)' : 'Thực nghiệm / Thực địa (Gate G4)'}
+                          {isEn ? 'Fieldwork' : 'Thực nghiệm / Thực địa'}
                         </div>
                         {researchType === 'EMPIRICAL_HUMAN' && <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />}
                       </div>

@@ -29,9 +29,9 @@ const ACTIONS_EN: Record<string, ActionItem> = {
     tone: 'amber'
   },
   UPLOAD_DATA: {
-    title: 'Awaiting empirical fieldwork dataset (Gate G4)',
+    title: 'Awaiting empirical fieldwork dataset',
     text: 'Methodologist completed protocol. Please upload survey data or results to proceed. In the meantime, this task is saved and you can work on other projects.',
-    button: 'Upload Data (Gate G4)',
+    button: 'Upload Data',
     tone: 'amber'
   },
   START_RESEARCH: {
@@ -98,7 +98,7 @@ const ACTIONS_VI: Record<string, ActionItem> = {
     tone: 'amber'
   },
   UPLOAD_DATA: {
-    title: 'Đang chờ bạn nạp dữ liệu thực địa (Gate G4)',
+    title: 'Đang chờ bạn nạp dữ liệu thực địa',
     text: 'Methodologist đã thiết lập protocol. Vui lòng tải lên tệp dữ liệu CSV/JSON hoặc khảo sát để tiếp tục. Trong lúc chờ, bài nghiên cứu vẫn được lưu và bạn có thể chạy bài khác.',
     button: 'Mở bài và nạp dữ liệu G4',
     tone: 'amber'
@@ -219,7 +219,7 @@ export default function ResearchMonitorPage() {
                   : snapshot?.research_type === 'EMPIRICAL_COMPUTATIONAL'
                   ? (isEn ? 'Computational Empirical' : 'Thực nghiệm tính toán')
                   : snapshot?.research_type === 'EMPIRICAL_HUMAN'
-                  ? (isEn ? 'Fieldwork (Gate G4)' : 'Thực nghiệm con người (Gate G4)')
+                  ? (isEn ? 'Fieldwork' : 'Thực nghiệm con người')
                   : (isEn ? 'Research Project' : 'Đề tài nghiên cứu')}
               </span>
               {snapshot?.workflow && (

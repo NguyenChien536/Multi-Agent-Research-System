@@ -46,15 +46,15 @@ try {
         Start-Sleep -Seconds 5
         $state = Invoke-RestMethod -Uri "$api/research/$($task.id)" -Method Get -Headers $headers
         if ($state.status -eq 'FAILED') { throw "Research task $($task.id) failed; inspect worker logs." }
-        if ($state.status -eq 'COMPLETED') { break }
+        if ($state.status -in @('COMPLETED', 'PARTIAL', 'NEEDS_REVIEW')) { break }
     } while ((Get-Date) -lt $deadline)
 
-    if ($state.status -ne 'COMPLETED') { throw "Research task $($task.id) did not finish within $TimeoutSeconds seconds (last status: $($state.status))." }
+    if ($state.status -notin @('COMPLETED', 'PARTIAL', 'NEEDS_REVIEW')) { throw "Research task $($task.id) did not finish within $TimeoutSeconds seconds (last status: $($state.status))." }
     $report = Invoke-RestMethod -Uri "$api/research/$($task.id)/report" -Method Get -Headers $headers
     if ($report.research_task_id -ne $task.id -or [string]::IsNullOrWhiteSpace($report.content_markdown) -or $report.word_count -lt 1) {
         throw 'The completed task has no valid persisted report.'
     }
-    Write-Output "PASS: task $($task.id) completed; report $($report.id) has $($report.word_count) words."
+    Write-Output "PASS (runtime): task $($task.id) persisted report $($report.id) with $($report.word_count) words. Scientific status: $($state.status); PARTIAL/NEEDS_REVIEW still require review."
 } catch {
     Write-Error "Release smoke failed: $($_.Exception.Message)"
     exit 1
