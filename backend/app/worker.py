@@ -73,6 +73,51 @@ async def _graph_for_worker():
 
 
 async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRun, preloaded_dataset_csv):
+    """Deliver an explicitly unreviewed draft when a later provider call is denied.
+
+    Read only the owning run's last committed superstep. Recovery makes no
+    provider calls, resumes no graph nodes and never publishes a partial Writer response.
+    """
+    from app.services.provider_budget import ProviderBudgetExceeded, assert_task_active
+
+    try:
+        return await _invoke_checkpointed_graph_unchecked(graph, initial_state, task, run, preloaded_dataset_csv)
+    except ProviderBudgetExceeded as stopped:
+        if not hasattr(graph, "aget_state") or getattr(graph, "checkpointer", None) is None:
+            raise
+        config = {"configurable": {"thread_id": run.checkpoint_thread_id}}
+        try:
+            snapshot = await graph.aget_state(config)
+        except Exception:
+            logger.warning("Unable to inspect budget-stopped checkpoint for task %s", task.id)
+            raise stopped
+        saved = getattr(snapshot, "values", None) or {}
+        if (saved.get("task_id") != str(task.id)
+                or saved.get("workflow_run_id") != str(run.id)
+                or saved.get("attempt_number") != initial_state.get("attempt_number")
+                or not str(saved.get("draft_report_markdown") or "").strip()):
+            raise
+        await assert_task_active(str(task.id), initial_state["attempt_number"])
+        metadata = {
+            **(saved.get("critic_review_metadata") or {}),
+            "status": "NEEDS_REVIEW", "verdict": "NEEDS_REVIEW",
+            "budget_limited": True,
+            "review_scope": "internal_quality_control_not_peer_review",
+            "draft_recovery": {
+                "reason": "PROVIDER_BUDGET_LIMIT",
+                "source": "last_completed_checkpoint",
+                "workflow_run_id": str(run.id),
+                "review_incomplete": True,
+            },
+        }
+        recovered = {**saved, "critic_verdict": "NEEDS_REVIEW", "critic_review_metadata": metadata}
+        from app.agents.nodes import post_processor_node
+        finalized = await post_processor_node(recovered)
+        await assert_task_active(str(task.id), initial_state["attempt_number"])
+        return {**recovered, **finalized, "status": "NEEDS_REVIEW"}, config
+
+
+async def _invoke_checkpointed_graph_unchecked(graph, initial_state, task, run: WorkflowRun, preloaded_dataset_csv):
     from langgraph.types import Command
 
     config = {"configurable": {"thread_id": run.checkpoint_thread_id}}
