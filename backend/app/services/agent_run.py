@@ -12,10 +12,12 @@ from app.models.agent_run import AgentRun
 logger = logging.getLogger(__name__)
 
 # Pricing table per 1,000,000 tokens (USD)
-# Source: official provider pricing as of 2024-2026
+# Estimates, not a billing guarantee. Gemini 3.5 Flash-Lite standard text
+# verified 2026-11-03: https://aistudio.google.com/docs/pricing#gemini-3.5-flash-lite
+# Other legacy entries require their own pricing review before paid deployment.
 MODEL_PRICING: Dict[str, Dict[str, float]] = {
     # Gemini
-    "gemini-3.5-flash-lite": {"prompt": 0.075, "completion": 0.30},
+    "gemini-3.5-flash-lite": {"prompt": 0.30, "completion": 2.50},
     "gemini-2.5-flash-lite": {"prompt": 0.075, "completion": 0.30},
     "gemini-1.5-flash": {"prompt": 0.075, "completion": 0.30},
     "gemini-3.5-flash": {"prompt": 0.15, "completion": 0.60},

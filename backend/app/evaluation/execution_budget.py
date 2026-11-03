@@ -109,6 +109,8 @@ class Meter:
                      "schema": bound.schema.__name__ if bound.schema else None,
                      "reserved_input_tokens": inputs, "reserved_output_tokens": outputs,
                      "model": c["model"], "temperature": c["temperature"], "state": "STARTED"}
+            event.update(provider=c.get("provider", "openai"), sampling_mode=c.get("sampling_mode", "temperature"))
+            event["transport_settings"] = getattr(getattr(bound, "client", None), "runtime_settings", {})
             self.trace.append(event)
         try:
             async with asyncio.timeout(remaining):

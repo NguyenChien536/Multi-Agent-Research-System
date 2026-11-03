@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 ARMS = ("single_agent", "multi_agent", "no_macro_loop")
 DELIVERED = {"COMPLETED", "NEEDS_REVIEW", "PARTIAL"}
@@ -22,9 +22,11 @@ class StrictModel(BaseModel):
 
 
 class Controls(StrictModel):
+    provider: Literal["openai", "gemini"] = "openai"
     model: str = Field(min_length=1, max_length=150)
     model_revision: str = Field(min_length=1, max_length=150)
-    temperature: float = Field(ge=0, le=2)
+    temperature: float | None = Field(ge=0, le=2)
+    sampling_mode: Literal["temperature", "provider_default"] = "temperature"
     language: str = Field(min_length=2, max_length=10)
     output_contract: str = Field(min_length=1, max_length=150)
     retrieval_profile: str = Field(min_length=1, max_length=150)
@@ -33,6 +35,12 @@ class Controls(StrictModel):
     max_output_tokens: int = Field(ge=1, le=50000)
     max_cost_usd: float = Field(gt=0, le=2)
     timeout_seconds: int = Field(ge=1, le=900)
+
+    @model_validator(mode="after")
+    def sampling_matches_declaration(self):
+        if (self.sampling_mode == "temperature") != (self.temperature is not None):
+            raise ValueError("Temperature mode requires a value; provider_default requires null temperature")
+        return self
 
 
 class Source(StrictModel):
