@@ -748,3 +748,13 @@ async def test_e2e_empirical_computational_workflow(monkeypatch):
         assert jr_body[0]["kind"] == "PLAN_FROZEN"
         assert jr_body[5]["kind"] == "INTERPRETATION"
         assert jr_body[6]["kind"] == "ARTIFACTS_PERSISTED"
+
+        # A real worker finalization must leave the completed execution older
+        # than its immutable paper snapshot, so the private reproduction export
+        # accepts the exact run without weakening historical integrity checks.
+        availability = await client.get(
+            f"/api/v1/research/{task_id}/report/versions/1/experiment-bundle/availability",
+            headers=headers,
+        )
+        assert availability.status_code == 200
+        assert availability.json()["available"], availability.text
