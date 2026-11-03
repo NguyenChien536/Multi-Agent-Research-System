@@ -87,6 +87,16 @@ Lệnh Python dùng thư viện chuẩn; có thể dùng Python 3.11+ thay đư�
 
 CI kiểm backend, frontend, quy tắc nhánh và build dev; job `Release runtime` còn dựng release từ database sạch, chạy smoke không tốn provider và thử broker mất/kết nối lại. Real-provider/browser và backup/restore là các gate local riêng, không được suy ra từ test mock.
 
+### Kết quả kiểm tra nguồn ngày 03/11/2026
+
+| Candidate / kiểm tra | Kết quả thực tế | Kết luận được phép |
+|---|---|---|
+| `e78125125154`, REVIEW cũ | Lần đầu provider 503; retry sinh bản thảo 1.673 từ, 2 citation records cùng một nguồn | Giữ cả lỗi và kết quả yếu; chưa đạt chất lượng nguồn |
+| `d235b3a31cda`, REVIEW mới, cap 6 nguồn / 0,50 USD | 6 nguồn thu thập (4 toàn văn, 2 abstract), 6 quote-linked claim candidates; bản thảo 2.095 từ, 4 citation records trỏ 3 nguồn khác nhau; có mục con, gói IEEE/ACM ZIP hợp lệ; 6/6 CI đạt với 562 backend tests | Runtime chạy được; đây là chẩn đoán một bài, không phải thử nghiệm A/B hoặc bằng chứng chất lượng tăng trên mọi chủ đề |
+| Audit nội dung của bài trên | Một nhu cầu bằng chứng trung tâm chưa có quote; còn phát biểu quá rộng về peer-review, lịch sử, định nghĩa và so sánh baseline. Critic nội bộ đã đánh giá nhiều đoạn quá lạc quan dù gate cuối vẫn NEEDS_REVIEW | Không coi bài là đủ chuẩn nộp/xuất bản. #86 và đánh giá #83 còn mở; chưa đưa lên main |
+
+Sau audit này, context của Critic được bổ sung ma trận thiếu bằng chứng, giả định và yêu cầu đánh giá quote thay vì tin diễn giải claim do AI sinh. Bằng chứng provider trong bảng thuộc đúng SHA đã ghi, **không tự áp dụng cho revision mới**. Kiểm thử tự động xác minh cách truyền context và giữ gate; hiệu quả phát hiện sai khoa học cần được chấm tiếp. Không tự sửa bài lịch sử hoặc nâng trạng thái để làm đẹp demo.
+
 ## 5. Theo dõi lỗi, sao lưu và khôi phục
 
 ```powershell
