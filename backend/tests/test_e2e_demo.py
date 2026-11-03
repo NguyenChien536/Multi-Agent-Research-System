@@ -95,7 +95,7 @@ async def test_demo_path_persists_report(monkeypatch: pytest.MonkeyPatch, budget
         started = await client.post(f"/api/v1/research/{task_id}/start", headers=headers)
         assert started.status_code == 202, started.text
         assert started.json()["status"] == "QUEUED"
-        assert await task_dispatcher.dispatch_one_outbox_event()
+        assert await task_dispatcher.dispatch_one_outbox_event(user_id=uuid.UUID(registered.json()["id"]))
         assert queued == [task_id]
 
         completed = await worker.run_langgraph_workflow(task_id)

@@ -9,7 +9,7 @@ from app.services.provider_budget import ProviderBudgetExceeded, ResearchTaskSto
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("invalid", [None, "empty", "task", "run", "attempt", "uncheckpointed", "cancelled"])
+@pytest.mark.parametrize("invalid", [None, "formatter_upgrade", "empty", "task", "run", "attempt", "uncheckpointed", "cancelled"])
 async def test_only_current_owned_complete_checkpoint_can_recover(monkeypatch, invalid):
     task = SimpleNamespace(id=uuid.uuid4())
     run = SimpleNamespace(id=uuid.uuid4(), checkpoint_thread_id=str(uuid.uuid4()))
@@ -35,7 +35,14 @@ async def test_only_current_owned_complete_checkpoint_can_recover(monkeypatch, i
         if invalid == "cancelled": raise ResearchTaskStopped("Owner cancelled")
 
     monkeypatch.setattr(provider_budget, "assert_task_active", active)
-    if invalid is not None:
+    if invalid == "formatter_upgrade":
+        from app.agents import nodes
+        async def formatter(_state):
+            return {"status": "COMPLETED", "critic_verdict": "PASS", "citations": [],
+                    "final_report_markdown": saved["draft_report_markdown"],
+                    "critic_review_metadata": {"status": "PASSED", "formatter_findings": ["retained"]}}
+        monkeypatch.setattr(nodes, "post_processor_node", formatter)
+    if invalid not in (None, "formatter_upgrade"):
         with pytest.raises(ResearchTaskStopped if invalid == "cancelled" else ProviderBudgetExceeded):
             await worker._invoke_checkpointed_graph(Graph(), {"attempt_number": 1}, task, run, None)
     else:
@@ -46,6 +53,9 @@ async def test_only_current_owned_complete_checkpoint_can_recover(monkeypatch, i
         assert result["critic_review_metadata"]["status"] == "NEEDS_REVIEW"
         assert result["critic_review_metadata"]["draft_recovery"]["review_incomplete"] is True
         assert result["citations"] == []
+        if invalid == "formatter_upgrade":
+            assert result["critic_review_metadata"]["formatter_findings"] == ["retained"]
+            assert result["critic_verdict"] == "NEEDS_REVIEW"
 
 
 @pytest.mark.asyncio

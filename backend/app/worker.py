@@ -114,7 +114,12 @@ async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRu
         from app.agents.nodes import post_processor_node
         finalized = await post_processor_node(recovered)
         await assert_task_active(str(task.id), initial_state["attempt_number"])
-        return {**recovered, **finalized, "status": "NEEDS_REVIEW"}, config
+        final_metadata = {**(finalized.get("critic_review_metadata") or metadata),
+                          "status": "NEEDS_REVIEW", "verdict": "NEEDS_REVIEW",
+                          "budget_limited": True, "draft_recovery": metadata["draft_recovery"],
+                          "review_scope": "internal_quality_control_not_peer_review"}
+        return {**recovered, **finalized, "status": "NEEDS_REVIEW",
+                "critic_verdict": "NEEDS_REVIEW", "critic_review_metadata": final_metadata}, config
 
 
 async def _invoke_checkpointed_graph_unchecked(graph, initial_state, task, run: WorkflowRun, preloaded_dataset_csv):
