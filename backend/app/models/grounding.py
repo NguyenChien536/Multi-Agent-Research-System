@@ -44,7 +44,7 @@ class Evidence(Base):
     chunk_id = Column(UUID(as_uuid=True), ForeignKey("document_chunks.id", ondelete="CASCADE"), nullable=False, index=True)
     content = Column(Text, nullable=False)  # Exact quote / statistic from chunk
     evidence_type = Column(String(30), default="FACT", nullable=False)  # STATISTIC | QUOTE | FACT | OPINION
-    confidence_score = Column(Float, default=1.0, nullable=False)
+    confidence_score = Column(Float, default=1.0, nullable=False)  # QUOTE: literal-match score, not factual certainty.
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
@@ -62,7 +62,7 @@ class ResearchClaim(Base):
     claim_text = Column(Text, nullable=False)
     claim_type = Column(String(30), default="KEY_FINDING", nullable=False)  # KEY_FINDING | CONTRADICTION | LIMITATION
     # evidence_ids (UUID[]) removed — replaced by ClaimEvidence junction table (migration a1b2c3d4e5f6)
-    is_verified = Column(Boolean, default=False, nullable=False)
+    is_verified = Column(Boolean, default=False, nullable=False)  # Historical name: quote provenance, not semantic truth.
     verification_note = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 

@@ -83,7 +83,11 @@ def analysis_needs(state):
                 continue
             key = str(need.get("need_id") or "")[:40]
             if not key or key in seen:
-                key = f"need_{i+1}"
+                base, suffix = f"need_{i+1}", 1
+                key = base
+                while key in seen:
+                    key = f"{base}_{suffix}"
+                    suffix += 1
             seen.add(key)
             needs.append({**need, "need_id": key})
         if needs:
@@ -97,7 +101,8 @@ def analysis_needs(state):
 
 def evidence_need_coverage(needs, results):
     rows = []
-    for need, (claims, retrieved) in zip(needs, results):
+    for i, need in enumerate(needs):
+        claims, retrieved = results[i] if i < len(results) else ([], [])
         sources = sorted({str(c["source_id"]) for c in claims})
         rows.append({**need, "status": "QUOTE_BACKED_CANDIDATES" if claims else "NO_MATCHED_QUOTE",
                      "retrieved_sources": sorted({str(c.source_id) for c in retrieved}),

@@ -369,7 +369,7 @@ class ExtractedClaim(BaseModel):
     evidence_quote: str = Field(description="Trích dẫn nguyên văn làm bằng chứng")
     chunk_id: Optional[str] = Field(default=None, max_length=36, description="Exact supplied Chunk ID containing this verbatim quote")
     evidence_need_id: Optional[str] = Field(default=None, max_length=40)
-    assumptions: List[str] = Field(default_factory=list, max_length=8, description="Conditions and limitations actually present in the quoted source; do not infer missing assumptions")
+    assumptions: List[str] = Field(default_factory=list, max_length=8, description="Verbatim condition/limitation snippets from the same supplied chunk; do not infer missing assumptions")
 
 class AnalystExtraction(BaseModel):
     claims: List[ExtractedClaim] = Field(max_length=6, description="At most six distinct, relevant claim/quote pairs; return none if supplied passages do not support the question")
@@ -911,6 +911,7 @@ async def analyst_node(state: ResearchState) -> Dict[str, Any]:
                 is not support for a theorem, causal conclusion, fairness guarantee or superiority claim.
                 Copy evidence_quote EXACTLY in its original language, including punctuation; never
                 translate or paraphrase the quote. Set chunk_id to the supplied containing Chunk ID.
+                Assumptions must also be exact snippets from that same chunk, not inferred conditions.
                 Set evidence_need_id to the ID above. Consider relevant passages from different sources,
                 but never invent a claim or add one merely to cover a source. Return no claims when
                 passages cannot support the question. An abstract/landing page is not full-paper evidence.

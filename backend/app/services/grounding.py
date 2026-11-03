@@ -28,7 +28,7 @@ async def persist_grounded_claims(
     """
     chunks_by_id = {chunk.id: chunk for chunk in retrieved_chunks}
     valid: list[dict[str, Any]] = []
-    seen: set[tuple[str, uuid.UUID]] = set()
+    seen: set[tuple[str, uuid.UUID, str]] = set()
 
     for item in extracted_claims:
         claim_text = str(item.get("claim", "")).strip()
@@ -63,25 +63,10 @@ async def persist_grounded_claims(
         if source is None:
             continue
 
-        claim_key = (_stable_key(claim_text), chunk.id)
+        claim_key = (_stable_key(claim_text), chunk.id, quote)
         if claim_key in seen:
             continue
         seen.add(claim_key)
-
-        claim = await db.scalar(
-            select(ResearchClaim).where(
-                ResearchClaim.research_task_id == task_id,
-                ResearchClaim.claim_text == claim_text,
-            )
-        )
-        if claim is None:
-            claim = ResearchClaim(
-                research_task_id=task_id,
-                claim_text=claim_text,
-                is_verified=False,
-            )
-            db.add(claim)
-            await db.flush()
 
         evidence = await db.scalar(
             select(Evidence).where(
@@ -97,16 +82,34 @@ async def persist_grounded_claims(
                 chunk_id=chunk.id,
                 content=quote,
                 evidence_type="QUOTE",
-                confidence_score=1.0,
+                confidence_score=1.0,  # Literal quote presence only, never a probability of truth.
             )
             db.add(evidence)
             await db.flush()
 
+        # A copyable claim marker must identify one exact provenance record.
+        # Reusing a text-only claim across papers aliases its marker and causes
+        # downstream dictionaries to silently discard all but one source. Keep
+        # historical many-to-many records intact; new markers are quote-scoped.
+        other_proof = select(ClaimEvidence.claim_id).where(
+            ClaimEvidence.claim_id == ResearchClaim.id,
+            ClaimEvidence.evidence_id != evidence.id,
+        ).correlate(ResearchClaim).exists()
+        claim = await db.scalar(select(ResearchClaim).join(
+            ClaimEvidence, ClaimEvidence.claim_id == ResearchClaim.id,
+        ).where(ResearchClaim.research_task_id == task_id,
+                ResearchClaim.claim_text == claim_text,
+                ClaimEvidence.evidence_id == evidence.id, ~other_proof)
+            .order_by(ResearchClaim.created_at, ResearchClaim.id).limit(1))
+        if claim is None:
+            claim = ResearchClaim(research_task_id=task_id, claim_text=claim_text, is_verified=False)
+            db.add(claim)
+            await db.flush()
         link = await db.get(ClaimEvidence, (claim.id, evidence.id))
         if link is None:
             db.add(ClaimEvidence(claim_id=claim.id, evidence_id=evidence.id))
         claim.is_verified = True
-        claim.verification_note = "Evidence quote matched the retrieved source chunk exactly."
+        claim.verification_note = "Verbatim quote matched its source chunk; semantic entailment and scientific validity remain unverified."
 
         valid.append({
             "claim_id": str(claim.id),
@@ -127,7 +130,8 @@ async def persist_grounded_claims(
             "discovery_queries": source.discovery_queries or [],
             "chunk_id": str(chunk.id),
             "evidence_need_id": str(item.get("evidence_need_id") or "")[:40],
-            "assumptions": [str(v)[:300] for v in (item.get("assumptions") or [])[:8]],
+            "assumptions": [v.strip() for v in (item.get("assumptions") or [])[:8]
+                            if isinstance(v, str) and v.strip() and len(v.strip()) <= 300 and v.strip() in chunk.content],
         })
 
     await db.flush()

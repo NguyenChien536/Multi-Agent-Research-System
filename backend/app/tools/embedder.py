@@ -295,12 +295,16 @@ class EmbedderTool:
             ResearchSource.ingestion_status == "READY",
         )
         vector_rows = []
+        vector_scope = [DocumentChunk.embedding.is_not(None)]
+        if expected_dimension := getattr(self, "dimension", None):
+            # Do not bill query embeddings against an incompatible historical corpus.
+            vector_scope.append(func.vector_dims(DocumentChunk.embedding) == expected_dimension)
         has_vectors = await db.scalar(
             select(DocumentChunk.id)
             .join(ResearchSource, ResearchSource.id == DocumentChunk.source_id)
             .where(
                 DocumentChunk.research_task_id == task_id,
-                DocumentChunk.embedding.is_not(None),
+                *vector_scope,
                 *source_scope,
             )
             .limit(1)
@@ -343,7 +347,7 @@ class EmbedderTool:
                 stmt = (
                     select(DocumentChunk, DocumentChunk.embedding.cosine_distance(query_vector).label("distance"))
                     .join(ResearchSource, ResearchSource.id == DocumentChunk.source_id)
-                    .where(DocumentChunk.research_task_id == task_id, DocumentChunk.embedding.is_not(None), *source_scope)
+                    .where(DocumentChunk.research_task_id == task_id, *vector_scope, *source_scope)
                     .order_by(DocumentChunk.embedding.cosine_distance(query_vector))
                     .limit(pool_size)
                 )
@@ -362,7 +366,7 @@ class EmbedderTool:
         if terms:
             config = literal_column("'simple'")
             document = func.to_tsvector(config, DocumentChunk.content)
-            tsquery = func.to_tsquery(config, " | ".join(terms))
+            tsquery = func.websearch_to_tsquery(config, " OR ".join(f'"{term}"' for term in terms))
             rank = func.ts_rank_cd(document, tsquery)
             lexical_stmt = (
                 select(DocumentChunk, rank.label("rank"))

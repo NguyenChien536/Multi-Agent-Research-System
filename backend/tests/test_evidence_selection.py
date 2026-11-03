@@ -91,8 +91,12 @@ def test_legacy_and_duplicate_needs_are_bounded_and_gaps_are_not_claimed_covered
         dict(need_id='same', question='Question A', search_query='A', section_id='synthesis'),
         dict(need_id='same', question='Question B', search_query='B', section_id='discussion')]}})
     assert len({n['need_id'] for n in needs}) == 2
+    collided = analysis_needs({'plan': {'evidence_needs': [
+        dict(need_id='need_2', question='First'), dict(need_id='need_2', question='Second')]}})
+    assert len({n['need_id'] for n in collided}) == 2
     coverage = evidence_need_coverage(needs, [([], []), ([], [])])
     assert len(coverage['missing_need_ids']) == 2
+    assert len(evidence_need_coverage(needs, [([], [])])['missing_need_ids']) == 2
     contextual = {'missing_need_ids':['limits'], 'needs':[{'need_id':'limits', 'role':'COUNTEREVIDENCE'}]}
     assert blocking_evidence_gaps(contextual) == []
     assert blocking_evidence_gaps({'missing_need_ids':['unknown']}) == ['unknown']
@@ -141,6 +145,7 @@ async def test_lexical_fallback_finds_late_methods_and_ignores_unrelated_prefix(
         result = await tool.search_similar_chunks(db, tid, 'Ridge regression prediction limitations', limit=2)
         assert {c.id for c, _ in result} == {chunks[1].id, chunks[2].id}
         assert await tool.search_similar_chunks(db, tid, 'quantum entanglement', limit=3) == []
+        assert await tool.search_similar_chunks(db, tid, "'ridge':* | !(regression) & \"2026\"", limit=2)
         source = await db.get(ResearchSource, sources[2].id)
         source.ingestion_status = 'FAILED'
         await db.commit()
@@ -170,6 +175,33 @@ async def test_bad_vector_dimensions_do_not_poison_lexical_transaction(corpus, m
 
 
 @pytest.mark.asyncio
+async def test_dimension_preflight_avoids_billing_and_corrupt_source_links_are_excluded(corpus):
+    tid, sources, chunks = corpus
+    tool = object.__new__(EmbedderTool)
+    query = AsyncMock()
+    tool.embeddings = SimpleNamespace(aembed_query=query)
+    tool.dimension = 3
+    async with AsyncSessionLocal() as db:
+        chunk = await db.get(DocumentChunk, chunks[1].id)
+        chunk.embedding = [1., 0.]
+        own_task = await db.get(ResearchTask, tid)
+        other = ResearchTask(user_id=own_task.user_id, title='Foreign research', research_question='A different task')
+        db.add(other)
+        await db.flush()
+        foreign_source = ResearchSource(research_task_id=other.id, source_tag='foreign', url='https://example.org/foreign')
+        db.add(foreign_source)
+        await db.flush()
+        bad = DocumentChunk(research_task_id=tid, source_id=foreign_source.id, chunk_index=0,
+                            content='Ridge regression Ridge regression Ridge regression')
+        db.add(bad)
+        await db.commit()
+        result = await tool.search_similar_chunks(db, tid, 'Ridge regression', 3,
+                                                  {'task_id':str(tid), 'attempt_number':1})
+        assert {c.id for c, _ in result} == {chunks[1].id, chunks[2].id}
+        query.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_quote_identity_is_not_guessed_when_papers_share_boilerplate(corpus):
     tid, _, chunks = corpus
     async with AsyncSessionLocal() as db:
@@ -179,10 +211,52 @@ async def test_quote_identity_is_not_guessed_when_papers_share_boilerplate(corpu
         await db.flush()
         item = {'claim':'A scoped finding', 'evidence_quote':'Shared quoted sentence.'}
         assert await persist_grounded_claims(db, tid, [item], [first, second]) == []
-        accepted = await persist_grounded_claims(db, tid, [{**item, 'chunk_id': str(second.id)}], [first, second])
+        accepted = await persist_grounded_claims(db, tid, [{**item, 'chunk_id': str(second.id),
+            'assumptions':['Shared quoted sentence.', 'Invented theorem condition']}], [first, second])
         assert accepted[0]['source_id'] == str(second.source_id)
+        assert accepted[0]['assumptions'] == ['Shared quoted sentence.']
         assert await persist_grounded_claims(db, tid, [{**item, 'chunk_id': str(uuid.uuid4())}], [first, second]) == []
         assert await persist_grounded_claims(db, uuid.uuid4(), [{**item, 'chunk_id': str(second.id)}], [second]) == []
+
+
+@pytest.mark.asyncio
+async def test_same_finding_from_distinct_sources_keeps_distinct_copyable_markers(corpus, monkeypatch):
+    from app.agents import nodes
+    tid, _, chunks = corpus
+    items = [{'claim':'Predictive results require contextual interpretation.',
+              'evidence_quote':c.content, 'chunk_id':str(c.id)} for c in chunks[1:]]
+    async with AsyncSessionLocal() as db:
+        first = await persist_grounded_claims(db, tid, items, chunks)
+        assert len({c['claim_id'] for c in first}) == 2
+        repeated = await persist_grounded_claims(db, tid, items, chunks)
+        assert [c['claim_id'] for c in repeated] == [c['claim_id'] for c in first]
+        await db.commit()
+    monkeypatch.setattr(nodes, '_record_progress', AsyncMock())
+    monkeypatch.setattr(nodes, 'record_agent_run', AsyncMock())
+    markers = ''.join(f"[[@claim:{c['claim_id']}]]" for c in first)
+    final = await nodes.post_processor_node({'claims':first, 'draft_report_markdown':f'# Discussion\nA contextual comparison {markers}.'})
+    assert len({c['source_id'] for c in final['citations']}) == 2
+    assert '[1][2]' in final['final_report_markdown']
+
+
+@pytest.mark.asyncio
+async def test_historical_shared_claim_is_not_rewritten_or_reused_as_ambiguous_marker(corpus):
+    from app.models.grounding import ResearchClaim, Evidence, ClaimEvidence
+    tid, _, chunks = corpus
+    async with AsyncSessionLocal() as db:
+        legacy = ResearchClaim(research_task_id=tid, claim_text='A shared finding')
+        db.add(legacy)
+        proofs = [Evidence(research_task_id=tid, source_id=c.source_id, chunk_id=c.id,
+                           content=c.content, evidence_type='QUOTE') for c in chunks[1:]]
+        db.add_all(proofs)
+        await db.flush()
+        db.add_all([ClaimEvidence(claim_id=legacy.id, evidence_id=e.id) for e in proofs])
+        await db.flush()
+        items = [{'claim':legacy.claim_text, 'chunk_id':str(c.id), 'evidence_quote':c.content} for c in chunks[1:]]
+        result = await persist_grounded_claims(db, tid, items, chunks)
+        assert len({c['claim_id'] for c in result}) == 2
+        assert str(legacy.id) not in {c['claim_id'] for c in result}
+        assert len(list(await db.scalars(select(ClaimEvidence).where(ClaimEvidence.claim_id == legacy.id)))) == 2
 
 
 @pytest.mark.asyncio
