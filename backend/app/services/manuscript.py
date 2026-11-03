@@ -140,7 +140,11 @@ def manuscript_provenance(state: dict) -> dict:
         "full_text_source_count": sum(src.get("text_scope") == "FULL_TEXT" for src in sources),
         "abstract_only_source_count": sum(src.get("text_scope") == "ABSTRACT" for src in sources),
         "landing_page_source_count": sum(src.get("text_scope") == "LANDING_PAGE" for src in sources),
-        "selection_policy": "Provider-ranked candidates interleaved across discovery queries before and after fetching; deduplicate DOI/title/URL; retain retrievable text or indexed abstracts within the configured source and fetch caps. This is availability-based collection, not methodological quality screening.",
+        "selection_policy": "Candidates prioritized by title/abstract query overlap and bounded metadata relevance assessment when logged, then interleaved across discovery queries; deduplicate DOI/title/URL; retain retrievable text or indexed abstracts within source/fetch caps. Metadata ranking is not methodological quality certification.",
+        "metadata_prioritization": [{"status": event.get("status"), "candidate_count": len(event.get("candidates", [])),
+                                      "assessed_count": sum(bool(c.get("metadata_assessment_present")) for c in event.get("candidates", [])),
+                                      "scope": event.get("scope")}
+                                     for event in state.get("source_selection_log", [])],
         "verified_claim_count": len({item.get("claim_id") for item in state.get("claims", []) if item.get("evidence_id")}),
         "distinct_quote_evidence_count": len(unique_quote_claims([c for c in state.get("claims", []) if c.get("evidence_id")])),
         "query_coverage": query_coverage(state),
@@ -151,7 +155,7 @@ def manuscript_provenance(state: dict) -> dict:
         "direct_academic_database_search": False,
         "direct_scholarly_index_query_executed": bool(successful_indexes),
         "screening_protocol_executed": False,
-        "note": "Stored sources may come from uploads or earlier runs. Tavily is a general web search even when domain-filtered. OpenAlex/Crossref are named only when their API query succeeded. No title/abstract/full-text screening protocol is executed or implied. A public PDF is not proof of publisher quality.",
+        "note": "Stored sources may come from uploads or earlier runs. Tavily is a general web search even when domain-filtered. OpenAlex/Crossref are named only when their API query succeeded. Logged metadata relevance prioritization is not a systematic title/abstract/full-text screening protocol. A public PDF is not proof of publisher quality.",
     }
 
 

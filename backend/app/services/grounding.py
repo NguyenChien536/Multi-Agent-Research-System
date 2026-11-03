@@ -1,6 +1,7 @@
 """Persistence and validation helpers for claim-to-source grounding."""
 
 import uuid
+import re
 from typing import Any
 
 from sqlalchemy import select
@@ -14,6 +15,35 @@ def _stable_key(value: str) -> str:
     return " ".join(value.split()).casefold()
 
 
+def source_quote_span(content: str, proposed: str) -> str | None:
+    """Return original source text, permitting only whitespace alignment.
+
+    PDF line wraps and HTML nonbreaking spaces can differ from the model's JSON
+    string. Map that spelling back to a literal source span; never normalize
+    case, punctuation, words or hyphens and never persist a reconstructed quote.
+    """
+    if not proposed.strip():
+        return None
+    if proposed in content:
+        return proposed
+    target = " ".join(proposed.split())
+    if not target:
+        return None
+    normalized, positions = [], []
+    for match in re.finditer(r"\s+|\S+", content):
+        part = match.group()
+        if part.isspace():
+            normalized.append(" ")
+            positions.append((match.start(), match.end()))
+        else:
+            normalized.extend(part)
+            positions.extend((i, i+1) for i in range(match.start(), match.end()))
+    start = "".join(normalized).find(target)
+    if start < 0:
+        return None
+    return content[positions[start][0]:positions[start+len(target)-1][1]]
+
+
 async def persist_grounded_claims(
     db: AsyncSession,
     task_id: uuid.UUID,
@@ -22,9 +52,8 @@ async def persist_grounded_claims(
 ) -> list[dict[str, Any]]:
     """Persist only claims whose non-empty quote occurs in a retrieved task chunk.
 
-    Quote validation is intentionally exact substring matching. Whitespace is
-    normalized only to reject empty/whitespace-only values, never to make a
-    quote pass when its original text is absent from the source chunk.
+    Persisted quotes are always literal source substrings. Whitespace-only
+    spelling differences can be mapped back to that original source span.
     """
     chunks_by_id = {chunk.id: chunk for chunk in retrieved_chunks}
     valid: list[dict[str, Any]] = []
@@ -44,15 +73,19 @@ async def persist_grounded_claims(
                 chunk = chunks_by_id.get(uuid.UUID(str(item["chunk_id"])))
             except (ValueError, TypeError, AttributeError):
                 continue
-            if chunk is None or quote not in chunk.content:
+            matched = source_quote_span(chunk.content, quote) if chunk is not None else None
+            if matched is None:
                 continue
         else:
-            matches = [candidate for candidate in chunks_by_id.values() if quote in candidate.content]
+            matches = [(candidate, source_quote_span(candidate.content, quote)) for candidate in chunks_by_id.values()]
+            matches = [(candidate, span) for candidate, span in matches if span is not None]
             if len(matches) != 1:
                 continue
-            chunk = matches[0]
+            chunk, matched = matches[0]
         if chunk is None or chunk.research_task_id != task_id:
             continue
+        match_method = "EXACT" if matched == quote else "WHITESPACE_ALIGNED_TO_SOURCE"
+        quote = matched
 
         source = await db.scalar(
             select(ResearchSource).where(
@@ -129,6 +162,7 @@ async def persist_grounded_claims(
             "text_scope": source.text_scope,
             "discovery_queries": source.discovery_queries or [],
             "chunk_id": str(chunk.id),
+            "quote_match_method": match_method,
             "evidence_need_id": str(item.get("evidence_need_id") or "")[:40],
             "assumptions": [v.strip() for v in (item.get("assumptions") or [])[:8]
                             if isinstance(v, str) and v.strip() and len(v.strip()) <= 300 and v.strip() in chunk.content],

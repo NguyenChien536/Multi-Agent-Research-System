@@ -135,8 +135,20 @@ def run(args):
     evidence["runtime_passed"] = True
     evidence["scientific_quality_gate"] = state["status"]
     evidence["word_count"] = report["word_count"]
+    bibliography = (report.get("review_metadata") or {}).get("bibliography_snapshot") or []
+    # A bibliography snapshot may repeat one source for several claim citations.
+    # Count source records separately; neither count certifies independent evidence.
+    evidence["citation_records"] = len(bibliography)
+    evidence["distinct_cited_source_records"] = len({
+        item["source_id"] for item in bibliography if item.get("source_id")
+    })
+    for name in ("sources", "citations"):
+        payload = request(f"/api/v1/research/{task_id}/{name}", token=token)
+        (output / f"{name}.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     check("real broker/worker/provider generation and both publication archives")
     print("Scientific status:", state["status"], "(runtime success is not scientific validation)", flush=True)
+    print("Cited source records:", evidence["distinct_cited_source_records"],
+          "from", evidence["citation_records"], "claim citation records", flush=True)
 
 
 if __name__ == "__main__":

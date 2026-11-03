@@ -14,8 +14,9 @@ from app.models.user import User
 from app.services.evidence_selection import (
     analysis_needs, evidence_need_coverage, fuse_diverse_chunks, spread_indexes, query_terms, rank_discovery_candidates,
     blocking_evidence_gaps,
+    metadata_triage_order,
 )
-from app.services.grounding import persist_grounded_claims
+from app.services.grounding import persist_grounded_claims, source_quote_span
 from app.tools.embedder import EmbedderTool
 
 
@@ -61,6 +62,15 @@ def test_sampling_keeps_late_results_and_diversity_without_inventing_candidates(
     assert query_terms("Ridge & ('regression') | ! 2026") == ['ridge', 'regression', '2026']
 
 
+def test_whitespace_alignment_returns_original_source_and_never_repairs_words_or_punctuation():
+    source='Limited\n  evidence\u00a0supports the result.'
+    assert source_quote_span(source, 'Limited evidence supports the result.') == source
+    assert source_quote_span(source, 'Strong evidence supports the result.') is None
+    assert source_quote_span(source, 'limited evidence supports the result.') is None
+    assert source_quote_span(source, 'Limited evidence supports the result!') is None
+    assert source_quote_span(source, '   ') is None
+
+
 @pytest.mark.asyncio
 async def test_storage_keeps_body_text_but_bounds_embedding_calls():
     tool = object.__new__(EmbedderTool)
@@ -83,6 +93,76 @@ def test_discovery_ranks_metadata_without_excluding_uncertain_foundational_title
     ranked = rank_discovery_candidates(items)
     assert ranked[0].title == 'Ridge regression baseline'
     assert len(ranked) == 3
+
+
+def test_metadata_triage_prioritizes_primary_candidates_and_preserves_unknown_items():
+    from app.tools.search_models import SearchResult
+    items = [SearchResult(title=f'Candidate {i}', url=f'https://example.org/{i}') for i in range(4)]
+    ranked, log = metadata_triage_order(items, [
+        dict(candidate_id='c01', relevance='DIRECT', study_role='GUIDE', reason='Practitioner guide'),
+        dict(candidate_id='c02', relevance='DIRECT', study_role='PRIMARY', reason='Metadata indicates an original evaluation'),
+        dict(candidate_id='c03', relevance='DIRECT', study_role='PRIMARY', reason='Conflicting duplicate'),
+        dict(candidate_id='c03', relevance='OUT_OF_SCOPE', study_role='GUIDE', reason='Conflicting duplicate'),
+        dict(candidate_id='c04', relevance='CONTEXT', study_role='REVIEW', reason='Adjacent vertical application'),
+        dict(candidate_id='invented', relevance='DIRECT', study_role='PRIMARY', reason='Unknown ID ignored')])
+    assert ranked[0] == items[1]
+    assert len(ranked) == 4 and len(log) == 4
+    assert log[2]['relevance'] == 'UNCERTAIN' and not log[2]['metadata_assessment_present']
+
+
+def test_metadata_assessments_keep_candidate_identity_when_landing_urls_overlap():
+    from app.tools.search_models import SearchResult
+    items = [SearchResult(title=title, url='https://example.org/shared') for title in ('Guide', 'Original study')]
+    ranked, rows = metadata_triage_order(items, [
+        dict(candidate_id='c01', relevance='DIRECT', study_role='GUIDE', reason='Guide'),
+        dict(candidate_id='c02', relevance='DIRECT', study_role='PRIMARY', reason='Study')])
+    assert ranked == [items[1], items[0]]
+    assert [row['candidate_id'] for row in rows] == ['c01', 'c02']
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('triage_mode', ['assessed', 'unavailable', 'budget_exhausted'])
+async def test_researcher_applies_bounded_metadata_triage_before_fetch_and_source_cap(monkeypatch, triage_mode):
+    import json
+    from app.agents import nodes
+    from app.tools import search, scraper
+    from app.tools.search_models import SearchResult
+    candidates = [SearchResult(title='RAG citation practitioner guide', url='https://example.org/guide', query='RAG citation', content='Citation recommendations.'),
+                  SearchResult(title='Original citation evaluation', url='https://example.org/primary', query='RAG citation', content='We evaluated factual support and attribution on benchmark outputs.')]
+    monkeypatch.setattr(search, 'execute_parallel_searches', AsyncMock(return_value=(candidates, [])))
+    monkeypatch.setattr(scraper, 'fetch_urls_parallel', AsyncMock(return_value={str(c.url):c.content for c in candidates}))
+    monkeypatch.setattr(nodes, '_record_progress', AsyncMock())
+    monkeypatch.setattr(nodes, 'record_agent_run', AsyncMock())
+    monkeypatch.setattr(nodes, 'get_fast_llm', lambda: SimpleNamespace(with_structured_output=lambda _:object()))
+    from app.services import provider_budget
+    monkeypatch.setattr(provider_budget, 'assert_task_active', AsyncMock())
+    async def assess(_state, _model, messages, **kwargs):
+        if triage_mode == 'unavailable':
+            raise RuntimeError('Provider temporarily unavailable')
+        if triage_mode == 'budget_exhausted':
+            raise provider_budget.ProviderBudgetExceeded('No budget for metadata triage')
+        payload=json.loads(messages[0].content.split('<candidates>')[1].split('</candidates>')[0])
+        assert len(payload) <= 24
+        return nodes.SourceTriage(assessments=[nodes.MetadataAssessment(candidate_id=c['candidate_id'], relevance='DIRECT',
+            study_role='PRIMARY' if 'Original' in c['title'] else 'GUIDE', reason='Metadata-only fixture judgment') for c in payload])
+    monkeypatch.setattr(nodes, 'invoke_llm_with_budget', assess)
+    state={'task_id':str(uuid.uuid4()), 'attempt_number':1, 'enforce_provider_budget':True,
+           'research_question':'How accurate are RAG citations?', 'max_sources':1, 'delta_queries':['RAG citation'],
+           'plan':{'evidence_needs':[dict(need_id='citation', question='What evidence supports citations?')]}}
+    if triage_mode == 'budget_exhausted':
+        with pytest.raises(provider_budget.ProviderBudgetExceeded):
+            await nodes.researcher_node(state)
+        scraper.fetch_urls_parallel.assert_not_awaited()
+        return
+    result=await nodes.researcher_node(state)
+    if triage_mode == 'unavailable':
+        assert result['collected_sources'][0]['url'] == 'https://example.org/guide'
+        assert result['source_selection_log'][0]['status'] == 'UNAVAILABLE'
+        assert result['source_selection_log'][0]['error_type'] == 'RuntimeError'
+        return
+    assert result['collected_sources'][0]['url']=='https://example.org/primary'
+    assert result['source_selection_log'][0]['status']=='ASSESSED'
+    assert 'not full-text' in result['source_selection_log'][0]['scope']
 
 
 def test_legacy_and_duplicate_needs_are_bounded_and_gaps_are_not_claimed_covered():
@@ -231,6 +311,21 @@ async def test_quote_identity_is_not_guessed_when_papers_share_boilerplate(corpu
         assert accepted[0]['assumptions'] == ['Shared quoted sentence.']
         assert await persist_grounded_claims(db, tid, [{**item, 'chunk_id': str(uuid.uuid4())}], [first, second]) == []
         assert await persist_grounded_claims(db, uuid.uuid4(), [{**item, 'chunk_id': str(second.id)}], [second]) == []
+
+
+@pytest.mark.asyncio
+async def test_pdf_line_wrap_quote_is_persisted_as_its_original_literal_span(corpus):
+    tid, _, chunks = corpus
+    async with AsyncSessionLocal() as db:
+        chunk=await db.get(DocumentChunk,chunks[1].id)
+        chunk.content='The method reduced\n   prediction error in this sample.'
+        await db.flush()
+        item=dict(claim='A sample-specific result', evidence_quote='The method reduced prediction error in this sample.', chunk_id=str(chunk.id))
+        accepted=await persist_grounded_claims(db,tid,[item],[chunk])
+        assert accepted[0]['evidence_quote'] == chunk.content
+        assert accepted[0]['quote_match_method'] == 'WHITESPACE_ALIGNED_TO_SOURCE'
+        repeated=await persist_grounded_claims(db,tid,[{**item,'evidence_quote':chunk.content}],[chunk])
+        assert repeated[0]['claim_id'] == accepted[0]['claim_id']
 
 
 @pytest.mark.asyncio

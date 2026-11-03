@@ -6,6 +6,7 @@ EVIDENCE_SELECTION_VERSION = 1
 MAX_STORED_CHUNKS = 128
 MAX_VECTOR_CHUNKS = 8
 MAX_ANALYSIS_NEEDS = 5
+MAX_TRIAGE_CANDIDATES = 24
 
 _STOP = set("the a an and or of to in on for from with by is are was were this that what how does do can could should under which when between study research evidence question review literature method methods limitation limitations compare comparison"
             .split())
@@ -42,6 +43,33 @@ def rank_discovery_candidates(items):
             scores.append((len(title & terms) * 3 + len(abstract & terms)) / max(1, len(terms)))
         return max(scores, default=0)
     return sorted(items, key=priority, reverse=True)
+
+
+def metadata_triage_order(items, assessments):
+    """Apply provisional metadata judgments to supplied candidates, retaining uncertain items."""
+    by_id = defaultdict(list)
+    for assessment in assessments:
+        by_id[assessment["candidate_id"]].append(assessment)
+    rows = []
+    for i, item in enumerate(items):
+        key = f"c{i+1:02d}"
+        supplied = by_id.get(key, [])
+        decision = supplied[0] if len(supplied) == 1 else {
+            "candidate_id": key, "relevance": "UNCERTAIN", "study_role": "UNCERTAIN",
+            "reason": "Missing or ambiguous metadata assessment",
+        }
+        rows.append({**decision, "url": str(item.url), "title": item.title,
+                     "metadata_assessment_present": len(supplied) == 1})
+
+    def priority(index):
+        decision = rows[index]
+        if decision["relevance"] == "DIRECT":
+            return {"PRIMARY": 0, "REVIEW": 1, "UNCERTAIN": 2, "GUIDE": 3}[decision["study_role"]]
+        return {"UNCERTAIN": 2, "CONTEXT": 4, "OUT_OF_SCOPE": 5}[decision["relevance"]]
+
+    # Candidates may share a landing URL but have different full-text locations.
+    # Preserve assessment identity by supplied position, never by URL.
+    return [items[index] for index in sorted(range(len(items)), key=priority)], rows
 
 
 def fuse_diverse_chunks(vector_rows, lexical_rows, limit):
@@ -99,15 +127,19 @@ def analysis_needs(state):
             for i, q in enumerate(queries[:MAX_ANALYSIS_NEEDS])]
 
 
-def evidence_need_coverage(needs, results):
+def evidence_need_coverage(needs, results, proposed_counts=None):
     rows = []
     for i, need in enumerate(needs):
         claims, retrieved = results[i] if i < len(results) else ([], [])
         sources = sorted({str(c["source_id"]) for c in claims})
-        rows.append({**need, "status": "QUOTE_BACKED_CANDIDATES" if claims else "NO_MATCHED_QUOTE",
+        row = {**need, "status": "QUOTE_BACKED_CANDIDATES" if claims else "NO_MATCHED_QUOTE",
                      "retrieved_sources": sorted({str(c.source_id) for c in retrieved}),
                      "source_ids": sources,
-                     "distinct_quotes": len({(c["source_id"], c["evidence_quote"]) for c in claims})})
+                     "distinct_quotes": len({(c["source_id"], c["evidence_quote"]) for c in claims})}
+        if proposed_counts is not None:
+            proposed = proposed_counts[i] if i < len(proposed_counts) else 0
+            row.update(proposed_claims=proposed, rejected_or_duplicate_claims=max(0, proposed-len(claims)))
+        rows.append(row)
     return {"version": EVIDENCE_SELECTION_VERSION,
             "scope": "retrieved quote candidates per planned need; not entailment, study quality or exhaustive coverage",
             "needs": rows, "missing_need_ids": [r["need_id"] for r in rows if not r["source_ids"]]}
@@ -118,4 +150,4 @@ def blocking_evidence_gaps(coverage):
     missing = set(coverage.get("missing_need_ids", []))
     rows = {r["need_id"]: r for r in coverage.get("needs", [])}
     return sorted(key for key in missing if key not in rows or
-                  rows[key].get("role", "CORE_CONCEPT") in {"CORE_CONCEPT", "COMPARISON"})
+                  rows[key].get("role", "CORE_CONCEPT") in {"FOUNDATION", "CORE_CONCEPT", "COMPARISON"})
