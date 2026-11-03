@@ -329,7 +329,11 @@ async def test_agent_run_persistence_and_cost_accounting(monkeypatch):
     cost_lite = estimate_cost("gemini-3.5-flash-lite", 10000, 2000)
     assert cost_lite > 0
     cost_smart = estimate_cost("gemini-3.5-flash", 10000, 2000)
-    assert cost_smart > cost_lite
+    # Roles do not imply a price ordering. Flash-Lite uses the verified current
+    # rate; the legacy Smart alias retains its separately documented estimate.
+    assert cost_lite == pytest.approx(0.008)
+    assert cost_smart > 0
+    assert estimate_cost("gemini-3.5-flash", 20000, 4000) == pytest.approx(2 * cost_smart)
 
     # 2. Test token extraction
     in_tok, out_tok = extract_tokens(None, prompt_str="Hello world test", output_str="Output response")

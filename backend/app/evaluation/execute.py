@@ -12,6 +12,7 @@ from pathlib import Path
 from app.evaluation.protocol import ARMS, Controls, case_for, digest, protocol
 from app.evaluation.corpus import RETRIEVAL_PROFILE
 from app.evaluation.execution_budget import Campaign
+from app.evaluation.transports import OpenAITransport, build_transport, validate_transport_profile
 from app.services.manuscript import REVIEW_OUTPUT_CONTRACT
 
 
@@ -39,26 +40,6 @@ def attest_revision(frozen):
             raise ValueError("Container requires EVALUATION_CODE_REVISION matching the frozen commit") from None
 
 
-class OpenAITransport:
-    """Pinned OpenAI chat client, no cache, retries, fallback or remote retrieval."""
-    def __init__(self, controls):
-        from app.core.config import settings
-        from langchain_openai import ChatOpenAI
-        if not settings.OPENAI_API_KEY or settings.OPENAI_API_KEY.startswith("your_"):
-            raise ValueError("An OpenAI key is required for this explicit transport")
-        self.client = ChatOpenAI(model=controls["model"], temperature=controls["temperature"],
-            api_key=settings.OPENAI_API_KEY, max_retries=0, cache=False,
-            timeout=controls["timeout_seconds"])
-
-    async def request(self, messages, schema, outputs):
-        client = self.client.model_copy(update={"max_tokens": outputs})
-        if schema:
-            result = await client.with_structured_output(schema, method="function_calling", include_raw=True).ainvoke(messages)
-            return result["raw"], result.get("parsed")
-        raw = await client.ainvoke(messages)
-        return raw, raw
-
-
 async def run(args, frozen):
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
     from app.core.config import settings
@@ -68,7 +49,7 @@ async def run(args, frozen):
     if not database:
         raise ValueError("Set the explicit evaluation database environment variable first")
     url = isolated_database_url(database, settings.DATABASE_URL)
-    client = OpenAITransport(frozen["controls"])
+    client = build_transport(frozen["controls"])
     engine = create_async_engine(url, echo=False)
     try:
         await claim_database(engine, digest(frozen))
@@ -95,6 +76,12 @@ def main(argv=None):
     try:
         frozen = protocol(args.bundle)
         Controls.model_validate(frozen["controls"])
+        validate_transport_profile(frozen["controls"])
+        if frozen["controls"]["model"] == "gemini-3.5-flash-lite":
+            from app.services.agent_run import MODEL_PRICING
+            verified = MODEL_PRICING["gemini-3.5-flash-lite"]
+            if args.input_rate < verified["prompt"] or args.output_rate < verified["completion"]:
+                raise ValueError("Evaluation rates are below the verified standard-text rates for this model")
         case = case_for(frozen, args.case)
         if frozen["controls"]["retrieval_profile"] != RETRIEVAL_PROFILE or frozen["controls"]["output_contract"] != REVIEW_OUTPUT_CONTRACT:
             raise ValueError("This executor requires " + REVIEW_OUTPUT_CONTRACT + " and " + RETRIEVAL_PROFILE)
