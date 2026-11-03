@@ -134,6 +134,8 @@ services:
 
   gateway:
     image: nginx:1.28-alpine
+    labels:
+      org.opencontainers.image.revision: ${RELEASE_REVISION:-local}
     user: '101:101'
     restart: unless-stopped
     ports:
