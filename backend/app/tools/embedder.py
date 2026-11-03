@@ -27,6 +27,26 @@ from app.services.evidence_selection import (
 
 logger = logging.getLogger(__name__)
 
+
+def _source_balanced_statement(task_id, score, pool_size, per_source, *, descending=False, extra_scope=()):
+    """Limit each source before the global pool, so one long PDF cannot crowd it out."""
+    order = score.desc() if descending else score.asc()
+    candidates = select(
+        DocumentChunk.id.label("chunk_id"), score.label("retrieval_score"),
+        func.row_number().over(partition_by=DocumentChunk.source_id,
+                               order_by=(order, DocumentChunk.chunk_index, DocumentChunk.id)).label("source_position"),
+    ).join(ResearchSource, ResearchSource.id == DocumentChunk.source_id).where(
+        DocumentChunk.research_task_id == task_id, ResearchSource.research_task_id == task_id,
+        ResearchSource.ingestion_status == "READY", *extra_scope,
+    ).subquery()
+    result_order = candidates.c.retrieval_score.desc() if descending else candidates.c.retrieval_score.asc()
+    return select(DocumentChunk, candidates.c.retrieval_score).join(
+        candidates, candidates.c.chunk_id == DocumentChunk.id,
+    ).where(candidates.c.source_position <= per_source).order_by(
+        result_order, DocumentChunk.source_id, DocumentChunk.chunk_index, DocumentChunk.id,
+    ).limit(pool_size)
+
+
 class EmbedderTool:
     """Công cụ băm nhỏ văn bản (Chunking) và Vector Embedding."""
 
@@ -290,6 +310,7 @@ class EmbedderTool:
         if limit <= 0:
             return []
         pool_size = min(max(limit * 6, 18), 90)
+        per_source = max(3, min(limit, 8))
         source_scope = (
             ResearchSource.research_task_id == task_id,
             ResearchSource.ingestion_status == "READY",
@@ -344,13 +365,8 @@ class EmbedderTool:
                             input_tokens=0, output_tokens=0, cost_usd=0, succeeded=False,
                         )
                     raise
-                stmt = (
-                    select(DocumentChunk, DocumentChunk.embedding.cosine_distance(query_vector).label("distance"))
-                    .join(ResearchSource, ResearchSource.id == DocumentChunk.source_id)
-                    .where(DocumentChunk.research_task_id == task_id, *vector_scope, *source_scope)
-                    .order_by(DocumentChunk.embedding.cosine_distance(query_vector))
-                    .limit(pool_size)
-                )
+                stmt = _source_balanced_statement(task_id, DocumentChunk.embedding.cosine_distance(query_vector),
+                                                   pool_size, per_source, extra_scope=vector_scope)
                 # A failed distance query must not poison the enclosing session
                 # before the lexical path (for example, incompatible dimensions).
                 async with db.begin_nested():
@@ -368,12 +384,7 @@ class EmbedderTool:
             document = func.to_tsvector(config, DocumentChunk.content)
             tsquery = func.websearch_to_tsquery(config, " OR ".join(f'"{term}"' for term in terms))
             rank = func.ts_rank_cd(document, tsquery)
-            lexical_stmt = (
-                select(DocumentChunk, rank.label("rank"))
-                .join(ResearchSource, ResearchSource.id == DocumentChunk.source_id)
-                .where(DocumentChunk.research_task_id == task_id, *source_scope, document.op("@@")(tsquery))
-                .order_by(rank.desc(), DocumentChunk.source_id, DocumentChunk.chunk_index)
-                .limit(pool_size)
-            )
+            lexical_stmt = _source_balanced_statement(task_id, rank, pool_size, per_source, descending=True,
+                                                       extra_scope=[document.op("@@")(tsquery)])
             lexical_rows = (await db.execute(lexical_stmt)).all()
         return fuse_diverse_chunks(vector_rows, lexical_rows, limit)

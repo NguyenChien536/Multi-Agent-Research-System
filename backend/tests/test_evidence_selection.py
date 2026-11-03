@@ -175,6 +175,20 @@ async def test_bad_vector_dimensions_do_not_poison_lexical_transaction(corpus, m
 
 
 @pytest.mark.asyncio
+async def test_long_high_frequency_source_cannot_crowd_other_relevant_sources_out_of_pool(corpus):
+    tid, sources, chunks = corpus
+    tool = object.__new__(EmbedderTool)
+    tool.embeddings = None
+    async with AsyncSessionLocal() as db:
+        for i in range(50):
+            db.add(DocumentChunk(research_task_id=tid, source_id=sources[1].id, chunk_index=100+i,
+                                 content='Ridge regression prediction ' * 20))
+        await db.commit()
+        result = await tool.search_similar_chunks(db, tid, 'Ridge regression prediction', limit=2)
+        assert {c.source_id for c, _ in result} == {sources[1].id, sources[2].id}
+
+
+@pytest.mark.asyncio
 async def test_dimension_preflight_avoids_billing_and_corrupt_source_links_are_excluded(corpus):
     tid, sources, chunks = corpus
     tool = object.__new__(EmbedderTool)
