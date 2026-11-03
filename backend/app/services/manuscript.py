@@ -89,7 +89,8 @@ def manuscript_contract(research_type: str, language: str) -> dict[str, Any]:
         "introduction_requirements": ["background", "problem_statement", "research_question", "bounded_research_gap", "approach_and_execution_status", "evidence_supported_contributions"],
         "writing_brief": writing_brief(article_type),
         "structure_policy": structure_policy(article_type),
-        "evidence_review_policy": {"version": 3, "scope": "passage_support_with_source_bound_literal_quote_anchors"},
+        "evidence_review_policy": {"version": 4, "scope": "source_quote_anchors_and_bounded_execution_procedure_facts"},
+        "revision_policy": {"version": 2, "scope": "bounded_repairs_preserving_unresolved_evidence_gates"},
         "research_quality_policy": {"version": 2, "source_balance": "provisional_need_hints_with_discovery_query_fallback"},
     }
 

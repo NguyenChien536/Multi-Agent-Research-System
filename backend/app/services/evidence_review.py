@@ -20,12 +20,14 @@ class EvidenceReview(BaseModel):
     reason: str = Field(min_length=1, max_length=1000)
     supporting_claim_ids: list[str] = Field(default_factory=list, max_length=24)
     quote_anchors: list[QuoteAnchor] = Field(default_factory=list, max_length=8)
+    supporting_execution_fact_ids: list[str] = Field(default_factory=list, max_length=8)
     assumptions_preserved: bool = False
 
 
 def prepare_evidence_review(section_text: str, claims: list[dict], *, central_headings: list[str],
                             draft: str, max_units: int = 16, max_evidence: int = 24,
-                            policy_version: int = 1, excluded_headings: list[str] | None = None) -> dict:
+                            policy_version: int = 1, excluded_headings: list[str] | None = None,
+                            execution_context: dict | None = None) -> dict:
     """Select cited evidence by identity, never by its position in a global list."""
     records = {}
     for item in claims:
@@ -34,6 +36,7 @@ def prepare_evidence_review(section_text: str, claims: list[dict], *, central_he
     marker = r"\[\[@claim:([^\]]+)\]\]"
     draft_refs = list(dict.fromkeys(re.findall(marker, draft)))
     units, requested, findings, substantive = [], [], [], []
+    execution_facts = {}
     heading = ""
     for index, paragraph in enumerate(section_text.split("\n\n")):
         lines = paragraph.splitlines()
@@ -52,9 +55,21 @@ def prepare_evidence_review(section_text: str, claims: list[dict], *, central_he
             findings.append(f"Passage {identity} exceeds the evidence-review text limit.")
         from app.services.research_quality import guarantee_risks
         risks = guarantee_risks(paragraph) if policy_version >= 2 else []
+        procedure = None
+        if policy_version >= 4 and risks:
+            from app.services.execution_evidence import execution_procedure_fact
+            procedure = execution_procedure_fact(paragraph, execution_context)
+        if procedure:
+            execution_facts[procedure["fact_id"]] = procedure
         units.append({"statement_id": identity, "section": heading, "guarantee_risks": risks,
                       "passage": paragraph[:4000], "claim_ids": context_refs, "cited_claim_ids": refs,
                       "kind": "cited_passage" if refs else "interpretation"})
+        if procedure and not refs:
+            # Only this bounded procedural fact is supplied by execution. Other
+            # scientific guarantees still require source context and assumptions.
+            units[-1]["detected_guarantee_risks"] = risks
+            units[-1]["guarantee_risks"] = []
+            units[-1]["execution_fact_ids"] = [procedure["fact_id"]]
     if len(units) > max_units:
         findings.append("This batch exceeds the passage-review limit; unreviewed passages require review.")
     requested = list(dict.fromkeys(requested))
@@ -98,6 +113,7 @@ def prepare_evidence_review(section_text: str, claims: list[dict], *, central_he
             if not full_context:
                 substantive.append(f"[{unit['section']}] A strong technical guarantee requires full-text context and explicit assumptions, or weaker wording: {unit['guarantee_risks'][0]}")
     return {"units": units[:max_units], "evidence": evidence, "coverage_findings": findings,
+            "execution_facts": list(execution_facts.values()),
             "expected_units": len(units), "policy_version": policy_version, "substantive_findings": substantive}
 
 
@@ -135,6 +151,11 @@ def evaluate_evidence_reviews(prepared: dict, reviews: list[EvidenceReview]) -> 
                     findings.append(f"Support for {review.statement_id} lacks literal quote anchors for its declared evidence.")
                 if set(unit["cited_claim_ids"]) - anchored_ids:
                     findings.append(f"Direct citations in {review.statement_id} were not all checked against literal source quotes.")
+            if prepared.get("policy_version", 1) >= 4:
+                expected_facts = set(unit.get("execution_fact_ids", []))
+                declared_facts = set(review.supporting_execution_fact_ids)
+                if declared_facts != expected_facts:
+                    findings.append(f"Execution support for {review.statement_id} does not match its supplied procedure facts.")
     if expected - seen:
         findings.append(f"Missing support judgments for {len(expected - seen)} passages.")
     return {"expected_passages": prepared.get("expected_units", len(expected)), "reviewed_passages": len(seen),
