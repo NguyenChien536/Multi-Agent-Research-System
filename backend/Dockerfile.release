@@ -26,15 +26,18 @@ RUN --mount=type=bind,from=dependencies,source=/wheels,target=/wheels \
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini .
-RUN useradd --system --uid 10001 --create-home appuser \
+RUN getent passwd root >/dev/null \
+    && groupadd --gid 10001 appgroup \
+    && useradd --uid 10001 --gid 10001 --create-home appuser \
     && mkdir -p /app/storage/artifacts \
-    && chown -R appuser:appuser /app
+    && chown -R 10001:10001 /app \
+    && test "$(id -u appuser)" = 10001
 
 ARG VCS_URL
 ARG VCS_REF=unknown
 LABEL org.opencontainers.image.source=$VCS_URL
 LABEL org.opencontainers.image.revision=$VCS_REF
 
-USER appuser
+USER 10001:10001
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
