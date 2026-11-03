@@ -656,7 +656,11 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                         run_record.metrics = analysis_data.get("metrics")
                         run_record.reproducibility_status = analysis_data.get("reproducibility_status", "NOT_RUN")
                         run_record.reproducibility_diff = analysis_data.get("reproducibility_diff")
-                        run_record.completed_at = datetime.now(timezone.utc)
+                        # Execution already committed its completion before writing
+                        # began. Keep that event time: changing it here makes a
+                        # historical paper appear to precede its own experiment.
+                        if run_record.completed_at is None:
+                            raise RuntimeError("Persisted experiment has no execution completion timestamp")
                     else:
                         run_record = AnalysisRun(
                             research_task_id=task.id,
