@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -34,7 +34,7 @@ const BASE_STAGES: StageConfig[] = [
   { title_en: 'Planning', title_vi: 'Lập kế hoạch', steps: ['SUPERVISOR'], statuses: ['PLANNING', 'WAITING_APPROVAL'] },
   { title_en: 'Literature Search & Analysis', title_vi: 'Thu thập và phân tích nguồn', steps: ['RESEARCHER', 'CURATOR', 'ANALYST'], statuses: ['RESEARCHING', 'INDEXING', 'ANALYZING'] },
   { title_en: 'Methodology Design', title_vi: 'Thiết kế phương pháp', steps: ['METHODOLOGIST'], statuses: ['WAITING_USER_DATA'] },
-  { title_en: 'Drafting & Peer Review', title_vi: 'Viết và phản biện', steps: ['WRITER', 'CRITIC', 'POST_PROCESSOR'], statuses: ['WRITING', 'REVIEWING', 'FINALIZING'] },
+  { title_en: 'Drafting & AI Critique', title_vi: 'Viết và phản biện', steps: ['WRITER', 'CRITIC', 'POST_PROCESSOR'], statuses: ['WRITING', 'REVIEWING', 'FINALIZING'] },
 ];
 
 const COMPUTATIONAL_STAGES: StageConfig[] = [
@@ -42,13 +42,13 @@ const COMPUTATIONAL_STAGES: StageConfig[] = [
   { title_en: 'Literature Search & Analysis', title_vi: 'Thu thập và phân tích nguồn', steps: ['RESEARCHER', 'CURATOR', 'ANALYST'], statuses: ['RESEARCHING', 'INDEXING', 'ANALYZING'] },
   { title_en: 'Methodology Design', title_vi: 'Thiết kế phương pháp', steps: ['METHODOLOGIST'], statuses: ['RUNNING'] },
   { title_en: 'Computational Routine', title_vi: 'Thực nghiệm tính toán', steps: ['EXPERIMENT_RUNNER'], statuses: ['RUNNING'] },
-  { title_en: 'Drafting & Peer Review', title_vi: 'Viết và phản biện', steps: ['WRITER', 'CRITIC', 'POST_PROCESSOR'], statuses: ['WRITING', 'REVIEWING', 'FINALIZING'] },
+  { title_en: 'Drafting & AI Critique', title_vi: 'Viết và phản biện', steps: ['WRITER', 'CRITIC', 'POST_PROCESSOR'], statuses: ['WRITING', 'REVIEWING', 'FINALIZING'] },
 ];
 
 const REVIEW_STAGES: StageConfig[] = [
   { title_en: 'Planning', title_vi: 'Lập kế hoạch', steps: ['SUPERVISOR'], statuses: ['PLANNING', 'WAITING_APPROVAL'] },
   { title_en: 'Literature Search & Analysis', title_vi: 'Thu thập và phân tích nguồn', steps: ['RESEARCHER', 'CURATOR', 'ANALYST'], statuses: ['RESEARCHING', 'INDEXING', 'ANALYZING'] },
-  { title_en: 'Drafting & Peer Review', title_vi: 'Viết và phản biện', steps: ['WRITER', 'CRITIC', 'POST_PROCESSOR'], statuses: ['WRITING', 'REVIEWING', 'FINALIZING'] },
+  { title_en: 'Drafting & AI Critique', title_vi: 'Viết và phản biện', steps: ['WRITER', 'CRITIC', 'POST_PROCESSOR'], statuses: ['WRITING', 'REVIEWING', 'FINALIZING'] },
 ];
 
 const TERMINAL = new Set(['COMPLETED', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW', 'PARTIAL']);
@@ -72,7 +72,7 @@ const STEP_LABELS_EN: Record<string, string> = {
   METHODOLOGIST: 'Methodology & Protocol Agent',
   EXPERIMENT_RUNNER: 'Computational Routine Agent (Ridge & Baseline)',
   WRITER: 'Report Drafting Agent (Writer)',
-  CRITIC: 'Peer Review Agent (Critic)',
+  CRITIC: 'Internal AI Critic',
   POST_PROCESSOR: 'Finalizing & Citations Agent',
 };
 
@@ -107,7 +107,7 @@ function statusLabel(status: string, lang: 'en' | 'vi' = 'en') {
     PENDING: 'Pending', QUEUED: 'Queued', PLANNING: 'Planning',
     WAITING_APPROVAL: 'Awaiting Plan Approval', WAITING_USER_DATA: 'Awaiting Field Data',
     RESEARCHING: 'Searching Literature', INDEXING: 'Processing Sources', ANALYZING: 'Analyzing Evidence',
-    WRITING: 'Drafting Paper', REVIEWING: 'Peer Reviewing', FINALIZING: 'Finalizing Report',
+    WRITING: 'Drafting Paper', REVIEWING: 'AI Critique', FINALIZING: 'Finalizing Report',
     RETRYING: 'Retrying', COMPLETED: 'Completed', PARTIAL: 'Partial Result',
     NEEDS_REVIEW: 'Needs Review', FAILED: 'Failed', CANCELLED: 'Cancelled',
   };
@@ -1460,7 +1460,7 @@ export default function WorkspacePage() {
                         <div className="border-t border-zinc-200 bg-zinc-50/70 px-6 sm:px-10 py-5 text-xs text-zinc-500 flex flex-wrap items-center justify-between gap-4 print:bg-white print:px-0">
                           <div>
                             <div className="font-medium text-zinc-700">Synthia Multi-Agent Autonomous Research Platform</div>
-                            <div>{isEn ? "Paper generated autonomously based on verified evidence and AI agent orchestration." : "Báo cáo được khởi tạo tự động dựa trên bằng chứng đã xác minh và chuỗi tác tử AI."}</div>
+                            <div>{isEn ? "AI-assisted draft linked to source passages; claims still require scientific review." : "Bản thảo có AI hỗ trợ, gắn với trích đoạn nguồn; luận điểm vẫn cần kiểm chứng khoa học."}</div>
                           </div>
                           <div className="font-mono text-[11px] text-zinc-400">
                             ID: {task.id} • Hash verification valid
@@ -1682,7 +1682,7 @@ export default function WorkspacePage() {
                             <span className="text-lg font-bold text-zinc-900">{sources.length}</span>
                           </div>
                           <div className="bg-white/80 p-3 rounded-xl border border-zinc-200">
-                            <span className="text-zinc-500 font-medium block">{isEn ? "Verified Claims" : "Luận điểm xác minh"}</span>
+                            <span className="text-zinc-500 font-medium block">{isEn ? "Source-linked Claims" : "Luận điểm có nguồn"}</span>
                             <span className="text-lg font-bold text-zinc-900">{citations.length}</span>
                           </div>
                           <div className="bg-white/80 p-3 rounded-xl border border-zinc-200">
@@ -1970,7 +1970,7 @@ export default function WorkspacePage() {
             {activeTab === 'citations' && (
               <div className="w-full max-w-7xl mx-auto space-y-6">
                 <div>
-                  <h2 className="text-xl font-bold text-zinc-900">{isEn ? "Verified Evidence & Citations" : "Bằng chứng & Trích dẫn đã xác minh"} ({citations.length})</h2>
+                  <h2 className="text-xl font-bold text-zinc-900">{isEn ? "Linked Evidence & Citations" : "Bằng chứng & Trích dẫn có nguồn"} ({citations.length})</h2>
                   <p className="text-xs text-zinc-500 mt-0.5">
                     {isEn ? "Each citation is anchored to an indexed literature chunk and corresponding claim in the paper." : "Mỗi trích dẫn được neo chặt vào đoạn trích nguồn (chunk) và luận điểm (claim) tương ứng trong bài báo."}
                   </p>

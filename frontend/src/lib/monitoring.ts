@@ -28,7 +28,7 @@ export const STAGES = [
   { key: 'METHODOLOGIST', name: 'Thiết kế phương pháp', name_en: 'Methodology Design', agent: 'Methodologist', description: 'Đề xuất giả thuyết, phương pháp và quy trình thu thập dữ liệu.', description_en: 'Designs protocols, hypotheses, and data schemas.' },
   { key: 'EXPERIMENT_RUNNER', name: 'Chạy phân tích', name_en: 'Execution & Analysis', agent: 'ExperimentRunner', description: 'Thực hiện routine được cho phép và kiểm tra khả năng chạy lại.', description_en: 'Executes verified computational routines and checks repeatability.' },
   { key: 'WRITER', name: 'Soạn bài báo', name_en: 'Drafting Paper', agent: 'Writer', description: 'Tổng hợp bằng chứng và kết quả thành bản thảo có cấu trúc.', description_en: 'Synthesizes verified claims into a cohesive academic draft.' },
-  { key: 'CRITIC', name: 'Phản biện bản thảo', name_en: 'Peer Review', agent: 'Critic', description: 'Kiểm tra nội dung, phương pháp và mức hỗ trợ của bằng chứng.', description_en: 'Evaluates methodological rigor and citation support.' },
+  { key: 'CRITIC', name: 'Phản biện bản thảo', name_en: 'AI Critique', agent: 'Critic', description: 'Kiểm tra nội dung, phương pháp và mức hỗ trợ của bằng chứng.', description_en: 'Internal AI critique of reasoning and citation support; not independent peer review.' },
   { key: 'POST_PROCESSOR', name: 'Kiểm tra trích dẫn', name_en: 'Citation Check', agent: 'PostProcessor', description: 'Kiểm tra liên kết nguồn và hoàn thiện bản thảo.', description_en: 'Validates source links and polishes paper formatting.' },
 ];
 
@@ -61,7 +61,7 @@ const OUTPUT_LABELS_VI: Record<string, string> = {
 
 const OUTPUT_LABELS_EN: Record<string, string> = {
   queries_count: 'Queries', sections_count: 'Sections planned', sources_scraped: 'Sources read',
-  visited_urls: 'URLs retrieved', chunks_indexed: 'Chunks indexed', verified_claims_count: 'Verified claims',
+  visited_urls: 'URLs retrieved', chunks_indexed: 'Chunks indexed', verified_claims_count: 'Source-linked claims',
   draft_words: 'Draft words', feedback_count: 'Critique notes', missing_areas_count: 'Gaps identified',
   citations_count: 'Citations', report_words: 'Report words', budget_limited: 'Budget ceiling reached',
   verdict: 'Verdict', repeatability: 'Repeatability check',

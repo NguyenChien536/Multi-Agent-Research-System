@@ -90,6 +90,7 @@ class ResearchState(TypedDict, total=False):
     
     # === Phân tích ===
     analysis_results: Dict[str, Any]  # Luận điểm, mâu thuẫn, phát hiện chính (kèm chunk_id)
+    evidence_need_coverage: Dict[str, Any]  # Quote candidates per planned need; never a semantic-quality certificate
     
     # === Viết & Phản biện (Ủy quyền cho Subgraph) ===
     draft_report_markdown: str        # Bản nháp từ Writer (có marker claim để tạo citation đã kiểm chứng)

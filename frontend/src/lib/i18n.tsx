@@ -173,7 +173,7 @@ export const DICTIONARY = {
     mon_counts_title: 'Saved Research Artifacts',
     mon_counts_desc: 'Cumulative results across iterations',
     mon_sources: 'Sources Gathered',
-    mon_claims: 'Verified Claims',
+    mon_claims: 'Source-linked Claims',
     mon_reports: 'Report Versions',
     mon_artifacts: 'Artifacts & Charts',
     mon_experiments: 'Analysis Runs',

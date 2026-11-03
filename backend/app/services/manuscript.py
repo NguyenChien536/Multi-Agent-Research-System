@@ -23,7 +23,7 @@ def writer_claim_context(claims: list[dict]) -> list[dict]:
     return [{"citation_marker": f"[[@claim:{claim['claim_id']}]]",
              "claim": claim.get("claim") or claim.get("claim_text", ""),
              "evidence_quote": claim.get("evidence_quote") or claim.get("evidence_text", ""),
-             **{key: claim[key] for key in ("source_title", "source_url", "source_author", "publication_date", "source_type", "doi", "venue", "search_provider", "text_scope", "related_claims") if claim.get(key)}}
+             **{key: claim[key] for key in ("source_title", "source_url", "source_author", "publication_date", "source_type", "doi", "venue", "search_provider", "text_scope", "related_claims", "evidence_need_id", "assumptions") if claim.get(key)}}
             for claim in claims if claim.get("claim_id") and claim.get("evidence_id")]
 
 _HEADINGS = {

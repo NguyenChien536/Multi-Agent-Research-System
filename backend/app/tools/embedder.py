@@ -6,7 +6,7 @@ import asyncio
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from sqlalchemy import select, text
+from sqlalchemy import select, text, func, literal_column
 from sqlalchemy.ext.asyncio import AsyncSession
 from pgvector.sqlalchemy import Vector
 
@@ -20,6 +20,9 @@ from app.services.provider_budget import (
     estimate_tokens,
     reserve_provider_call,
     settle_provider_call,
+)
+from app.services.evidence_selection import (
+    MAX_STORED_CHUNKS, MAX_VECTOR_CHUNKS, spread_indexes, query_terms, fuse_diverse_chunks,
 )
 
 logger = logging.getLogger(__name__)
@@ -82,12 +85,16 @@ class EmbedderTool:
         budget_context: dict[str, Any] | None = None,
     ) -> int:
         """Cắt chuỗi, tạo embedding và lưu vào pgvector thông qua SQLAlchemy."""
-        # 1. Chunking: cap to top 8 chunks per source to avoid exceeding free-tier RPM
+        # Keep bounded text across the document. Only eight representative
+        # chunks need vectors; later Methods/Results remain lexically searchable.
         docs = self.chunk_text(text_content)
         if not docs:
             return 0
 
-        texts = [doc.page_content for doc in docs[:8]]
+        indexes = spread_indexes(len(docs), MAX_STORED_CHUNKS)
+        stored_texts = [docs[i].page_content for i in indexes]
+        vector_indexes = spread_indexes(len(stored_texts), MAX_VECTOR_CHUNKS)
+        texts = [stored_texts[i] for i in vector_indexes]
         vectors = [None] * len(texts)
 
         if self.embeddings and budget_context:
@@ -117,6 +124,8 @@ class EmbedderTool:
                         allow_pre_run=bool(budget_context.get("allow_pre_run")),
                     )
                     result = await self.embeddings.aembed_documents(texts_batch)
+                    if len(result) != len(texts_batch):
+                        raise RuntimeError("Embedding provider returned a different number of vectors than requested")
                     if reservation_id:
                         await settle_provider_call(
                             task_id=budget_context["task_id"], reservation_id=reservation_id,
@@ -168,13 +177,14 @@ class EmbedderTool:
 
         # 3. Lưu vào Database
         chunks_to_insert = []
-        for i, (content, vector) in enumerate(zip(texts, vectors)):
+        vector_by_index = dict(zip(vector_indexes, vectors))
+        for i, content in enumerate(stored_texts):
             chunk = DocumentChunk(
                 research_task_id=task_id,
                 source_id=source_id,
-                chunk_index=i,
+                chunk_index=indexes[i],
                 content=content,
-                embedding=vector,
+                embedding=vector_by_index.get(i),
                 token_count=len(content) // 4
             )
             chunks_to_insert.append(chunk)
@@ -192,16 +202,26 @@ class EmbedderTool:
         """Embed text-only chunks created during upload, inside the active run budget."""
         if not self.embeddings:
             return 0
+        source = await db.scalar(select(ResearchSource).where(
+            ResearchSource.id == source_id, ResearchSource.research_task_id == task_id))
+        if source is None:
+            return 0
         result = await db.execute(
             select(DocumentChunk)
             .where(
                 DocumentChunk.research_task_id == task_id,
                 DocumentChunk.source_id == source_id,
-                DocumentChunk.embedding.is_(None),
             )
             .order_by(DocumentChunk.chunk_index.asc())
         )
-        chunks = result.scalars().all()
+        all_chunks = list(result.scalars().all())
+        if source.upload_artifact_id is None:
+            # Web corpora intentionally keep extra text for lexical retrieval.
+            # A macro loop must not silently embed every previously text-only chunk.
+            candidates = [all_chunks[i] for i in spread_indexes(len(all_chunks), MAX_VECTOR_CHUNKS)]
+        else:
+            candidates = all_chunks  # Preserve the existing uploaded-PDF ingestion path.
+        chunks = [chunk for chunk in candidates if chunk.embedding is None]
         if not chunks:
             return 0
 
@@ -264,14 +284,24 @@ class EmbedderTool:
     ) -> List[Tuple[DocumentChunk, float]]:
         """
         Tìm kiếm ngữ nghĩa (Semantic Search) trong scope của 1 Research Task.
-        Trả về danh sách (DocumentChunk, khoảng cách cosine).
-        Nếu vector search không khả dụng, fallback sang lấy chunks tuần tự.
+        Hybrid vector/lexical rank with source diversity; score is a fused rank,
+        not a cosine distance or evidence-confidence estimate.
         """
+        if limit <= 0:
+            return []
+        pool_size = min(max(limit * 6, 18), 90)
+        source_scope = (
+            ResearchSource.research_task_id == task_id,
+            ResearchSource.ingestion_status == "READY",
+        )
+        vector_rows = []
         has_vectors = await db.scalar(
             select(DocumentChunk.id)
+            .join(ResearchSource, ResearchSource.id == DocumentChunk.source_id)
             .where(
                 DocumentChunk.research_task_id == task_id,
                 DocumentChunk.embedding.is_not(None),
+                *source_scope,
             )
             .limit(1)
         )
@@ -312,25 +342,34 @@ class EmbedderTool:
                     raise
                 stmt = (
                     select(DocumentChunk, DocumentChunk.embedding.cosine_distance(query_vector).label("distance"))
-                    .where(DocumentChunk.research_task_id == task_id, DocumentChunk.embedding.is_not(None))
+                    .join(ResearchSource, ResearchSource.id == DocumentChunk.source_id)
+                    .where(DocumentChunk.research_task_id == task_id, DocumentChunk.embedding.is_not(None), *source_scope)
                     .order_by(DocumentChunk.embedding.cosine_distance(query_vector))
-                    .limit(limit)
+                    .limit(pool_size)
                 )
-                result = await db.execute(stmt)
-                chunks = result.all()
-                if chunks:
-                    return chunks
+                # A failed distance query must not poison the enclosing session
+                # before the lexical path (for example, incompatible dimensions).
+                async with db.begin_nested():
+                    result = await db.execute(stmt)
+                    vector_rows = result.all()
             except Exception as e:
                 if isinstance(e, (ProviderBudgetExceeded, ResearchTaskStopped)):
                     raise
-                logger.warning("Vector search fallback to sequential chunks: %s", e)
+                logger.warning("Vector retrieval unavailable; using lexical evidence ranking: %s", type(e).__name__)
 
-        # Fallback to sequential chunks when vector search is unavailable
-        fallback_stmt = (
-            select(DocumentChunk)
-            .where(DocumentChunk.research_task_id == task_id)
-            .order_by(DocumentChunk.chunk_index.asc())
-            .limit(limit)
-        )
-        fallback_res = await db.execute(fallback_stmt)
-        return [(c, 0.0) for c in fallback_res.scalars().all()]
+        lexical_rows = []
+        terms = query_terms(query)
+        if terms:
+            config = literal_column("'simple'")
+            document = func.to_tsvector(config, DocumentChunk.content)
+            tsquery = func.to_tsquery(config, " | ".join(terms))
+            rank = func.ts_rank_cd(document, tsquery)
+            lexical_stmt = (
+                select(DocumentChunk, rank.label("rank"))
+                .join(ResearchSource, ResearchSource.id == DocumentChunk.source_id)
+                .where(DocumentChunk.research_task_id == task_id, *source_scope, document.op("@@")(tsquery))
+                .order_by(rank.desc(), DocumentChunk.source_id, DocumentChunk.chunk_index)
+                .limit(pool_size)
+            )
+            lexical_rows = (await db.execute(lexical_stmt)).all()
+        return fuse_diverse_chunks(vector_rows, lexical_rows, limit)

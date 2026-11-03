@@ -36,14 +36,21 @@ async def persist_grounded_claims(
         if not claim_text or not _stable_key(quote):
             continue
 
-        chunk = next(
-            (
-                candidate
-                for candidate in chunks_by_id.values()
-                if quote in candidate.content
-            ),
-            None,
-        )
+        # Identical boilerplate can occur in several papers. Respect a supplied
+        # chunk identity and reject ambiguous legacy extractions, rather than
+        # silently attributing the quote to the first source in retrieval order.
+        if item.get("chunk_id"):
+            try:
+                chunk = chunks_by_id.get(uuid.UUID(str(item["chunk_id"])))
+            except (ValueError, TypeError, AttributeError):
+                continue
+            if chunk is None or quote not in chunk.content:
+                continue
+        else:
+            matches = [candidate for candidate in chunks_by_id.values() if quote in candidate.content]
+            if len(matches) != 1:
+                continue
+            chunk = matches[0]
         if chunk is None or chunk.research_task_id != task_id:
             continue
 
@@ -119,6 +126,8 @@ async def persist_grounded_claims(
             "text_scope": source.text_scope,
             "discovery_queries": source.discovery_queries or [],
             "chunk_id": str(chunk.id),
+            "evidence_need_id": str(item.get("evidence_need_id") or "")[:40],
+            "assumptions": [str(v)[:300] for v in (item.get("assumptions") or [])[:8]],
         })
 
     await db.flush()
