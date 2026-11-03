@@ -302,7 +302,7 @@ class ArgumentSection(BaseModel):
 
 class EvidenceNeed(BaseModel):
     need_id: str = Field(min_length=1, max_length=40, description="Stable short ID unique within this plan")
-    question: str = Field(min_length=1, max_length=350, description="One factual or comparative question needing source evidence, including assumptions or conflicting findings")
+    question: str = Field(min_length=1, max_length=350, description="One external-literature question needing source evidence; actual results on the user's dataset belong to executed analysis, not web discovery")
     search_query: str = Field(min_length=1, max_length=180, description="Short discovery query aligned with this evidence need; no invented author, title or DOI")
     section_id: str = Field(min_length=1, max_length=40, description="Intended semantic manuscript section, not a claimed finding")
     role: Literal["FOUNDATION", "CORE_CONCEPT", "COMPARISON", "LIMITATION", "COUNTEREVIDENCE"] = "CORE_CONCEPT"
@@ -466,6 +466,11 @@ async def supervisor_node(state: ResearchState) -> Dict[str, Any]:
     evidence with vertical application reviews or speculative variants. Never invent bibliographic identities.
     Stay within five total queries; do not add tangents (for example long-context comparisons unless relevant).
     Use FOUNDATION/CORE_CONCEPT/COMPARISON for central support and LIMITATION/COUNTEREVIDENCE for contextual checks.
+    FOUNDATION means original/seminal work only, not a question about an implementation or library documentation;
+    use CORE_CONCEPT for implementation details and authoritative documentation. For empirical studies,
+    evidence_needs cover external literature, definitions, assumptions and prior work. Do not ask web searches
+    to establish this study's measured baseline/model results, repeatability or findings on the user's dataset;
+    those must come from the executed analysis or user-supplied data, not borrowed published results.
     A missing contextual source can be disclosed as a limitation; it is never proof that no such research exists.
     Với REVIEW: định hướng tổng quan phân tích tài liệu (narrative review), không tự nhận tổng quan hệ thống/PRISMA.
     Các chủ đề cần phân tích sẽ được đặt bên trong cấu trúc bài báo học thuật do hệ thống quy định.
