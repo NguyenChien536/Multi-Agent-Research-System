@@ -6,11 +6,20 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class QuoteAnchor(BaseModel):
+    """A reviewer must point back to a supplied quote, never generate new evidence."""
+    claim_id: str = Field(min_length=1, max_length=40)
+    source_id: str = Field(min_length=1, max_length=40)
+    chunk_id: str = Field(min_length=1, max_length=40)
+    quote: str = Field(min_length=1, max_length=400)
+
+
 class EvidenceReview(BaseModel):
     statement_id: str
     judgment: Literal["SUPPORTED", "PARTIAL", "UNSUPPORTED", "CONTRADICTED", "UNVERIFIABLE"]
     reason: str = Field(min_length=1, max_length=1000)
     supporting_claim_ids: list[str] = Field(default_factory=list, max_length=24)
+    quote_anchors: list[QuoteAnchor] = Field(default_factory=list, max_length=8)
     assumptions_preserved: bool = False
 
 
@@ -109,6 +118,23 @@ def evaluate_evidence_reviews(prepared: dict, reviews: list[EvidenceReview]) -> 
                 findings.append(f"Support for {review.statement_id} lacks valid passage-specific evidence identities.")
             if unit.get("guarantee_risks") and not review.assumptions_preserved:
                 findings.append(f"Assumptions were not checked for {review.statement_id}.")
+            if prepared.get("policy_version", 1) >= 3:
+                anchored_ids = set()
+                for anchor in review.quote_anchors:
+                    matches = [e for e in prepared["evidence"]
+                               if e["claim_id"] == anchor.claim_id
+                               and str(e.get("source_id")) == anchor.source_id
+                               and str(e.get("chunk_id")) == anchor.chunk_id]
+                    if (anchor.claim_id not in set(review.supporting_claim_ids) & valid_ids
+                            or not anchor.quote.strip()
+                            or not any(anchor.quote in e["quote"] for e in matches)):
+                        findings.append(f"Quote anchor for {review.statement_id} is absent from its supplied source evidence.")
+                    else:
+                        anchored_ids.add(anchor.claim_id)
+                if set(review.supporting_claim_ids) - anchored_ids:
+                    findings.append(f"Support for {review.statement_id} lacks literal quote anchors for its declared evidence.")
+                if set(unit["cited_claim_ids"]) - anchored_ids:
+                    findings.append(f"Direct citations in {review.statement_id} were not all checked against literal source quotes.")
     if expected - seen:
         findings.append(f"Missing support judgments for {len(expected - seen)} passages.")
     return {"expected_passages": prepared.get("expected_units", len(expected)), "reviewed_passages": len(seen),

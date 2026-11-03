@@ -74,6 +74,56 @@ def test_review_is_bound_to_the_exact_draft():
     assert not audit_matches_draft(metadata, draft + " A stronger conclusion.")
 
 
+@pytest.mark.parametrize('fault', ['missing', 'invented_quote', 'wrong_source', 'wrong_chunk', 'unrelated_claim', 'whitespace_only'])
+def test_supported_verdict_without_source_bound_literal_anchor_cannot_pass_policy3(fault):
+    record = claim()
+    text = f"## Discussion\n\nThe method works under limited conditions. [[@claim:{record['claim_id']}]]"
+    prepared = prepare_evidence_review(text, [record], central_headings=['Discussion'], draft=text, policy_version=3)
+    anchor = {'claim_id': record['claim_id'], 'source_id': 's', 'chunk_id': 'c', 'quote': record['evidence_quote']}
+    if fault == 'invented_quote': anchor['quote'] = 'This method always outperforms all baselines.'
+    if fault == 'wrong_source': anchor['source_id'] = 'another-paper'
+    if fault == 'wrong_chunk': anchor['chunk_id'] = 'another-chunk'
+    if fault == 'unrelated_claim': anchor['claim_id'] = 'another-claim'
+    if fault == 'whitespace_only': anchor['quote'] = ' '
+    response = EvidenceReview(statement_id=prepared['units'][0]['statement_id'], judgment='SUPPORTED',
+        reason='Overconfident fixture model response.', supporting_claim_ids=[record['claim_id']],
+        quote_anchors=[] if fault == 'missing' else [anchor], assumptions_preserved=True)
+    result = evaluate_evidence_reviews(prepared, [response])
+    assert not result['all_supported'] and not result['coverage_complete']
+
+
+def test_literal_anchor_is_a_source_correspondence_check_and_retains_historical_policy():
+    record = claim()
+    text = f"A conditional finding [[@claim:{record['claim_id']}]]"
+    response = {'judgment': 'SUPPORTED', 'reason': 'The literal quote supports a bounded finding.',
+                'supporting_claim_ids': [record['claim_id']], 'assumptions_preserved': True}
+    old = prepare_evidence_review(text, [record], central_headings=[], draft=text, policy_version=2)
+    old_review = EvidenceReview(statement_id=old['units'][0]['statement_id'], **response)
+    assert evaluate_evidence_reviews(old, [old_review])['all_supported']
+    current = prepare_evidence_review(text, [record], central_headings=[], draft=text, policy_version=3)
+    current_review = EvidenceReview(statement_id=current['units'][0]['statement_id'], **response, quote_anchors=[
+        {'claim_id': record['claim_id'], 'source_id':'s', 'chunk_id':'c', 'quote':'limited comparison'}])
+    assert evaluate_evidence_reviews(current, [current_review])['all_supported']
+
+
+def test_policy3_uncited_scope_statement_can_rely_on_actual_provenance_without_fake_citation():
+    text = '## Methods\n\nNo experiment or systematic screening was performed in this narrative review.'
+    prepared = prepare_evidence_review(text, [], central_headings=[], draft=text, policy_version=3)
+    response = EvidenceReview(statement_id=prepared['units'][0]['statement_id'], judgment='SUPPORTED',
+                              reason='Consistent with the supplied execution provenance.')
+    assert evaluate_evidence_reviews(prepared, [response])['all_supported']
+
+
+def test_one_good_anchor_cannot_hide_an_unchecked_second_direct_citation():
+    first, second = claim(), claim()
+    text = f"Two alleged findings [[@claim:{first['claim_id']}]][[@claim:{second['claim_id']}]]"
+    prepared = prepare_evidence_review(text, [first, second], central_headings=[], draft=text, policy_version=3)
+    response = EvidenceReview(statement_id=prepared['units'][0]['statement_id'], judgment='SUPPORTED',
+        reason='Only the first citation was inspected.', supporting_claim_ids=[first['claim_id']], quote_anchors=[
+            {'claim_id':first['claim_id'], 'source_id':'s', 'chunk_id':'c', 'quote':first['evidence_quote']}])
+    assert not evaluate_evidence_reviews(prepared, [response])['all_supported']
+
+
 @pytest.mark.asyncio
 async def test_provider_pass_without_required_judgments_requires_review(monkeypatch):
     monkeypatch.setattr(nodes, "_record_progress", AsyncMock())
@@ -102,6 +152,16 @@ def test_historical_contract_does_not_require_new_review_policy():
     assert "evidence_review_policy" not in resumed["manuscript_contract"]
     assert resumed["manuscript_contract"] == historical
     assert resumed["manuscript_contract"] is not historical
+
+
+def test_resume_keeps_policy2_while_new_plans_require_quote_anchors():
+    from app.services.manuscript import manuscript_contract
+    historical = manuscript_contract('REVIEW', 'en')
+    historical['evidence_review_policy'] = {'version':2, 'scope':'historical snapshot'}
+    historical['research_quality_policy'] = {'version':1, 'source_balance':'round_robin_discovery_queries'}
+    resumed = attach_manuscript_contract({'manuscript_contract':historical}, 'REVIEW', 'en')
+    assert resumed['manuscript_contract'] == historical
+    assert manuscript_contract('REVIEW', 'en')['evidence_review_policy']['version'] == 3
 
 
 @pytest.mark.asyncio

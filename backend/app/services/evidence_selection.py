@@ -45,11 +45,13 @@ def rank_discovery_candidates(items):
     return sorted(items, key=priority, reverse=True)
 
 
-def metadata_triage_order(items, assessments):
+def metadata_triage_order(items, assessments, needs=None):
     """Apply provisional metadata judgments to supplied candidates, retaining uncertain items."""
     by_id = defaultdict(list)
     for assessment in assessments:
         by_id[assessment["candidate_id"]].append(assessment)
+    allowed = {n["need_id"] for n in (needs or [])}
+    foundations = {n["need_id"] for n in (needs or []) if n.get("role") == "FOUNDATION"}
     rows = []
     for i, item in enumerate(items):
         key = f"c{i+1:02d}"
@@ -58,7 +60,11 @@ def metadata_triage_order(items, assessments):
             "candidate_id": key, "relevance": "UNCERTAIN", "study_role": "UNCERTAIN",
             "reason": "Missing or ambiguous metadata assessment",
         }
-        rows.append({**decision, "url": str(item.url), "title": item.title,
+        hints = list(dict.fromkeys(n for n in decision.get("need_ids", [])
+                     if n in allowed and decision["relevance"] == "DIRECT"
+                     and (n not in foundations or decision["study_role"] == "PRIMARY")))
+        rows.append({**decision, "need_ids": hints, "url": str(item.url), "title": item.title,
+                     "fetch_url": str(getattr(item, "full_text_url", None) or item.url),
                      "metadata_assessment_present": len(supplied) == 1})
 
     def priority(index):
@@ -70,6 +76,19 @@ def metadata_triage_order(items, assessments):
     # Candidates may share a landing URL but have different full-text locations.
     # Preserve assessment identity by supplied position, never by URL.
     return [items[index] for index in sorted(range(len(items)), key=priority)], rows
+
+
+def balance_by_need(items, needs, decisions, candidate_key):
+    """Use provisional direct need hints, retaining all remaining candidates.
+
+    Discovery-query representation is not evidence of topical support. This
+    ordering improves allocation within a cap; it does not certify coverage.
+    """
+    from app.services.research_quality import balance_by_query
+    by_fetch = {d["fetch_url"]: d.get("need_ids", []) for d in (decisions or [])
+                if d.get("fetch_url") and d.get("relevance") == "DIRECT"}
+    return balance_by_query(items, [n["need_id"] for n in (needs or [])],
+                            lambda item: by_fetch.get(candidate_key(item), []))
 
 
 def fuse_diverse_chunks(vector_rows, lexical_rows, limit):

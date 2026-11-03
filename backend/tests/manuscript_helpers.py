@@ -10,10 +10,15 @@ def supported_critic_response(messages):
     text = messages[0].content
     match = re.search(r"^EVIDENCE_REVIEW_UNITS_JSON: (.*)$", text, re.M)
     units = json.loads(match[1]) if match else []
+    evidence_match = re.search(r"^EVIDENCE_REVIEW_CONTEXT_JSON: (.*)$", text, re.M)
+    evidence = json.loads(evidence_match[1]) if evidence_match else []
     return CriticVerdict(verdict="PASS", evidence_reviews=[{
         "statement_id": unit["statement_id"], "judgment": "SUPPORTED",
         "reason": "Controlled fixture judgment for workflow testing.",
         "supporting_claim_ids": unit.get("claim_ids", []), "assumptions_preserved": True,
+        "quote_anchors": [{"claim_id": record["claim_id"], "source_id": str(record["source_id"]),
+                           "chunk_id": str(record["chunk_id"]), "quote": record["quote"][:400]}
+                          for record in evidence if record["claim_id"] in unit.get("claim_ids", [])][:8],
     } for unit in units])
 
 

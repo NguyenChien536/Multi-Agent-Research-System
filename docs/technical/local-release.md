@@ -97,6 +97,14 @@ CI kiểm backend, frontend, quy tắc nhánh và build dev; job `Release runtim
 
 Sau audit này, context của Critic được bổ sung ma trận thiếu bằng chứng, giả định và yêu cầu đánh giá quote thay vì tin diễn giải claim do AI sinh. Bằng chứng provider trong bảng thuộc đúng SHA đã ghi, **không tự áp dụng cho revision mới**. Kiểm thử tự động xác minh cách truyền context và giữ gate; hiệu quả phát hiện sai khoa học cần được chấm tiếp. Không tự sửa bài lịch sử hoặc nâng trạng thái để làm đẹp demo.
 
+### Kiểm tra tiếp theo: phân bổ nguồn và quote anchor (#101)
+
+Candidate `4fc6ddb2887e` đạt 6/6 CI, gồm 582 backend tests; build release và smoke HTTP không gọi provider đều đạt. Lượt hiệu chỉnh riêng dùng đúng Critic và model đang cấu hình, có giới hạn gọi/chi phí và không ghi vào bài cũ: hai đoạn từng bị duyệt sai được đánh giá PARTIAL, chỉ rõ phần lịch sử/diễn giải không có nguồn; đoạn đối chứng trích nguyên văn được đánh giá SUPPORTED. Đã thực hiện hai lời gọi provider. Một lần chuẩn bị trước đó thiếu trường cấu hình của script, dừng trước provider; log và reservation vẫn được giữ. Đây là ca đã biết, không phải tập held-out, không chứng minh độ chính xác tổng quát; provider cũng báo bỏ qua cấu hình temperature, nên không coi đây là thử nghiệm kiểm soát sampling.
+
+Trên cùng candidate, nhánh tính toán với dữ liệu **tổng hợp để kiểm tra phần mềm** đã đi qua WAITING_USER_DATA → upload 60 dòng → chạy `tabular_regression_v1` → lưu bài và experiment ZIP. Analysis COMPLETED, kiểm tra lặp lại PASSED, 7 journal entries; MAE baseline = 3,849167 và Ridge = 0,087204 trên 12 dòng test của một split. ZIP có dữ liệu, routine, config, metrics, figures, journal và manifest, kiểm tra archive đạt. Chỉ kết luận về lần chạy này, không suy hiệu quả nghiên cứu trên dữ liệu thật.
+
+Bài tính toán 1.475 từ vẫn NEEDS_REVIEW, chưa có citation nền tảng được giữ. Nhật ký cho thấy một số câu hỏi tìm nguồn đang lẫn với bằng chứng cần lấy từ thực nghiệm. Chỉ dẫn lập kế hoạch được làm rõ: truy vấn tài liệu phục vụ prior work/định nghĩa/phương pháp; kết quả trên dataset hiện tại phải lấy từ analysis hoặc dữ liệu người dùng. FOUNDATION dành cho công trình gốc, không gán cho câu hỏi về tài liệu hướng dẫn thư viện. Chưa coi sửa chỉ dẫn là bằng chứng mọi chủ đề đã được giải quyết; #86/#83 còn mở, chưa promote main.
+
 ## 5. Theo dõi lỗi, sao lưu và khôi phục
 
 ```powershell
