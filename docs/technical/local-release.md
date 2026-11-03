@@ -1,15 +1,16 @@
 # Bản Docker dùng để demo cuối kỳ
 
-**Nghiệm thu local 03/11/2026:** hạ tầng và backup/restore đã chạy thực tế. Bản release hiện tại **chưa đạt gate đưa lên main**: cần xử lý giữ bản nháp khi chạm hạn mức token (#93), triển khai bản sửa thời điểm hoàn tất thí nghiệm (#95), và đánh giá chất lượng bằng chứng (#86).
+**Nghiệm thu local 03/11/2026:** hạ tầng, backup/restore và luồng nghiên cứu đã chạy thực tế. #93 và #95 đã sửa, kiểm thử và merge vào `develop`. Candidate `2bc6151573d8` đã qua đủ 6 kiểm tra CI và chạy với provider thật; mã runtime tương ứng được merge tại `ac4c886a3eec`. **Chưa đưa lên main hoặc chốt chất lượng bài nộp**: tiếp tục cải thiện độ phủ bằng chứng (#86) và đánh giá pilot (#83).
 
 | Kiểm tra thực tế | Kết quả |
 |---|---|
 | Web/API cùng origin, login, owner isolation, monitor | Pass trên Docker local |
 | Human-led với provider thật | Lưu protocol và dừng `WAITING_USER_DATA`; trả worker |
-| Computational với CSV synthetic được gắn nhãn kiểm thử, 60 dòng | Routine hoàn tất; repeatability `PASSED`; 6 journal entries; có bản thảo `NEEDS_REVIEW` và hai ZIP nguồn IEEE/ACM |
-| Gói tái lập gắn phiên bản | Phát hiện lỗi worker ghi lại execution timestamp sau lúc xuất bản version; test tái hiện và bản sửa theo #95. Chưa coi bản đang chạy là đã sửa |
-| REVIEW với provider thật | Có draft, sau đó chạm input-token cap trong vòng sửa; report endpoint trả 404. Đây là lỗi #93, không phải demo bài báo thành công |
-| Backup và restore sang project riêng | Đăng nhập lại, phục hồi 3 bài; manuscript khớp nguyên bản, artifact tải xuống có cùng SHA-256; project phục hồi đã dừng sau kiểm tra |
+| Computational với CSV synthetic được gắn nhãn kiểm thử, 60 dòng | Routine hoàn tất; repeatability `PASSED`; 7 journal entries; có bản thảo `NEEDS_REVIEW` và gói tái lập ZIP tải được, kiểm tra archive hợp lệ |
+| Gói tái lập gắn phiên bản | #95 giữ nguyên execution timestamp; regression tái hiện lỗi trước sửa và pass sau sửa. Luồng CSV thật trên candidate mới đã xuất được bundle |
+| REVIEW với provider thật | Báo cáo 1.819 từ mở được và xuất được hai ZIP nguồn IEEE/ACM; trạng thái `NEEDS_REVIEW`, budget-limited. Đây là runtime pass, chưa phải scientific-quality pass; bibliography mới có một nguồn |
+| Giữ bản nháp khi provider từ chối do hạn mức | #93 lấy đúng checkpoint của task/run/attempt rồi chỉ định dạng bằng code. 158 test liên quan pass; test API→worker tái hiện đúng nhánh budget exception, cancellation và duplicate delivery. Lần REVIEW thật mới hoàn tất qua nhánh Critic budget-limited, không dùng riêng nhánh phục hồi checkpoint; hai loại bằng chứng kiểm thử được phân biệt |
+| Backup và restore sang project riêng | Kiểm tra trên candidate trước (`1a84aeb84c30`): đăng nhập lại, phục hồi 3 bài; manuscript khớp nguyên bản, artifact tải xuống có cùng SHA-256; project phục hồi đã dừng. Không có migration thay đổi cấu trúc dữ liệu trong #93/#95 |
 
 ## 1. Phạm vi và cách chạy
 
