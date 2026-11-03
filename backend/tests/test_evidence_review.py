@@ -161,7 +161,7 @@ def test_resume_keeps_policy2_while_new_plans_require_quote_anchors():
     historical['research_quality_policy'] = {'version':1, 'source_balance':'round_robin_discovery_queries'}
     resumed = attach_manuscript_contract({'manuscript_contract':historical}, 'REVIEW', 'en')
     assert resumed['manuscript_contract'] == historical
-    assert manuscript_contract('REVIEW', 'en')['evidence_review_policy']['version'] == 3
+    assert manuscript_contract('REVIEW', 'en')['evidence_review_policy']['version'] == 4
 
 
 @pytest.mark.asyncio

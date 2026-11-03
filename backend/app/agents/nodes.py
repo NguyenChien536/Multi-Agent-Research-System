@@ -1759,6 +1759,7 @@ async def critic_node(state: ResearchState) -> Dict[str, Any]:
                 central_headings=[s["heading"] for s in (contract or {}).get("sections", [])
                                   if s["id"] in {"discussion", "conclusion"}],
                 policy_version=policy_version,
+                execution_context=state.get("scientific_context") or {},
                 excluded_headings=[s["heading"] for s in (contract or {}).get("sections", []) if s["id"] == "keywords"] + LEDGER_HEADINGS,
             ) if require_support_review else None
             selected_evidence = prepared["evidence"] if prepared else evidence_context
@@ -1785,6 +1786,11 @@ async def critic_node(state: ResearchState) -> Dict[str, Any]:
                     "of executed methods or an explicit limitation/proposal may have no supporting claim IDs or anchors "
                     "when justified by actual provenance. Never use this exception for external scientific assertions.\n"
                     "EVIDENCE_REVIEW_CONTEXT_JSON: " + json.dumps(prepared["evidence"], ensure_ascii=False) + "\n"
+                    "For policy v4, a unit with execution_fact_ids may justify only its bounded executed procedure. "
+                    "For a SUPPORTED judgment, copy those exact IDs into supporting_execution_fact_ids, and return [] "
+                    "for units without them. A recorded seed is not proof of accuracy, stability, causality, privacy "
+                    "or statistical significance. Do not invent facts or use external citations for this run's own measurements.\n"
+                    "EXECUTION_FACTS_JSON: " + json.dumps(prepared["execution_facts"], ensure_ascii=False) + "\n"
                     "EVIDENCE_REVIEW_UNITS_JSON: " + json.dumps(prepared["units"], ensure_ascii=False) + "\n"
                     "EVIDENCE_REVIEW_COVERAGE: " + json.dumps(prepared["coverage_findings"]) + "\n"
                 )
@@ -1907,7 +1913,8 @@ Complete section content:
             verdicts.append("REVISE" if all(item.startswith("Malformed or incomplete") for item in lineage_findings) else "NEEDS_REVIEW")
         previous = state.get("critic_review_metadata") or {}
         draft_hash = hashlib.sha256(draft.encode("utf-8")).hexdigest()
-        if state.get("current_micro_revision", 0) > 0 and previous.get("draft_sha256") == draft_hash:
+        no_delta_revision = state.get("current_micro_revision", 0) > 0 and previous.get("draft_sha256") == draft_hash
+        if no_delta_revision:
             feedback.append("Writer revision produced no manuscript change; automatic revision stopped.")
             verdicts.append("NEEDS_REVIEW")
 
@@ -1919,6 +1926,19 @@ Complete section content:
             final_verdict = "REVISE"
         else:
             final_verdict = "PASS"
+        scope_repair = False
+        revision_policy = (contract or {}).get("revision_policy") or {}
+        if (revision_policy.get("version", 1) >= 2 and final_verdict == "NEEDS_REVIEW"
+                and "REVISE" in verdicts and blocking_need_ids
+                and not lineage_findings and not no_delta_revision
+                and not any(record["verdict"] == "NEEDS_REVIEW" for record in review_records)
+                and state.get("current_micro_revision", 0) < state.get("max_micro_revisions", 2)):
+            # Missing literature prevents scientific completion, but need not
+            # prevent a bounded repair of identifiable overclaims/prose defects.
+            # The next review and delivery independently recheck the same gaps.
+            feedback.append("Repair the identified text using only supplied evidence. Narrow unsupported claims and disclose missing literature; do not invent support or results to fill a gap.")
+            final_verdict = "REVISE"
+            scope_repair = True
         if final_verdict == "REVISE" and state.get("current_micro_revision", 0) >= state.get("max_micro_revisions", 2):
             feedback.append("The automatic revision limit was reached; remaining findings need human review.")
             final_verdict = "NEEDS_REVIEW"
@@ -1937,6 +1957,7 @@ Complete section content:
             "revision_limit": state.get("max_micro_revisions", 2),
             "draft_sha256": draft_hash,
             "automatic_revision_stopped": final_verdict == "NEEDS_REVIEW",
+            "scope_repair_with_missing_evidence": scope_repair,
             "review_scope": "internal_quality_control_not_peer_review",
         }
         if require_support_review:

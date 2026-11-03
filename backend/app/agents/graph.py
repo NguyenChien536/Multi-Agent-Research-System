@@ -140,7 +140,13 @@ def should_revise_draft(state: ResearchState) -> str:
     Quyết định bằng code Python deterministic.
     """
     if state.get("critic_verdict") == "REVISE":
-        if state.get("current_micro_revision", 0) < state.get("max_micro_revisions", 2):
+        requested = state.get("current_micro_revision", 0)
+        limit = state.get("max_micro_revisions", 2)
+        revision_policy = ((state.get("plan") or {}).get("manuscript_contract") or {}).get("revision_policy") or {}
+        # Critic increments when approving the next revision. Version 2 treats
+        # that value as its reserved slot; the last allowed slot must still run.
+        allowed = 0 < requested <= limit if revision_policy.get("version", 1) >= 2 else requested < limit
+        if allowed:
             return "writer"
 
     if state.get("critic_verdict") == "NEED_MORE_DATA":

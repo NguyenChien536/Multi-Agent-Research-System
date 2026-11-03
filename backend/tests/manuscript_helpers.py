@@ -16,6 +16,7 @@ def supported_critic_response(messages):
         "statement_id": unit["statement_id"], "judgment": "SUPPORTED",
         "reason": "Controlled fixture judgment for workflow testing.",
         "supporting_claim_ids": unit.get("claim_ids", []), "assumptions_preserved": True,
+        "supporting_execution_fact_ids": unit.get("execution_fact_ids", []),
         "quote_anchors": [{"claim_id": record["claim_id"], "source_id": str(record["source_id"]),
                            "chunk_id": str(record["chunk_id"]), "quote": record["quote"][:400]}
                           for record in evidence if record["claim_id"] in unit.get("claim_ids", [])][:8],
