@@ -24,6 +24,7 @@ from app.services.manuscript import REVIEW_OUTPUT_CONTRACT
 class ControllerClaim(BaseModel):
     claim: str
     evidence_quote: str
+    chunk_id: str | None = Field(default=None, max_length=36)
 
 
 class ControllerStep(BaseModel):
@@ -87,6 +88,7 @@ async def single_controller(state, runtime, corpus):
             f"Write in {state['language']}. Use only the frozen sources. No live searches or experiments were executed.\n"
             f"First RETRIEVE using a focused query. When sufficient, WRITE a complete {word_target} word narrative review. "
             "Return claims with exact source quotes and cite their zero-based positions as [[evidence:0]] in manuscript. "
+            "Set each claim's chunk_id to the supplied containing chunk. A shared quote cannot be attributed by guessing. "
             "Never invent results, metadata or guaranteed advantages. State gaps and limits of the available evidence.\n"
             + editorial_instructions(contract, manuscript_provenance(state)) + "\n"
             + writing_guidance(contract) + "\n" + figure_instructions(figures)

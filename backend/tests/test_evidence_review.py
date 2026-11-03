@@ -24,6 +24,15 @@ def test_cited_evidence_after_the_first_fifty_records_is_selected():
     assert prepared["evidence"][0]["text_scope"] == "ABSTRACT"
 
 
+def test_reviewer_receives_source_assumptions_without_turning_metadata_into_proof():
+    record = {**claim(), "evidence_need_id": "comparison", "assumptions": ["Within the sampled population."]}
+    text = f"A conditional comparison [[@claim:{record['claim_id']}]]"
+    prepared = prepare_evidence_review(text, [record], central_headings=[], draft=text)
+    assert prepared["evidence"][0]["assumptions"] == record["assumptions"]
+    assert prepared["evidence"][0]["evidence_need_id"] == "comparison"
+    assert not evaluate_evidence_reviews(prepared, [])["all_supported"]
+
+
 def test_missing_unknown_and_duplicate_judgments_cannot_count_as_complete_review():
     text = "## Conclusion\n\nThe proposal requires formal proof and empirical evaluation."
     prepared = prepare_evidence_review(text, [], central_headings=["Conclusion"], draft=text)
@@ -74,10 +83,13 @@ async def test_provider_pass_without_required_judgments_requires_review(monkeypa
     monkeypatch.setattr(nodes, "invoke_llm_with_budget", AsyncMock(return_value=nodes.CriticVerdict(verdict="PASS")))
     c = claim()
     state = {"plan": attach_manuscript_contract({}, "REVIEW", "en"), "research_type": "REVIEW", "claims": [c],
+             "evidence_need_coverage": {"missing_need_ids": ["causal-comparison"]},
              "draft_report_markdown": complete_manuscript(f"A limited finding [[@claim:{c['claim_id']}]]", language="en")}
     result = await nodes.critic_node(state)
     assert result["critic_verdict"] == "NEEDS_REVIEW"
     assert not result["critic_review_metadata"]["evidence_support_review"]["coverage_complete"]
+    assert all("causal-comparison" in call.args[2][0].content
+               for call in nodes.invoke_llm_with_budget.await_args_list)
     delivered = await nodes.post_processor_node({**state, **result, "critic_verdict": "PASS"})
     assert delivered["critic_review_metadata"]["status"] == "NEEDS_REVIEW"
 

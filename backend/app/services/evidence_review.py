@@ -78,6 +78,9 @@ def prepare_evidence_review(section_text: str, claims: list[dict], *, central_he
         if len(claim) > 2000 or len(quote) > 3000:
             findings.append(f"Evidence for {claim_id} exceeds the context limit.")
         evidence.append({"claim_id": claim_id, "claim": claim[:2000], "quote": quote[:3000],
+                         "evidence_need_id": str(item.get("evidence_need_id") or "")[:40],
+                         "assumptions": [value[:300] for value in (item.get("assumptions") or [])[:8]
+                                         if isinstance(value, str)],
                          **{k: item.get(k) for k in ("source_id", "chunk_id", "source_title", "text_scope", "source_type", "doi")}})
     for unit in units[:max_units]:
         if unit["guarantee_risks"]:

@@ -76,6 +76,7 @@ class ResearchState(TypedDict, total=False):
     plan_version: int
     current_queries: Annotated[List[str], operator.add]   # Tích lũy queries qua các vòng
     search_activity: Annotated[List[Dict[str, Any]], operator.add]
+    source_selection_log: Annotated[List[Dict[str, Any]], operator.add]
     delta_queries: List[str]          # Truy vấn của vòng hiện tại; được thay thế khi lập kế hoạch bổ sung
     visited_urls: Annotated[Set[str], merge_sets]         # URLs đã crawl — tránh lặp ở vòng sau (Seen URL Cache)
     
@@ -90,6 +91,7 @@ class ResearchState(TypedDict, total=False):
     
     # === Phân tích ===
     analysis_results: Dict[str, Any]  # Luận điểm, mâu thuẫn, phát hiện chính (kèm chunk_id)
+    evidence_need_coverage: Dict[str, Any]  # Quote candidates per planned need; never a semantic-quality certificate
     
     # === Viết & Phản biện (Ủy quyền cho Subgraph) ===
     draft_report_markdown: str        # Bản nháp từ Writer (có marker claim để tạo citation đã kiểm chứng)
