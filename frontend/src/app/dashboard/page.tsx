@@ -236,7 +236,7 @@ export default function DashboardPage() {
       {
         type: 'EMPIRICAL_HUMAN' as const,
         name: t('method_human_name'),
-        badge: 'FIELDWORK G4',
+        badge: 'FIELDWORK',
         desc: t('method_human_desc'),
         color: 'text-zinc-800',
         bg: 'bg-zinc-100',
@@ -474,7 +474,7 @@ export default function DashboardPage() {
                             {item.count}
                           </div>
                           <div className="text-xs font-mono font-medium text-zinc-600 mt-1">
-                            {item.countPct}% {language === 'en' ? 'of total' : 'tá»•ng'}
+                            {item.countPct}% {language === 'en' ? 'of total' : 'tổng'}
                           </div>
                         </div>
 
@@ -491,7 +491,7 @@ export default function DashboardPage() {
                               : item.tokens}
                           </div>
                           <div className="text-xs font-mono font-medium text-blue-700 mt-1">
-                            {item.tokensPct}% {language === 'en' ? 'volume' : 'lÆ°á»£ng'}
+                            {item.tokensPct}% {language === 'en' ? 'volume' : 'lượng'}
                           </div>
                         </div>
 
@@ -504,16 +504,16 @@ export default function DashboardPage() {
                             ${item.cost < 0.01 ? item.cost.toFixed(4) : item.cost.toFixed(3)}
                           </div>
                           <div className="text-xs font-mono font-medium text-emerald-700 mt-1">
-                            {item.costPct}% {language === 'en' ? 'spend' : 'chi phÃ­'}
+                            {item.costPct}% {language === 'en' ? 'spend' : 'chi phí'}
                           </div>
                         </div>
                       </div>
 
                       {/* Average breakdown row */}
                       <div className="flex items-center justify-between text-xs text-zinc-700 px-1 mb-4 font-medium">
-                        <span>{language === 'en' ? 'Avg. per task:' : 'TB má»—i bÃ i:'}</span>
+                        <span>{language === 'en' ? 'Avg. per task:' : 'TB mỗi bài:'}</span>
                         <span className="font-mono text-zinc-900 font-semibold">
-                          ${item.avgCost.toFixed(4)} â€¢ ~{item.count > 0 ? Math.round(item.tokens / item.count).toLocaleString() : 0} tokens
+                          ${item.avgCost.toFixed(4)} • ~{item.count > 0 ? Math.round(item.tokens / item.count).toLocaleString() : 0} tokens
                         </span>
                       </div>
                     </div>
@@ -528,13 +528,13 @@ export default function DashboardPage() {
                         {item.active > 0 && (
                           <span className="inline-flex items-center gap-1 font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
                             <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
-                            {item.active} {language === 'en' ? 'active' : 'cháº¡y'}
+                            {item.active} {language === 'en' ? 'active' : 'chạy'}
                           </span>
                         )}
                         {item.attention > 0 && (
                           <span className="inline-flex items-center gap-1 font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
-                            {item.attention} {language === 'en' ? 'action' : 'chá»'}
+                            {item.attention} {language === 'en' ? 'action' : 'chờ'}
                           </span>
                         )}
                       </div>
@@ -769,7 +769,7 @@ export default function DashboardPage() {
                               {isComputational
                                 ? (language === 'en' ? 'Computational' : 'Thực nghiệm tính toán')
                                 : isFieldwork
-                                ? (language === 'en' ? 'Fieldwork (Gate G4)' : 'Thực nghiệm thực địa (G4)')
+                                ? (language === 'en' ? 'Fieldwork' : 'Thực nghiệm thực địa')
                                 : (language === 'en' ? 'Literature Review' : 'Tổng quan tài liệu')}
                             </span>
 

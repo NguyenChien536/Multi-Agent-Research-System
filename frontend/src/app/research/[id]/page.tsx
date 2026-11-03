@@ -33,7 +33,7 @@ interface StageConfig {
 const BASE_STAGES: StageConfig[] = [
   { title_en: 'Planning', title_vi: 'Lập kế hoạch', steps: ['SUPERVISOR'], statuses: ['PLANNING', 'WAITING_APPROVAL'] },
   { title_en: 'Literature Search & Analysis', title_vi: 'Thu thập và phân tích nguồn', steps: ['RESEARCHER', 'CURATOR', 'ANALYST'], statuses: ['RESEARCHING', 'INDEXING', 'ANALYZING'] },
-  { title_en: 'Methodology Design (Gate G4)', title_vi: 'Thiết kế phương pháp (Gate G4)', steps: ['METHODOLOGIST'], statuses: ['WAITING_USER_DATA'] },
+  { title_en: 'Methodology Design', title_vi: 'Thiết kế phương pháp', steps: ['METHODOLOGIST'], statuses: ['WAITING_USER_DATA'] },
   { title_en: 'Drafting & Peer Review', title_vi: 'Viết và phản biện', steps: ['WRITER', 'CRITIC', 'POST_PROCESSOR'], statuses: ['WRITING', 'REVIEWING', 'FINALIZING'] },
 ];
 
@@ -105,7 +105,7 @@ function stageState(stages: StageConfig[], index: number, status: string, curren
 function statusLabel(status: string, lang: 'en' | 'vi' = 'en') {
   const labels_en: Record<string, string> = {
     PENDING: 'Pending', QUEUED: 'Queued', PLANNING: 'Planning',
-    WAITING_APPROVAL: 'Awaiting Plan Approval', WAITING_USER_DATA: 'Awaiting Field Data (G4)',
+    WAITING_APPROVAL: 'Awaiting Plan Approval', WAITING_USER_DATA: 'Awaiting Field Data',
     RESEARCHING: 'Searching Literature', INDEXING: 'Processing Sources', ANALYZING: 'Analyzing Evidence',
     WRITING: 'Drafting Paper', REVIEWING: 'Peer Reviewing', FINALIZING: 'Finalizing Report',
     RETRYING: 'Retrying', COMPLETED: 'Completed', PARTIAL: 'Partial Result',
@@ -675,7 +675,7 @@ export default function WorkspacePage() {
           <div>
             <h1 className="font-semibold text-lg line-clamp-1 text-zinc-900">{task.title}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs font-medium">
-              {/* Status pill â€” colored by state */}
+              {/* Status pill — colored by state */}
               {task.status === 'QUEUED' ? (
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-zinc-100 border border-zinc-300 text-zinc-700 font-semibold">
                   <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-pulse" />
@@ -818,12 +818,12 @@ export default function WorkspacePage() {
                         </span>
                         {state === 'active' && (
                           <span className="text-[11px] text-blue-600 font-medium">
-                            {isEn ? 'In progressâ€¦' : 'Äang thá»±c hiá»‡nâ€¦'}
+                            {isEn ? 'In progress…' : 'Đang thực hiện…'}
                           </span>
                         )}
                         {state === 'done' && (
                           <span className="text-[11px] text-emerald-600 font-medium">
-                            {isEn ? 'Completed' : 'HoÃ n thÃ nh'}
+                            {isEn ? 'Completed' : 'Hoàn thành'}
                           </span>
                         )}
                       </div>
@@ -838,7 +838,7 @@ export default function WorkspacePage() {
             <div className="flex justify-between">
               <span className="text-zinc-500">{isEn ? "Research Type:" : "Loại nghiên cứu:"}</span>
               <Badge variant="outline">
-                {task.research_type === 'EMPIRICAL_HUMAN' ? (isEn ? 'Fieldwork (G4)' : 'Thực địa (G4)') : task.research_type === 'EMPIRICAL_COMPUTATIONAL' ? (isEn ? 'Computational' : 'Tính toán') : (isEn ? 'Literature Review' : 'Tổng quan')}
+                {task.research_type === 'EMPIRICAL_HUMAN' ? (isEn ? 'Fieldwork' : 'Thực địa') : task.research_type === 'EMPIRICAL_COMPUTATIONAL' ? (isEn ? 'Computational' : 'Tính toán') : (isEn ? 'Literature Review' : 'Tổng quan')}
               </Badge>
             </div>
             <div className="flex justify-between">
@@ -978,7 +978,7 @@ export default function WorkspacePage() {
                     </span>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h2 className="font-semibold text-sm text-indigo-950">{isEn ? "Study Protocol Ready & Awaiting Fieldwork Data (Gate G4)" : "Đề cương nghiên cứu sẵn sàng & Chờ dữ liệu thực nghiệm (Gate G4)"}</h2>
+                        <h2 className="font-semibold text-sm text-indigo-950">{isEn ? "Study Protocol Ready & Awaiting Fieldwork Data" : "Đề cương nghiên cứu sẵn sàng & Chờ dữ liệu thực nghiệm"}</h2>
                         <Badge variant="outline" className="border-indigo-300 bg-indigo-100 text-indigo-900 text-[11px]">{isEn ? "Awaiting User Data" : "Chờ dữ liệu người dùng"}</Badge>
                       </div>
                       <p className="text-xs text-indigo-800/90 mt-0.5">
@@ -1186,7 +1186,7 @@ export default function WorkspacePage() {
                 className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === 'protocol' ? 'border-zinc-900 text-zinc-900 bg-white' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}
               >
                 <FlaskConical size={15} className="inline mr-1.5 opacity-70" />
-                {isEn ? 'Study Protocol (G4)' : 'Đề cương nghiên cứu (G4)'}
+                {isEn ? 'Study Protocol' : 'Đề cương nghiên cứu'}
               </button>
             )}
             {task.research_type === 'EMPIRICAL_COMPUTATIONAL' && (
@@ -1575,12 +1575,12 @@ export default function WorkspacePage() {
                             {task.status === 'QUEUED' ? (
                               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-200/80 text-zinc-800 text-xs font-bold uppercase tracking-wider">
                                 <span className="w-2 h-2 rounded-full bg-zinc-500 animate-pulse" />
-                                {isEn ? "Task Queued" : "Äang chá» xáº¿p hÃ ng"}
+                                {isEn ? "Task Queued" : "Đang chờ xếp hàng"}
                               </span>
                             ) : task.status === 'PLANNING' ? (
                               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-blue-900 text-xs font-bold uppercase tracking-wider">
                                 <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-                                {isEn ? "Planning Phase" : "Giai Ä‘oáº¡n láº­p káº¿ hoáº¡ch"}
+                                {isEn ? "Planning Phase" : "Giai đoạn lập kế hoạch"}
                               </span>
                             ) : isWorking ? (
                               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-blue-900 text-xs font-bold uppercase tracking-wider">
@@ -1602,42 +1602,42 @@ export default function WorkspacePage() {
 
                           <h2 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight">
                             {task.status === 'QUEUED'
-                              ? (isEn ? "Research task is queued for agent worker allocation" : "BÃ i nghiÃªn cá»©u Ä‘ang trong hÃ ng Ä‘á»£i chá» phÃ¢n phá»‘i tÃ¡c tá»­")
+                              ? (isEn ? "Research task is queued for agent worker allocation" : "Bài nghiên cứu đang trong hàng đợi chờ phân phối tác tử")
                               : task.status === 'PLANNING'
-                              ? (isEn ? "Supervisor Agent is planning research strategy & queries" : "Supervisor Agent Ä‘ang phÃ¢n tÃ­ch Ä‘á» tÃ i & thiáº¿t láº­p tá»« khÃ³a")
+                              ? (isEn ? "Supervisor Agent is planning research strategy & queries" : "Supervisor Agent đang phân tích đề tài & thiết lập từ khóa")
                               : isWorking
-                              ? (isEn ? "Autonomous agents are gathering and synthesizing evidence" : "CÃ¡c tÃ¡c tá»­ tá»± trá»‹ Ä‘ang thu tháº­p vÃ  phÃ¢n tÃ­ch dá»¯ liá»‡u")
+                              ? (isEn ? "Autonomous agents are gathering and synthesizing evidence" : "Các tác tử tự trị đang thu thập và phân tích dữ liệu")
                               : task.status === 'FAILED'
-                              ? (isEn ? "Research stopped due to an execution error" : "BÃ i nghiÃªn cá»©u Ä‘Ã£ dá»«ng do phÃ¡t sinh lá»—i")
+                              ? (isEn ? "Research stopped due to an execution error" : "Bài nghiên cứu đã dừng do phát sinh lỗi")
                               : task.status === 'CANCELLED'
-                              ? (isEn ? "Research task was cancelled" : "BÃ i nghiÃªn cá»©u Ä‘Ã£ Ä‘Æ°á»£c há»§y")
-                              : (isEn ? "Research task is ready to begin" : "BÃ i nghiÃªn cá»©u sáºµn sÃ ng báº¯t Ä‘áº§u")}
+                              ? (isEn ? "Research task was cancelled" : "Bài nghiên cứu đã được hủy")
+                              : (isEn ? "Research task is ready to begin" : "Bài nghiên cứu sẵn sàng bắt đầu")}
                           </h2>
 
                           <p className="text-sm text-zinc-600 leading-relaxed max-w-2xl">
                             {task.status === 'QUEUED'
                               ? (isEn
                                   ? "Your research question has been registered. An autonomous agent worker is being scheduled to initiate literature discovery. Polling updates automatically."
-                                  : "Äá» tÃ i nghiÃªn cá»©u Ä‘Ã£ Ä‘Æ°á»£c ghi nháº­n vÃ o há»‡ thá»‘ng. MÃ¡y chá»§ Ä‘ang xáº¿p lá»‹ch tÃ¡c tá»­ Ä‘á»ƒ báº¯t Ä‘áº§u tÃ¬m kiáº¿m tÃ i liá»‡u. Giao diá»‡n tá»± Ä‘á»™ng cáº­p nháº­t.")
+                                  : "Đề tài nghiên cứu đã được ghi nhận vào hệ thống. Máy chủ đang xếp lịch tác tử để bắt đầu tìm kiếm tài liệu. Giao diện tự động cập nhật.")
                               : task.status === 'PLANNING'
                               ? (isEn
                                   ? "The Supervisor Agent is deconstructing your topic into core domain hypotheses, identifying academic databases, and generating targeted search queries."
-                                  : "Supervisor Agent Ä‘ang phÃ¢n rÃ£ cÃ¢u há»i nghiÃªn cá»©u thÃ nh cÃ¡c luáº­n Ä‘iá»ƒm há»c thuáº­t, xÃ¡c Ä‘á»‹nh cÆ¡ sá»Ÿ dá»¯ liá»‡u vÃ  soáº¡n tháº£o truy váº¥n tÃ¬m kiáº¿m chuyÃªn sÃ¢u.")
+                                  : "Supervisor Agent đang phân rã câu hỏi nghiên cứu thành các luận điểm học thuật, xác định cơ sở dữ liệu và soạn thảo truy vấn tìm kiếm chuyên sâu.")
                               : isWorking
                               ? (isEn
                                   ? "Literature is being fetched, chunked, and embedded into the vector database. Analysts will cross-reference claims before drafting the final paper."
-                                  : "TÃ i liá»‡u Ä‘ang Ä‘Æ°á»£c thu tháº­p, trÃ­ch xuáº¥t Ä‘oáº¡n vÃ  nhÃºng vÃ o vector database. Agent phÃ¢n tÃ­ch sáº½ Ä‘á»‘i soÃ¡t chÃ©o báº±ng chá»©ng trÆ°á»›c khi soáº¡n tháº£o.")
+                                  : "Tài liệu đang được thu thập, trích xuất đoạn và nhúng vào vector database. Agent phân tích sẽ đối soát chéo bằng chứng trước khi soạn thảo.")
                               : task.status === 'FAILED'
                               ? (isEn
                                   ? "An error occurred during workflow execution. Check the Agent Runs tab or Live Monitor for diagnostic logs."
-                                  : "ÄÃ£ xáº£y ra sá»± cá»‘ trong quÃ¡ trÃ¬nh thá»±c thi. Vui lÃ²ng kiá»ƒm tra tab Tiáº¿n trÃ¬nh Agent hoáº·c MÃ n hÃ¬nh giÃ¡m sÃ¡t Ä‘á»ƒ xem log.")
+                                  : "Đã xảy ra sự cố trong quá trình thực thi. Vui lòng kiểm tra tab Tiến trình Agent hoặc Màn hình giám sát để xem log.")
                               : task.status === 'CANCELLED'
                               ? (isEn
                                   ? "Execution was manually cancelled. You can restart the pipeline at any time with the button below."
-                                  : "Tiáº¿n trÃ¬nh Ä‘Ã£ Ä‘Æ°á»£c dá»«ng theo lá»‡nh ngÆ°á»i dÃ¹ng. Báº¡n cÃ³ thá»ƒ báº¥m khá»Ÿi Ä‘á»™ng láº¡i báº¥t cá»© lÃºc nÃ o.")
+                                  : "Tiến trình đã được dừng theo lệnh người dùng. Bạn có thể bấm khởi động lại bất cứ lúc nào.")
                               : (isEn
                                   ? "Click 'Start Research Now' to deploy the multi-agent pipeline."
-                                  : "Nháº¥n 'Báº¯t Ä‘áº§u nghiÃªn cá»©u ngay' Ä‘á»ƒ khá»Ÿi cháº¡y chuá»—i tÃ¡c tá»­.")}
+                                  : "Nhấn 'Bắt đầu nghiên cứu ngay' để khởi chạy chuỗi tác tử.")}
                           </p>
                         </div>
 
@@ -1651,7 +1651,7 @@ export default function WorkspacePage() {
                               className="h-10 px-5 text-sm font-semibold bg-zinc-900 hover:bg-zinc-800 text-white shadow-sm"
                             >
                               <Play size={16} className="mr-2" />
-                              {task.status === 'CANCELLED' ? (isEn ? 'Rerun Research' : 'Cháº¡y láº¡i nghiÃªn cá»©u') : (isEn ? 'Start Research Now' : 'Báº¯t Ä‘áº§u nghiÃªn cá»©u ngay')}
+                              {task.status === 'CANCELLED' ? (isEn ? 'Rerun Research' : 'Chạy lại nghiên cứu') : (isEn ? 'Start Research Now' : 'Bắt đầu nghiên cứu ngay')}
                             </Button>
                           )}
 
@@ -1660,7 +1660,7 @@ export default function WorkspacePage() {
                             className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-xs sm:text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm"
                           >
                             <Activity size={16} />
-                            <span>{isEn ? "Open Live Monitor" : "Má»Ÿ mÃ n hÃ¬nh giÃ¡m sÃ¡t trá»±c tiáº¿p"}</span>
+                            <span>{isEn ? "Open Live Monitor" : "Mở màn hình giám sát trực tiếp"}</span>
                           </Link>
 
                           <Button
@@ -1669,7 +1669,7 @@ export default function WorkspacePage() {
                             className="h-9 px-3 text-xs border-zinc-200 text-zinc-700 hover:bg-zinc-100"
                           >
                             <RefreshCw size={13} className="mr-1.5" />
-                            <span>{isEn ? "Refresh Status" : "LÃ m má»›i tráº¡ng thÃ¡i"}</span>
+                            <span>{isEn ? "Refresh Status" : "Làm mới trạng thái"}</span>
                           </Button>
                         </div>
                       </div>
@@ -1678,19 +1678,19 @@ export default function WorkspacePage() {
                       {(isWorking || sources.length > 0 || runs.length > 0) && (
                         <div className="mt-5 pt-4 border-t border-zinc-200/80 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                           <div className="bg-white/80 p-3 rounded-xl border border-zinc-200">
-                            <span className="text-zinc-500 font-medium block">{isEn ? "Sources Found" : "Nguá»“n thu tháº­p"}</span>
+                            <span className="text-zinc-500 font-medium block">{isEn ? "Sources Found" : "Nguồn thu thập"}</span>
                             <span className="text-lg font-bold text-zinc-900">{sources.length}</span>
                           </div>
                           <div className="bg-white/80 p-3 rounded-xl border border-zinc-200">
-                            <span className="text-zinc-500 font-medium block">{isEn ? "Verified Claims" : "Luáº­n Ä‘iá»ƒm xÃ¡c minh"}</span>
+                            <span className="text-zinc-500 font-medium block">{isEn ? "Verified Claims" : "Luận điểm xác minh"}</span>
                             <span className="text-lg font-bold text-zinc-900">{citations.length}</span>
                           </div>
                           <div className="bg-white/80 p-3 rounded-xl border border-zinc-200">
-                            <span className="text-zinc-500 font-medium block">{isEn ? "Tokens Consumed" : "Tokens tiÃªu thá»¥"}</span>
+                            <span className="text-zinc-500 font-medium block">{isEn ? "Tokens Consumed" : "Tokens tiêu thụ"}</span>
                             <span className="text-lg font-bold text-zinc-900 font-mono">{task.total_tokens_used.toLocaleString()}</span>
                           </div>
                           <div className="bg-white/80 p-3 rounded-xl border border-zinc-200">
-                            <span className="text-zinc-500 font-medium block">{isEn ? "Estimated Cost" : "Chi phÃ­ Æ°á»›c tÃ­nh"}</span>
+                            <span className="text-zinc-500 font-medium block">{isEn ? "Estimated Cost" : "Chi phí ước tính"}</span>
                             <span className="text-lg font-bold text-emerald-700 font-mono">${Number(task.total_cost_usd).toFixed(4)}</span>
                           </div>
                         </div>
@@ -1702,16 +1702,16 @@ export default function WorkspacePage() {
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="font-bold text-base sm:text-lg text-zinc-900">
-                            {isEn ? "Expected Research Deliverables" : "CÃ¡c sáº£n pháº©m há»‡ thá»‘ng sáº½ bÃ n giao"}
+                            {isEn ? "Expected Research Deliverables" : "Các sản phẩm hệ thống sẽ bàn giao"}
                           </h3>
                           <p className="text-xs text-zinc-600 mt-0.5">
                             {isEn
                               ? "Upon pipeline completion, you will receive full academic deliverables backed by verifiable grounding:"
-                              : "Sau khi chuá»—i tÃ¡c tá»­ hoÃ n táº¥t, báº¡n sáº½ nháº­n Ä‘Æ°á»£c cÃ¡c tÃ i liá»‡u vÃ  báº±ng chá»©ng há»c thuáº­t hoÃ n chá»‰nh sau:"}
+                              : "Sau khi chuỗi tác tử hoàn tất, bạn sẽ nhận được các tài liệu và bằng chứng học thuật hoàn chỉnh sau:"}
                           </p>
                         </div>
                         <span className="text-xs font-medium px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-700 border border-zinc-200 hidden sm:inline-block">
-                          {task.citation_style} â€¢ {task.research_type}
+                          {task.citation_style} • {task.research_type}
                         </span>
                       </div>
 
@@ -1724,15 +1724,15 @@ export default function WorkspacePage() {
                             </div>
                             <div>
                               <h4 className="font-bold text-sm text-zinc-900">
-                                {isEn ? "1. Peer-Reviewed Scientific Paper" : "1. Báº£n tháº£o bÃ i bÃ¡o khoa há»c chuáº©n má»±c"}
+                                {isEn ? "1. Peer-Reviewed Scientific Paper" : "1. Bản thảo bài báo khoa học chuẩn mực"}
                               </h4>
-                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "IMRaD structure & formatted citations" : "Cáº¥u trÃºc IMRaD & Ä‘á»‹nh dáº¡ng chuáº©n"}</span>
+                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "IMRaD structure & formatted citations" : "Cấu trúc IMRaD & định dạng chuẩn"}</span>
                             </div>
                           </div>
                           <p className="text-xs sm:text-[13px] text-zinc-600 leading-relaxed">
                             {isEn
                               ? "Full scientific report containing Abstract, Introduction, Methodology, Evidence Synthesis, Discussion, Limitations, and full Bibliography."
-                              : "BÃ¡o cÃ¡o khoa há»c gá»“m Ä‘áº§y Ä‘á»§ Abstract, Äáº·t váº¥n Ä‘á», PhÆ°Æ¡ng phÃ¡p luáº­n, Tá»•ng há»£p báº±ng chá»©ng, Tháº£o luáº­n vÃ  Danh má»¥c tÃ i liá»‡u tham kháº£o."}
+                              : "Báo cáo khoa học gồm đầy đủ Abstract, Đặt vấn đề, Phương pháp luận, Tổng hợp bằng chứng, Thảo luận và Danh mục tài liệu tham khảo."}
                           </p>
                         </div>
 
@@ -1744,15 +1744,15 @@ export default function WorkspacePage() {
                             </div>
                             <div>
                               <h4 className="font-bold text-sm text-zinc-900">
-                                {isEn ? "2. Publication Exports (Word & Markdown)" : "2. Xuáº¥t báº£n Ä‘a Ä‘á»‹nh dáº¡ng (.docx, .md, .json)"}
+                                {isEn ? "2. Publication Exports (Word & Markdown)" : "2. Xuất bản đa định dạng (.docx, .md, .json)"}
                               </h4>
-                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Ready for journal submission" : "Sáºµn sÃ ng gá»­i há»™i tháº£o & táº¡p chÃ­"}</span>
+                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Ready for journal submission" : "Sẵn sàng gửi hội thảo & tạp chí"}</span>
                             </div>
                           </div>
                           <p className="text-xs sm:text-[13px] text-zinc-600 leading-relaxed">
                             {isEn
                               ? "One-click download as Microsoft Word (.docx) with formatted tables and headings, clean Markdown (.md), or raw JSON research package."
-                              : "Táº£i vá» má»™t cháº¡m file Word (.docx) chuáº©n báº£ng biá»ƒu, vÄƒn báº£n Markdown (.md) hoáº·c toÃ n bá»™ gÃ³i dá»¯ liá»‡u nghiÃªn cá»©u (.json)."}
+                              : "Tải về một chạm file Word (.docx) chuẩn bảng biểu, văn bản Markdown (.md) hoặc toàn bộ gói dữ liệu nghiên cứu (.json)."}
                           </p>
                         </div>
 
@@ -1764,15 +1764,15 @@ export default function WorkspacePage() {
                             </div>
                             <div>
                               <h4 className="font-bold text-sm text-zinc-900">
-                                {isEn ? "3. Traceable Evidence & Citations" : "3. Báº±ng chá»©ng trÃ­ch dáº«n cÃ³ thá»ƒ truy váº¿t"}
+                                {isEn ? "3. Traceable Evidence & Citations" : "3. Bằng chứng trích dẫn có thể truy vết"}
                               </h4>
-                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Zero hallucination guarantee" : "Neo trá»±c tiáº¿p vÃ o nguá»“n tÃ i liá»‡u"}</span>
+                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Zero hallucination guarantee" : "Neo trực tiếp vào nguồn tài liệu"}</span>
                             </div>
                           </div>
                           <p className="text-xs sm:text-[13px] text-zinc-600 leading-relaxed">
                             {isEn
                               ? "Every substantive claim is tied to an indexed passage with original source URL, similarity score, and verbatim excerpt for peer review."
-                              : "Má»—i luáº­n Ä‘iá»ƒm Ä‘á»u Ä‘Æ°á»£c neo cháº·t vÃ o Ä‘oáº¡n trÃ­ch nguá»“n kÃ¨m liÃªn káº¿t gá»‘c, Ä‘iá»ƒm tÆ°Æ¡ng Ä‘á»“ng vÃ  trÃ­ch dáº«n nguyÃªn vÄƒn phá»¥c vá»¥ pháº£n biá»‡n."}
+                              : "Mỗi luận điểm đều được neo chặt vào đoạn trích nguồn kèm liên kết gốc, điểm tương đồng và trích dẫn nguyên văn phục vụ phản biện."}
                           </p>
                         </div>
 
@@ -1784,15 +1784,15 @@ export default function WorkspacePage() {
                             </div>
                             <div>
                               <h4 className="font-bold text-sm text-zinc-900">
-                                {isEn ? "4. Full Reproducibility & Audit Trail" : "4. Há»“ sÆ¡ minh báº¡ch & Kháº£ nÄƒng tÃ¡i láº­p"}
+                                {isEn ? "4. Full Reproducibility & Audit Trail" : "4. Hồ sơ minh bạch & Khả năng tái lập"}
                               </h4>
-                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Auditable agent execution logs" : "Lá»‹ch sá»­ thá»±c thi tá»«ng tÃ¡c tá»­"}</span>
+                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Auditable agent execution logs" : "Lịch sử thực thi từng tác tử"}</span>
                             </div>
                           </div>
                           <p className="text-xs sm:text-[13px] text-zinc-600 leading-relaxed">
                             {isEn
                               ? "Complete timeline recording every agent step, input/output tokens, execution latency, and exact monetary cost in USD."
-                              : "ToÃ n bá»™ chuá»—i thá»i gian ghi nháº­n tá»«ng bÆ°á»›c cháº¡y cá»§a agent, sá»‘ token vÃ o/ra, Ä‘á»™ trá»… vÃ  chi phÃ­ tÃ i chÃ­nh chi tiáº¿t theo USD."}
+                              : "Toàn bộ chuỗi thời gian ghi nhận từng bước chạy của agent, số token vào/ra, độ trễ và chi phí tài chính chi tiết theo USD."}
                           </p>
                         </div>
                       </div>
@@ -2196,7 +2196,7 @@ export default function WorkspacePage() {
                   <div>
                     <h2 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
                       <FlaskConical size={18} className="text-indigo-600" />
-                      {isEn ? "Study Protocol (Gate G4)" : "Đề cương nghiên cứu (Study Protocol)"}
+                      {isEn ? "Study Protocol" : "Đề cương nghiên cứu (Study Protocol)"}
                     </h2>
                     <p className="text-xs text-zinc-500 mt-0.5">
                       {isEn ? "Intermediate methodological artifact designed by the Methodologist Agent" : "Văn bản trung gian (Intermediate Artifact) được thiết kế bởi Agent Methodologist"}
@@ -2254,7 +2254,7 @@ export default function WorkspacePage() {
                     <div>
                       <span className="text-xs text-zinc-500">{isEn ? "Research Type" : "Loại nghiên cứu"}</span>
                       <div className="font-semibold text-zinc-800 mt-0.5">
-                        {task.research_type === 'EMPIRICAL_HUMAN' ? (isEn ? 'Fieldwork (Gate G4)' : 'Thực địa (Gate G4)') : task.research_type === 'EMPIRICAL_COMPUTATIONAL' ? (isEn ? 'Computational' : 'Tính toán') : (isEn ? 'Literature Review' : 'Tổng quan')}
+                        {task.research_type === 'EMPIRICAL_HUMAN' ? (isEn ? 'Fieldwork' : 'Thực địa') : task.research_type === 'EMPIRICAL_COMPUTATIONAL' ? (isEn ? 'Computational' : 'Tính toán') : (isEn ? 'Literature Review' : 'Tổng quan')}
                       </div>
                     </div>
                     <div>
@@ -2294,7 +2294,7 @@ export default function WorkspacePage() {
                     <div className="border-t border-zinc-100 pt-4">
                       <h3 className="font-semibold text-zinc-900 text-sm mb-2 flex items-center gap-1.5">
                         <FlaskConical size={14} className="text-indigo-600" />
-                        {isEn ? "Submitted Empirical / Fieldwork Data (Gate G4)" : "Dữ liệu thực nghiệm đã cung cấp (Gate G4)"}
+                        {isEn ? "Submitted Empirical / Fieldwork Data" : "Dữ liệu thực nghiệm đã cung cấp"}
                       </h3>
                       <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200 text-xs space-y-2">
                         {task.user_data_submission.sample_size != null && (

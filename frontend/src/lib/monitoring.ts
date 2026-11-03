@@ -10,7 +10,7 @@ export const STATUS_LABELS_VI: Record<string, string> = {
 
 export const STATUS_LABELS_EN: Record<string, string> = {
   PENDING: 'Pending', QUEUED: 'Queued', RUNNING: 'In Progress',
-  WAITING_APPROVAL: 'Awaiting Plan Approval', WAITING_USER_DATA: 'Awaiting Data (Gate G4)',
+  WAITING_APPROVAL: 'Awaiting Plan Approval', WAITING_USER_DATA: 'Awaiting Data',
   COMPLETED: 'Completed', NEEDS_REVIEW: 'Needs Review', PARTIAL: 'Partial Result',
   FAILED: 'Failed', CANCELLED: 'Cancelled', SUCCESS: 'Finished', UNKNOWN: 'Unknown',
   PLANNING: 'Planning', RESEARCHING: 'Searching Sources', INDEXING: 'Processing Sources',
