@@ -17,7 +17,8 @@ from app.services import task_dispatcher
 
 
 @pytest.mark.asyncio
-async def test_demo_path_persists_report(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("budget_stop", [False, True])
+async def test_demo_path_persists_report(monkeypatch: pytest.MonkeyPatch, budget_stop: bool) -> None:
     visited: list[str] = []
     queued: list[str] = []
 
@@ -48,7 +49,21 @@ async def test_demo_path_persists_report(monkeypatch: pytest.MonkeyPatch) -> Non
         "final_report_markdown": "# Overview\nA sourced finding [1].\n\n# References\n[1] Example source.",
         "status": "COMPLETED",
     }))
-    monkeypatch.setattr(worker, "research_graph", graph_module.build_research_graph())
+    if budget_stop:
+        from langgraph.checkpoint.memory import InMemorySaver
+        from app.agents import nodes
+        from app.services.provider_budget import ProviderBudgetExceeded
+
+        async def exhausted(_state):
+            raise ProviderBudgetExceeded("Input-token limit before revision")
+
+        monkeypatch.setattr(graph_module, "critic_node", exhausted)
+        # The worker publication path is real; formatting has a separate test.
+        monkeypatch.setattr(nodes, "post_processor_node", graph_module.post_processor_node)
+        graph = graph_module.build_research_graph(checkpointer=InMemorySaver())
+    else:
+        graph = graph_module.build_research_graph()
+    monkeypatch.setattr(worker, "research_graph", graph)
     monkeypatch.setattr(
         task_dispatcher,
         "execute_research_workflow",
@@ -80,22 +95,28 @@ async def test_demo_path_persists_report(monkeypatch: pytest.MonkeyPatch) -> Non
         started = await client.post(f"/api/v1/research/{task_id}/start", headers=headers)
         assert started.status_code == 202, started.text
         assert started.json()["status"] == "QUEUED"
-        assert await task_dispatcher.dispatch_one_outbox_event()
+        assert await task_dispatcher.dispatch_one_outbox_event(user_id=uuid.UUID(registered.json()["id"]))
         assert queued == [task_id]
 
         completed = await worker.run_langgraph_workflow(task_id)
         assert completed["status"] == "SUCCESS"
         status = await client.get(f"/api/v1/research/{task_id}", headers=headers)
         assert status.status_code == 200, status.text
-        assert status.json()["status"] == "COMPLETED"
+        assert status.json()["status"] == ("NEEDS_REVIEW" if budget_stop else "COMPLETED")
         report = await client.get(f"/api/v1/research/{task_id}/report", headers=headers)
         assert report.status_code == 200, report.text
         assert report.json()["research_task_id"] == task_id
         assert "# References" in report.json()["content_markdown"]
+        if budget_stop:
+            assert report.json()["review_metadata"]["draft_recovery"]["review_incomplete"] is True
+            # Duplicate delivery cannot turn recovery into a second publication.
+            await worker.run_langgraph_workflow(task_id)
+            versions = await client.get(f"/api/v1/research/{task_id}/report/versions", headers=headers)
+            assert versions.status_code == 200
+            assert len(versions.json()) == 1
 
-    assert visited == [
-        "supervisor", "researcher", "curator", "analyst", "writer", "critic", "post_processor",
-    ]
+    assert visited == ["supervisor", "researcher", "curator", "analyst", "writer"] + (
+        [] if budget_stop else ["critic"]) + ["post_processor"]
 
     from app.core.database import engine
     await engine.dispose()
