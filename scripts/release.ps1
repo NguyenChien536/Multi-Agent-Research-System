@@ -84,16 +84,11 @@ switch ($Action) {
             Invoke-Compose -Arguments @('stop', 'worker')
             Invoke-Compose -Arguments @('exec', '-T', 'postgres', 'pg_dump', '-U', 'research_user', '-d', 'research_db', '-Fc', '-f', '/tmp/research.dump')
             Invoke-Compose -Arguments @('cp', 'postgres:/tmp/research.dump', (Join-Path $BackupPath 'research.dump'))
-            # Keep the binary archive in a named helper's tmpfs until docker cp finishes.
-            # PowerShell 5 redirection/pipelines must not transport binary dump/archive bytes.
-            $helper = "$Project-backup-$([guid]::NewGuid().ToString('N').Substring(0,8))"
-            Invoke-Compose -Arguments @('run', '-d', '--no-deps', '--name', $helper, 'backend', 'sleep', '120')
-            try {
-                & docker exec $helper tar czf /tmp/artifacts.tgz -C /app/storage/artifacts .
-                if ($LASTEXITCODE -ne 0) { throw 'Artifact backup failed.' }
-                & docker cp "${helper}:/tmp/artifacts.tgz" (Join-Path $BackupPath 'artifacts.tgz')
-                if ($LASTEXITCODE -ne 0) { throw 'Artifact archive copy failed.' }
-            } finally { & docker rm -f $helper | Out-Null }
+            # Write directly to the explicitly selected backup directory. Docker cp
+            # cannot reliably export tmpfs files; PowerShell pipelines corrupt binary bytes.
+            $backupMount = "$($BackupPath.Replace('\','/')):/backup"
+            Invoke-Compose -Arguments @('run', '--rm', '--no-deps', '--volume', $backupMount,
+                'backend', 'tar', 'czf', '/backup/artifacts.tgz', '-C', '/app/storage/artifacts', '.')
             @{ revision=$revision; project=$Project; created_at=(Get-Date).ToUniversalTime().ToString('o') } |
                 ConvertTo-Json | Set-Content -LiteralPath (Join-Path $BackupPath 'manifest.json')
             Get-ChildItem -LiteralPath $BackupPath -File | Get-FileHash -Algorithm SHA256 |
@@ -125,14 +120,9 @@ switch ($Action) {
         Invoke-Compose -Arguments @('up', '-d', '--wait', 'postgres', 'redis')
         Invoke-Compose -Arguments @('cp', (Join-Path $BackupPath 'research.dump'), 'postgres:/tmp/research.dump')
         Invoke-Compose -Arguments @('exec', '-T', 'postgres', 'pg_restore', '-U', 'research_user', '-d', 'research_db', '--no-owner', '--exit-on-error', '/tmp/research.dump')
-        $helper = "$Project-artifacts-$([guid]::NewGuid().ToString('N').Substring(0,8))"
-        Invoke-Compose -Arguments @('run', '-d', '--no-deps', '--name', $helper, 'backend', 'sleep', '120')
-        try {
-            & docker cp (Join-Path $BackupPath 'artifacts.tgz') "${helper}:/tmp/artifacts.tgz"
-            if ($LASTEXITCODE -ne 0) { throw 'Artifact copy failed.' }
-            & docker exec $helper tar xzf /tmp/artifacts.tgz -C /app/storage/artifacts
-            if ($LASTEXITCODE -ne 0) { throw 'Artifact restore failed.' }
-        } finally { & docker rm -f $helper | Out-Null }
+        $backupMount = "$($BackupPath.Replace('\','/')):/backup:ro"
+        Invoke-Compose -Arguments @('run', '--rm', '--no-deps', '--volume', $backupMount,
+            'backend', 'tar', 'xzf', '/backup/artifacts.tgz', '-C', '/app/storage/artifacts')
         Invoke-Compose -Arguments @('up', '-d', '--wait', '--wait-timeout', '240')
         @{ revision=$revision; port=$Port } | ConvertTo-Json | Set-Content -LiteralPath $stateFile
         Write-Output "Restored rehearsal: http://127.0.0.1:$Port. Stop this project after verification."
