@@ -112,3 +112,17 @@ async def test_scheduler_oversleep_cannot_release_a_request_after_its_queue_dead
     monkeypatch.setattr(pacing.settings, 'GEMINI_MAX_QUEUE_SECONDS', 1)
     with pytest.raises(TimeoutError, match='deadline'):
         await pacing.wait_for_gemini_slot('gemini-fixture')
+
+
+@pytest.mark.asyncio
+async def test_version_question_route_cannot_bypass_the_shared_quota_gate(monkeypatch):
+    from app.services import report_question_answering as answering
+    touched = []
+    async def full(_): raise TimeoutError('queue full')
+    async def unexpected(*args, **kwargs): touched.append('unexpected budget or provider call')
+    monkeypatch.setattr(answering, 'question_models', lambda: [('gemini-fixture', SimpleNamespace(ainvoke=unexpected))])
+    monkeypatch.setattr(answering, 'wait_for_gemini_slot', full)
+    monkeypatch.setattr(answering, 'reserve_provider_call', unexpected)
+    with pytest.raises(TimeoutError):
+        await answering.generate_answer(uuid.uuid4(), 1, uuid.uuid4(), 'What does this source support?', {})
+    assert touched == []

@@ -9,6 +9,8 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
 from app.services.agent_run import estimate_cost, extract_tokens
+from app.services.provider_pacing import wait_for_gemini_slot, record_gemini_rate_limit
+from app.services.structured_output import compatible_structured_output
 from app.services.provider_budget import (
     ProviderBudgetExceeded, ResearchTaskStopped, assert_task_active,
     estimate_tokens, reserve_provider_call, settle_provider_call,
@@ -98,6 +100,7 @@ async def generate_answer(task_id: uuid.UUID, attempt_number: int, question_id: 
     )), HumanMessage(content=json.dumps({"question": question, "saved_context": context}, ensure_ascii=False))]
     prompt_text = "\n".join(message.content for message in messages)
     for model_name, model in question_models():
+        await wait_for_gemini_slot(model_name)
         await assert_task_active(task_id, attempt_number, allow_post_run=True)
         reservation = await reserve_provider_call(task_id=task_id, attempt_number=attempt_number,
             kind="llm", model=model_name, input_tokens=estimate_tokens(prompt_text),
@@ -111,7 +114,7 @@ async def generate_answer(task_id: uuid.UUID, attempt_number: int, question_id: 
             if hasattr(model, "max_tokens"):
                 model.max_tokens = QA_OUTPUT_TOKENS
             await assert_task_active(task_id, attempt_number, allow_post_run=True)
-            response = await model.with_structured_output(QuestionDraft).ainvoke(messages)
+            response = await compatible_structured_output(model_name, model, QuestionDraft).ainvoke(messages)
             response = QuestionDraft.model_validate(response)
         except BaseException as exc:
             await asyncio.shield(settle_provider_call(task_id=task_id, reservation_id=reservation,
@@ -120,6 +123,7 @@ async def generate_answer(task_id: uuid.UUID, attempt_number: int, question_id: 
                 raise
             if not isinstance(exc, Exception):
                 raise
+            await record_gemini_rate_limit(model_name, exc)
             logger.warning("Question provider failed question=%s model=%s error_type=%s",
                            question_id, model_name, type(exc).__name__)
             continue
