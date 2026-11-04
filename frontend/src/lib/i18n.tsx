@@ -68,7 +68,7 @@ export const DICTIONARY = {
 
     method_review_name: 'Literature Review',
     method_review_badge: 'REVIEW',
-    method_review_desc: 'Systematic review, synthesis of scientific sources and evidence.',
+    method_review_desc: 'Source-based literature review and evidence synthesis.',
     method_comp_name: 'Computational Empirical',
     method_comp_badge: 'COMPUTATIONAL',
     method_comp_desc: 'Empirical data analysis, automated computational execution routines.',
@@ -260,7 +260,7 @@ export const DICTIONARY = {
 
     method_review_name: 'Tổng quan tài liệu',
     method_review_badge: 'REVIEW',
-    method_review_desc: 'Tổng hợp tài liệu có hệ thống, đối chiếu nguồn bằng chứng khoa học.',
+    method_review_desc: 'Tổng quan tài liệu, tổng hợp và đối chiếu bằng chứng từ nguồn.',
     method_comp_name: 'Thực nghiệm tính toán',
     method_comp_badge: 'COMPUTATIONAL',
     method_comp_desc: 'Phân tích dữ liệu thực nghiệm, chạy routine tính toán tự động.',

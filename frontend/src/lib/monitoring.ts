@@ -46,6 +46,22 @@ export function stagesFor(type?: string) {
 
 export function activityStage(agent: string) { return STAGES.find(stage => stage.agent === agent); }
 export function currentStage(step?: string | null) { return STAGES.find(stage => stage.key === stageKey(step)); }
+
+export type StageDisplayState = 'done' | 'active' | 'waiting' | 'paused' | 'review' | 'failed' | 'cancelled';
+export function stageState(stages: { steps: string[]; statuses: string[] }[], index: number, status: string, step?: string | null): StageDisplayState {
+  if (status === 'COMPLETED') return 'done';
+  if (['PENDING', 'QUEUED'].includes(status)) return 'waiting';
+  // An unknown explicit step must not fall back to an unrelated inferred stage.
+  const current = step ? stages.findIndex(stage => stage.steps.includes(stageKey(step)))
+    : stages.findIndex(stage => stage.statuses.includes(status));
+  if (current < 0 || index > current) return 'waiting';
+  if (index < current) return 'done';
+  if (['NEEDS_REVIEW', 'PARTIAL'].includes(status)) return 'review';
+  if (status === 'FAILED') return 'failed';
+  if (status === 'CANCELLED') return 'cancelled';
+  if (['WAITING_APPROVAL', 'WAITING_USER_DATA'].includes(status)) return 'paused';
+  return ['RUNNING', 'PLANNING', 'RESEARCHING', 'INDEXING', 'ANALYZING', 'WRITING', 'REVIEWING', 'FINALIZING', 'RETRYING'].includes(status) ? 'active' : 'waiting';
+}
 export function statusLabel(status: string, lang: 'en' | 'vi' = 'en') {
   if (lang === 'vi') return STATUS_LABELS_VI[status] || 'Trạng thái chưa xác định';
   return STATUS_LABELS_EN[status] || 'Unknown status';

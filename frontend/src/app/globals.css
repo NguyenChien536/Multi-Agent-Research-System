@@ -121,3 +121,15 @@
     margin: 20mm 15mm 20mm 15mm;
   }
 }
+
+/* Respond to actual paper space, including both navigation sidebars. */
+.paper-space { container-type: inline-size; container-name: paper; }
+.paper-layout-container { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2rem; align-items: start; }
+@container paper (min-width: 1000px) {
+  .paper-layout-container { grid-template-columns: minmax(0, 1fr) 240px; }
+  .paper-toc { position: sticky; top: 1rem; }
+}
+@media print {
+  .paper-space { container-type: normal; }
+  .paper-layout-container { display: block !important; }
+}
