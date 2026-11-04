@@ -1516,7 +1516,7 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     contract = plan.get("manuscript_contract")
     editorial_context = editorial_instructions(contract, manuscript_provenance(state)) if contract else ""
     paper_context = scientific_context(state)
-    figures = build_scientific_figures(paper_context, manuscript_provenance(state)) if contract and contract.get("version", 1) >= 2 else []
+    figures = build_scientific_figures(paper_context) if contract and contract.get("version", 1) >= 2 else []
     claims = [
         claim for claim in state.get("claims", [])
         if claim.get("claim_id") and claim.get("evidence_id")
@@ -1912,7 +1912,16 @@ Complete section content:
             verdicts.append("NEED_MORE_DATA" if len(state.get("collected_sources", [])) < state.get("max_sources", 10) else "NEEDS_REVIEW")
         if manuscript_findings:
             feedback.extend(item["message"] for item in manuscript_findings)
-            verdicts.append("REVISE")
+            nonrepairable_findings = {"SINGLE_SOURCE_SCOPE"}
+            if any(item.get("code") in nonrepairable_findings for item in manuscript_findings):
+                # More prose cannot create independent literature evidence.
+                # Keep a requested research pass or a separate prose repair
+                # available; final delivery still remains NEEDS_REVIEW unless
+                # new evidence resolves this scope finding.
+                if "NEED_MORE_DATA" not in verdicts and "REVISE" not in verdicts:
+                    verdicts.append("NEEDS_REVIEW")
+            if any(item.get("code") not in nonrepairable_findings for item in manuscript_findings):
+                verdicts.append("REVISE")
         if state.get("draft_truncated"):
             feedback.append("The provider truncated the draft at its output limit. Rewrite concisely with all required sections and complete citation markers.")
             verdicts.append("REVISE")
@@ -2101,7 +2110,10 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
         final_md = marker_pattern.sub(replace_marker, draft)
         # Several grounded claims can cite the same source consecutively. Keep
         # every claim/evidence record, but print its reference label only once.
-        final_md = re.sub(r"(@@VALID_CITATION_\d+@@)(?:\s*\1)+", r"\1", final_md)
+        final_md = re.sub(
+            r"(@@VALID_CITATION_\d+@@)(?:(?:[ \t]*[,;][ \t]*|[ \t]*)\1)+",
+            r"\1", final_md,
+        )
         # Remove all model-authored numbered citations, then restore only markers
         # that resolved to validated claim/evidence records.
         final_md = re.sub(r"\[\d+\]", "", final_md)
@@ -2138,7 +2150,14 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
         if (contract or {}).get("evidence_review_policy") and not audit_matches_draft(review_metadata, draft):
             review_metadata.update(status="NEEDS_REVIEW", evidence_delivery_findings=[
                 "A complete, supporting evidence review for this exact draft is unavailable."])
-        review_metadata["reference_metadata_notes"] = reference_metadata_notes([claims_by_id[cid] for cid in reference_claims])
+        bibliography_notes = reference_metadata_notes([claims_by_id[cid] for cid in reference_claims])
+        review_metadata["reference_metadata_notes"] = bibliography_notes
+        title_metadata_findings = [item for item in bibliography_notes
+                                   if {"title", "title_may_be_internal_source_label"} & set(item.get("missing", []))]
+        if title_metadata_findings:
+            review_metadata.update(status="NEEDS_REVIEW", bibliography_findings=[
+                "At least one cited source has no trustworthy publication title. Resolve its metadata before presenting the bibliography as publication-ready."
+            ])
         from copy import deepcopy
         review_metadata["manuscript_input_snapshot"] = {key:deepcopy(state.get(key)) for key in (
             "research_type", "language", "citation_style", "report_length", "plan", "protocol",
@@ -2162,11 +2181,15 @@ async def post_processor_node(state: ResearchState) -> Dict[str, Any]:
         manuscript_findings = validate_manuscript(final_md, contract)
         figures = state.get("scientific_figures") or []
         final_md = materialize_figures(final_md, figures)
-        manuscript_findings += validate_scientific_reporting(final_md, contract, state.get("scientific_context") or {}, figures)
+        scientific_review_context = {
+            **(state.get("scientific_context") or {}),
+            "used_source_count": len({str(item.get("source_id")) for item in citation_records if item.get("source_id")}),
+        }
+        manuscript_findings += validate_scientific_reporting(final_md, contract, scientific_review_context, figures)
         lineage_findings = _claim_lineage_findings(draft, state.get("claims", []))
         if contract:
             review_metadata.update(manuscript_contract=contract, method_provenance=manuscript_provenance(state))
-            review_metadata.update(scientific_context=state.get("scientific_context") or {}, scientific_figures=figures)
+            review_metadata.update(scientific_context=scientific_review_context, scientific_figures=figures)
         if manuscript_findings:
             review_metadata.update(status="NEEDS_REVIEW", manuscript_findings=manuscript_findings)
         if lineage_findings:

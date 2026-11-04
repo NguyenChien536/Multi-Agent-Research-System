@@ -7,9 +7,17 @@ from xml.sax.saxutils import escape
 
 def scientific_context(state: dict) -> dict:
     analysis = state.get("analysis_run") or {}
+    claims = state.get("claims") or []
+    claim_source_ids = {
+        str(claim.get("source_id")) for claim in claims
+        if claim.get("source_id") and claim.get("evidence_id")
+    }
+    contract_version = ((state.get("plan") or {}).get("manuscript_contract") or {}).get("version", 1)
     return {"research_type": state.get("research_type", "REVIEW"),
-            "figure_style_version": 2 if ((state.get("plan") or {}).get("manuscript_contract") or {}).get("version", 1) >= 3 else 1,
+            "figure_style_version": 3 if contract_version >= 5 else (2 if contract_version >= 3 else 1),
             "grounded_claim_count": len({c.get("claim_id") for c in state.get("claims", []) if c.get("evidence_id")}),
+            "available_source_count": len(state.get("collected_sources") or []),
+            "distinct_claim_source_count": len(claim_source_ids),
             "evaluation_scope": "single_seeded_split_exploratory" if analysis else "literature_or_user_supplied_observations",
             "analysis": {key: deepcopy(analysis[key]) for key in (
                 "analysis_run_id", "status", "routine_name", "metrics", "manifest", "reproducibility_status"
@@ -24,23 +32,8 @@ def _number(value):
     return float(value)
 
 
-def _legacy_figures(context: dict, provenance: dict) -> list[dict]:
+def _measured_figures(context: dict) -> list[dict]:
     figures = []
-    if provenance.get("available_source_count", 0):
-        labels = ["Sources", "Evidence", "Synthesis"]
-        svg = ['<svg xmlns="http://www.w3.org/2000/svg" width="660" height="160" viewBox="0 0 660 160" role="img">',
-               '<rect width="660" height="160" fill="white"/>']
-        for i, label in enumerate(labels):
-            x = 20 + i * 220
-            svg += [f'<rect x="{x}" y="35" width="180" height="65" rx="6" fill="#eff6ff" stroke="#334155"/>',
-                    f'<text x="{x+90}" y="74" text-anchor="middle" font-family="serif" font-size="20">{escape(label)}</text>']
-            if i < 2:
-                svg.append(f'<path d="M{x+182} 67h32m-8 -6 8 6-8 6" fill="none" stroke="#334155" stroke-width="2"/>')
-        svg.append('</svg>')
-        figures.append({"id": "workflow", "number": 1, "kind": "conceptual",
-                        "caption": "Conceptual evidence-processing workflow. Arrows describe processing stages, not measured performance.",
-                        "alt": "Sources feed evidence extraction, followed by synthesis.", "svg": "".join(svg),
-                        "latex": r"\begin{tikzpicture}[every node/.style={draw,rounded corners,align=center,font=\small}]\node (s) at (0,0) {Sources};\node (e) at (2.2,0) {Evidence};\node (w) at (4.5,0) {Synthesis};\draw[->] (s)--(e);\draw[->] (e)--(w);\end{tikzpicture}"})
     run = context.get("analysis") or {}
     metrics = run.get("metrics") or {}
     if run.get("status") == "COMPLETED" and metrics.get("baseline") and metrics.get("model"):
@@ -68,60 +61,87 @@ def _legacy_figures(context: dict, provenance: dict) -> list[dict]:
     return figures
 
 
-def build_scientific_figures(context: dict, provenance: dict) -> list[dict]:
-    """Keep historical rendering stable; newer contracts opt into clearer plots."""
-    figures = _legacy_figures(context, provenance)
-    if context.get("figure_style_version", 1) < 2:
+def _historical_workflow_figure(style_version: int) -> dict:
+    """Rebuild the old decorative workflow only for immutable pre-v5 exports."""
+    if style_version >= 2:
+        alt = "Three stages: available sources, source-linked evidence, and question-led synthesis. This is a processing schematic, not an experimental result."
+        labels = [("Available sources", "Web pages / supplied PDFs"), ("Grounded evidence", "Claim linked to source text"), ("Question-led synthesis", "Compare findings and limits")]
+        svg = ['<svg xmlns="http://www.w3.org/2000/svg" width="720" height="180" viewBox="0 0 720 180" role="img" aria-labelledby="workflow-title workflow-desc">',
+               '<title id="workflow-title">Evidence synthesis workflow</title>',
+               '<desc id="workflow-desc">' + escape(alt) + '</desc><rect width="720" height="180" fill="white"/>']
+        for index, (title, detail) in enumerate(labels):
+            x = 10 + index * 245
+            svg += [f'<rect x="{x}" y="35" width="210" height="95" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>',
+                    f'<text x="{x+105}" y="74" text-anchor="middle" font-family="sans-serif" font-size="17">{title}</text>',
+                    f'<text x="{x+105}" y="102" text-anchor="middle" font-family="sans-serif" font-size="12">{detail}</text>']
+            if index < 2:
+                svg.append(f'<path d="M{x+214} 82h24m-7 -5 7 5-7 5" fill="none" stroke="#334155" stroke-width="2"/>')
+        svg.append('</svg>')
+        return {"id": "workflow", "number": 1, "kind": "conceptual",
+                "caption": "Conceptual source-to-evidence synthesis workflow. Source availability is not a count of screened studies or a measure of review completeness.",
+                "alt": alt, "svg": "".join(svg),
+                "latex": r"\begin{tikzpicture}[every node/.style={draw,rounded corners,align=center,text width=1.6cm,font=\scriptsize}]\node (s) at (0,0) {Available sources\\Web / supplied PDFs};\node (e) at (2,0) {Grounded evidence\\Source-linked claims};\node (w) at (4,0) {Question-led synthesis\\Findings and limits};\draw[->] (s)--(e);\draw[->] (e)--(w);\end{tikzpicture}"}
+
+    labels = ["Sources", "Evidence", "Synthesis"]
+    svg = ['<svg xmlns="http://www.w3.org/2000/svg" width="660" height="160" viewBox="0 0 660 160" role="img">',
+           '<rect width="660" height="160" fill="white"/>']
+    for index, label in enumerate(labels):
+        x = 20 + index * 220
+        svg += [f'<rect x="{x}" y="35" width="180" height="65" rx="6" fill="#eff6ff" stroke="#334155"/>',
+                f'<text x="{x+90}" y="74" text-anchor="middle" font-family="serif" font-size="20">{escape(label)}</text>']
+        if index < 2:
+            svg.append(f'<path d="M{x+182} 67h32m-8 -6 8 6-8 6" fill="none" stroke="#334155" stroke-width="2"/>')
+    svg.append('</svg>')
+    return {"id": "workflow", "number": 1, "kind": "conceptual",
+            "caption": "Conceptual evidence-processing workflow. Arrows describe processing stages, not measured performance.",
+            "alt": "Sources feed evidence extraction, followed by synthesis.", "svg": "".join(svg),
+            "latex": r"\begin{tikzpicture}[every node/.style={draw,rounded corners,align=center,font=\small}]\node (s) at (0,0) {Sources};\node (e) at (2.2,0) {Evidence};\node (w) at (4.5,0) {Synthesis};\draw[->] (s)--(e);\draw[->] (e)--(w);\end{tikzpicture}"}
+
+
+def build_scientific_figures(context: dict) -> list[dict]:
+    """Build topic-relevant figures from measured outputs only."""
+    style_version = context.get("figure_style_version", 1)
+    figures = _measured_figures(context)
+    if style_version < 3 and context.get("available_source_count", 0):
+        workflow = _historical_workflow_figure(style_version)
+        for figure in figures:
+            figure["number"] += 1
+        figures.insert(0, workflow)
+    if style_version < 2:
         return figures
     for figure in figures:
         if figure["id"] == "workflow":
-            figure["caption"] = "Conceptual source-to-evidence synthesis workflow. Source availability is not a count of screened studies or a measure of review completeness."
-            figure["alt"] = "Three stages: available sources, source-linked evidence, and question-led synthesis. This is a processing schematic, not an experimental result."
-            labels = [("Available sources", "Web pages / supplied PDFs"), ("Grounded evidence", "Claim linked to source text"), ("Question-led synthesis", "Compare findings and limits")]
-            svg = ['<svg xmlns="http://www.w3.org/2000/svg" width="720" height="180" viewBox="0 0 720 180" role="img" aria-labelledby="workflow-title workflow-desc">',
-                   '<title id="workflow-title">Evidence synthesis workflow</title>',
-                   '<desc id="workflow-desc">' + escape(figure["alt"]) + '</desc><rect width="720" height="180" fill="white"/>']
-            for index, (title, detail) in enumerate(labels):
-                x = 10 + index * 245
-                svg += [f'<rect x="{x}" y="35" width="210" height="95" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>',
-                        f'<text x="{x+105}" y="74" text-anchor="middle" font-family="sans-serif" font-size="17">{title}</text>',
-                        f'<text x="{x+105}" y="102" text-anchor="middle" font-family="sans-serif" font-size="12">{detail}</text>']
-                if index < 2:
-                    svg.append(f'<path d="M{x+214} 82h24m-7 -5 7 5-7 5" fill="none" stroke="#334155" stroke-width="2"/>')
-            svg.append('</svg>')
-            figure["svg"] = "".join(svg)
-            figure["latex"] = r"\begin{tikzpicture}[every node/.style={draw,rounded corners,align=center,text width=1.6cm,font=\scriptsize}]\node (s) at (0,0) {Available sources\\Web / supplied PDFs};\node (e) at (2,0) {Grounded evidence\\Source-linked claims};\node (w) at (4,0) {Question-led synthesis\\Findings and limits};\draw[->] (s)--(e);\draw[->] (e)--(w);\end{tikzpicture}"
-        else:
-            baseline, model = figure["data"]["baseline_mae"], figure["data"]["ridge_mae"]
-            scale = max(baseline, model) or 1.0
-            svg = ['<svg xmlns="http://www.w3.org/2000/svg" width="720" height="380" viewBox="0 0 720 380" role="img" aria-labelledby="evaluation-title evaluation-desc">',
-                   '<title id="evaluation-title">Held-out prediction error</title>',
-                   '<desc id="evaluation-desc">' + escape(figure["alt"] + ' A zero-based vertical axis shows mean absolute error in target units; uncertainty was not estimated.') + '</desc>',
-                   '<rect width="720" height="380" fill="white"/>',
-                   '<text x="385" y="28" text-anchor="middle" font-family="sans-serif" font-size="19">Held-out prediction error</text>',
-                   '<text x="385" y="51" text-anchor="middle" font-family="sans-serif" font-size="13">Same test split · lower MAE is better</text>',
-                   '<text transform="translate(20,190) rotate(-90)" text-anchor="middle" font-family="sans-serif" font-size="13">MAE (target units)</text>']
-            for fraction in (0, 0.25, 0.5, 0.75, 1):
-                y = 300 - 200 * fraction
-                svg += [f'<path d="M105 {y}h540" stroke="#e2e8f0"/>',
-                        f'<text x="98" y="{y+4}" text-anchor="end" font-family="sans-serif" font-size="12">{scale*fraction:.4g}</text>']
-            svg.append('<path d="M105 75v225h540" fill="none" stroke="#334155" stroke-width="1.5"/>')
-            for x, value, label, color in ((190, baseline, "Mean baseline", "#94a3b8"), (430, model, "Ridge", "#334155")):
-                height = 200 * (value / scale)
-                svg += [f'<rect x="{x}" y="{300-height:.4f}" width="110" height="{height:.4f}" fill="{color}" stroke="#334155"/>',
-                        f'<text x="{x+55}" y="{287-height:.4f}" text-anchor="middle" font-family="sans-serif" font-size="15">{value:.5g}</text>',
-                        f'<text x="{x+55}" y="325" text-anchor="middle" font-family="sans-serif" font-size="14">{label}</text>']
-            svg.append('<text x="385" y="360" text-anchor="middle" font-family="sans-serif" font-size="12">One seeded split; uncertainty not estimated</text></svg>')
-            figure["svg"] = "".join(svg)
-            figure["latex"] = r"\begin{tikzpicture}\begin{axis}[ybar,width=\linewidth,height=5cm,ymin=0,ymax=1.2,enlarge x limits=0.5,xtick={1,2},xticklabels={Mean baseline,Ridge},ytick={0,0.25,0.5,0.75,1},yticklabels={" + ",".join(f"{scale*f:.4g}" for f in (0, .25, .5, .75, 1)) + r"},ylabel={MAE (target units)},tick label style={font=\scriptsize},label style={font=\small},ymajorgrids=true,grid style={gray!20},bar width=18pt,point meta=explicit symbolic,nodes near coords,nodes near coords style={font=\scriptsize}]\addplot[fill=gray!40,draw=black] coordinates {(1," + f"{baseline/scale:.8f}) [{baseline:.5g}] (2,{model/scale:.8f}) [{model:.5g}]" + r"};\end{axis}\end{tikzpicture}"
+            continue
+        baseline, model = figure["data"]["baseline_mae"], figure["data"]["ridge_mae"]
+        scale = max(baseline, model) or 1.0
+        svg = ['<svg xmlns="http://www.w3.org/2000/svg" width="720" height="380" viewBox="0 0 720 380" role="img" aria-labelledby="evaluation-title evaluation-desc">',
+               '<title id="evaluation-title">Held-out prediction error</title>',
+               '<desc id="evaluation-desc">' + escape(figure["alt"] + ' A zero-based vertical axis shows mean absolute error in target units; uncertainty was not estimated.') + '</desc>',
+               '<rect width="720" height="380" fill="white"/>',
+               '<text x="385" y="28" text-anchor="middle" font-family="sans-serif" font-size="19">Held-out prediction error</text>',
+               '<text x="385" y="51" text-anchor="middle" font-family="sans-serif" font-size="13">Same test split · lower MAE is better</text>',
+               '<text transform="translate(20,190) rotate(-90)" text-anchor="middle" font-family="sans-serif" font-size="13">MAE (target units)</text>']
+        for fraction in (0, 0.25, 0.5, 0.75, 1):
+            y = 300 - 200 * fraction
+            svg += [f'<path d="M105 {y}h540" stroke="#e2e8f0"/>',
+                    f'<text x="98" y="{y+4}" text-anchor="end" font-family="sans-serif" font-size="12">{scale*fraction:.4g}</text>']
+        svg.append('<path d="M105 75v225h540" fill="none" stroke="#334155" stroke-width="1.5"/>')
+        for x, value, label, color in ((190, baseline, "Mean baseline", "#94a3b8"), (430, model, "Ridge", "#334155")):
+            height = 200 * (value / scale)
+            svg += [f'<rect x="{x}" y="{300-height:.4f}" width="110" height="{height:.4f}" fill="{color}" stroke="#334155"/>',
+                    f'<text x="{x+55}" y="{287-height:.4f}" text-anchor="middle" font-family="sans-serif" font-size="15">{value:.5g}</text>',
+                    f'<text x="{x+55}" y="325" text-anchor="middle" font-family="sans-serif" font-size="14">{label}</text>']
+        svg.append('<text x="385" y="360" text-anchor="middle" font-family="sans-serif" font-size="12">One seeded split; uncertainty not estimated</text></svg>')
+        figure["svg"] = "".join(svg)
+        figure["latex"] = r"\begin{tikzpicture}\begin{axis}[ybar,width=\linewidth,height=5cm,ymin=0,ymax=1.2,enlarge x limits=0.5,xtick={1,2},xticklabels={Mean baseline,Ridge},ytick={0,0.25,0.5,0.75,1},yticklabels={" + ",".join(f"{scale*f:.4g}" for f in (0, .25, .5, .75, 1)) + r"},ylabel={MAE (target units)},tick label style={font=\scriptsize},label style={font=\small},ymajorgrids=true,grid style={gray!20},bar width=18pt,point meta=explicit symbolic,nodes near coords,nodes near coords style={font=\scriptsize}]\addplot[fill=gray!40,draw=black] coordinates {(1," + f"{baseline/scale:.8f}) [{baseline:.5g}] (2,{model/scale:.8f}) [{model:.5g}]" + r"};\end{axis}\end{tikzpicture}"
         figure["style_version"] = 2
     return figures
 
 
 def figure_instructions(figures: list[dict]) -> str:
     if not figures:
-        return "No approved figures are available. Do not invent plots or figure assets."
-    lines = ["APPROVED FIGURES: use each supplied figure once. Write a body paragraph of at least two sentences referring to Figure N (or Hình N), then place its marker on a separate line in Methods/Results as appropriate. The renderer supplies the caption: do not write another caption or use a caption in place of explanatory prose. The conceptual workflow depicts Sources -> Evidence -> Synthesis, not a topic-specific algorithm or experiment. Explain only what the actual figure shows and what it does not establish."]
+        return "No topic-relevant, evidence-backed figures are available. Omit figures; a paper does not need a decorative figure. Do not invent plots, diagrams, image URLs, or figure assets."
+    lines = ["APPROVED FIGURES: use each supplied figure once. Write a body paragraph of at least two sentences referring to Figure N (or Hình N), then place its marker on a separate line in Methods/Results as appropriate. The renderer supplies the caption: do not write another caption or use a caption in place of explanatory prose. Explain only what the actual figure shows and what it does not establish."]
     for figure in figures:
         lines.append(f"Figure {figure['number']} ({figure['kind']}): {figure['caption']} Marker: [[figure:{figure['id']}]]")
     return "\n".join(lines)
@@ -166,11 +186,15 @@ def validate_scientific_reporting(markdown: str, contract: dict | None, context:
             add("UNKNOWN_FIGURE", "Do not insert invented or unapproved image URLs; use the supplied versioned figure assets.")
     for name in re.findall(r"\[\[figure:([^\]]+)\]\]|\]\(figures/([^)]+)\.svg\)", markdown):
         if (name[0] or name[1]) not in allowed:
-            add("UNKNOWN_FIGURE", "Use only figures produced from approved data or the labeled conceptual workflow.")
+            add("UNKNOWN_FIGURE", "Use only figures produced from approved, topic-relevant data.")
     run = context.get("analysis") or {}
     if contract.get("article_type") == "COMPUTATIONAL_STUDY":
         if run.get("status") != "COMPLETED" or not (run.get("metrics") or {}).get("baseline") or not (run.get("metrics") or {}).get("model"):
             add("BASELINE_MISSING", "Report real executed baseline/model results before making a computational comparison.")
+    if contract.get("article_type") == "NARRATIVE_REVIEW":
+        source_count = context.get("used_source_count", context.get("distinct_claim_source_count"))
+        if source_count is not None and source_count < 2:
+            add("SINGLE_SOURCE_SCOPE", "Fewer than two distinct cited sources support this review. Label it as a preliminary single-source synthesis, avoid cross-study or field-wide conclusions, and request more sources before presenting it as a literature review.")
     for section in contract.get("sections", []):
         if section["id"] not in {"related_work", "introduction", "results"}:
             continue

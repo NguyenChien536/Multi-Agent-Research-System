@@ -173,9 +173,9 @@ async def test_editorial_revision_and_contract_survive_graph_interrupt(monkeypat
     paused = await graph.ainvoke({"require_plan_approval": True, "research_type": "REVIEW", "language": "en"}, config=config)
     assert paused["__interrupt__"]
     result = await graph.ainvoke(Command(resume=True), config=config)
-    assert result["status"] == "COMPLETED"
-    assert len(writes) == 2
-    assert result["critic_review_metadata"]["manuscript_findings"] == []
+    assert result["status"] == "NEEDS_REVIEW"
+    assert len(writes) == 1
+    assert "SINGLE_SOURCE_SCOPE" in {item["code"] for item in result["critic_review_metadata"]["manuscript_findings"]}
     assert "## References" in result["final_report_markdown"]
 
 
