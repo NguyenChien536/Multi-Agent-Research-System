@@ -1,4 +1,5 @@
 'use client';
+import { ResearchErrorNotice } from '@/components/ResearchErrorNotice';
 import { ModelConnectionSummary } from '@/components/ModelConnectionSummary';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -8,7 +9,7 @@ import {
   ArrowLeft, CheckCircle2, Circle, Clock, Copy, Check, Download,
   ExternalLink, FileText, Globe, Layers, Play, RefreshCw,
   Trash2, XCircle, Search, Activity, Cpu, UploadCloud, FileUp, FlaskConical,
-  AlertTriangle, Database, Printer, Maximize2, Minimize2, PanelLeftClose, PanelLeft,
+  AlertTriangle, Database, Printer, Maximize2, Minimize2, PanelLeftClose, PanelLeft, PanelRight, PanelRightClose,
   ListFilter, Bookmark, BookOpen, Package, ChevronDown, FileDown, Loader2,
   MessageSquare, History, Info
 } from 'lucide-react';
@@ -154,7 +155,8 @@ export default function WorkspacePage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isWidePaper, setIsWidePaper] = useState(false);
-  const [isStagesCollapsed, setIsStagesCollapsed] = useState(false);
+  const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
+  const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
   const [isExportingDocx, setIsExportingDocx] = useState(false);
   const [activeTocSlug, setActiveTocSlug] = useState<string | null>(null);
@@ -726,11 +728,11 @@ export default function WorkspacePage() {
         <div className="flex items-center gap-3 flex-1 min-w-[280px]">
           <button
             type="button"
-            onClick={() => setIsStagesCollapsed(prev => !prev)}
+            onClick={() => setIsLeftSidebarCollapsed(prev => !prev)}
             className="hidden lg:flex items-center justify-center p-1.5 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors shrink-0"
-            title={isStagesCollapsed ? (isEn ? "Show table of contents" : "Hiện mục lục bài báo") : (isEn ? "Collapse table of contents" : "Thu gọn mục lục")}
+            title={isLeftSidebarCollapsed ? (isEn ? "Show table of contents" : "Hiện mục lục bài báo") : (isEn ? "Collapse table of contents" : "Thu gọn mục lục")}
           >
-            {isStagesCollapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
+            {isLeftSidebarCollapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
           </button>
           <div>
             <h1 className="font-semibold text-lg line-clamp-1 text-zinc-900">{task.title}</h1>
@@ -812,7 +814,7 @@ export default function WorkspacePage() {
       <div className="flex flex-1 overflow-hidden flex-col lg:flex-row print:overflow-visible print:h-auto print:block">
         {/* Stages Sidebar */}
         {/* Left Sidebar: Table of Contents & Manuscript Details */}
-        <aside id="toc-sidebar" className={`${isStagesCollapsed ? 'hidden' : 'w-full lg:w-72 xl:w-80'} border-r border-zinc-200 bg-zinc-50/70 flex flex-col shrink-0 overflow-y-auto max-h-72 lg:max-h-none transition-all duration-200 print:hidden`}>
+        <aside id="toc-sidebar" className={`${isLeftSidebarCollapsed ? 'hidden' : 'w-full lg:w-72 xl:w-80'} border-r border-zinc-200 bg-zinc-50/70 flex flex-col shrink-0 overflow-y-auto max-h-72 lg:max-h-none transition-all duration-200 print:hidden`}>
           <div className="p-4 border-b border-zinc-200 flex items-center justify-between sticky top-0 bg-zinc-50/95 backdrop-blur z-10">
             <div className="flex items-center gap-2">
               <ListFilter size={17} className="text-zinc-700" />
@@ -822,7 +824,7 @@ export default function WorkspacePage() {
             </div>
             <button
               type="button"
-              onClick={() => setIsStagesCollapsed(true)}
+              onClick={() => setIsLeftSidebarCollapsed(true)}
               className="hidden lg:block text-zinc-400 hover:text-zinc-700 transition-colors p-1.5 rounded-lg hover:bg-zinc-200/60"
               title={isEn ? "Collapse table of contents" : "Thu gọn mục lục"}
             >
@@ -1395,6 +1397,8 @@ export default function WorkspacePage() {
 
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-zinc-50/60 print:overflow-visible print:h-auto print:p-0 print:m-0 print:bg-white print:block">
             {/* TAB 1: SCIENTIFIC PAPER */}
+            {task.status === 'FAILED' && <ResearchErrorNotice isEn={isEn}
+              error={runs.find(run => run.status === 'FAILED' && run.attempt_number === task.attempt_number)?.error_message} />}
             {activeTab === 'report' && (
               <div className={`paper-space w-full ${isWidePaper ? 'max-w-[1600px]' : 'max-w-7xl'} mx-auto space-y-6 transition-all duration-300 print:max-w-none print:m-0 print:p-0 print:space-y-0`}>
                 {(['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(task.status) || report?.research_task_id === params.id) ? report?.research_task_id === params.id ? (
@@ -1618,85 +1622,7 @@ export default function WorkspacePage() {
                       </article>
 
                       {/* Right Sidebar: Table of Contents & Article Metadata */}
-                                            {/* Right Sidebar: Research Pipeline Stages */}
-                      <div id="stages-sidebar" className="paper-stages w-full min-w-0 space-y-4 self-start print:hidden">
-                        <Card className="p-4 space-y-4 shadow-2xs bg-white border border-zinc-200">
-                          <div className="flex items-center justify-between border-b border-zinc-100 pb-2.5">
-                            <h3 className="font-bold text-xs text-zinc-900 uppercase tracking-wider flex items-center gap-1.5">
-                              <Activity size={14} className="text-zinc-600" />
-                              {isEn ? "Research Pipeline" : "Các giai đoạn nghiên cứu"}
-                            </h3>
-                            <Link
-                              href={`/research/${params.id}/monitor`}
-                              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 hover:underline"
-                            >
-                              {isEn ? "Live Monitor →" : "Giám sát tác tử →"}
-                            </Link>
-                          </div>
-
-                          <div className="relative border-l-2 border-zinc-200 ml-3 space-y-5 my-2">
-                            {(() => {
-                              const currentStages = task.research_type === 'REVIEW'
-                                ? REVIEW_STAGES
-                                : task.research_type === 'EMPIRICAL_COMPUTATIONAL'
-                                ? COMPUTATIONAL_STAGES
-                                : BASE_STAGES;
-                              return currentStages.map((stage, index) => {
-                                const state = stageState(currentStages, index, task.status, task.current_step);
-                                const Icon = state === 'done' ? CheckCircle2 : state === 'active' ? Activity : state === 'review' ? AlertTriangle : state === 'failed' ? XCircle : state === 'paused' ? Clock : Circle;
-                                return (
-                                  <div
-                                    key={isEn ? stage.title_en : stage.title_vi}
-                                    className={`relative pl-6 py-1 rounded-lg transition-colors ${
-                                      state === 'active' ? 'bg-blue-50/80 -mx-2 px-3 border border-blue-100' : ''
-                                    }`}
-                                  >
-                                    <span className={`absolute left-0 top-1.5 p-1 rounded-full border bg-white ${
-                                      state === 'done' ? 'text-emerald-500 border-emerald-200'
-                                      : state === 'active' ? 'text-blue-600 border-blue-300 shadow-sm shadow-blue-100'
-                                      : ['review', 'paused'].includes(state) ? 'text-amber-600 border-amber-300' : state === 'failed' ? 'text-red-600 border-red-300' : 'text-zinc-300 border-zinc-200'
-                                    }`}>
-                                      <Icon size={12} className={state === 'active' ? 'animate-pulse' : ''} />
-                                    </span>
-                                    <div>
-                                      <span className={`text-xs leading-snug block ${
-                                        state === 'waiting' ? 'text-zinc-400 font-normal'
-                                        : state === 'active' ? 'font-bold text-blue-900'
-                                        : 'font-medium text-zinc-700'
-                                      }`}>
-                                        {isEn ? stage.title_en : stage.title_vi}
-                                      </span>
-                                      {state === 'active' && (
-                                        <span className="text-[10px] text-blue-600 font-bold">
-                                          {isEn ? 'In progress…' : 'Đang thực hiện…'}
-                                        </span>
-                                      )}
-                                      {['review', 'failed', 'cancelled', 'paused'].includes(state) && (
-                                        <span className="text-[10px] text-amber-700 font-bold">{statusLabel(task.status, language)}</span>
-                                      )}
-                                      {state === 'done' && (
-                                        <span className="text-[10px] text-emerald-600 font-medium">
-                                          {isEn ? 'Completed' : 'Hoàn thành'}
-                                        </span>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              });
-                            })()}
-                          </div>
-
-                          <div className="pt-2 border-t border-zinc-100">
-                            <Link
-                              href={`/research/${params.id}/monitor`}
-                              className="inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-3 text-xs font-bold text-zinc-800 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors border border-zinc-200/80"
-                            >
-                              <Activity size={13} />
-                              {isEn ? "Open Live Monitor" : "Mở giám sát trực tiếp"}
-                            </Link>
-                          </div>
-                        </Card>
-                      </div>
+                                            
                     </div>
                   </div>
                 ) : (
@@ -2820,6 +2746,102 @@ export default function WorkspacePage() {
             )}
           </div>
         </main>
+
+        {/* Right Sidebar: Research Pipeline Stages */}
+        <aside id="stages-sidebar" className={`${isRightSidebarCollapsed ? 'hidden' : 'w-full lg:w-72 xl:w-80'} border-l border-zinc-200 bg-zinc-50/70 flex flex-col shrink-0 overflow-y-auto max-h-72 lg:max-h-none transition-all duration-200 print:hidden`}>
+          <div className="p-4 border-b border-zinc-200 flex items-center justify-between sticky top-0 bg-zinc-50/95 backdrop-blur z-10">
+            <div className="flex items-center gap-2">
+              <Activity size={17} className="text-zinc-700" />
+              <h2 className="font-bold text-sm sm:text-base uppercase tracking-wider text-zinc-900">
+                {isEn ? "Research Pipeline" : "Các giai đoạn nghiên cứu"}
+              </h2>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsRightSidebarCollapsed(true)}
+              className="hidden lg:block text-zinc-400 hover:text-zinc-700 transition-colors p-1.5 rounded-lg hover:bg-zinc-200/60"
+              title={isEn ? "Collapse pipeline stages" : "Thu gọn cột giai đoạn"}
+            >
+              <PanelRightClose size={16} />
+            </button>
+          </div>
+
+          <div className="p-4 flex-1 overflow-y-auto space-y-4">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                {isEn ? "Execution Stages" : "Tiến trình các bước"}
+              </span>
+              <Link
+                href={`/research/${params.id}/monitor`}
+                className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 hover:underline"
+              >
+                {isEn ? "Live Monitor →" : "Giám sát tác tử →"}
+              </Link>
+            </div>
+
+            <div className="relative border-l-2 border-zinc-200 ml-3 space-y-5 my-2">
+              {(() => {
+                const currentStages = task.research_type === 'REVIEW'
+                  ? REVIEW_STAGES
+                  : task.research_type === 'EMPIRICAL_COMPUTATIONAL'
+                  ? COMPUTATIONAL_STAGES
+                  : BASE_STAGES;
+                return currentStages.map((stage, index) => {
+                  const state = stageState(currentStages, index, task.status, task.current_step);
+                  const Icon = state === 'done' ? CheckCircle2 : state === 'active' ? Activity : state === 'review' ? AlertTriangle : state === 'failed' ? XCircle : state === 'paused' ? Clock : Circle;
+                  return (
+                    <div
+                      key={isEn ? stage.title_en : stage.title_vi}
+                      className={`relative pl-6 py-1 rounded-lg transition-colors ${
+                        state === 'active' ? 'bg-blue-50/80 -mx-2 px-3 border border-blue-100' : ''
+                      }`}
+                    >
+                      <span className={`absolute left-0 top-1.5 p-1 rounded-full border bg-white ${
+                        state === 'done' ? 'text-emerald-500 border-emerald-200'
+                        : state === 'active' ? 'text-blue-600 border-blue-300 shadow-sm shadow-blue-100'
+                        : ['review', 'paused'].includes(state) ? 'text-amber-600 border-amber-300' : state === 'failed' ? 'text-red-600 border-red-300' : 'text-zinc-300 border-zinc-200'
+                      }`}>
+                        <Icon size={12} className={state === 'active' ? 'animate-pulse' : ''} />
+                      </span>
+                      <div>
+                        <span className={`text-xs leading-snug block ${
+                          state === 'waiting' ? 'text-zinc-400 font-normal'
+                          : state === 'active' ? 'font-bold text-blue-900'
+                          : 'font-medium text-zinc-700'
+                        }`}>
+                          {isEn ? stage.title_en : stage.title_vi}
+                        </span>
+                        {state === 'active' && (
+                          <span className="text-[10px] text-blue-600 font-bold">
+                            {isEn ? 'In progress…' : 'Đang thực hiện…'}
+                          </span>
+                        )}
+                        {['review', 'failed', 'cancelled', 'paused'].includes(state) && (
+                          <span className="text-[10px] text-amber-700 font-bold">{statusLabel(task.status, language)}</span>
+                        )}
+                        {state === 'done' && (
+                          <span className="text-[10px] text-emerald-600 font-medium">
+                            {isEn ? 'Completed' : 'Hoàn thành'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+
+            <div className="pt-3 border-t border-zinc-200/80">
+              <Link
+                href={`/research/${params.id}/monitor`}
+                className="inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-3 text-xs font-bold text-zinc-800 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors border border-zinc-200"
+              >
+                <Activity size={13} />
+                {isEn ? "Open Live Monitor" : "Mở giám sát trực tiếp"}
+              </Link>
+            </div>
+          </div>
+        </aside>
       </div>
     </div>
   );

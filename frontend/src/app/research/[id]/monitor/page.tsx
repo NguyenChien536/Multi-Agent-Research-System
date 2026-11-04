@@ -1,4 +1,5 @@
 'use client';
+import { researchErrorText } from '@/components/ResearchErrorNotice';
 
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
@@ -644,7 +645,7 @@ export default function ResearchMonitorPage() {
                               {activity.has_error && (
                                 <div className="rounded-md bg-red-50 border border-red-200 p-2 text-xs text-red-800 flex items-center gap-1.5">
                                   <AlertCircle size={13} className="shrink-0 text-red-600" />
-                                  <span>{isEn ? 'This step reported an execution error. Technical logs are saved in system ledger.' : 'Bước này có ghi nhận lỗi nghiệp vụ. Chi tiết kỹ thuật được lưu trong log vận hành.'}</span>
+                                  <span>{researchErrorText(activity.error_summary, isEn)}</span>
                                 </div>
                               )}
                             </div>
