@@ -1,4 +1,4 @@
-import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, UserDataResumeRequest, ProtocolResponse, AnalysisRunResponse, ExperimentJournalEntryResponse, DatasetUploadResponse, TokenResponse, UserCreate, UserResponse } from '../types';
+﻿import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, UserDataResumeRequest, ProtocolResponse, AnalysisRunResponse, ExperimentJournalEntryResponse, DatasetUploadResponse, TokenResponse, UserCreate, UserResponse } from '../types';
 import type { ResearchMonitor } from '../types/monitoring';
 import type { ReportQuestion, ReportQuestionHistory, ReportVersionMetadata } from '../types/report-questions';
 import type { ReportRevision } from '../types/report-revisions';
@@ -150,6 +150,11 @@ export const api = {
 
     getSources: (id: string) =>
       fetcher<ResearchSourceResponse[]>(`/research/${id}/sources`),
+
+    retrySource: (id: string, sourceId: string) =>
+      fetcher<{ message?: string }>(`/research/${id}/sources/${sourceId}/retry`, {
+        method: 'POST',
+      }),
 
     getAgentRuns: (id: string) =>
       fetcher<AgentRunResponse[]>(`/research/${id}/agent-runs`),

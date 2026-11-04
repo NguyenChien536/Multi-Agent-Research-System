@@ -1,4 +1,4 @@
-export interface BudgetConfig {
+﻿export interface BudgetConfig {
   max_cost_usd?: number;
   max_llm_calls?: number;
   max_input_tokens?: number;
@@ -113,6 +113,7 @@ export interface ResearchReportResponse {
 
 export interface CitationResponse {
   id: string;
+  report_version_id?: string;
   citation_number?: number | null;
   citation_label: string;
   claim_text?: string | null;
@@ -131,15 +132,22 @@ export interface ResearchSourceResponse {
   source_type: string;
   author?: string | null;
   publication_date?: string | null;
+  doi?: string | null;
+  venue?: string | null;
+  search_provider?: string | null;
+  full_text_url?: string | null;
+  text_scope?: string | null;
+  discovery_queries?: string[];
   content_snippet?: string | null;
   summary?: string | null;
   relevance_score: number;
+  ingestion_status?: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | string;
+  ingestion_error?: string | null;
   attribution?: string | null;
   provider_name?: string | null;
   license_name?: string | null;
   created_at: string;
 }
-
 export interface AgentRunResponse {
   id: string;
   research_task_id: string;

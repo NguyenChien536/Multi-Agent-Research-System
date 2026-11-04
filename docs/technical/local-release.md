@@ -1,5 +1,23 @@
 # Bản Docker dùng để demo cuối kỳ
 
+## Cập nhật nghiệm thu candidate 04/11/2026
+
+**Candidate hiện tại: `ad66fd5a4a71` trên nhánh `feature/89-workspace-ui-export-fidelity`.** CI của PR #107 pass đủ sáu job: branch policy, backend syntax/tests, frontend build, Compose build và release runtime. Đã build lại image và triển khai candidate này qua Docker Compose; API, frontend, worker, gateway, PostgreSQL và Redis đều healthy, readiness trả `ready`.
+
+**Ghi chú build Windows:** `npm run build` cục bộ không hoàn tất do `frontend/.next/diagnostics/framework.json` là reparse point trong OneDrive và Next.js báo `EINVAL`. Production build/typecheck pass trong GitHub CI và Docker Linux; không xóa `.next` theo cách đệ quy khi chưa xác định đích của reparse point.
+
+| Kiểm tra candidate hiện tại | Kết quả |
+|---|---|
+| Release runtime không gọi provider | Pass trong CI trên candidate này: gateway, readiness, đăng nhập, ownership, monitor và lỗi khi broker dừng |
+| Dữ liệu sau restart/thay image | Pass: profile, ba bài, trạng thái, monitor và CSV tổng hợp 1.176 byte (SHA-256 khớp) còn nguyên sau restart và sau khi triển khai candidate này; không có bài RUNNING/QUEUED bị gián đoạn |
+| API phiên bản khi chưa có bản thảo | Pass: test PostgreSQL cô lập 1/1; task của chủ sở hữu trả `200 []`, task của người khác vẫn trả `404` |
+| Backup/restore | Pass trên candidate cũ `9a1617abee7b`: backup PostgreSQL + artifacts được khôi phục sang project riêng `synthia-restore-final-9a1617`; file/checksum khớp. Không chạy lại backup/restore sau candidate này |
+| Giao diện đã đăng nhập | Workspace đã kiểm tra bằng tiếng Anh/Việt trên `bd5d60f`; trên candidate hiện tại, trang phiên bản hiển thị đúng trạng thái “chưa có bản thảo”, không hiện lỗi 404 giả và không cho gửi yêu cầu sửa khi chưa có bài |
+| Nội dung bài/Word export | Test frontend pass trong CI; kiểm tra cấu trúc export bằng fixture xác nhận giữ nội dung và tài liệu tham khảo của phiên bản, không thêm DOI/tác giả/abstract/keywords bịa. Chưa kiểm tra file export từ bài thật vì release smoke chưa có bản thảo |
+| Nghiên cứu với provider | **Chưa chạy trên candidate hiện tại.** Ba bài smoke ở trạng thái PENDING; không gọi model hay search API |
+
+PR #107 vẫn là draft. `main` chưa thay đổi và chưa được promote. Các kết quả provider-backed ở những mục lịch sử bên dưới thuộc các candidate cũ; không được xem là bằng chứng chạy provider trên `ad66fd5a4a71`.
+
 **Nghiệm thu local 03/11/2026:** hạ tầng, backup/restore và luồng nghiên cứu đã chạy thực tế. #93 và #95 đã sửa, kiểm thử và merge vào `develop`. Candidate `2bc6151573d8` đã qua đủ 6 kiểm tra CI và chạy với provider thật; mã runtime tương ứng được merge tại `ac4c886a3eec`. **Chưa đưa lên main hoặc chốt chất lượng bài nộp**: tiếp tục cải thiện độ phủ bằng chứng (#86) và đánh giá pilot (#83).
 
 | Kiểm tra thực tế | Kết quả |
