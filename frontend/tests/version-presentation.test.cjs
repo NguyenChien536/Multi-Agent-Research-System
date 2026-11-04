@@ -12,9 +12,11 @@ const exported = {};
 new Function('require', 'exports', compiled)(require, exported);
 
 test('revision metadata labels identify versions without inventing a DOI', () => {
-  assert.equal(exported.formatVersionLabel(3, 'NEEDS_REVIEW', true), 'Version v3 · NEEDS_REVIEW');
-  assert.equal(exported.formatVersionLabel(3, 'NEEDS_REVIEW', false), 'Phiên bản v3 · NEEDS_REVIEW');
-  assert.equal(exported.formatVersionLabel(undefined, undefined, true), 'Version unavailable · status unavailable');
-  assert.equal(exported.formatVersionLabel(undefined, undefined, false), 'Chưa có số phiên bản · chưa có trạng thái');
+  assert.equal(exported.formatVersionLabel(3, 'NEEDS_REVIEW', true), 'Version v3 · Review needed');
+  assert.equal(exported.formatVersionLabel(3, 'NEEDS_REVIEW', false), 'Phiên bản v3 · Cần kiểm tra');
+  assert.equal(exported.formatVersionLabel(undefined, undefined, true), 'Version unavailable · Review status unavailable');
+  assert.equal(exported.formatVersionLabel(undefined, undefined, false), 'Chưa có số phiên bản · Chưa có kết quả kiểm tra');
+  assert.equal(exported.formatReviewStatus('UNKNOWN', true), 'Review status unavailable');
+  assert.equal(exported.formatReviewStatus('PASSED', true), 'Automated checks passed');
   assert.ok(!source.includes('10.synthia'));
 });

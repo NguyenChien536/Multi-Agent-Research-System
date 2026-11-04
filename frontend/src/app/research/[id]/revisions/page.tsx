@@ -11,7 +11,8 @@ import { safeSourceUrl } from '@/lib/report-questions';
 import type { ReportVersionMetadata } from '@/types/report-questions';
 import { normalizeCitationLabel, revisionActive, revisionStatus, type ReportRevision } from '@/types/report-revisions';
 import { PublicationArticle, PublicationExport } from '@/components/research/PublicationPaper';
-import { formatVersionLabel } from '@/lib/versionPresentation';
+import { formatVersionLabel, formatReviewStatus } from '@/lib/versionPresentation';
+import { withoutRepeatedTitle } from '@/lib/paperPresentation';
 
 export default function ManuscriptRevisions() {
   const { id } = useParams<{ id: string }>();
@@ -236,7 +237,7 @@ export default function ManuscriptRevisions() {
               {!versions.length && <option value={0}>{isEn ? "No versions available" : "Chưa có phiên bản"}</option>}
               {versions.map(item => (
                 <option key={item.version_id} value={item.version_number}>
-                  v{item.version_number} — {item.review_status} — {new Date(item.created_at).toLocaleString(isEn ? 'en-US' : 'vi-VN')}
+                  v{item.version_number} — {formatReviewStatus(item.review_status, isEn)} — {new Date(item.created_at).toLocaleString(isEn ? 'en-US' : 'vi-VN')}
                 </option>
               ))}
             </select>
@@ -258,7 +259,7 @@ export default function ManuscriptRevisions() {
               <span>{isEn ? "Word count:" : "Số từ:"} <strong>{article.word_count.toLocaleString()}</strong></span>
               <span>•</span>
               <span className="px-2 py-0.5 rounded bg-zinc-100 border border-zinc-200 text-zinc-800 text-[11px] font-semibold">
-                {article.review_status}
+                {formatReviewStatus(article.review_status, isEn)}
               </span>
             </div>
           )}
@@ -293,7 +294,7 @@ export default function ManuscriptRevisions() {
                 {/* Article Body */}
                 <div className="pt-2">
                   <PublicationArticle
-                    content={article.content_markdown}
+                    content={withoutRepeatedTitle(article.content_markdown, article.title)}
                     metadata={article.review_metadata}
                     academicStyle={true}
                     onCitationClick={label => {
