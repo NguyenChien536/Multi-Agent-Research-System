@@ -15,6 +15,7 @@ import { Badge, Card } from '@/components/ui/Components';
 import { Button } from '@/components/ui/Button';
 import { MarkdownViewer, extractHeadings } from '@/components/ui/MarkdownViewer';
 import { PublicationArticle, PublicationExport } from '@/components/research/PublicationPaper';
+import { ManuscriptReadiness } from '@/components/research/ManuscriptReadiness';
 import { useLanguage } from '@/lib/i18n';
 import { exportPaperToDocx } from '@/lib/docxExport';
 import { stageState } from '@/lib/monitoring';
@@ -1301,12 +1302,13 @@ export default function WorkspacePage() {
               <div className={`paper-space w-full ${isWidePaper ? 'max-w-[1600px]' : 'max-w-7xl'} mx-auto space-y-6 transition-all duration-300 print:max-w-none print:m-0 print:p-0 print:space-y-0`}>
                 {(['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(task.status) || report?.research_task_id === params.id) ? report?.research_task_id === params.id ? (
                   <div className="space-y-6 print:space-y-0">
-                    {task.status !== 'COMPLETED' && (
+                    <ManuscriptReadiness report={report} taskId={params.id} isEn={isEn} />
+                    {['FAILED', 'CANCELLED'].includes(task.status) && (
                       <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800 flex items-center justify-between print:hidden">
                         <span>{statusLabel(task.status, language)} — {['FAILED', 'CANCELLED'].includes(task.status)
                           ? (isEn ? `Showing saved version ${report.version_number}; the latest operation did not replace it.` : `Đang hiển thị phiên bản ${report.version_number} đã lưu; thao tác vừa rồi không ghi đè bản này.`)
                           : (isEn ? 'Review evidence, validation findings and remaining limitations before use.' : 'Cần rà soát bằng chứng, kết quả kiểm tra và các hạn chế trước khi sử dụng.')}</span>
-                        <Badge variant="outline">{task.status}</Badge>
+                        <Badge variant="outline">{statusLabel(task.status, language)}</Badge>
                       </div>
                     )}
 
@@ -1358,7 +1360,7 @@ export default function WorkspacePage() {
                             </div>
 
                             {/* Quick Actions */}
-                            <div className="flex items-center gap-2 print:hidden">
+                            <div className="flex flex-wrap items-center gap-2 print:hidden">
                               <Button
                                 variant="outline"
                                 onClick={() => window.print()}

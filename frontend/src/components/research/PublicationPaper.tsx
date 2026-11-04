@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ComponentProps } from 'react';
+import { useId, useState, type ComponentProps } from 'react';
 import { api } from '@/lib/api';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import Link from 'next/link';
@@ -11,6 +11,7 @@ export function PublicationExport({ taskId, version, isEn, showRevisionLink = tr
   const [template, setTemplate] = useState<'IEEE_CONFERENCE' | 'ACM_SIGCONF'>('IEEE_CONFERENCE');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const templateId = useId();
   const download = async () => {
     if (!version || busy) return;
     setBusy(true); setError('');
@@ -30,8 +31,11 @@ export function PublicationExport({ taskId, version, isEn, showRevisionLink = tr
     {version && showRevisionLink && <Link href={`/research/${taskId}/revisions?version=${version}`} className="rounded border px-3 py-2 font-medium">
       {isEn ? 'Revise & view versions' : 'Sửa bài & xem phiên bản'}
     </Link>}
-    <label className="font-medium" htmlFor="publication-template">{isEn ? 'Publication source' : 'Mẫu xuất bản'}</label>
-    <select id="publication-template" value={template} onChange={e => setTemplate(e.target.value as typeof template)} disabled={busy} className="border rounded px-2 py-2 bg-white text-zinc-900">
+    <details className="w-full rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+    <summary className="cursor-pointer font-medium text-zinc-700">{isEn ? 'LaTeX & research files' : 'LaTeX và tệp nghiên cứu'}</summary>
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+    <label className="font-medium" htmlFor={templateId}>{isEn ? 'Template' : 'Mẫu trình bày'}</label>
+    <select id={templateId} value={template} onChange={e => setTemplate(e.target.value as typeof template)} disabled={busy} className="border rounded px-2 py-2 bg-white text-zinc-900">
       <option value="IEEE_CONFERENCE">IEEE Conference</option><option value="ACM_SIGCONF">ACM SIGCONF</option>
     </select>
     <button disabled={busy || !version} onClick={() => void download()} className="rounded border px-3 py-2 font-medium disabled:opacity-50">
@@ -39,6 +43,8 @@ export function PublicationExport({ taskId, version, isEn, showRevisionLink = tr
     </button>
     <span className="text-zinc-500">{isEn ? 'Compile the ZIP with XeLaTeX / Overleaf.' : 'Biên dịch ZIP bằng XeLaTeX / Overleaf.'}</span>
     <ExperimentBundleExport taskId={taskId} version={version} isEn={isEn} />
+    </div>
+    </details>
     {error && <p role="alert" className="w-full text-red-700">{error}</p>}
   </div>;
 }

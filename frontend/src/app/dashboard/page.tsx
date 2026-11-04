@@ -117,7 +117,7 @@ export default function DashboardPage() {
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'ATTENTION' | 'COMPLETED'>('ALL');
   const [typeFilter, setTypeFilter] = useState<'ALL' | 'REVIEW' | 'EMPIRICAL_COMPUTATIONAL' | 'EMPIRICAL_HUMAN'>('ALL');
   const [depthFilter, setDepthFilter] = useState<'ALL' | 'SHALLOW' | 'STANDARD' | 'DEEP'>('ALL');
-  const [showResourceTable, setShowResourceTable] = useState(true);
+  const [showResourceTable, setShowResourceTable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
