@@ -11,6 +11,7 @@ import { safeSourceUrl } from '@/lib/report-questions';
 import type { ReportVersionMetadata } from '@/types/report-questions';
 import { normalizeCitationLabel, revisionActive, revisionStatus, type ReportRevision } from '@/types/report-revisions';
 import { PublicationArticle, PublicationExport } from '@/components/research/PublicationPaper';
+import { formatVersionLabel } from '@/lib/versionPresentation';
 
 export default function ManuscriptRevisions() {
   const { id } = useParams<{ id: string }>();
@@ -285,7 +286,7 @@ export default function ManuscriptRevisions() {
                     {article.title}
                   </h2>
                   <p className="mt-1 text-xs text-zinc-500 font-mono">
-                    DOI: 10.synthia/{id.slice(0, 8)} · v{article.version_number} ({article.review_status})
+                    {formatVersionLabel(article.version_number, article.review_status, isEn)}
                   </p>
                 </div>
 
