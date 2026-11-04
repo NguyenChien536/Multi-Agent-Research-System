@@ -42,6 +42,9 @@ def get_active_model_name(is_smart: bool = False) -> str:
     from app.core.runtime import current_runtime
     if runtime := current_runtime():
         return runtime.model_name
+    from app.services.model_connection import current_connection
+    if connection := current_connection():
+        return connection.model_tag
     providers = [p.strip().lower() for p in settings.LLM_PROVIDER_PRIORITY.split(",")]
     primary_provider = providers[0] if providers else "gemini"
 
@@ -58,6 +61,10 @@ def get_active_model_name(is_smart: bool = False) -> str:
 
 def estimate_cost(model_name: Optional[str], input_tokens: int, output_tokens: int) -> float:
     """Calculate estimated cost in USD based on model pricing per 1M tokens."""
+    from app.services.model_connection import current_connection
+    if connection := current_connection():
+        if model_name == connection.model_tag:
+            return connection.estimate(input_tokens, output_tokens)
     if not model_name:
         pricing = DEFAULT_PRICING
     else:

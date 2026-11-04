@@ -2,7 +2,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Body, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Body, status, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -47,6 +47,27 @@ from app.services.fieldwork_intake import MAX_RESULT_BYTES, RESULT_TYPES, valida
 router = APIRouter()
 
 
+@router.get("/model-connections/options")
+async def model_connection_options(current_user: User = Depends(get_current_user)):
+    return {"protocol": "openai_compatible", "base_urls": [root.strip().rstrip('/')
+        for root in settings.CUSTOM_LLM_API_ROOTS.split(',') if root.strip()]}
+
+
+@router.delete("/{task_id}/model-connection", status_code=204)
+async def revoke_model_connection(task_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                                  current_user: User = Depends(get_current_user)):
+    task = await db.scalar(select(ResearchTask).where(ResearchTask.id == task_id,
+        ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING").with_for_update())
+    if task is None:
+        raise HTTPException(404, "Research task not found")
+    config = dict(task.budget_config or {})
+    if stored := config.get('_llm_connection'):
+        config['_llm_connection'] = {'profile': stored.get('profile', {}), 'revoked': True}
+        task.budget_config = config
+        await db.commit()
+    return Response(status_code=204)
+
+
 async def _require_active_workflow_run(db: AsyncSession, task: ResearchTask, expected_status: str) -> WorkflowRun:
     run = await db.scalar(
         select(WorkflowRun)
@@ -87,6 +108,7 @@ async def create_research_task(
     }
     
     task = ResearchTask(
+        id=uuid.uuid4(),
         user_id=current_user.id,
         title=task_in.title,
         research_question=task_in.research_question,
@@ -102,6 +124,13 @@ async def create_research_task(
         require_plan_approval=task_in.require_plan_approval,
         status="PENDING",
     )
+    if task_in.llm_connection is not None:
+        from app.services.model_connection import seal_connection
+        try:
+            sealed = seal_connection(task_in.llm_connection, task.id, current_user.id)
+        except ValueError:
+            raise HTTPException(503, "Private API connections are not configured securely on this server") from None
+        task.budget_config = {**budget_dict, "_llm_connection": sealed}
     db.add(task)
     await db.commit()
     await db.refresh(task)

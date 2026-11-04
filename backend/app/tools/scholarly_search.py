@@ -133,7 +133,8 @@ class ScholarlySearch:
                 "per_page": min(max(limit, 1), 25),
                 "select": "id,doi,title,publication_year,publication_date,authorships,primary_location,best_oa_location,abstract_inverted_index",
             }
-            if settings.OPENALEX_API_KEY:
+            from app.services.model_connection import current_connection
+            if settings.OPENALEX_API_KEY and current_connection() is None:
                 params["api_key"] = settings.OPENALEX_API_KEY
             response = await client.get(OPENALEX_API, params=params)
             response.raise_for_status()
@@ -207,11 +208,14 @@ async def execute_scholarly_searches(
 ) -> tuple[list[SearchResult], list[dict[str, Any]]]:
     provider_slots = {"search_openalex": asyncio.Semaphore(3), "search_crossref": asyncio.Semaphore(2)}
     async def guarded(method, query):
+        from app.services.model_connection import current_connection
+        unkeyed = current_connection() is not None
         reservation = None
         if budget_context:
             reservation = await reserve_provider_call(
                 task_id=budget_context["task_id"], attempt_number=budget_context["attempt_number"],
-                kind="search", fixed_cost_usd=settings.SCHOLARLY_REQUEST_COST_USD,
+                kind="search", fixed_cost_usd=0 if unkeyed else settings.SCHOLARLY_REQUEST_COST_USD,
+                model=("public:openalex" if method.__name__ == "search_openalex" else "public:crossref") if unkeyed else None,
             )
         response = None
         try:
@@ -224,7 +228,7 @@ async def execute_scholarly_searches(
                 await settle_provider_call(
                     task_id=budget_context["task_id"], reservation_id=reservation,
                     input_tokens=0, output_tokens=0,
-                    cost_usd=(settings.SCHOLARLY_REQUEST_COST_USD if response and response[1].get("status") == "SUCCESS" and method.__name__ == "search_openalex" and settings.OPENALEX_API_KEY else 0),
+                    cost_usd=(settings.SCHOLARLY_REQUEST_COST_USD if not unkeyed and response and response[1].get("status") == "SUCCESS" and method.__name__ == "search_openalex" and settings.OPENALEX_API_KEY else 0),
                     succeeded=bool(response and response[1].get("status") == "SUCCESS"),
                 )
         if budget_context:

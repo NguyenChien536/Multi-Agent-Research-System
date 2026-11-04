@@ -83,6 +83,8 @@ export const api = {
     me: () => fetcher<UserResponse>('/auth/me'),
   },
   tasks: {
+    modelConnectionOptions: () => fetcher<{ protocol: string; base_urls: string[] }>('/research/model-connections/options'),
+    revokeModelConnection: (id: string) => fetcher<void>(`/research/${id}/model-connection`, { method: 'DELETE' }),
     downloadArtifact: (id: string, artifactId: string) =>
       fetcher<Blob>(`/research/${id}/artifacts/${artifactId}/download`, {cache: 'no-store'}, 'blob'),
     create: (data: ResearchTaskCreate) =>

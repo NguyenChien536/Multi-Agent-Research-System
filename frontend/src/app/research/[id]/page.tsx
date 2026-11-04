@@ -1,4 +1,5 @@
 'use client';
+import { ModelConnectionSummary } from '@/components/ModelConnectionSummary';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -2420,6 +2421,7 @@ export default function WorkspacePage() {
               <div className="w-full max-w-7xl mx-auto space-y-6">
                 <Card className="p-6 space-y-5">
                   <h2 className="text-lg font-bold text-zinc-900 border-b border-zinc-200 pb-3">{isEn ? "Task Configuration & Metadata" : "Cấu hình & Chi tiết nhiệm vụ"}</h2>
+                  <ModelConnectionSummary key={task.id} task={task} isEn={isEn} />
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>

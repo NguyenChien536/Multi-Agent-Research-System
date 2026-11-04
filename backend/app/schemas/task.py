@@ -2,6 +2,7 @@ import uuid
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict, model_validator
+from app.services.model_connection import ModelConnectionInput
 
 
 class BudgetConfigSchema(BaseModel):
@@ -25,6 +26,7 @@ class ResearchTaskCreate(BaseModel):
     report_length: str = Field(default="MEDIUM", pattern="^(SHORT|MEDIUM|LONG)$")
     citation_style: str = Field(default="IEEE", pattern="^(IEEE|APA|HARVARD)$")
     budget: Optional[BudgetConfigSchema] = None
+    llm_connection: Optional[ModelConnectionInput] = Field(default=None, repr=False)
 
 
 class ResearchTaskResponse(BaseModel):
@@ -47,6 +49,7 @@ class ResearchTaskResponse(BaseModel):
     citation_style: str = "IEEE"
     total_cost_usd: float
     total_tokens_used: int
+    model_connection: Optional[Dict[str, Any]] = None
     plan: Optional[Dict[str, Any]] = None
     plan_version: int = 0
     plan_approved: bool = False
@@ -63,6 +66,13 @@ class ResearchTaskResponse(BaseModel):
     @classmethod
     def canonical_usage_totals(cls, value, handler):
         result = handler(value)
+        connection = (getattr(value, 'budget_config', None) or {}).get('_llm_connection')
+        if isinstance(connection, dict):
+            profile = connection.get('profile') or {}
+            result.model_connection = {key: profile.get(key) for key in (
+                'base_url', 'model', 'input_price_per_million', 'output_price_per_million')}
+            result.model_connection['revoked'] = bool(connection.get('revoked'))
+            result.model_connection['cost_basis'] = 'user_declared_estimate_not_invoice'
         # Historical paused records can have stale denormalized totals. Read
         # their durable ledger without exposing private budget/reservation data.
         usage = (getattr(value, 'budget_config', None) or {}).get('_provider_usage')

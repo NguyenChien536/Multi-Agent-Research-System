@@ -108,8 +108,10 @@ async def ask_question(db: AsyncSession, task_id: uuid.UUID, version_number: int
         return question
     status, answer, references, error_code = "FAILED", None, [], None
     try:
-        async with asyncio.timeout(QA_TIMEOUT_SECONDS):
-            status, answer, references = await generate_answer(task_id, attempt_number, question_id, payload.question, context)
+        from app.services.model_connection import async_connection_scope
+        async with async_connection_scope(task.budget_config, task.id, task.user_id):
+            async with asyncio.timeout(QA_TIMEOUT_SECONDS):
+                status, answer, references = await generate_answer(task_id, attempt_number, question_id, payload.question, context)
     except ProviderBudgetExceeded:
         status, error_code = "BUDGET_LIMIT", "BUDGET_LIMIT"
     except ResearchTaskStopped:

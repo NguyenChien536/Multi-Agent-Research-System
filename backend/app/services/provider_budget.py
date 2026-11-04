@@ -171,20 +171,32 @@ async def reserve_provider_call(
 
         input_tokens = max(0, int(input_tokens))
         output_tokens = max(0, int(output_tokens))
+        from app.services.model_connection import open_connection
+        connection = open_connection(config, task.id, task.user_id)
         if kind == "llm":
-            if not model or not any(key in model.lower() for key in MODEL_PRICING):
+            if connection is not None:
+                if model != connection.model_tag:
+                    raise ProviderBudgetExceeded("Only the task owner's configured model may be called")
+                call_cost = connection.estimate(input_tokens, output_tokens)
+            elif not model or model.startswith("byok:") or not any(key in model.lower() for key in MODEL_PRICING):
                 raise ProviderBudgetExceeded("Cannot price an unidentified LLM; provider call blocked")
-            call_cost = estimate_cost(model, input_tokens, output_tokens)
+            else:
+                call_cost = estimate_cost(model, input_tokens, output_tokens)
             next_llm_calls = int(usage.get("llm_calls", 0)) + 1
             if next_llm_calls > limits[0]:
                 raise ProviderBudgetExceeded(f"LLM call limit reached ({limits[0]})")
         elif kind == "embedding":
+            if connection is not None:
+                raise ProviderBudgetExceeded("Server embedding credentials are disabled for custom API tasks")
             if not model or not any(key in model.lower() for key in MODEL_PRICING):
                 raise ProviderBudgetExceeded("Cannot price unidentified embeddings; provider call blocked")
             call_cost = estimate_cost(model, input_tokens, 0)
             next_embedding_calls = int(usage.get("embedding_calls", 0)) + 1
         elif kind == "search":
-            if fixed_cost_usd is None or fixed_cost_usd <= 0:
+            if connection is not None and (model not in {"public:crossref", "public:openalex"} or fixed_cost_usd != 0):
+                raise ProviderBudgetExceeded("Custom API tasks use only unkeyed scholarly discovery")
+            public_search = model in {"public:crossref", "public:openalex"} and fixed_cost_usd == 0
+            if not public_search and (fixed_cost_usd is None or fixed_cost_usd <= 0):
                 raise ProviderBudgetExceeded("Search price is unknown; configure a positive per-request ceiling")
             call_cost = float(fixed_cost_usd)
             next_search_calls = int(usage.get("search_calls", 0)) + 1

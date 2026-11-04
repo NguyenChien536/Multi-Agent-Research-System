@@ -60,6 +60,9 @@ class EmbedderTool:
         self.dimension = settings.EMBEDDING_DIMENSION
         self.embeddings = None
         providers = [p.strip().lower() for p in settings.EMBEDDING_PROVIDER_PRIORITY.split(",")]
+        from app.services.model_connection import current_connection
+        if current_connection() is not None:
+            providers = []  # Existing lexical retrieval works without a paid embedding API.
         
         for provider in providers:
             if provider == "gemini" and getattr(settings, "GEMINI_API_KEY", None) and "your_" not in settings.GEMINI_API_KEY:

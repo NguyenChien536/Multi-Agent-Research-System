@@ -10,7 +10,8 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
-import type { ResearchType, UserResponse } from '@/types';
+import type { ResearchType, UserResponse, ModelConnectionInput } from '@/types';
+import { ModelConnectionFields } from '@/components/ModelConnectionFields';
 
 const OUTPUT_LANGUAGES = [
   { code: 'en', name: 'English', native: 'English (Default)', desc_en: 'Standard international scientific draft', desc_vi: 'Văn bản báo cáo chuẩn học thuật quốc tế' },
@@ -38,6 +39,9 @@ export default function Home() {
   const [taskLanguage, setTaskLanguage] = useState<string>('en'); // Default to English
   const [requirePlanApproval, setRequirePlanApproval] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [maxSources, setMaxSources] = useState(12);
+  // Secrets remain in memory only; never add this to the saved draft.
+  const [modelConnection, setModelConnection] = useState<ModelConnectionInput | null>(null);
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -170,7 +174,11 @@ export default function Home() {
         citation_style: citationStyle,
         language: taskLanguage || 'en', // Default to English
         require_plan_approval: requirePlanApproval,
+        max_sources: maxSources,
+        llm_connection: modelConnection || undefined,
       });
+
+      setModelConnection(null);
 
       // Tải lên các file PDF riêng tư nếu có trước khi bắt đầu workflow
       if (pdfFiles.length > 0) {
@@ -447,6 +455,16 @@ export default function Home() {
                 </div>
 
                 {/* 1. Research Depth (Cards) */}
+                <ModelConnectionFields value={modelConnection} onChange={setModelConnection} isEn={isEn} />
+                <label className="block space-y-1 text-xs font-medium text-zinc-700">
+                  <span>{isEn ? 'Maximum sources to collect' : 'Số nguồn tối đa cần thu thập'}</span>
+                  <input type="number" min={3} max={30} required value={maxSources}
+                    onChange={event => setMaxSources(Number(event.target.value))}
+                    className="block w-28 rounded-lg border border-zinc-200 p-2 text-sm" />
+                  <span className="block font-normal text-zinc-500">{isEn
+                    ? '3–30. Only relevant sources supporting the manuscript are cited; more sources may take longer.'
+                    : '3–30. Chỉ trích dẫn nguồn phù hợp có hỗ trợ nội dung; tìm nhiều nguồn có thể lâu hơn.'}</span>
+                </label>
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-600">
                     {isEn ? 'Depth' : 'Độ sâu nghiên cứu'}

@@ -39,7 +39,7 @@ if ($Action -eq 'init') {
     if (Test-Path -LiteralPath $sourceEnv) {
         # Copy only provider settings; keep development DB, auth and mock settings out.
         $lines += Get-Content -LiteralPath $sourceEnv | Where-Object {
-            $_ -match '^(TAVILY_|OPENALEX_|CROSSREF_|SCHOLARLY_|ANTHROPIC_|OPENAI_|GEMINI_|GROQ_|LLM_PROVIDER_|EMBEDDING_PROVIDER_)'
+            $_ -match '^(TAVILY_|OPENALEX_|CROSSREF_|SCHOLARLY_|ANTHROPIC_|OPENAI_|GEMINI_|GROQ_|LLM_PROVIDER_|EMBEDDING_PROVIDER_|CUSTOM_LLM_API_ROOTS)'
         }
     }
     [IO.File]::WriteAllLines($EnvFile, $lines, (New-Object Text.UTF8Encoding $false))

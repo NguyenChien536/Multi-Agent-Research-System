@@ -222,6 +222,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
     revision_request = None
     claim_attempt: int | None = None
     workflow_run_id: uuid.UUID | None = None
+    connection_token = None
     try:
         async with AsyncSessionLocal() as session:
             # Claim only a queued task. A duplicate Celery delivery is acknowledged
@@ -331,6 +332,8 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             claim_attempt = task.attempt_number
             user_id = task.user_id
             await session.commit()
+            from app.services.model_connection import activate_connection
+            connection_token = activate_connection(task.budget_config, task.id, task.user_id)
             await _ensure_checkpoint_schema()
             heartbeat = asyncio.create_task(renew_worker_lease(task_id, claim_attempt))
             from app.services.provider_budget import resume_active_clock, remaining_active_seconds
@@ -898,6 +901,9 @@ async def run_langgraph_workflow(task_id: str) -> dict:
         logger.exception("Research execution failed task=%s attempt=%s", task_id, claim_attempt)
         raise
     finally:
+        if connection_token is not None:
+            from app.services.model_connection import reset_connection_async
+            await reset_connection_async(connection_token)
         if heartbeat is not None:
             heartbeat.cancel()
             try:

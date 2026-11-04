@@ -26,6 +26,13 @@ def _gemini_wire_schema(schema: dict) -> dict:
 
 def compatible_structured_output(model_name: str, model: Any, schema: Any):
     """Native JSON output, followed by the original schema's full validation."""
+    if model_name.startswith("byok:") and isinstance(schema, type) and issubclass(schema, BaseModel):
+        import json
+        from langchain_core.messages import SystemMessage
+        schema_text = json.dumps(schema.model_json_schema(), ensure_ascii=False)
+        def add_schema(messages):
+            return [SystemMessage(content="Return one JSON object matching this schema exactly:\n" + schema_text), *messages]
+        return RunnableLambda(add_schema) | model.with_structured_output(schema, method="json_mode")
     if model_name.startswith("gemini-") and isinstance(schema, type) and issubclass(schema, BaseModel):
         return model.with_structured_output(_gemini_wire_schema(schema.model_json_schema())) | RunnableLambda(schema.model_validate)
     return model.with_structured_output(schema)

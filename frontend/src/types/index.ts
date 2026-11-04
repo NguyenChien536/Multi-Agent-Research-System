@@ -8,6 +8,14 @@
 
 export type ResearchType = "REVIEW" | "EMPIRICAL_COMPUTATIONAL" | "EMPIRICAL_HUMAN";
 
+export interface ModelConnectionInput {
+  api_key: string;
+  base_url: string;
+  model: string;
+  input_price_per_million: number;
+  output_price_per_million: number;
+}
+
 export interface ResearchTaskCreate {
   title: string;
   research_question: string;
@@ -21,6 +29,7 @@ export interface ResearchTaskCreate {
   report_length?: "SHORT" | "MEDIUM" | "LONG";
   citation_style?: "IEEE" | "APA" | "HARVARD";
   budget?: BudgetConfig;
+  llm_connection?: ModelConnectionInput;
 }
 
 export interface ResearchTaskResponse {
@@ -43,6 +52,7 @@ export interface ResearchTaskResponse {
   citation_style?: string;
   total_cost_usd: number;
   total_tokens_used: number;
+  model_connection?: Omit<ModelConnectionInput, 'api_key'> & { revoked: boolean; cost_basis: string };
   plan?: {
     research_angle?: string;
     search_queries?: string[];

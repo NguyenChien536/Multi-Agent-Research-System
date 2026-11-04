@@ -92,14 +92,16 @@ _BUDGET_CALL_CONTEXT: contextvars.ContextVar[dict[str, Any] | None] = contextvar
 class BudgetedFallbackLLM:
     """Try configured providers in order, reserving budget for every attempt."""
 
-    def __init__(self, models: list[tuple[str, Any]], *, pace_requests: bool = False):
+    def __init__(self, models: list[tuple[str, Any]], *, pace_requests: bool = False, structured_schema: Any = None):
         self.models = models
         self.pace_requests = pace_requests
+        self.structured_schema = structured_schema
 
     def with_structured_output(self, schema: Any):
         return BudgetedFallbackLLM(
             [(model_name, compatible_structured_output(model_name, model, schema)) for model_name, model in self.models],
             pace_requests=self.pace_requests,
+            structured_schema=schema,
         )
 
     async def ainvoke(self, messages: Any, **kwargs: Any):
@@ -110,13 +112,24 @@ class BudgetedFallbackLLM:
             if self.pace_requests:
                 from app.services.provider_pacing import wait_for_gemini_slot
                 await wait_for_gemini_slot(model_name)
+            extra_tokens = 0
+            if context and self.structured_schema is not None:
+                import json
+                try:
+                    if hasattr(self.structured_schema, "model_json_schema"):
+                        schema_str = json.dumps(self.structured_schema.model_json_schema(), ensure_ascii=False)
+                    else:
+                        schema_str = str(self.structured_schema)
+                    extra_tokens = estimate_tokens("Return one JSON object matching this schema exactly:\n" + schema_str)
+                except Exception:
+                    pass
             if context:
                 reservation_id = await reserve_provider_call(
                     task_id=context["task_id"],
                     attempt_number=context["attempt_number"],
                     kind="llm",
                     model=model_name,
-                    input_tokens=context["input_tokens"],
+                    input_tokens=context["input_tokens"] + extra_tokens,
                     output_tokens=context["output_tokens"],
                 )
             try:
@@ -124,13 +137,19 @@ class BudgetedFallbackLLM:
                     from app.services.provider_budget import assert_task_active
                     await assert_task_active(context["task_id"], context["attempt_number"])
                 async with asyncio.timeout(settings.PROVIDER_CALL_TIMEOUT_SECONDS):
-                    response = await model.ainvoke(messages, **kwargs)
+                    from langsmith import tracing_context
+                    with tracing_context(enabled=False if model_name.startswith("byok:") else None):
+                        response = await model.ainvoke(messages, **kwargs)
                 if reservation_id:
                     prompt_text = context["prompt_text"]
                     output_text = response.model_dump_json() if hasattr(response, "model_dump_json") else str(
                         getattr(response, "content", response)
                     )
                     input_tokens, output_tokens = extract_tokens(response, prompt_text, output_text)
+                    # Provider usage already includes the schema. Add its estimate
+                    # only when structured parsing discarded usage metadata.
+                    if not getattr(response, "usage_metadata", None) and not getattr(response, "response_metadata", None):
+                        input_tokens += extra_tokens
                     await settle_provider_call(
                         task_id=context["task_id"],
                         reservation_id=reservation_id,
@@ -158,6 +177,19 @@ class BudgetedFallbackLLM:
                     await record_gemini_rate_limit(model_name, exc)
                 logger.warning("LLM provider attempt failed (%s); trying the next configured provider", model_name)
         if last_error:
+            if any(name.startswith("byok:") for name, _ in self.models):
+                err_str = str(last_error).lower()
+                if "429" in err_str or "rate limit" in err_str or "quota" in err_str or "credit" in err_str:
+                    raise RuntimeError("Your API connection reached its rate limit or quota (HTTP 429). Please check your account credits.") from None
+                if "401" in err_str or "unauthorized" in err_str or "invalid api key" in err_str or "authentication" in err_str:
+                    raise RuntimeError("Your API key was rejected by the provider (HTTP 401). Please verify your API key.") from None
+                if "404" in err_str or "not found" in err_str:
+                    raise RuntimeError("The model was not found on this provider (HTTP 404). Please verify your model name.") from None
+                if "outputparser" in last_error.__class__.__name__.lower() or "validation" in err_str or "json" in err_str:
+                    raise RuntimeError("The model failed to produce valid structured JSON output for this workflow step. Please check if this model supports structured output.") from None
+                if isinstance(last_error, (TimeoutError, asyncio.TimeoutError)) or "timeout" in err_str:
+                    raise RuntimeError("The API connection timed out. The provider endpoint may be unreachable or responding too slowly.") from None
+                raise RuntimeError(f"Your API connection failed ({last_error.__class__.__name__}). Check its key, model, quota and supported output format.") from None
             raise last_error
         raise RuntimeError("No LLM provider is configured")
 
@@ -179,6 +211,9 @@ def _provider_model_names(provider: str, is_smart: bool) -> list[str]:
 def build_llm_chain(is_smart: bool = False):
     if runtime := current_runtime():
         return runtime.llm
+    from app.services.model_connection import current_connection, build_connection_client
+    if connection := current_connection():
+        return BudgetedFallbackLLM([(connection.model_tag, build_connection_client(connection))])
     providers = [p.strip().lower() for p in settings.LLM_PROVIDER_PRIORITY.split(",")]
     models: list[tuple[str, Any]] = []
     
@@ -936,17 +971,18 @@ async def analyst_node(state: ResearchState) -> Dict[str, Any]:
         async def process_query(need: dict) -> tuple[List[Dict], List[Any]]:
             query = need["question"]
             async with AsyncSessionLocal() as db:
-                # RAG: Lấy top 3 chunks liên quan nhất cho query
+                # RAG: Lấy chunks liên quan nhất cho query từ đa dạng nguồn
+                retrieval_limit = 6
                 if state.get("enforce_provider_budget"):
                     similar_chunks = await embedder.search_similar_chunks(
-                        db, task_id, query, limit=3,
+                        db, task_id, query, limit=retrieval_limit,
                         budget_context={
                             "task_id": state["task_id"],
                             "attempt_number": state.get("attempt_number", 1),
                         },
                     )
                 else:
-                    similar_chunks = await embedder.search_similar_chunks(db, task_id, query, limit=3)
+                    similar_chunks = await embedder.search_similar_chunks(db, task_id, query, limit=retrieval_limit)
 
                 if not similar_chunks:
                     return [], []
@@ -1501,6 +1537,27 @@ async def experiment_runner_node(state: ResearchState) -> Dict[str, Any]:
                 logger.exception("Failed to persist technical experiment failure for task %s", task_id_str)
         raise
 
+def format_section_outline_prompt(section_outline: list[Any], contract: dict | None = None) -> str:
+    if not section_outline and not contract:
+        return ""
+    lines = [
+        "YÊU CẦU CẤU TRÚC TIÊU ĐỀ CON H3 (SUBSECTIONS):",
+        "Mỗi phần thân bài chính (Synthesis, Review Methods, Methods, Setup, Results, Discussion) BẮT BUỘC phải tổ chức thành từ 2 đến 4 mục con H3 (### <Tiêu đề chuyên đề cụ thể>), không để mục trống, không chỉ liệt kê gạch đầu dòng. Sử dụng đề cương lập luận sau làm cấu trúc định hướng:",
+    ]
+    if section_outline:
+        for sec in section_outline:
+            sec_id = sec.get("section_id") if isinstance(sec, dict) else getattr(sec, "section_id", "")
+            titles = sec.get("subsection_titles") if isinstance(sec, dict) else getattr(sec, "subsection_titles", [])
+            purpose = sec.get("purpose") if isinstance(sec, dict) else getattr(sec, "purpose", "")
+            titles_str = ", ".join(f"### {t}" for t in titles) if titles else "2–4 mục con H3"
+            lines.append(f"- Phần '{sec_id}': Gồm các mục con {titles_str}. Mục tiêu: {purpose}")
+    elif contract and contract.get("sections"):
+        for s in contract.get("sections", []):
+            if s.get("id") in ("synthesis", "review_methods", "methods", "setup", "results", "discussion"):
+                lines.append(f"- Phần '{s.get('heading')}': Triển khai ít nhất 2 mục con '### <Chủ đề>' phân tích sâu.")
+    return "\n".join(lines)
+
+
 async def writer_node(state: ResearchState) -> Dict[str, Any]:
     """
     Writer Agent: Viết bản nháp dựa trên Claims & Evidences. (Dùng mô hình xịn)
@@ -1613,6 +1670,15 @@ Requested edits: {state.get('revision_instructions')}
 {state.get('base_report_markdown')}
 </base_manuscript>
 """
+    academic_style_instructions = """
+    YÊU CẦU VĂN PHONG VÀ TRÍCH DẪN HỌC THUẬT:
+    1. Văn phong học thuật chuẩn mực (academic prose): Diễn đạt bằng các đoạn văn xuôi liên kết logic chặt chẽ. Hạn chế tối đa việc lạm dụng bullet points trong thân bài (tuyệt đối tránh văn phong dạng checklist hoặc trả lời chatbot AI).
+    2. Đa dạng hóa nguồn trích dẫn: Phân bổ và trích dẫn các nguồn tài liệu đã cung cấp xuyên suốt các phần phù hợp (Introduction, Related Work, Synthesis/Methods, Discussion). Tránh việc dồn bài chỉ vào 1–2 nguồn khi có nhiều nguồn khả dụng.
+    3. Trong nghiên cứu thực nghiệm / tính toán: BẮT BUỘC giữ trích dẫn y văn (literature citations) cho các phần bối cảnh, cơ sở phương pháp và so sánh thảo luận; tách bạch rõ ràng giữa kết quả đo đạc thực nghiệm và kết luận từ các tài liệu tham khảo.
+    4. Bảng biểu và hình ảnh (nếu có): Phải có caption rõ ràng (ví dụ: 'Table 1. <Mô tả>' hoặc 'Figure 1. <Mô tả>') và được viện dẫn, giải thích tường minh trong nội dung bài viết.
+    5. Phần Introduction phải dẫn dắt logic từ bối cảnh rộng -> vấn đề cụ thể -> khoảng trống nghiên cứu (gap) -> câu hỏi nghiên cứu / mục tiêu -> đóng góp chính (contributions) và cách tiếp cận.
+    """
+
     prompt = f"""
     Bạn là một Nhà văn học thuật chuyên nghiệp. Hãy viết báo cáo nghiên cứu về đề tài: {state.get('research_question')}
     Loại nghiên cứu: {research_type}
@@ -1630,7 +1696,8 @@ Requested edits: {state.get('revision_instructions')}
     concept is a gap in this corpus, not evidence that no prior work exists.
     Lưu ý từ vòng sửa trước (nếu có): {feedback}
     Các chủ đề cần tổng hợp/đối chiếu bên trong nội dung: {plan.get('suggested_topics', [])}
-    Đề cương lập luận dự kiến (chỉ là kế hoạch, điều chỉnh theo bằng chứng thực có): {plan.get('section_outline', [])}
+    {format_section_outline_prompt(plan.get('section_outline', []), contract)}
+    {academic_style_instructions}
     {editorial_context}
     {writing_guidance(contract)}
     {empirical_section}
