@@ -325,7 +325,7 @@ export default function WorkspacePage() {
         setTask(value);
         setError('');
 
-        if (['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(value.status)) {
+        if (['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW', 'FAILED', 'CANCELLED'].includes(value.status)) {
           void loadReport();
           void loadCitations();
           void loadSources();
@@ -1227,11 +1227,13 @@ export default function WorkspacePage() {
             {/* TAB 1: SCIENTIFIC PAPER */}
             {activeTab === 'report' && (
               <div className={`paper-space w-full ${isWidePaper ? 'max-w-[1600px]' : 'max-w-7xl'} mx-auto space-y-6 transition-all duration-300 print:max-w-none print:m-0 print:p-0 print:space-y-0`}>
-                {['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(task.status) ? report?.research_task_id === params.id ? (
+                {(['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(task.status) || report?.research_task_id === params.id) ? report?.research_task_id === params.id ? (
                   <div className="space-y-6 print:space-y-0">
                     {task.status !== 'COMPLETED' && (
                       <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800 flex items-center justify-between print:hidden">
-                        <span>{statusLabel(task.status, language)} — {isEn ? "Review evidence, validation findings and remaining limitations before use." : "Cần rà soát bằng chứng, kết quả kiểm tra và các hạn chế trước khi sử dụng."}</span>
+                        <span>{statusLabel(task.status, language)} — {['FAILED', 'CANCELLED'].includes(task.status)
+                          ? (isEn ? `Showing saved version ${report.version_number}; the latest operation did not replace it.` : `Đang hiển thị phiên bản ${report.version_number} đã lưu; thao tác vừa rồi không ghi đè bản này.`)
+                          : (isEn ? 'Review evidence, validation findings and remaining limitations before use.' : 'Cần rà soát bằng chứng, kết quả kiểm tra và các hạn chế trước khi sử dụng.')}</span>
                         <Badge variant="outline">{task.status}</Badge>
                       </div>
                     )}
@@ -1260,7 +1262,7 @@ export default function WorkspacePage() {
                             <div className="flex items-center gap-3">
                               <span>{isEn ? 'Draft version' : 'Phiên bản bản thảo'} {report.version_number}</span>
                               <span>•</span>
-                              <span>{formatDate(task.completed_at || task.updated_at)}</span>
+                              <span>{formatDate(report.created_at, language)}</span>
                             </div>
                           </div>
 
