@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
@@ -25,7 +25,11 @@ export default function MonitorOverview() {
     `${task.title} ${task.research_question || ''}`.toLowerCase().includes(query.trim().toLowerCase())
   );
 
-  const running = tasks.filter(task => task.status === 'RUNNING' || task.status === 'QUEUED').length;
+  const ACTIVE_STATUSES = new Set([
+    'QUEUED', 'RUNNING', 'PLANNING', 'RESEARCHING', 'INDEXING',
+    'ANALYZING', 'WRITING', 'REVIEWING', 'FINALIZING', 'RETRYING',
+  ]);
+  const running = tasks.filter(task => ACTIVE_STATUSES.has(task.status)).length;
   const waiting = tasks.filter(task => task.status.startsWith('WAITING')).length;
   const attention = tasks.filter(task => ['FAILED', 'NEEDS_REVIEW', 'PARTIAL'].includes(task.status)).length;
   const completed = tasks.filter(task => task.status === 'COMPLETED').length;

@@ -9,6 +9,7 @@ export function useMonitorPoll<T>(load: (signal: AbortSignal) => Promise<T>, int
   const [loading, setLoading] = useState(true);
   const [lastSuccess, setLastSuccess] = useState<Date | null>(null);
   const [revision, setRevision] = useState(0);
+  const [errorStatus, setErrorStatus] = useState<number | null>(null);
   const refresh = useCallback(() => setRevision(value => value + 1), []);
 
   useEffect(() => {
@@ -21,6 +22,7 @@ export function useMonitorPoll<T>(load: (signal: AbortSignal) => Promise<T>, int
     setLastSuccess(null);
     setLoading(true);
     setError('');
+    setErrorStatus(null);
     async function poll() {
       if (!active) return;
       if (document.visibilityState === 'hidden') {
@@ -35,11 +37,13 @@ export function useMonitorPoll<T>(load: (signal: AbortSignal) => Promise<T>, int
           setData(value);
           setLastSuccess(new Date());
           setError('');
+          setErrorStatus(null);
         }
       } catch (reason) {
         if (active) {
           const status = reason && typeof reason === 'object' && 'status' in reason ? reason.status : null;
           const isEn = typeof window !== 'undefined' && localStorage.getItem('synthia_lang') === 'en';
+          setErrorStatus(Number(status) || null);
           setError(Number(status) === 404
             ? (isEn ? 'Research project not found or access denied.' : 'Bài nghiên cứu không tồn tại hoặc bạn không có quyền xem.')
             : Number(status) === 401
@@ -64,5 +68,5 @@ export function useMonitorPoll<T>(load: (signal: AbortSignal) => Promise<T>, int
     void poll();
     return () => { active = false; clearTimeout(timer); controller?.abort(); };
   }, [load, interval, revision]);
-  return { data, error, loading, lastSuccess, refresh };
+  return { data, error, errorStatus, loading, lastSuccess, refresh };
 }
