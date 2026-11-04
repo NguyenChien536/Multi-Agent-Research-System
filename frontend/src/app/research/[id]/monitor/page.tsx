@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   Activity, ArrowLeft, ArrowUpRight, AlertTriangle, CheckCircle2, Circle, Clock,
   FileText, ExternalLink, ChevronLeft, ChevronRight, Info,
@@ -167,7 +167,7 @@ export default function ResearchMonitorPage() {
   const offset = historyPage.taskId === id ? historyPage.offset : 0;
 
   const load = useCallback((signal: AbortSignal) => api.tasks.getMonitor(id, offset, 20, signal), [id, offset]);
-  const { data, error, loading, lastSuccess, refresh } = useMonitorPoll(load, 4000);
+  const { data, error, errorStatus, loading, lastSuccess, refresh } = useMonitorPoll(load, 4000);
 
   const snapshot = data?.task_id === id ? data : null;
   const actionsDict = language === 'en' ? ACTIONS_EN : ACTIONS_VI;
@@ -177,11 +177,15 @@ export default function ResearchMonitorPage() {
   const activeStageKey = stageKey(snapshot?.current_step);
 
   const isEn = language === 'en';
+  const router = useRouter();
 
   return (
     <main className="h-full overflow-y-auto bg-zinc-50/60 p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-[1720px] mx-auto space-y-6">
 
+        {/* Show nav/header only when not a terminal auth/notfound error */}
+        {!((!loading && !snapshot) && errorStatus && [401, 403, 404].includes(errorStatus)) && (
+        <>
         {/* Navigation Breadcrumb Bar */}
         <nav aria-label="Breadcrumbs" className="flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-600 bg-white px-4 py-2 rounded-xl border border-zinc-200 shadow-2xs">
           <div className="flex flex-wrap items-center gap-2">
@@ -266,8 +270,79 @@ export default function ResearchMonitorPage() {
           </div>
         </header>
 
+        </>
+        )}
+
         {/* Polling & Sync Status Banner */}
-        <PollStatus error={error} lastSuccess={lastSuccess} refresh={refresh} />
+        {!(errorStatus && [401, 403, 404].includes(errorStatus)) && (
+          <PollStatus error={error} lastSuccess={lastSuccess} refresh={refresh} />
+        )}
+
+        {/* Not Found / Access Denied — Friendly Empty State */}
+        {!loading && !snapshot && errorStatus && [401, 403, 404].includes(errorStatus) && (
+          <div className="flex flex-col items-center justify-center gap-6 rounded-xl border border-zinc-200 bg-white p-12 sm:p-16 text-center shadow-2xs">
+            <div className="w-16 h-16 rounded-2xl bg-zinc-100 border border-zinc-200 flex items-center justify-center">
+              <FileText size={28} className="text-zinc-400" />
+            </div>
+            <div className="max-w-md space-y-2">
+              <h2 className="text-lg font-semibold text-zinc-900">
+                {errorStatus === 404
+                  ? (isEn ? 'Research project not found' : 'Không tìm thấy bài nghiên cứu')
+                  : errorStatus === 401
+                  ? (isEn ? 'Session expired' : 'Phiên đăng nhập đã hết hạn')
+                  : (isEn ? 'Access denied' : 'Không có quyền truy cập')}
+              </h2>
+              <p className="text-sm text-zinc-500 leading-relaxed">
+                {errorStatus === 404
+                  ? (isEn
+                    ? 'This research project may have been deleted, or the link is outdated. Head to your Dashboard to view all your projects.'
+                    : 'Bài nghiên cứu này có thể đã bị xoá hoặc đường dẫn không còn hợp lệ. Hãy quay về Dashboard để xem toàn bộ dự án của bạn.')
+                  : errorStatus === 401
+                  ? (isEn
+                    ? 'Your session has expired. Please log in again to continue.'
+                    : 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để tiếp tục.')
+                  : (isEn
+                    ? 'You do not have permission to view this research project.'
+                    : 'Bạn không có quyền xem bài nghiên cứu này.')}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              {errorStatus === 401 ? (
+                <button
+                  type="button"
+                  onClick={() => router.push('/login')}
+                  className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-zinc-800 transition-colors shadow-2xs cursor-pointer"
+                >
+                  {isEn ? 'Sign in again' : 'Đăng nhập lại'}
+                </button>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/dashboard')}
+                    className="inline-flex items-center gap-2 rounded-xl bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-zinc-800 transition-colors shadow-2xs cursor-pointer"
+                  >
+                    {isEn ? 'Go to Dashboard' : 'Về Dashboard'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/')}
+                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-5 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors cursor-pointer"
+                  >
+                    {isEn ? 'Create New Research' : 'Tạo bài nghiên cứu mới'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push('/research/monitor')}
+                    className="inline-flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-5 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 transition-colors cursor-pointer"
+                  >
+                    {isEn ? 'View all monitors' : 'Tất cả tiến độ'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Loading Initial State */}
         {loading && !snapshot && (

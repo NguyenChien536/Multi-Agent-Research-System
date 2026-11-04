@@ -8,7 +8,8 @@ import {
   ExternalLink, FileText, Globe, Layers, Play, RefreshCw,
   Trash2, XCircle, Search, Activity, Cpu, UploadCloud, FileUp, FlaskConical,
   AlertTriangle, Database, Printer, Maximize2, Minimize2, PanelLeftClose, PanelLeft,
-  ListFilter, Bookmark, BookOpen, Package, ChevronDown, FileDown, Loader2
+  ListFilter, Bookmark, BookOpen, Package, ChevronDown, FileDown, Loader2,
+  MessageSquare, History
 } from 'lucide-react';
 import { Badge, Card } from '@/components/ui/Components';
 import { Button } from '@/components/ui/Button';
@@ -135,6 +136,7 @@ export default function WorkspacePage() {
   const [runs, setRuns] = useState<AgentRunResponse[]>([]);
 
   const [error, setError] = useState('');
+  const [errorCode, setErrorCode] = useState<number | null>(null);
   const [reportError, setReportError] = useState('');
   const [citationsError, setCitationsError] = useState('');
   const [sourcesError, setSourcesError] = useState('');
@@ -159,6 +161,7 @@ export default function WorkspacePage() {
   const [uploadError, setUploadError] = useState('');
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [artifacts, setArtifacts] = useState<ArtifactItemResponse[]>([]);
+  const [retryingSourceId, setRetryingSourceId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [experiments, setExperiments] = useState<AnalysisRunResponse[]>([]);
@@ -356,6 +359,8 @@ export default function WorkspacePage() {
         }
       } catch (err) {
         if (!active) return;
+        const status = err && typeof err === 'object' && 'status' in err ? (err as { status?: number }).status : null;
+        setErrorCode(status ?? null);
         setError(err instanceof Error ? err.message : (isEn ? 'Unable to load research progress.' : 'Không thể tải tiến trình nghiên cứu.'));
         clearInterval(timer);
       }
@@ -429,6 +434,19 @@ export default function WorkspacePage() {
       setUploadError(err instanceof Error ? err.message : (isEn ? 'PDF upload failed.' : 'Tải lên tài liệu PDF thất bại.'));
     } finally {
       setIsUploading(false);
+    }
+  };
+
+  const handleRetrySource = async (sourceId: string) => {
+    if (!task) return;
+    setRetryingSourceId(sourceId);
+    try {
+      await api.tasks.retrySource(task.id, sourceId);
+      await loadSources();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : (isEn ? 'Failed to retry ingestion' : 'Không thể thử lại trích xuất'));
+    } finally {
+      setRetryingSourceId(null);
     }
   };
 
@@ -623,22 +641,58 @@ export default function WorkspacePage() {
     }
   };
 
-  if (error) {
+  if (error && !task) {
+    const is404 = errorCode === 404;
+    const is401 = errorCode === 401;
+    const is403 = errorCode === 403;
+    const isAuthError = is401 || is403;
     return (
-      <div className="p-8 text-center text-red-700" role="alert">
-        {error}
-        <div className="mt-4">
-          <Button variant="outline" onClick={() => setReloadKey(v => v + 1)}>{isEn ? 'Retry' : 'Thử lại'}</Button>
+      <div className="flex flex-col items-center justify-center gap-6 p-12 sm:p-20 text-center min-h-[60vh]">
+        <div className="w-16 h-16 rounded-2xl bg-zinc-100 border border-zinc-200 flex items-center justify-center">
+          <FileText size={28} className="text-zinc-400" />
+        </div>
+        <div className="max-w-md space-y-2">
+          <h2 className="text-lg font-semibold text-zinc-900">
+            {is404
+              ? (isEn ? 'Research project not found' : 'Không tìm thấy bài nghiên cứu')
+              : is401
+              ? (isEn ? 'Session expired' : 'Phiên đăng nhập đã hết hạn')
+              : is403
+              ? (isEn ? 'Access denied' : 'Không có quyền truy cập')
+              : (isEn ? 'Failed to load project' : 'Không thể tải bài nghiên cứu')}
+          </h2>
+          <p className="text-sm text-zinc-500 leading-relaxed">
+            {is404
+              ? (isEn ? 'This project may have been deleted or the link is outdated.' : 'Dự án có thể đã bị xoá hoặc đường dẫn không còn hợp lệ.')
+              : is401
+              ? (isEn ? 'Your session has expired. Please sign in again.' : 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.')
+              : is403
+              ? (isEn ? 'You do not have permission to view this project.' : 'Bạn không có quyền xem dự án này.')
+              : error}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {isAuthError
+            ? <Button variant="primary" onClick={() => router.push('/login')}>{isEn ? 'Sign in again' : 'Đăng nhập lại'}</Button>
+            : <Button variant="primary" onClick={() => router.push('/dashboard')}>{isEn ? 'Go to Dashboard' : 'Về Dashboard'}</Button>}
+          {!isAuthError && (
+            <Button variant="outline" onClick={() => setReloadKey(v => v + 1)}>{isEn ? 'Retry' : 'Thử lại'}</Button>
+          )}
         </div>
       </div>
     );
   }
 
   if (!task || task.id !== params.id) {
-    return <div className="p-8 text-center text-zinc-500">{isEn ? 'Loading research project...' : 'Đang tải bài nghiên cứu...'}</div>;
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 p-12 sm:p-20 text-center min-h-[60vh]">
+        <RefreshCw size={24} className="animate-spin text-blue-600" />
+        <p className="text-sm text-zinc-500">{isEn ? 'Loading research project...' : 'Đang tải bài nghiên cứu...'}</p>
+      </div>
+    );
   }
 
-  const isWorking = !TERMINAL.has(task.status) && task.status !== 'WAITING_APPROVAL' && task.status !== 'WAITING_USER_DATA' && task.status !== 'PENDING';
+    const isWorking = !TERMINAL.has(task.status) && task.status !== 'WAITING_APPROVAL' && task.status !== 'WAITING_USER_DATA' && task.status !== 'PENDING';
   const canCancel = !TERMINAL.has(task.status) && task.status !== 'PENDING';
 
   const filteredSources = sources.filter(s =>
@@ -746,14 +800,32 @@ export default function WorkspacePage() {
             </div>
           )}
 
-          <Link
-            href={`/research/${task.id}/monitor`}
-            className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-100/90 px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-200 hover:text-zinc-950 transition-colors shadow-2xs"
-            title={isEn ? "Open live agent & cost monitor" : "Mở màn hình giám sát agent và chi phí"}
-          >
-            <Activity size={14} className="text-blue-600" />
-            <span className="hidden md:inline">{isEn ? "Agent Monitor" : "Giám sát Agent"}</span>
-          </Link>
+          <div className="hidden sm:flex items-center gap-1.5">
+            <Link
+              href={`/research/${task.id}/monitor`}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-100/90 px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-200 hover:text-zinc-950 transition-colors shadow-2xs"
+              title={isEn ? "Open live agent & cost monitor" : "Mở màn hình giám sát agent và chi phí"}
+            >
+              <Activity size={14} className="text-blue-600" />
+              <span className="hidden md:inline">{isEn ? "Agent Monitor" : "Giám sát Agent"}</span>
+            </Link>
+            <Link
+              href={`/research/${task.id}/questions`}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-100/90 px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-200 hover:text-zinc-950 transition-colors shadow-2xs"
+              title={isEn ? "Ask questions about the paper" : "Hỏi đáp về bài nghiên cứu"}
+            >
+              <MessageSquare size={14} className="text-emerald-600" />
+              <span className="hidden md:inline">{isEn ? "Q&A" : "Hỏi đáp"}</span>
+            </Link>
+            <Link
+              href={`/research/${task.id}/revisions`}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-100/90 px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-200 hover:text-zinc-950 transition-colors shadow-2xs"
+              title={isEn ? "Editorial revision history" : "Lịch sử biên tập và sửa đổi"}
+            >
+              <History size={14} className="text-purple-600" />
+              <span className="hidden md:inline">{isEn ? "Revisions" : "Biên tập"}</span>
+            </Link>
+          </div>
 
           <Button variant="outline" onClick={() => setReloadKey(v => v + 1)} aria-label={isEn ? "Refresh" : "Làm mới"}>
             <RefreshCw size={15} />
@@ -1876,6 +1948,12 @@ export default function WorkspacePage() {
                               [{source.source_tag}]
                             </span>
                             <Badge variant="outline">{source.source_type}</Badge>
+                            {source.ingestion_status && (
+                              <Badge variant={source.ingestion_status === 'READY' ? 'success' : source.ingestion_status === 'FAILED' ? 'danger' : source.ingestion_status === 'PROCESSING' ? 'default' : 'outline'}>
+                                {source.ingestion_status === 'PROCESSING' && <Loader2 size={11} className="mr-1 inline animate-spin" />}
+                                {source.ingestion_status}
+                              </Badge>
+                            )}
                             {source.relevance_score > 0 && (
                               <span className="text-xs text-emerald-600 font-medium">
                                 {isEn ? "Relevance: " : "Liên quan: "}{(source.relevance_score * 100).toFixed(0)}%
@@ -1924,6 +2002,39 @@ export default function WorkspacePage() {
                           )}
                           <div className="text-xs font-mono text-zinc-600 mt-1 truncate">{source.url}</div>
                         </div>
+
+                        {(source.venue || source.search_provider || source.doi) && (
+                          <div className="text-xs text-zinc-500 flex flex-wrap items-center gap-2">
+                            {source.search_provider && (
+                              <span className="px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200 font-medium">
+                                {source.search_provider}
+                              </span>
+                            )}
+                            {source.venue && <span className="italic">{source.venue}</span>}
+                            {source.doi && <span className="font-mono text-zinc-400">DOI: {source.doi}</span>}
+                          </div>
+                        )}
+
+                        {source.ingestion_status === 'FAILED' && (
+                          <div className="p-3 bg-red-50/80 border border-red-200 rounded-lg text-xs space-y-2">
+                            <div className="flex items-start gap-2 text-red-700">
+                              <AlertTriangle size={14} className="shrink-0 mt-0.5 text-red-600" />
+                              <div className="flex-1">
+                                <span className="font-semibold">{isEn ? 'Ingestion Failed: ' : 'Trích xuất thất bại: '}</span>
+                                <span className="text-red-600">{source.ingestion_error || (isEn ? 'Unknown extraction error.' : 'Lỗi trích xuất không xác định.')}</span>
+                              </div>
+                            </div>
+                            <Button
+                              variant="danger-outline"
+                              className="!h-8 !px-3 text-xs"
+                              onClick={() => void handleRetrySource(source.id)}
+                              isLoading={retryingSourceId === source.id}
+                            >
+                              <RefreshCw size={12} className="mr-1.5" />
+                              {isEn ? 'Retry Ingestion' : 'Thử lại trích xuất'}
+                            </Button>
+                          </div>
+                        )}
 
                         {source.content_snippet && (
                           <p className="text-sm leading-relaxed text-zinc-700 bg-zinc-50 p-3.5 rounded-xl border border-zinc-200 line-clamp-4">

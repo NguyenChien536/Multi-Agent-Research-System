@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { useParams, usePathname } from 'next/navigation';
-import { Activity, FileText, MessageCircle } from 'lucide-react';
+import { Activity, FileText, MessageCircle, History } from 'lucide-react';
 import { useLanguage } from '@/lib/i18n';
 
 export default function PaperLayout({ children }: { children: React.ReactNode }) {
@@ -16,17 +16,22 @@ export default function PaperLayout({ children }: { children: React.ReactNode })
     {
       href: `/research/${id}`,
       label: isEn ? 'Research Paper' : 'Bài nghiên cứu',
-      icon: FileText
+      icon: FileText,
     },
     {
       href: `/research/${id}/monitor`,
       label: isEn ? 'Live Monitor' : 'Tiến độ giám sát',
-      icon: Activity
+      icon: Activity,
     },
     {
       href: `/research/${id}/questions`,
       label: isEn ? 'Q&A Assistant' : 'Hỏi đáp bài báo',
-      icon: MessageCircle
+      icon: MessageCircle,
+    },
+    {
+      href: `/research/${id}/revisions`,
+      label: isEn ? 'Editorial Revisions' : 'Lịch sử chỉnh sửa',
+      icon: History,
     },
   ];
 
@@ -46,7 +51,7 @@ export default function PaperLayout({ children }: { children: React.ReactNode })
               className={`inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs transition-colors ${
                 isActive
                   ? 'bg-zinc-100 text-zinc-900 font-semibold border border-zinc-200 shadow-2xs'
-                  : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 font-medium'
+                  : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-950 font-medium'
               }`}
             >
               <Icon size={14} className={isActive ? 'text-zinc-900' : 'text-zinc-500'} />
