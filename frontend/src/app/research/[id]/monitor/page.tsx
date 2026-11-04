@@ -427,6 +427,8 @@ export default function ResearchMonitorPage() {
                   activities={snapshot.activities}
                   isEn={isEn}
                   t={t}
+                  researchId={id}
+                  researchType={snapshot.research_type}
                 />
               </div>
             </section>

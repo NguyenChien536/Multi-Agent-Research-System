@@ -372,6 +372,24 @@ export default function WorkspacePage() {
     return () => { active = false; clearInterval(timer); };
   }, [params.id, loadReport, loadCitations, loadSources, loadRuns, loadProtocol, loadExperiments, loadJournal, reloadKey, isEn]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab') as 'report' | 'sources' | 'citations' | 'runs' | 'details' | 'protocol' | 'experiments' | null;
+    if (tabParam && ['report', 'sources', 'citations', 'runs', 'details', 'protocol', 'experiments'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+    const hash = window.location.hash;
+    if (hash) {
+      setTimeout(() => {
+        const el = document.querySelector(hash);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 150);
+    }
+  }, [task?.status]);
+
   const handleStartTask = async () => {
     if (!task) return;
     setIsStarting(true);
@@ -887,7 +905,7 @@ export default function WorkspacePage() {
         {/* Content Tabs Area */}
         <main className="flex-1 flex flex-col bg-white overflow-hidden print:overflow-visible print:h-auto print:block">
           {task.status === 'WAITING_APPROVAL' && (
-            <div className="p-4 bg-amber-50/80 border-b border-amber-200 overflow-y-auto max-h-96 shrink-0 print:hidden">
+            <div id="plan-review-section" className="p-4 bg-amber-50/80 border-b border-amber-200 overflow-y-auto max-h-96 shrink-0 print:hidden">
               <div className="w-full max-w-7xl mx-auto space-y-3.5">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
@@ -986,14 +1004,14 @@ export default function WorkspacePage() {
           )}
 
           {task.status === 'WAITING_USER_DATA' && task.research_type === 'EMPIRICAL_COMPUTATIONAL' && (
-            <div className="p-4 bg-indigo-50 border-b border-indigo-200 text-sm print:hidden" role="status">
+            <div id="fieldwork-section" className="p-4 bg-indigo-50 border-b border-indigo-200 text-sm print:hidden" role="status">
               {isEn ? "Computational run is awaiting a CSV dataset. Upload data under Experiments & Journal to proceed." : "Bài tính toán đang chờ tập dữ liệu CSV. Tải dữ liệu trong mục Thực nghiệm để tiếp tục."}
               <Button variant="outline" className="ml-3" onClick={() => setActiveTab('experiments')}>{isEn ? "Open Experiments" : "Mở thực nghiệm"}</Button>
             </div>
           )}
 
           {task.status === 'WAITING_USER_DATA' && task.research_type === 'EMPIRICAL_HUMAN' && (
-            <div className="p-4 bg-indigo-50/80 border-b border-indigo-200 overflow-y-auto max-h-[32rem] shrink-0 print:hidden">
+            <div id="fieldwork-section" className="p-4 bg-indigo-50/80 border-b border-indigo-200 overflow-y-auto max-h-[32rem] shrink-0 print:hidden">
               <div className="w-full max-w-7xl mx-auto space-y-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
