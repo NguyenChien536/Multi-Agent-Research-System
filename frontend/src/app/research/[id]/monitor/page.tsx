@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { currentStage, stagesFor, stageKey, activityStage, outputLabel } from '@/lib/monitoring';
 import { useMonitorPoll } from '@/lib/use-monitor-poll';
 import { PollStatus, StatusPill, formatTime } from '@/components/monitoring/MonitorUI';
+import { PipelineFlow } from '@/components/monitoring/PipelineFlow';
 import { useLanguage } from '@/lib/i18n';
 
 interface ActionItem {
@@ -183,104 +184,9 @@ export default function ResearchMonitorPage() {
     <main className="h-full overflow-y-auto bg-zinc-50/60 p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-[1720px] mx-auto space-y-6">
 
-        {/* Show nav/header only when not a terminal auth/notfound error */}
-        {!((!loading && !snapshot) && errorStatus && [401, 403, 404].includes(errorStatus)) && (
-        <>
-        {/* Navigation Breadcrumb Bar */}
-        <nav aria-label="Breadcrumbs" className="flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-600 bg-white px-4 py-2 rounded-xl border border-zinc-200 shadow-2xs">
-          <div className="flex flex-wrap items-center gap-2">
-            <Link href="/dashboard" className="text-zinc-600 hover:text-zinc-900 font-medium transition-colors">
-              {t('nav_dashboard')}
-            </Link>
-            <span className="text-zinc-300">/</span>
-            <Link href="/research/monitor" className="inline-flex items-center gap-1.5 text-zinc-600 hover:text-zinc-900 font-medium transition-colors">
-              <Activity size={13} className="text-blue-600" /> {t('nav_all_monitors')}
-            </Link>
-            <span className="text-zinc-300">/</span>
-            <span className="text-zinc-900 font-semibold truncate max-w-xs sm:max-w-md">
-              {snapshot?.title || `#${id.slice(0, 8)}`}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <Link
-              href={`/research/${id}`}
-              className="inline-flex items-center gap-1 text-xs font-medium text-zinc-700 hover:text-zinc-900 bg-zinc-50 px-2.5 py-1 rounded-md border border-zinc-200 transition-colors"
-            >
-              <span>{t('nav_workspace')}</span>
-              <ArrowUpRight size={13} />
-            </Link>
-          </div>
-        </nav>
-
-        {/* Top Header Card */}
-        <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-xl border border-zinc-200 shadow-2xs">
-          <div className="min-w-0 space-y-1.5">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-100 text-zinc-700 uppercase tracking-wider">
-                {snapshot?.research_type === 'REVIEW'
-                  ? (isEn ? 'Literature Review' : 'Tổng quan lý thuyết')
-                  : snapshot?.research_type === 'EMPIRICAL_COMPUTATIONAL'
-                  ? (isEn ? 'Computational Empirical' : 'Thực nghiệm tính toán')
-                  : snapshot?.research_type === 'EMPIRICAL_HUMAN'
-                  ? (isEn ? 'Fieldwork' : 'Thực nghiệm con người')
-                  : (isEn ? 'Research Project' : 'Đề tài nghiên cứu')}
-              </span>
-              {snapshot?.workflow && (
-                <>
-                  <span className="text-zinc-300">•</span>
-                  <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-100 text-zinc-700">
-                    {t('mon_detail_run')} #{snapshot.workflow.run_number}
-                  </span>
-                  <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-100 text-zinc-700">
-                    {t('mon_detail_plan')}{snapshot.workflow.plan_version}
-                  </span>
-                </>
-              )}
-            </div>
-
-            <h1 className="break-words text-xl sm:text-2xl font-bold tracking-tight text-zinc-900">
-              {snapshot?.title || (isEn ? 'Loading research details...' : 'Đang tải thông tin bài nghiên cứu...')}
-            </h1>
-
-            {snapshot?.workflow && (
-              <p className="text-xs text-zinc-600 flex flex-wrap items-center gap-x-2 gap-y-1">
-                <span>{t('mon_detail_started')}: <strong className="font-normal text-zinc-800">{formatTime(snapshot.workflow.started_at, language)}</strong></span>
-                {snapshot.workflow.completed_at && (
-                  <>
-                    <span className="text-zinc-300">•</span>
-                    <span>{t('mon_detail_completed')}: <strong className="font-normal text-zinc-800">{formatTime(snapshot.workflow.completed_at, language)}</strong></span>
-                  </>
-                )}
-                <span className="text-zinc-300">•</span>
-                <span>{t('mon_detail_sample')}: <strong className="font-normal text-zinc-800">{formatTime(snapshot.observed_at, language)}</strong></span>
-              </p>
-            )}
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            {snapshot && <StatusPill status={snapshot.status} />}
-            <Link
-              href={`/research/${id}`}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 text-xs font-medium text-white hover:bg-zinc-800 transition-all shadow-2xs"
-            >
-              <span>{t('nav_workspace')}</span>
-              <ArrowUpRight size={14} />
-            </Link>
-          </div>
-        </header>
-
-        </>
-        )}
-
-        {/* Polling & Sync Status Banner */}
-        {!(errorStatus && [401, 403, 404].includes(errorStatus)) && (
-          <PollStatus error={error} lastSuccess={lastSuccess} refresh={refresh} />
-        )}
-
         {/* Not Found / Access Denied — Friendly Empty State */}
-        {!loading && !snapshot && errorStatus && [401, 403, 404].includes(errorStatus) && (
-          <div className="flex flex-col items-center justify-center gap-6 rounded-xl border border-zinc-200 bg-white p-12 sm:p-16 text-center shadow-2xs">
+        {!loading && !snapshot && (
+          <div className="flex flex-col items-center justify-center gap-6 rounded-2xl border border-zinc-200 bg-white p-12 sm:p-16 text-center shadow-xs">
             <div className="w-16 h-16 rounded-2xl bg-zinc-100 border border-zinc-200 flex items-center justify-center">
               <FileText size={28} className="text-zinc-400" />
             </div>
@@ -290,7 +196,9 @@ export default function ResearchMonitorPage() {
                   ? (isEn ? 'Research project not found' : 'Không tìm thấy bài nghiên cứu')
                   : errorStatus === 401
                   ? (isEn ? 'Session expired' : 'Phiên đăng nhập đã hết hạn')
-                  : (isEn ? 'Access denied' : 'Không có quyền truy cập')}
+                  : errorStatus === 403
+                  ? (isEn ? 'Access denied' : 'Không có quyền truy cập')
+                  : (isEn ? 'Unable to load project' : 'Không thể tải dữ liệu bài nghiên cứu')}
               </h2>
               <p className="text-sm text-zinc-500 leading-relaxed">
                 {errorStatus === 404
@@ -301,9 +209,11 @@ export default function ResearchMonitorPage() {
                   ? (isEn
                     ? 'Your session has expired. Please log in again to continue.'
                     : 'Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để tiếp tục.')
-                  : (isEn
+                  : errorStatus === 403
+                  ? (isEn
                     ? 'You do not have permission to view this research project.'
-                    : 'Bạn không có quyền xem bài nghiên cứu này.')}
+                    : 'Bạn không có quyền xem bài nghiên cứu này.')
+                  : (error || (isEn ? 'An unexpected error occurred while loading this task.' : 'Đã có lỗi xảy ra khi tải bài nghiên cứu này.'))}
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-center gap-3">
@@ -346,8 +256,8 @@ export default function ResearchMonitorPage() {
 
         {/* Loading Initial State */}
         {loading && !snapshot && (
-          <div role="status" className="flex items-center justify-center gap-2.5 rounded-xl border border-zinc-200 bg-white p-12 text-center text-xs sm:text-sm font-medium text-zinc-600 shadow-2xs">
-            <RefreshCw size={18} className="animate-spin text-blue-600" />
+          <div role="status" className="flex items-center justify-center gap-2.5 rounded-2xl border border-zinc-200 bg-white p-16 text-center text-sm font-medium text-zinc-600 shadow-2xs">
+            <RefreshCw size={20} className="animate-spin text-blue-600" />
             <span>{isEn ? 'Loading monitoring status...' : 'Đang tải dữ liệu tiến độ từ máy chủ...'}</span>
           </div>
         )}
@@ -355,6 +265,67 @@ export default function ResearchMonitorPage() {
         {/* Loaded Content */}
         {snapshot && action && (
           <>
+            {/* Top Header Card */}
+            <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl border border-zinc-200 shadow-xs">
+              <div className="min-w-0 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-zinc-100 text-zinc-700 uppercase tracking-wider">
+                    {snapshot.research_type === 'REVIEW'
+                      ? (isEn ? 'Literature Review' : 'Tổng quan lý thuyết')
+                      : snapshot.research_type === 'EMPIRICAL_COMPUTATIONAL'
+                      ? (isEn ? 'Computational Empirical' : 'Thực nghiệm tính toán')
+                      : snapshot.research_type === 'EMPIRICAL_HUMAN'
+                      ? (isEn ? 'Fieldwork' : 'Thực nghiệm con người')
+                      : (isEn ? 'Research Project' : 'Đề tài nghiên cứu')}
+                  </span>
+                  {snapshot.workflow && (
+                    <>
+                      <span className="text-zinc-300">•</span>
+                      <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-100 text-zinc-700">
+                        {t('mon_detail_run')} #{snapshot.workflow.run_number}
+                      </span>
+                      <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-zinc-100 text-zinc-700">
+                        {t('mon_detail_plan')}{snapshot.workflow.plan_version}
+                      </span>
+                    </>
+                  )}
+                </div>
+
+                <h1 className="break-words text-xl sm:text-2xl font-bold tracking-tight text-zinc-900">
+                  {snapshot.title}
+                </h1>
+
+                {snapshot.workflow && (
+                  <p className="text-xs text-zinc-600 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span>{t('mon_detail_started')}: <strong className="font-normal text-zinc-800">{formatTime(snapshot.workflow.started_at, language)}</strong></span>
+                    {snapshot.workflow.completed_at && (
+                      <>
+                        <span className="text-zinc-300">•</span>
+                        <span>{t('mon_detail_completed')}: <strong className="font-normal text-zinc-800">{formatTime(snapshot.workflow.completed_at, language)}</strong></span>
+                      </>
+                    )}
+                    <span className="text-zinc-300">•</span>
+                    <span>{t('mon_detail_sample')}: <strong className="font-normal text-zinc-800">{formatTime(snapshot.observed_at, language)}</strong></span>
+                  </p>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                <StatusPill status={snapshot.status} />
+                <Link
+                  href={`/research/${id}`}
+                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 text-xs font-medium text-white hover:bg-zinc-800 transition-all shadow-2xs"
+                >
+                  <FileText size={14} />
+                  <span>{t('nav_workspace')}</span>
+                  <ArrowUpRight size={13} />
+                </Link>
+              </div>
+            </header>
+
+            {/* Polling & Sync Status Banner */}
+            <PollStatus error={error} lastSuccess={lastSuccess} refresh={refresh} />
+
             {/* Worker Lease Expired Alert Box */}
             {snapshot.worker_lease_expired && (
               <div role="alert" className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/80 p-4 text-xs sm:text-sm text-amber-900 shadow-2xs">
@@ -371,7 +342,7 @@ export default function ResearchMonitorPage() {
             )}
 
             {/* Highlight Stage Card & Action Callout (2-column layout) */}
-            <section className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xs">
+            <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xs">
               <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-12">
 
                 {/* Left Highlight Block (7 cols) */}
@@ -446,55 +417,17 @@ export default function ResearchMonitorPage() {
 
               </div>
 
-              {/* Research Workflow Pipeline */}
-              <div className="border-t border-zinc-200 bg-zinc-50/40 p-5">
-                <div className="mb-2.5 flex items-center justify-between">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-700">
-                    {t('mon_pipeline_title')} ({activeStages.length})
-                  </h3>
-                  <span className="text-xs text-zinc-700 font-medium">
-                    {t('mon_current_step')}: <strong className="font-semibold text-zinc-900">{current ? (isEn ? (current.name_en || current.name) : current.name) : (isEn ? 'Pending' : 'Chưa xác định')}</strong>
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-2">
-                  {activeStages.map((stage, idx) => {
-                    const isActive = stage.key === activeStageKey;
-                    return (
-                      <div
-                        key={stage.key}
-                        className={`rounded-lg p-2.5 border transition-all ${
-                          isActive
-                            ? 'border-zinc-900 bg-zinc-100 text-zinc-900 ring-1 ring-zinc-900/10'
-                            : 'border-zinc-200 bg-white hover:border-zinc-300 text-zinc-700'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-1 mb-0.5">
-                          <span className={`text-xs font-mono font-medium ${isActive ? 'text-zinc-900 font-semibold' : 'text-zinc-600'}`}>
-                            #{idx + 1}
-                          </span>
-                          {isActive && (
-                            <span className="text-xs px-1.5 py-0.2 rounded font-medium bg-zinc-900 text-white uppercase tracking-wider">
-                              {t('mon_current_badge')}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs font-semibold truncate text-zinc-900">
-                          {isEn ? (stage.name_en || stage.name) : stage.name}
-                        </div>
-                        <div className="text-xs text-zinc-600 truncate mt-0.5 font-medium">
-                          {stage.agent}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Constraint note on non-linear backtracking */}
-                <div className="mt-3 flex items-start gap-2 rounded-lg bg-zinc-100 border border-zinc-200 p-2.5 text-xs text-zinc-700 font-normal leading-relaxed">
-                  <Info size={14} className="text-zinc-600 shrink-0 mt-0.5" />
-                  <span>{t('mon_backtrack_note')}</span>
-                </div>
+              {/* Research Workflow Pipeline (GitHub Actions style flow) */}
+              <div className="border-t border-zinc-200 bg-zinc-50/40 p-4 sm:p-5">
+                <PipelineFlow
+                  stages={activeStages}
+                  currentStep={snapshot.current_step}
+                  activeStageKey={activeStageKey}
+                  status={snapshot.status}
+                  activities={snapshot.activities}
+                  isEn={isEn}
+                  t={t}
+                />
               </div>
             </section>
 

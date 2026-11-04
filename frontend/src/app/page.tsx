@@ -12,7 +12,6 @@ import { api } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
 import type { ResearchType, UserResponse } from '@/types';
 
-
 const OUTPUT_LANGUAGES = [
   { code: 'en', name: 'English', native: 'English (Default)', desc_en: 'Standard international scientific draft', desc_vi: 'Văn bản báo cáo chuẩn học thuật quốc tế' },
   { code: 'vi', name: 'Vietnamese', native: 'Tiếng Việt', desc_en: 'Standard Vietnamese academic draft', desc_vi: 'Bản thảo bài báo xuất bản bằng Tiếng Việt' },
@@ -23,6 +22,8 @@ const OUTPUT_LANGUAGES = [
   { code: 'es', name: 'Spanish', native: 'Español', desc_en: 'Academic Spanish scientific paper', desc_vi: 'Bài báo khoa học bằng tiếng Tây Ban Nha' },
   { code: 'ko', name: 'Korean', native: '한국어', desc_en: 'Academic Korean scientific report', desc_vi: 'Báo cáo khoa học bằng tiếng Hàn' },
 ];
+
+const DRAFT_STORAGE_KEY = 'synthia_draft_research';
 
 export default function Home() {
   const router = useRouter();
@@ -40,11 +41,30 @@ export default function Home() {
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string>('');
   const [isFocused, setIsFocused] = useState(false);
   const [error, setError] = useState('');
   const [hasSession, setHasSession] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserResponse | null>(null);
 
+  // Restore draft from sessionStorage if available
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.topic) setTopic(parsed.topic);
+        if (parsed.researchType) setResearchType(parsed.researchType);
+        if (parsed.researchDepth) setResearchDepth(parsed.researchDepth);
+        if (parsed.reportLength) setReportLength(parsed.reportLength);
+        if (parsed.citationStyle) setCitationStyle(parsed.citationStyle);
+        if (parsed.taskLanguage) setTaskLanguage(parsed.taskLanguage);
+        if (typeof parsed.requirePlanApproval === 'boolean') setRequirePlanApproval(parsed.requirePlanApproval);
+      }
+    } catch {}
+  }, []);
+
+  // Check auth session
   useEffect(() => {
     const has = api.auth.hasSession();
     setHasSession(has);
@@ -52,6 +72,26 @@ export default function Home() {
       api.auth.me().then(setCurrentUser).catch(() => {});
     }
   }, []);
+
+  // Save draft whenever user makes changes
+  useEffect(() => {
+    try {
+      if (topic.trim() || researchType !== 'REVIEW' || showAdvanced) {
+        sessionStorage.setItem(
+          DRAFT_STORAGE_KEY,
+          JSON.stringify({
+            topic,
+            researchType,
+            researchDepth,
+            reportLength,
+            citationStyle,
+            taskLanguage,
+            requirePlanApproval,
+          })
+        );
+      }
+    } catch {}
+  }, [topic, researchType, researchDepth, reportLength, citationStyle, taskLanguage, requirePlanApproval, showAdvanced]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -95,12 +135,31 @@ export default function Home() {
       setError(isEn ? 'Please enter a research question with at least 10 characters.' : 'Vui lòng nhập câu hỏi nghiên cứu dài ít nhất 10 ký tự.');
       return;
     }
+
+    // Preserve draft if not logged in
     if (!api.auth.hasSession()) {
+      try {
+        sessionStorage.setItem(
+          DRAFT_STORAGE_KEY,
+          JSON.stringify({
+            topic: question,
+            researchType,
+            researchDepth,
+            reportLength,
+            citationStyle,
+            taskLanguage,
+            requirePlanApproval,
+          })
+        );
+      } catch {}
       router.push('/login?next=%2F');
       return;
     }
+
     setError('');
     setIsLoading(true);
+    setUploadStatus(isEn ? 'Creating research workspace...' : 'Đang khởi tạo không gian nghiên cứu...');
+
     try {
       const task = await api.tasks.create({
         title: question.slice(0, 255),
@@ -115,16 +174,29 @@ export default function Home() {
 
       // Tải lên các file PDF riêng tư nếu có trước khi bắt đầu workflow
       if (pdfFiles.length > 0) {
-        for (const file of pdfFiles) {
-          await api.tasks.uploadPdf(task.id, file);
+        for (let i = 0; i < pdfFiles.length; i++) {
+          setUploadStatus(
+            isEn
+              ? `Uploading custom document ${i + 1}/${pdfFiles.length}: ${pdfFiles[i].name}...`
+              : `Đang tải lên tài liệu ${i + 1}/${pdfFiles.length}: ${pdfFiles[i].name}...`
+          );
+          await api.tasks.uploadPdf(task.id, pdfFiles[i]);
         }
       }
 
+      setUploadStatus(isEn ? 'Starting multi-agent workflow...' : 'Đang kích hoạt chuỗi tác vụ AI...');
       await api.tasks.start(task.id);
+
+      // Clear draft upon successful launch
+      try {
+        sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+      } catch {}
+
       router.push(`/research/${task.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : (isEn ? 'Unable to start research. Please try again.' : 'Không thể bắt đầu nghiên cứu. Vui lòng thử lại.'));
       setIsLoading(false);
+      setUploadStatus('');
     }
   };
 
@@ -211,6 +283,7 @@ export default function Home() {
           <form onSubmit={handleStartResearch} className="w-full relative text-left">
             <div className={`absolute inset-0 bg-zinc-900/5 rounded-3xl blur-xl transition-opacity duration-500 pointer-events-none -z-10 ${isFocused ? 'opacity-100' : 'opacity-0'}`} />
 
+            {/* Main Prompt Input Box */}
             <div className="relative bg-white rounded-2xl shadow-xs border border-zinc-200 p-3 transition-all duration-200 focus-within:border-zinc-400 flex flex-col gap-2 z-10">
               <div className="flex items-start px-3 pt-2">
                 <Search className="text-zinc-400 shrink-0 mr-3 mt-3" size={20} />
@@ -222,7 +295,7 @@ export default function Home() {
                   placeholder={isEn
                     ? "Enter research question or topic (e.g., Evaluating quantum key distribution resilience against side-channel attacks...)"
                     : "Nhập câu hỏi hoặc chủ đề nghiên cứu (VD: Phân tích ảnh hưởng của trí tuệ nhân tạo đối với an ninh phần mềm...)"}
-                  className="w-full resize-none border-0 bg-transparent py-2.5 text-sm sm:text-base text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:ring-0 min-h-[80px]"
+                  className="w-full resize-none border-0 bg-transparent py-2.5 text-sm sm:text-base text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:ring-0 min-h-[85px]"
                   disabled={isLoading}
                   rows={2}
                 />
@@ -239,7 +312,7 @@ export default function Home() {
                       {researchType === 'REVIEW'
                         ? (isEn ? 'Literature Review' : 'Tổng quan tài liệu')
                         : researchType === 'EMPIRICAL_COMPUTATIONAL'
-                        ? (isEn ? 'Computational' : 'Thực nghiệm tính toán')
+                        ? (isEn ? 'Computational Empirical' : 'Thực nghiệm tính toán')
                         : (isEn ? 'Fieldwork' : 'Thực nghiệm thực địa')}
                     </span>
                   </span>
@@ -272,7 +345,96 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Advanced Options Drawer with Interactive Clickable Cards */}
+            {/* 3 Real Research Types Cards (Prominently visible under the question prompt) */}
+            <div className="mt-3.5 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              {/* Type 1: REVIEW */}
+              <button
+                type="button"
+                onClick={() => setResearchType('REVIEW')}
+                className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                  researchType === 'REVIEW'
+                    ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                    : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/70 text-zinc-900'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="flex items-center gap-1.5 font-semibold text-xs sm:text-[13px]">
+                      <FileText size={15} className={researchType === 'REVIEW' ? 'text-zinc-200' : 'text-zinc-500'} />
+                      <span>{isEn ? 'Literature Review' : 'Tổng quan tài liệu'}</span>
+                    </span>
+                    {researchType === 'REVIEW' && <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />}
+                  </div>
+                  <p className={`text-xs leading-relaxed ${researchType === 'REVIEW' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                    {isEn
+                      ? 'Synthesizes published literature, compares findings, and structures a review manuscript.'
+                      : 'Tổng quan tài liệu học thuật, đối chiếu chứng cứ và soạn thảo bài báo tổng quan lý thuyết.'}
+                  </p>
+                </div>
+              </button>
+
+              {/* Type 2: COMPUTATIONAL */}
+              <button
+                type="button"
+                onClick={() => setResearchType('EMPIRICAL_COMPUTATIONAL')}
+                className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                  researchType === 'EMPIRICAL_COMPUTATIONAL'
+                    ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                    : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/70 text-zinc-900'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="flex items-center gap-1.5 font-semibold text-xs sm:text-[13px]">
+                      <Cpu size={15} className={researchType === 'EMPIRICAL_COMPUTATIONAL' ? 'text-purple-300' : 'text-purple-600'} />
+                      <span>{isEn ? 'Computational Empirical' : 'Thực nghiệm tính toán'}</span>
+                    </span>
+                    {researchType === 'EMPIRICAL_COMPUTATIONAL' && <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />}
+                  </div>
+                  <p className={`text-xs leading-relaxed ${researchType === 'EMPIRICAL_COMPUTATIONAL' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                    {isEn
+                      ? 'Executes automated baseline algorithms, statistical benchmarking, and reproducible routines.'
+                      : 'Chạy quy trình tính toán tự động, mô hình baseline và đối sánh thực nghiệm kiểm chứng.'}
+                  </p>
+                </div>
+              </button>
+
+              {/* Type 3: FIELDWORK */}
+              <button
+                type="button"
+                onClick={() => setResearchType('EMPIRICAL_HUMAN')}
+                className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                  researchType === 'EMPIRICAL_HUMAN'
+                    ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                    : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/70 text-zinc-900'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="flex items-center gap-1.5 font-semibold text-xs sm:text-[13px]">
+                      <FlaskConical size={15} className={researchType === 'EMPIRICAL_HUMAN' ? 'text-emerald-300' : 'text-emerald-600'} />
+                      <span>{isEn ? 'Fieldwork / User Data' : 'Thực nghiệm thực địa'}</span>
+                    </span>
+                    {researchType === 'EMPIRICAL_HUMAN' && <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />}
+                  </div>
+                  <p className={`text-xs leading-relaxed ${researchType === 'EMPIRICAL_HUMAN' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                    {isEn
+                      ? 'Formulates experimental protocol, then pauses for your real-world survey or sample dataset.'
+                      : 'Thiết lập đề cương phương pháp, sau đó tạm dừng chờ nạp tập số liệu thực địa thực tế.'}
+                  </p>
+                </div>
+              </button>
+            </div>
+
+            {/* Uploading Status Banner */}
+            {isLoading && uploadStatus && (
+              <div className="mt-3 flex items-center justify-center gap-2.5 text-xs text-blue-700 bg-blue-50/90 border border-blue-200 rounded-xl p-3 animate-pulse">
+                <div className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                <span className="font-medium">{uploadStatus}</span>
+              </div>
+            )}
+
+            {/* Advanced Options Drawer */}
             {showAdvanced && (
               <div className="mt-3 bg-white rounded-xl border border-zinc-200 p-5 shadow-xs space-y-5 animate-in fade-in duration-150 z-10 relative">
                 <div>
@@ -280,64 +442,8 @@ export default function Home() {
                     {isEn ? 'Research Configuration' : 'Tùy chọn cấu hình nghiên cứu'}
                   </h3>
                   <p className="text-xs text-zinc-500 mt-0.5">
-                    {isEn ? 'Tune parameters, methodology, and output language' : 'Tùy biến các tham số cho chuỗi nghiên cứu'}
+                    {isEn ? 'Tune parameters, methodology depth, citation standards, and output language' : 'Tùy biến các tham số cho chuỗi nghiên cứu'}
                   </p>
-                </div>
-
-                {/* 0. Research Type */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-600">
-                    {isEn ? 'Methodology' : 'Loại hình nghiên cứu'}
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    <button
-                      type="button"
-                      onClick={() => setResearchType('REVIEW')}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${researchType === 'REVIEW' ? 'border-zinc-900 bg-zinc-900 text-white shadow-2xs' : 'border-zinc-200 bg-zinc-50/70 hover:bg-zinc-100 text-zinc-800'}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="font-semibold text-xs sm:text-sm">
-                          {isEn ? 'Literature Review' : 'Tổng quan tài liệu'}
-                        </div>
-                        {researchType === 'REVIEW' && <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />}
-                      </div>
-                      <div className={`text-xs mt-0.5 ${researchType === 'REVIEW' ? 'text-zinc-300' : 'text-zinc-500'}`}>
-                        {isEn ? 'Systematic synthesis and claim extraction' : 'Review học thuật & tổng hợp từ tài liệu'}
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setResearchType('EMPIRICAL_COMPUTATIONAL')}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${researchType === 'EMPIRICAL_COMPUTATIONAL' ? 'border-zinc-900 bg-zinc-900 text-white shadow-2xs' : 'border-zinc-200 bg-zinc-50/70 hover:bg-zinc-100 text-zinc-800'}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="font-semibold text-xs sm:text-sm">
-                          {isEn ? 'Computational Empirical' : 'Thực nghiệm tính toán'}
-                        </div>
-                        {researchType === 'EMPIRICAL_COMPUTATIONAL' && <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />}
-                      </div>
-                      <div className={`text-xs mt-0.5 ${researchType === 'EMPIRICAL_COMPUTATIONAL' ? 'text-zinc-300' : 'text-zinc-500'}`}>
-                        {isEn ? 'Simulation protocol and data routine' : 'Đề cương mô phỏng & phân tích dữ liệu'}
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setResearchType('EMPIRICAL_HUMAN')}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${researchType === 'EMPIRICAL_HUMAN' ? 'border-zinc-900 bg-zinc-900 text-white shadow-2xs' : 'border-zinc-200 bg-zinc-50/70 hover:bg-zinc-100 text-zinc-800'}`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="font-semibold text-xs sm:text-sm">
-                          {isEn ? 'Fieldwork' : 'Thực nghiệm / Thực địa'}
-                        </div>
-                        {researchType === 'EMPIRICAL_HUMAN' && <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />}
-                      </div>
-                      <div className={`text-xs mt-0.5 ${researchType === 'EMPIRICAL_HUMAN' ? 'text-zinc-300' : 'text-zinc-500'}`}>
-                        {isEn ? 'Protocol exported, pauses for field data' : 'Xuất đề cương, dừng chờ nạp số liệu thực địa'}
-                      </div>
-                    </button>
-                  </div>
                 </div>
 
                 {/* 1. Research Depth (Cards) */}
@@ -435,7 +541,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Report Output Language Configuration (Configurable to English or other languages) */}
+                {/* Report Output Language Configuration */}
                 <div className="space-y-2 pt-2 border-t border-zinc-100">
                   <div className="flex items-center justify-between">
                     <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-600">

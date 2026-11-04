@@ -409,155 +409,6 @@ export default function DashboardPage() {
 
         </div>
 
-        {/* Methodology Analytics Table */}
-        <section className="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-zinc-200 flex items-center justify-between bg-zinc-50/70">
-            <div>
-              <h2 className="font-semibold text-sm sm:text-base text-zinc-900">
-                {t('method_table_title')}
-              </h2>
-              <p className="text-xs text-zinc-600 mt-0.5">
-                {t('method_table_desc')}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => setShowResourceTable(!showResourceTable)}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
-            >
-              {showResourceTable ? (
-                <>
-                  <ChevronUp size={14} /> <span>{t('method_table_collapse')}</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown size={14} /> <span>{t('method_table_expand')}</span>
-                </>
-              )}
-            </button>
-          </div>
-
-          {showResourceTable && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 p-5">
-              {methodAnalytics.map(item => {
-                const isSelected = typeFilter === item.type;
-                return (
-                  <div
-                    key={item.type}
-                    className={`rounded-2xl border p-5 transition-all flex flex-col justify-between ${
-                      isSelected
-                        ? 'border-blue-400 bg-blue-50/50 shadow-md ring-2 ring-blue-200'
-                        : 'border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-xs'
-                    }`}
-                  >
-                    <div>
-                      {/* Method Header */}
-                      <div className="flex items-start justify-between gap-3 mb-4">
-                        <div>
-                          <div className="font-bold text-base text-zinc-900 tracking-tight">{item.name}</div>
-                          <div className="text-xs text-zinc-600 font-normal mt-0.5 line-clamp-1">{item.desc}</div>
-                        </div>
-                        <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-800 border border-zinc-200 shrink-0">
-                          {item.badge}
-                        </span>
-                      </div>
-
-                      {/* Prominent High-Visibility Metrics */}
-                      <div className="grid grid-cols-3 gap-2.5 bg-zinc-50/80 p-3.5 rounded-xl border border-zinc-200/90 mb-4">
-                        {/* 1. Projects Count */}
-                        <div className="text-center">
-                          <div className="text-xs font-semibold uppercase text-zinc-600 tracking-wider mb-1">
-                            {t('method_col_count')}
-                          </div>
-                          <div className="text-2xl sm:text-3xl font-extrabold text-zinc-950 font-mono leading-none">
-                            {item.count}
-                          </div>
-                          <div className="text-xs font-mono font-medium text-zinc-600 mt-1">
-                            {item.countPct}% {language === 'en' ? 'of total' : 'tổng'}
-                          </div>
-                        </div>
-
-                        {/* 2. Tokens */}
-                        <div className="text-center border-x border-zinc-200 px-1">
-                          <div className="text-xs font-semibold uppercase text-blue-700 tracking-wider mb-1">
-                            Tokens
-                          </div>
-                          <div className="text-2xl sm:text-3xl font-extrabold text-blue-800 font-mono leading-none">
-                            {item.tokens >= 1000000
-                              ? `${(item.tokens / 1000000).toFixed(1)}M`
-                              : item.tokens >= 1000
-                              ? `${(item.tokens / 1000).toFixed(0)}K`
-                              : item.tokens}
-                          </div>
-                          <div className="text-xs font-mono font-medium text-blue-700 mt-1">
-                            {item.tokensPct}% {language === 'en' ? 'volume' : 'lượng'}
-                          </div>
-                        </div>
-
-                        {/* 3. Cost USD */}
-                        <div className="text-center">
-                          <div className="text-xs font-semibold uppercase text-emerald-700 tracking-wider mb-1">
-                            Cost (USD)
-                          </div>
-                          <div className="text-2xl sm:text-3xl font-extrabold text-emerald-800 font-mono leading-none">
-                            ${item.cost < 0.01 ? item.cost.toFixed(4) : item.cost.toFixed(3)}
-                          </div>
-                          <div className="text-xs font-mono font-medium text-emerald-700 mt-1">
-                            {item.costPct}% {language === 'en' ? 'spend' : 'chi phí'}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Average breakdown row */}
-                      <div className="flex items-center justify-between text-xs text-zinc-700 px-1 mb-4 font-medium">
-                        <span>{language === 'en' ? 'Avg. per task:' : 'TB mỗi bài:'}</span>
-                        <span className="font-mono text-zinc-900 font-semibold">
-                          ${item.avgCost.toFixed(4)} • ~{item.count > 0 ? Math.round(item.tokens / item.count).toLocaleString() : 0} tokens
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Status & Filter Toggle Action Bar */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs border-t border-zinc-100 pt-3 mt-1">
-                      <div className="flex items-center gap-2.5">
-                        <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
-                          {item.completed} {language === 'en' ? 'done' : 'xong'}
-                        </span>
-                        {item.active > 0 && (
-                          <span className="inline-flex items-center gap-1 font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
-                            {item.active} {language === 'en' ? 'active' : 'chạy'}
-                          </span>
-                        )}
-                        {item.attention > 0 && (
-                          <span className="inline-flex items-center gap-1 font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
-                            <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
-                            {item.attention} {language === 'en' ? 'action' : 'chờ'}
-                          </span>
-                        )}
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => setTypeFilter(isSelected ? 'ALL' : item.type)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-zinc-900 text-white shadow-2xs'
-                            : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 border border-zinc-200'
-                        }`}
-                      >
-                        {isSelected ? t('method_filter_active') : t('method_filter_btn')}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
         {/* Main Research Tasks List & Controls */}
         <section className="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden" aria-label="Tasks List">
 
@@ -857,7 +708,50 @@ export default function DashboardPage() {
                         <td className="py-3.5 px-5 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
 
-                            {/* Start / Rerun */}
+                                                        {/* Contextual Primary Action Button */}
+                            {task.status === 'WAITING_APPROVAL' ? (
+                              <Link
+                                href={`/research/${task.id}`}
+                                onClick={e => e.stopPropagation()}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-2xs mr-1"
+                                title={language === 'en' ? 'Review & Approve Research Plan' : 'Xem và phê duyệt kế hoạch nghiên cứu'}
+                              >
+                                <span>{language === 'en' ? 'Review Plan' : 'Duyệt kế hoạch'}</span>
+                                <ArrowUpRight size={13} />
+                              </Link>
+                            ) : task.status === 'WAITING_USER_DATA' ? (
+                              <Link
+                                href={`/research/${task.id}`}
+                                onClick={e => e.stopPropagation()}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-amber-500 text-white hover:bg-amber-600 transition-colors shadow-2xs mr-1"
+                                title={language === 'en' ? 'Upload Fieldwork Dataset' : 'Nạp dữ liệu thực địa'}
+                              >
+                                <span>{language === 'en' ? 'Upload Data' : 'Nạp dữ liệu'}</span>
+                                <ArrowUpRight size={13} />
+                              </Link>
+                            ) : task.status === 'COMPLETED' ? (
+                              <Link
+                                href={`/research/${task.id}`}
+                                onClick={e => e.stopPropagation()}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-zinc-900 text-white hover:bg-zinc-800 transition-colors shadow-2xs mr-1"
+                                title={language === 'en' ? 'Read Final Paper' : 'Đọc bài báo hoàn chỉnh'}
+                              >
+                                <span>{language === 'en' ? 'Read Paper' : 'Đọc bài báo'}</span>
+                                <ArrowUpRight size={13} />
+                              </Link>
+                            ) : (isTaskWorking || isQueued || isPlanning) ? (
+                              <Link
+                                href={`/research/${task.id}/monitor`}
+                                onClick={e => e.stopPropagation()}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 transition-colors shadow-2xs mr-1"
+                                title={language === 'en' ? 'View Live Agent Progress' : 'Xem tiến độ các agent'}
+                              >
+                                <span>{language === 'en' ? 'Monitor' : 'Xem tiến độ'}</span>
+                                <Activity size={13} />
+                              </Link>
+                            ) : null}
+
+{/* Start / Rerun */}
                             {(task.status === 'PENDING' || task.status === 'CANCELLED') && (
                               <button
                                 type="button"
@@ -927,6 +821,156 @@ export default function DashboardPage() {
             </div>
           )}
         </section>
+
+        {/* Methodology Analytics Table */}
+        <section className="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden">
+          <div className="px-5 py-3.5 border-b border-zinc-200 flex items-center justify-between bg-zinc-50/70">
+            <div>
+              <h2 className="font-semibold text-sm sm:text-base text-zinc-900">
+                {t('method_table_title')}
+              </h2>
+              <p className="text-xs text-zinc-600 mt-0.5">
+                {t('method_table_desc')}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowResourceTable(!showResourceTable)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-zinc-200 bg-white text-xs font-medium text-zinc-700 hover:bg-zinc-50 transition-colors"
+            >
+              {showResourceTable ? (
+                <>
+                  <ChevronUp size={14} /> <span>{t('method_table_collapse')}</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown size={14} /> <span>{t('method_table_expand')}</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {showResourceTable && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 p-5">
+              {methodAnalytics.map(item => {
+                const isSelected = typeFilter === item.type;
+                return (
+                  <div
+                    key={item.type}
+                    className={`rounded-2xl border p-5 transition-all flex flex-col justify-between ${
+                      isSelected
+                        ? 'border-blue-400 bg-blue-50/50 shadow-md ring-2 ring-blue-200'
+                        : 'border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-xs'
+                    }`}
+                  >
+                    <div>
+                      {/* Method Header */}
+                      <div className="flex items-start justify-between gap-3 mb-4">
+                        <div>
+                          <div className="font-bold text-base text-zinc-900 tracking-tight">{item.name}</div>
+                          <div className="text-xs text-zinc-600 font-normal mt-0.5 line-clamp-1">{item.desc}</div>
+                        </div>
+                        <span className="text-xs font-semibold px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-800 border border-zinc-200 shrink-0">
+                          {item.badge}
+                        </span>
+                      </div>
+
+                      {/* Prominent High-Visibility Metrics */}
+                      <div className="grid grid-cols-3 gap-2.5 bg-zinc-50/80 p-3.5 rounded-xl border border-zinc-200/90 mb-4">
+                        {/* 1. Projects Count */}
+                        <div className="text-center">
+                          <div className="text-xs font-semibold uppercase text-zinc-600 tracking-wider mb-1">
+                            {t('method_col_count')}
+                          </div>
+                          <div className="text-2xl sm:text-3xl font-extrabold text-zinc-950 font-mono leading-none">
+                            {item.count}
+                          </div>
+                          <div className="text-xs font-mono font-medium text-zinc-600 mt-1">
+                            {item.countPct}% {language === 'en' ? 'of total' : 'tổng'}
+                          </div>
+                        </div>
+
+                        {/* 2. Tokens */}
+                        <div className="text-center border-x border-zinc-200 px-1">
+                          <div className="text-xs font-semibold uppercase text-blue-700 tracking-wider mb-1">
+                            Tokens
+                          </div>
+                          <div className="text-2xl sm:text-3xl font-extrabold text-blue-800 font-mono leading-none">
+                            {item.tokens >= 1000000
+                              ? `${(item.tokens / 1000000).toFixed(1)}M`
+                              : item.tokens >= 1000
+                              ? `${(item.tokens / 1000).toFixed(0)}K`
+                              : item.tokens}
+                          </div>
+                          <div className="text-xs font-mono font-medium text-blue-700 mt-1">
+                            {item.tokensPct}% {language === 'en' ? 'volume' : 'lượng'}
+                          </div>
+                        </div>
+
+                        {/* 3. Cost USD */}
+                        <div className="text-center">
+                          <div className="text-xs font-semibold uppercase text-emerald-700 tracking-wider mb-1">
+                            Cost (USD)
+                          </div>
+                          <div className="text-2xl sm:text-3xl font-extrabold text-emerald-800 font-mono leading-none">
+                            ${item.cost < 0.01 ? item.cost.toFixed(4) : item.cost.toFixed(3)}
+                          </div>
+                          <div className="text-xs font-mono font-medium text-emerald-700 mt-1">
+                            {item.costPct}% {language === 'en' ? 'spend' : 'chi phí'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Average breakdown row */}
+                      <div className="flex items-center justify-between text-xs text-zinc-700 px-1 mb-4 font-medium">
+                        <span>{language === 'en' ? 'Avg. per task:' : 'TB mỗi bài:'}</span>
+                        <span className="font-mono text-zinc-900 font-semibold">
+                          ${item.avgCost.toFixed(4)} • ~{item.count > 0 ? Math.round(item.tokens / item.count).toLocaleString() : 0} tokens
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Status & Filter Toggle Action Bar */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs border-t border-zinc-100 pt-3 mt-1">
+                      <div className="flex items-center gap-2.5">
+                        <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
+                          {item.completed} {language === 'en' ? 'done' : 'xong'}
+                        </span>
+                        {item.active > 0 && (
+                          <span className="inline-flex items-center gap-1 font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+                            {item.active} {language === 'en' ? 'active' : 'chạy'}
+                          </span>
+                        )}
+                        {item.attention > 0 && (
+                          <span className="inline-flex items-center gap-1 font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
+                            {item.attention} {language === 'en' ? 'action' : 'chờ'}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setTypeFilter(isSelected ? 'ALL' : item.type)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-zinc-900 text-white shadow-2xs'
+                            : 'bg-zinc-100 text-zinc-700 hover:bg-zinc-200 border border-zinc-200'
+                        }`}
+                      >
+                        {isSelected ? t('method_filter_active') : t('method_filter_btn')}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
 
       </div>
     </main>

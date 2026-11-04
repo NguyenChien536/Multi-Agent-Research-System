@@ -705,13 +705,6 @@ export default function WorkspacePage() {
       {/* Top Header Bar */}
       <div id="research-header-bar" className="min-h-16 px-6 py-3 border-b border-zinc-200 bg-white flex flex-wrap items-center justify-between gap-3 shrink-0 print:hidden">
         <div className="flex items-center gap-3 flex-1 min-w-[280px]">
-          <Link
-            href="/dashboard"
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 transition-colors shrink-0"
-            title={isEn ? "Back to Dashboard" : "Quay lại Dashboard"}
-          >
-            <ArrowLeft size={18} />
-          </Link>
           <button
             type="button"
             onClick={() => setIsStagesCollapsed(prev => !prev)}
@@ -789,32 +782,6 @@ export default function WorkspacePage() {
             </Button>
           )}
 
-          <div className="hidden sm:flex items-center gap-1.5">
-            <Link
-              href={`/research/${task.id}/monitor`}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-100/90 px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-200 hover:text-zinc-950 transition-colors shadow-2xs"
-              title={isEn ? "Open live agent & cost monitor" : "Mở màn hình giám sát agent và chi phí"}
-            >
-              <Activity size={14} className="text-blue-600" />
-              <span className="hidden md:inline">{isEn ? "Agent Monitor" : "Giám sát Agent"}</span>
-            </Link>
-            <Link
-              href={`/research/${task.id}/questions`}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-100/90 px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-200 hover:text-zinc-950 transition-colors shadow-2xs"
-              title={isEn ? "Ask questions about the paper" : "Hỏi đáp về bài nghiên cứu"}
-            >
-              <MessageSquare size={14} className="text-emerald-600" />
-              <span className="hidden md:inline">{isEn ? "Q&A" : "Hỏi đáp"}</span>
-            </Link>
-            <Link
-              href={`/research/${task.id}/revisions`}
-              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 bg-zinc-100/90 px-3 text-xs font-medium text-zinc-800 hover:bg-zinc-200 hover:text-zinc-950 transition-colors shadow-2xs"
-              title={isEn ? "Editorial revision history" : "Lịch sử biên tập và sửa đổi"}
-            >
-              <History size={14} className="text-purple-600" />
-              <span className="hidden md:inline">{isEn ? "Revisions" : "Biên tập"}</span>
-            </Link>
-          </div>
 
           <Button variant="outline" onClick={() => setReloadKey(v => v + 1)} aria-label={isEn ? "Refresh" : "Làm mới"}>
             <RefreshCw size={15} />
