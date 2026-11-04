@@ -40,7 +40,7 @@ export function ManuscriptReadiness({ report, taskId, isEn }: {
       : 'Đã chạm giới hạn ngân sách. Một số bước kiểm tra có thể chưa hoàn tất.'}</p>}
     {findings.length > 0 && <details className="border-t border-zinc-100 pt-3">
       <summary className="cursor-pointer text-xs font-medium text-zinc-700">{isEn
-        ? `View ${findings.length} review notes` : `Xem ${findings.length} góp ý kiểm tra`}</summary>
+        ? `View ${findings.length} review ${findings.length === 1 ? 'note' : 'notes'}` : `Xem ${findings.length} góp ý kiểm tra`}</summary>
       <ul className="mt-3 list-disc pl-5 space-y-2 text-xs leading-relaxed text-zinc-600">
         {findings.map(note => <li key={note}>{note}</li>)}
       </ul>

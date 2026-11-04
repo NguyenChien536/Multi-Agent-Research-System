@@ -789,18 +789,6 @@ export default function WorkspacePage() {
             </Button>
           )}
 
-          {report && (
-            <div className="hidden sm:flex items-center gap-2">
-              <Button variant="outline" onClick={handleCopyMarkdown} title={isEn ? "Copy Markdown" : "Sao chép Markdown"}>
-                {isCopied ? <Check size={15} className="text-emerald-600 mr-1.5" /> : <Copy size={15} className="mr-1.5" />}
-                {isCopied ? (isEn ? 'Copied' : 'Đã sao chép') : (isEn ? 'Copy' : 'Sao chép')}
-              </Button>
-              <Button variant="outline" onClick={handleDownloadMarkdown} title={isEn ? "Download .md file" : "Tải file .md"}>
-                <Download size={15} className="mr-1.5" /> {isEn ? 'Download' : 'Tải về'}
-              </Button>
-            </div>
-          )}
-
           <div className="hidden sm:flex items-center gap-1.5">
             <Link
               href={`/research/${task.id}/monitor`}
@@ -1564,7 +1552,7 @@ export default function WorkspacePage() {
                         {/* Article Metrics */}
                         <Card className="p-4 space-y-3 shadow-2xs text-xs">
                           <h3 className="font-semibold text-xs text-zinc-900 uppercase tracking-wider border-b border-zinc-100 pb-2 flex items-center gap-1.5">
-                            <Bookmark size={14} className="text-zinc-500" /> {isEn ? "Publication Details" : "Thông tin ấn phẩm"}
+                            <Bookmark size={14} className="text-zinc-500" /> {isEn ? "Draft Details" : "Thông tin bản thảo"}
                           </h3>
                           <div className="space-y-2 text-zinc-600">
                             <div className="flex justify-between items-center">
@@ -1580,7 +1568,7 @@ export default function WorkspacePage() {
                               <span className="font-semibold text-zinc-900">{sources.length} {isEn ? "sources" : "nguồn"}</span>
                             </div>
                             <div className="flex justify-between items-center">
-                              <span className="text-zinc-500">{isEn ? "Verified citations:" : "Trích dẫn bằng chứng:"}</span>
+                              <span className="text-zinc-500">{isEn ? "Source-linked citations:" : "Trích dẫn có liên kết nguồn:"}</span>
                               <span className="font-semibold text-zinc-900">{citations.length} {isEn ? "claims" : "đoạn"}</span>
                             </div>
                             <div className="flex justify-between items-center">
