@@ -122,13 +122,9 @@
   }
 }
 
-/* Respond to actual paper space, including both navigation sidebars. */
-.paper-space { container-type: inline-size; container-name: paper; }
-.paper-layout-container { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2rem; align-items: start; }
-@container paper (min-width: 1000px) {
-  .paper-layout-container { grid-template-columns: minmax(0, 1fr) 280px; }
-  .paper-toc, .paper-stages { position: sticky; top: 1rem; }
-}
+/* Full width unified article layout */
+.paper-space { width: 100%; }
+.paper-layout-container { display: block; width: 100%; }
 @media print {
   .paper-space { container-type: normal; }
   .paper-layout-container { display: block !important; }

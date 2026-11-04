@@ -1606,14 +1606,7 @@ export default function WorkspacePage() {
                                 )}
                               </div>
 
-                              <button
-                                type="button"
-                                onClick={() => setIsWidePaper(!isWidePaper)}
-                                className="p-1.5 rounded-lg border border-zinc-200 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors cursor-pointer"
-                                title={isWidePaper ? (isEn ? "Standard width" : "Thu gọn về kích thước chuẩn") : (isEn ? "Expand full width" : "Mở rộng tràn màn hình")}
-                              >
-                                {isWidePaper ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-                              </button>
+
                             </div>
                           </div>
 
