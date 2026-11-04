@@ -9,7 +9,7 @@ import {
   Trash2, XCircle, Search, Activity, Cpu, UploadCloud, FileUp, FlaskConical,
   AlertTriangle, Database, Printer, Maximize2, Minimize2, PanelLeftClose, PanelLeft,
   ListFilter, Bookmark, BookOpen, Package, ChevronDown, FileDown, Loader2,
-  MessageSquare, History
+  MessageSquare, History, Info
 } from 'lucide-react';
 import { Badge, Card } from '@/components/ui/Components';
 import { Button } from '@/components/ui/Button';
@@ -727,7 +727,7 @@ export default function WorkspacePage() {
             type="button"
             onClick={() => setIsStagesCollapsed(prev => !prev)}
             className="hidden lg:flex items-center justify-center p-1.5 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors shrink-0"
-            title={isStagesCollapsed ? (isEn ? "Show pipeline stages" : "Hiện danh mục giai đoạn nghiên cứu") : (isEn ? "Collapse pipeline stages" : "Thu gọn danh mục giai đoạn để tối đa hóa không gian bài viết")}
+            title={isStagesCollapsed ? (isEn ? "Show table of contents" : "Hiện mục lục bài báo") : (isEn ? "Collapse table of contents" : "Thu gọn mục lục")}
           >
             {isStagesCollapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
           </button>
@@ -810,97 +810,150 @@ export default function WorkspacePage() {
       {/* Main Workspace Body */}
       <div className="flex flex-1 overflow-hidden flex-col lg:flex-row print:overflow-visible print:h-auto print:block">
         {/* Stages Sidebar */}
-        <aside id="stages-sidebar" className={`${isStagesCollapsed ? 'hidden' : 'w-full lg:w-72 xl:w-80'} border-r border-zinc-200 bg-zinc-50/50 flex flex-col shrink-0 overflow-y-auto max-h-60 lg:max-h-none transition-all duration-200 print:hidden`}>
-          <div className="p-4 border-b border-zinc-200 flex items-center justify-between">
-            <h2 className="font-semibold text-xs uppercase tracking-wider text-zinc-500">{isEn ? "Research Pipeline" : "Các giai đoạn nghiên cứu"}</h2>
+        {/* Left Sidebar: Table of Contents & Manuscript Details */}
+        <aside id="toc-sidebar" className={`${isStagesCollapsed ? 'hidden' : 'w-full lg:w-72 xl:w-80'} border-r border-zinc-200 bg-zinc-50/70 flex flex-col shrink-0 overflow-y-auto max-h-72 lg:max-h-none transition-all duration-200 print:hidden`}>
+          <div className="p-4 border-b border-zinc-200 flex items-center justify-between sticky top-0 bg-zinc-50/95 backdrop-blur z-10">
+            <div className="flex items-center gap-2">
+              <ListFilter size={17} className="text-zinc-700" />
+              <h2 className="font-bold text-sm sm:text-base uppercase tracking-wider text-zinc-900">
+                {isEn ? "Table of Contents" : "Mục lục bài báo"}
+              </h2>
+            </div>
             <button
               type="button"
               onClick={() => setIsStagesCollapsed(true)}
-              className="hidden lg:block text-zinc-400 hover:text-zinc-700 transition-colors p-1 rounded hover:bg-zinc-200/60"
-              title={isEn ? "Collapse stages sidebar" : "Thu gọn cột giai đoạn"}
+              className="hidden lg:block text-zinc-400 hover:text-zinc-700 transition-colors p-1.5 rounded-lg hover:bg-zinc-200/60"
+              title={isEn ? "Collapse table of contents" : "Thu gọn mục lục"}
             >
-              <PanelLeftClose size={15} />
+              <PanelLeftClose size={16} />
             </button>
           </div>
-          <div className="p-4">
-            <div className="relative border-l-2 border-zinc-200 ml-3 space-y-6">
-              {(() => {
-                const currentStages = task.research_type === 'REVIEW'
-                  ? REVIEW_STAGES
-                  : task.research_type === 'EMPIRICAL_COMPUTATIONAL'
-                  ? COMPUTATIONAL_STAGES
-                  : BASE_STAGES;
-                return currentStages.map((stage, index) => {
-                  const state = stageState(currentStages, index, task.status, task.current_step);
-                  const Icon = state === 'done' ? CheckCircle2 : state === 'active' ? Activity : state === 'review' ? AlertTriangle : state === 'failed' ? XCircle : state === 'paused' ? Clock : Circle;
-                  return (
-                    <div
-                      key={isEn ? stage.title_en : stage.title_vi}
-                      className={`relative pl-6 py-1 rounded-lg transition-colors ${
-                        state === 'active' ? 'bg-blue-50/80 -mx-2 px-4 border border-blue-100' : ''
-                      }`}
-                    >
-                      <span className={`absolute left-0 top-1.5 p-1 rounded-full border bg-white ${
-                        state === 'done' ? 'text-emerald-500 border-emerald-200'
-                        : state === 'active' ? 'text-blue-600 border-blue-300 shadow-sm shadow-blue-100'
-                        : ['review', 'paused'].includes(state) ? 'text-amber-600 border-amber-300' : state === 'failed' ? 'text-red-600 border-red-300' : 'text-zinc-300 border-zinc-200'
-                      }`}>
-                        <Icon size={13} className={state === 'active' ? 'animate-pulse' : ''} />
-                      </span>
-                      <div>
-                        <span className={`text-sm leading-snug block ${
-                          state === 'waiting' ? 'text-zinc-400 font-normal'
-                          : state === 'active' ? 'font-semibold text-blue-900'
-                          : 'font-medium text-zinc-700'
-                        }`}>
-                          {isEn ? stage.title_en : stage.title_vi}
-                        </span>
-                        {state === 'active' && (
-                          <span className="text-[11px] text-blue-600 font-medium">
-                            {isEn ? 'In progress…' : 'Đang thực hiện…'}
-                          </span>
-                        )}
-                        {['review', 'failed', 'cancelled', 'paused'].includes(state) && (
-                          <span className="text-[11px] text-amber-700 font-medium">{statusLabel(task.status, language)}</span>
-                        )}
-                        {state === 'done' && (
-                          <span className="text-[11px] text-emerald-600 font-medium">
-                            {isEn ? 'Completed' : 'Hoàn thành'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                });
-              })()}
-            </div>
-          </div>
 
-          <div className="p-4 border-t border-zinc-200 mt-auto bg-white text-xs text-zinc-600 space-y-2.5">
-            <div className="flex justify-between">
-              <span className="text-zinc-500">{isEn ? "Research Type:" : "Loại nghiên cứu:"}</span>
-              <Badge variant="outline">
-                {task.research_type === 'EMPIRICAL_HUMAN' ? (isEn ? 'Fieldwork' : 'Thực địa') : task.research_type === 'EMPIRICAL_COMPUTATIONAL' ? (isEn ? 'Computational' : 'Tính toán') : (isEn ? 'Literature Review' : 'Tổng quan')}
-              </Badge>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-500">{isEn ? "Tokens used:" : "Tokens tiêu thụ:"}</span>
-              <strong className="font-semibold text-zinc-800">{task.total_tokens_used.toLocaleString('vi-VN')}</strong>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-500">{isEn ? "Estimated cost:" : "Chi phí ước tính:"}</span>
-              <strong className="font-semibold text-zinc-800">${Number(task.total_cost_usd).toFixed(4)}</strong>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-500">{isEn ? "Citation style:" : "Kiểu trích dẫn:"}</span>
-              <Badge variant="outline">{task.citation_style}</Badge>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-zinc-500">{isEn ? "Updated:" : "Cập nhật:"}</span>
-              <span className="text-zinc-700">{formatDate(task.updated_at, language)}</span>
+          <div className="flex-1 overflow-y-auto divide-y divide-zinc-200">
+            {/* Table of Contents Section */}
+            {(() => {
+              const headings = report ? extractHeadings(withoutRepeatedTitle(report.content_markdown, report.title)) : [];
+              if (headings.length > 0) {
+                return (
+                  <div className="p-3">
+                    <div className="flex items-center justify-between mb-2 px-1">
+                      <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                        {isEn ? "Sections" : "Các đề mục"}
+                      </span>
+                      <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-800 font-bold">
+                        {headings.length} {isEn ? "parts" : "mục"}
+                      </span>
+                    </div>
+                    <nav className="space-y-1 text-xs">
+                      {headings.map((h, i) => (
+                        <a
+                          key={i}
+                          href={`#${h.slug}`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (activeTab !== 'report') setActiveTab('report');
+                            setTimeout(() => {
+                              const el = document.getElementById(h.slug);
+                              if (el) {
+                                el.scrollIntoView({ behavior: 'smooth' });
+                                setActiveTocSlug(h.slug);
+                              }
+                            }, 50);
+                          }}
+                          className={`block py-1.5 px-2.5 rounded-lg transition-colors truncate ${
+                            h.level === 1 ? 'font-bold text-zinc-900 text-xs' :
+                            h.level === 2 ? 'pl-4 font-semibold text-zinc-700 text-xs' :
+                            'pl-6 text-zinc-500 text-[11px]'
+                          } hover:bg-zinc-200/70 hover:text-zinc-950 ${activeTocSlug === h.slug ? 'bg-white shadow-xs text-zinc-950 font-bold border-l-2 border-zinc-900' : ''}`}
+                          title={h.title}
+                        >
+                          {h.title}
+                        </a>
+                      ))}
+                    </nav>
+                  </div>
+                );
+              }
+              return (
+                <div className="p-4 text-xs text-zinc-500 leading-relaxed italic">
+                  {report
+                    ? (isEn ? "Draft contains no section headings." : "Bản thảo chưa phân mục.")
+                    : (isEn ? "Table of contents will appear once manuscript draft is generated." : "Mục lục sẽ hiển thị khi bản thảo bài báo được tạo.")
+                  }
+                </div>
+              );
+            })()}
+
+            {/* Draft Details (Thông tin bản thảo) */}
+            <div className="p-4 space-y-3.5 text-xs">
+              <div className="flex items-center gap-1.5 pb-2 border-b border-zinc-200">
+                <Bookmark size={15} className="text-zinc-700" />
+                <h3 className="font-bold text-xs uppercase tracking-wider text-zinc-900">
+                  {isEn ? "Draft Details" : "Thông tin bản thảo"}
+                </h3>
+              </div>
+
+              {report && (
+                <div className="space-y-2.5 text-zinc-700">
+                  <div className="flex justify-between items-center">
+                    <span className="text-zinc-500">{isEn ? "Word count:" : "Số lượng từ:"}</span>
+                    <strong className="font-bold text-zinc-900 font-mono text-xs">{report.word_count.toLocaleString()} {isEn ? "words" : "từ"}</strong>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-zinc-500">{isEn ? "Reading time:" : "Thời gian đọc:"}</span>
+                    <strong className="font-bold text-zinc-900 font-mono text-xs">~{Math.max(1, Math.ceil((report.word_count || 1) / 220))} {isEn ? "min" : "phút"}</strong>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-zinc-500">{isEn ? "Sources cited:" : "Nguồn tài liệu:"}</span>
+                    <span className="font-bold text-zinc-900">{sources.length} {isEn ? "sources" : "nguồn"}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-zinc-500">{isEn ? "Linked citations:" : "Trích dẫn có nguồn:"}</span>
+                    <span className="font-bold text-zinc-900">{citations.length} {isEn ? "claims" : "đoạn"}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-zinc-500">{isEn ? "Citation style:" : "Kiểu trích dẫn:"}</span>
+                    <Badge variant="outline">{task.citation_style}</Badge>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-zinc-100">
+                    <span className="text-zinc-500">{isEn ? "View width:" : "Khổ hiển thị:"}</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsWidePaper(!isWidePaper)}
+                      className="text-blue-600 hover:text-blue-800 font-semibold cursor-pointer text-xs hover:underline"
+                    >
+                      {isWidePaper ? (isEn ? "Standard (7xl)" : "Kích thước chuẩn (7xl)") : (isEn ? "Expanded (1600px)" : "Mở rộng (1600px)")}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Research Metadata */}
+              <div className={`space-y-2 text-zinc-600 ${report ? 'pt-3 border-t border-zinc-200' : ''}`}>
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-500">{isEn ? "Research Type:" : "Loại nghiên cứu:"}</span>
+                  <Badge variant="outline">
+                    {task.research_type === 'EMPIRICAL_HUMAN' ? (isEn ? 'Fieldwork' : 'Thực địa') : task.research_type === 'EMPIRICAL_COMPUTATIONAL' ? (isEn ? 'Computational' : 'Tính toán') : (isEn ? 'Literature Review' : 'Tổng quan')}
+                  </Badge>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-500">{isEn ? "Tokens used:" : "Tokens tiêu thụ:"}</span>
+                  <strong className="font-bold text-zinc-900 font-mono text-xs">{task.total_tokens_used.toLocaleString('vi-VN')}</strong>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-500">{isEn ? "Estimated cost:" : "Chi phí ước tính:"}</span>
+                  <strong className="font-bold text-zinc-900 font-mono text-xs">${Number(task.total_cost_usd).toFixed(4)}</strong>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-zinc-500">{isEn ? "Updated:" : "Cập nhật:"}</span>
+                  <span className="text-zinc-700 text-[11px]">{formatDate(task.updated_at, language)}</span>
+                </div>
+              </div>
             </div>
           </div>
         </aside>
+
+        {/* Content Tabs Area */}
 
         {/* Content Tabs Area */}
         <main className="flex-1 flex flex-col bg-white overflow-hidden print:overflow-visible print:h-auto print:block">
@@ -1214,58 +1267,128 @@ export default function WorkspacePage() {
             </div>
           )}
 
-          <div id="research-tab-bar" className="flex border-b border-zinc-200 px-4 bg-zinc-50/80 shrink-0 gap-1 overflow-x-auto print:hidden">
+                    <div id="research-tab-bar" className="flex border-b-2 border-zinc-200 px-4 sm:px-6 bg-zinc-50 shrink-0 gap-2 overflow-x-auto print:hidden">
             <button
               onClick={() => setActiveTab('report')}
-              className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === 'report' ? 'border-zinc-900 text-zinc-900 bg-white' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}
+              className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
+                activeTab === 'report'
+                  ? 'border-zinc-950 text-zinc-950 bg-white font-extrabold shadow-xs'
+                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100/70 font-bold'
+              }`}
             >
-              <FileText size={15} className="inline mr-1.5 opacity-70" />
-              {isEn ? `Scientific Paper ${report ? `(${report.word_count.toLocaleString()} words)` : ''}` : `Bài báo ${report ? `(${report.word_count} từ)` : ''}`}
+              <FileText size={18} className={activeTab === 'report' ? 'text-zinc-950' : 'text-zinc-500'} />
+              <span>{isEn ? 'Scientific Paper' : 'Bài báo'}</span>
+              {report && (
+                <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                  activeTab === 'report' ? 'bg-zinc-900 text-white' : 'bg-zinc-200 text-zinc-800'
+                }`}>
+                  {report.word_count.toLocaleString()} {isEn ? 'words' : 'từ'}
+                </span>
+              )}
             </button>
+
             {(task.protocol_artifact_id || protocol) && (
               <button
                 onClick={() => setActiveTab('protocol')}
-                className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === 'protocol' ? 'border-zinc-900 text-zinc-900 bg-white' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}
+                className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
+                  activeTab === 'protocol'
+                    ? 'border-zinc-950 text-zinc-950 bg-white font-extrabold shadow-xs'
+                    : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100/70 font-bold'
+                }`}
               >
-                <FlaskConical size={15} className="inline mr-1.5 opacity-70" />
-                {isEn ? 'Study Protocol' : 'Đề cương nghiên cứu'}
+                <FlaskConical size={18} className={activeTab === 'protocol' ? 'text-zinc-950' : 'text-zinc-500'} />
+                <span>{isEn ? 'Study Protocol' : 'Đề cương nghiên cứu'}</span>
               </button>
             )}
+
             {task.research_type === 'EMPIRICAL_COMPUTATIONAL' && (
               <button
                 onClick={() => setActiveTab('experiments')}
-                className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === 'experiments' ? 'border-zinc-900 text-zinc-900 bg-white' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}
+                className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
+                  activeTab === 'experiments'
+                    ? 'border-zinc-950 text-zinc-950 bg-white font-extrabold shadow-xs'
+                    : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100/70 font-bold'
+                }`}
               >
-                <Cpu size={15} className="inline mr-1.5 opacity-70" />
-                {isEn ? `Experiments & Journal ${experiments.length > 0 ? `(${experiments.length})` : ''}` : `Thực nghiệm & Nhật ký ${experiments.length > 0 ? `(${experiments.length})` : ''}`}
+                <Cpu size={18} className={activeTab === 'experiments' ? 'text-zinc-950' : 'text-zinc-500'} />
+                <span>{isEn ? 'Experiments & Journal' : 'Thực nghiệm & Nhật ký'}</span>
+                {experiments.length > 0 && (
+                  <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                    activeTab === 'experiments' ? 'bg-zinc-900 text-white' : 'bg-zinc-200 text-zinc-800'
+                  }`}>
+                    {experiments.length}
+                  </span>
+                )}
               </button>
             )}
+
             <button
               onClick={() => setActiveTab('sources')}
-              className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === 'sources' ? 'border-zinc-900 text-zinc-900 bg-white' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}
+              className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
+                activeTab === 'sources'
+                  ? 'border-zinc-950 text-zinc-950 bg-white font-extrabold shadow-xs'
+                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100/70 font-bold'
+              }`}
             >
-              <Globe size={15} className="inline mr-1.5 opacity-70" />
-              {isEn ? `Sources (${sources.length})` : `Nguồn tài liệu (${sources.length})`}
+              <Globe size={18} className={activeTab === 'sources' ? 'text-zinc-950' : 'text-zinc-500'} />
+              <span>{isEn ? 'Sources' : 'Nguồn tài liệu'}</span>
+              {sources.length > 0 && (
+                <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                  activeTab === 'sources' ? 'bg-zinc-900 text-white' : 'bg-zinc-200 text-zinc-800'
+                }`}>
+                  {sources.length}
+                </span>
+              )}
             </button>
+
             <button
               onClick={() => setActiveTab('citations')}
-              className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === 'citations' ? 'border-zinc-900 text-zinc-900 bg-white' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}
+              className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
+                activeTab === 'citations'
+                  ? 'border-zinc-950 text-zinc-950 bg-white font-extrabold shadow-xs'
+                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100/70 font-bold'
+              }`}
             >
-              <Layers size={15} className="inline mr-1.5 opacity-70" />
-              {isEn ? `Evidence & Citations (${citations.length})` : `Bằng chứng & Trích dẫn (${citations.length})`}
+              <Layers size={18} className={activeTab === 'citations' ? 'text-zinc-950' : 'text-zinc-500'} />
+              <span>{isEn ? 'Evidence & Citations' : 'Bằng chứng & Trích dẫn'}</span>
+              {citations.length > 0 && (
+                <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                  activeTab === 'citations' ? 'bg-zinc-900 text-white' : 'bg-zinc-200 text-zinc-800'
+                }`}>
+                  {citations.length}
+                </span>
+              )}
             </button>
+
             <button
               onClick={() => setActiveTab('runs')}
-              className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === 'runs' ? 'border-zinc-900 text-zinc-900 bg-white' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}
+              className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
+                activeTab === 'runs'
+                  ? 'border-zinc-950 text-zinc-950 bg-white font-extrabold shadow-xs'
+                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100/70 font-bold'
+              }`}
             >
-              <Activity size={15} className="inline mr-1.5 opacity-70" />
-              {isEn ? `Agent Runs & Cost (${runs.length})` : `Tiến trình Agent & Chi phí (${runs.length})`}
+              <Activity size={18} className={activeTab === 'runs' ? 'text-zinc-950' : 'text-zinc-500'} />
+              <span>{isEn ? 'Agent Runs & Cost' : 'Tiến trình Agent & Chi phí'}</span>
+              {runs.length > 0 && (
+                <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                  activeTab === 'runs' ? 'bg-zinc-900 text-white' : 'bg-zinc-200 text-zinc-800'
+                }`}>
+                  {runs.length}
+                </span>
+              )}
             </button>
+
             <button
               onClick={() => setActiveTab('details')}
-              className={`px-4 py-3 text-sm font-medium border-b-2 whitespace-nowrap transition-colors ${activeTab === 'details' ? 'border-zinc-900 text-zinc-900 bg-white' : 'border-transparent text-zinc-500 hover:text-zinc-800'}`}
+              className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
+                activeTab === 'details'
+                  ? 'border-zinc-950 text-zinc-950 bg-white font-extrabold shadow-xs'
+                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100/70 font-bold'
+              }`}
             >
-              {isEn ? 'Metadata & Config' : 'Thông tin & Cấu hình'}
+              <Info size={18} className={activeTab === 'details' ? 'text-zinc-950' : 'text-zinc-500'} />
+              <span>{isEn ? 'Metadata & Config' : 'Thông tin & Cấu hình'}</span>
             </button>
           </div>
 
@@ -1494,82 +1617,82 @@ export default function WorkspacePage() {
                       </article>
 
                       {/* Right Sidebar: Table of Contents & Article Metadata */}
-                      <div id="toc-sidebar" className="paper-toc w-full min-w-0 space-y-4 self-start print:hidden">
-                        {/* Table of Contents */}
-                        {(() => {
-                          const headings = extractHeadings(withoutRepeatedTitle(report.content_markdown, report.title));
-                          if (headings.length === 0) return null;
-                          return (
-                            <Card className="p-4 space-y-3 shadow-2xs">
-                              <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
-                                <h3 className="font-semibold text-xs text-zinc-900 uppercase tracking-wider flex items-center gap-1.5">
-                                  <ListFilter size={14} className="text-zinc-500" /> {isEn ? "Table of Contents" : "Mục lục bài báo"}
-                                </h3>
-                                <span className="text-[11px] text-zinc-400 font-mono">{headings.length} {isEn ? "sections" : "mục"}</span>
-                              </div>
-                              <nav className="max-h-[50vh] overflow-y-auto space-y-0.5 pr-1 text-xs">
-                                {headings.map((h, i) => (
-                                  <a
-                                    key={i}
-                                    href={`#${h.slug}`}
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      const el = document.getElementById(h.slug);
-                                      if (el) {
-                                        el.scrollIntoView({ behavior: 'smooth' });
-                                        setActiveTocSlug(h.slug);
-                                      }
-                                    }}
-                                    className={`block py-1.5 px-2 rounded-lg transition-colors truncate ${
-                                      h.level === 1 ? 'font-semibold text-zinc-900' :
-                                      h.level === 2 ? 'pl-4 text-zinc-700' : 'pl-6 text-zinc-500 text-[11px]'
-                                    } hover:bg-zinc-100 hover:text-zinc-950 ${activeTocSlug === h.slug ? 'bg-zinc-100 text-zinc-900 font-semibold border-l-2 border-zinc-900' : ''}`}
-                                    title={h.title}
-                                  >
-                                    {h.title}
-                                  </a>
-                                ))}
-                              </nav>
-                            </Card>
-                          );
-                        })()}
+                                            {/* Right Sidebar: Research Pipeline Stages */}
+                      <div id="stages-sidebar" className="paper-stages w-full min-w-0 space-y-4 self-start print:hidden">
+                        <Card className="p-4 space-y-4 shadow-2xs bg-white border border-zinc-200">
+                          <div className="flex items-center justify-between border-b border-zinc-100 pb-2.5">
+                            <h3 className="font-bold text-xs text-zinc-900 uppercase tracking-wider flex items-center gap-1.5">
+                              <Activity size={14} className="text-zinc-600" />
+                              {isEn ? "Research Pipeline" : "Các giai đoạn nghiên cứu"}
+                            </h3>
+                            <Link
+                              href={`/research/${params.id}/monitor`}
+                              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 hover:underline"
+                            >
+                              {isEn ? "Live Monitor →" : "Giám sát tác tử →"}
+                            </Link>
+                          </div>
 
-                        {/* Article Metrics */}
-                        <Card className="p-4 space-y-3 shadow-2xs text-xs">
-                          <h3 className="font-semibold text-xs text-zinc-900 uppercase tracking-wider border-b border-zinc-100 pb-2 flex items-center gap-1.5">
-                            <Bookmark size={14} className="text-zinc-500" /> {isEn ? "Draft Details" : "Thông tin bản thảo"}
-                          </h3>
-                          <div className="space-y-2 text-zinc-600">
-                            <div className="flex justify-between items-center">
-                              <span className="text-zinc-500">{isEn ? "Word count:" : "Số lượng từ:"}</span>
-                              <strong className="font-semibold text-zinc-900 font-mono">{report.word_count.toLocaleString()} {isEn ? "words" : "từ"}</strong>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-zinc-500">{isEn ? "Reading time:" : "Thời gian đọc:"}</span>
-                              <strong className="font-semibold text-zinc-900 font-mono">~{Math.max(1, Math.ceil((report.word_count || 1) / 220))} {isEn ? "min" : "phút"}</strong>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-zinc-500">{isEn ? "Sources:" : "Nguồn tài liệu:"}</span>
-                              <span className="font-semibold text-zinc-900">{sources.length} {isEn ? "sources" : "nguồn"}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-zinc-500">{isEn ? "Source-linked citations:" : "Trích dẫn có liên kết nguồn:"}</span>
-                              <span className="font-semibold text-zinc-900">{citations.length} {isEn ? "claims" : "đoạn"}</span>
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-zinc-500">{isEn ? "Citation style:" : "Kiểu trích dẫn:"}</span>
-                              <Badge variant="outline">{task.citation_style}</Badge>
-                            </div>
-                            <div className="flex justify-between items-center pt-1 border-t border-zinc-100">
-                              <span className="text-zinc-500">{isEn ? "View width:" : "Khổ hiển thị:"}</span>
-                              <button
-                                type="button"
-                                onClick={() => setIsWidePaper(!isWidePaper)}
-                                className="text-blue-600 hover:underline font-medium cursor-pointer"
-                              >
-                                {isWidePaper ? (isEn ? "Standard (7xl)" : "Kích thước chuẩn (7xl)") : (isEn ? "Expanded (1600px)" : "Mở rộng (1600px)")}
-                              </button>
-                            </div>
+                          <div className="relative border-l-2 border-zinc-200 ml-3 space-y-5 my-2">
+                            {(() => {
+                              const currentStages = task.research_type === 'REVIEW'
+                                ? REVIEW_STAGES
+                                : task.research_type === 'EMPIRICAL_COMPUTATIONAL'
+                                ? COMPUTATIONAL_STAGES
+                                : BASE_STAGES;
+                              return currentStages.map((stage, index) => {
+                                const state = stageState(currentStages, index, task.status, task.current_step);
+                                const Icon = state === 'done' ? CheckCircle2 : state === 'active' ? Activity : state === 'review' ? AlertTriangle : state === 'failed' ? XCircle : state === 'paused' ? Clock : Circle;
+                                return (
+                                  <div
+                                    key={isEn ? stage.title_en : stage.title_vi}
+                                    className={`relative pl-6 py-1 rounded-lg transition-colors ${
+                                      state === 'active' ? 'bg-blue-50/80 -mx-2 px-3 border border-blue-100' : ''
+                                    }`}
+                                  >
+                                    <span className={`absolute left-0 top-1.5 p-1 rounded-full border bg-white ${
+                                      state === 'done' ? 'text-emerald-500 border-emerald-200'
+                                      : state === 'active' ? 'text-blue-600 border-blue-300 shadow-sm shadow-blue-100'
+                                      : ['review', 'paused'].includes(state) ? 'text-amber-600 border-amber-300' : state === 'failed' ? 'text-red-600 border-red-300' : 'text-zinc-300 border-zinc-200'
+                                    }`}>
+                                      <Icon size={12} className={state === 'active' ? 'animate-pulse' : ''} />
+                                    </span>
+                                    <div>
+                                      <span className={`text-xs leading-snug block ${
+                                        state === 'waiting' ? 'text-zinc-400 font-normal'
+                                        : state === 'active' ? 'font-bold text-blue-900'
+                                        : 'font-medium text-zinc-700'
+                                      }`}>
+                                        {isEn ? stage.title_en : stage.title_vi}
+                                      </span>
+                                      {state === 'active' && (
+                                        <span className="text-[10px] text-blue-600 font-bold">
+                                          {isEn ? 'In progress…' : 'Đang thực hiện…'}
+                                        </span>
+                                      )}
+                                      {['review', 'failed', 'cancelled', 'paused'].includes(state) && (
+                                        <span className="text-[10px] text-amber-700 font-bold">{statusLabel(task.status, language)}</span>
+                                      )}
+                                      {state === 'done' && (
+                                        <span className="text-[10px] text-emerald-600 font-medium">
+                                          {isEn ? 'Completed' : 'Hoàn thành'}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              });
+                            })()}
+                          </div>
+
+                          <div className="pt-2 border-t border-zinc-100">
+                            <Link
+                              href={`/research/${params.id}/monitor`}
+                              className="inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-3 text-xs font-bold text-zinc-800 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors border border-zinc-200/80"
+                            >
+                              <Activity size={13} />
+                              {isEn ? "Open Live Monitor" : "Mở giám sát trực tiếp"}
+                            </Link>
                           </div>
                         </Card>
                       </div>

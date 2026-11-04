@@ -126,8 +126,8 @@
 .paper-space { container-type: inline-size; container-name: paper; }
 .paper-layout-container { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2rem; align-items: start; }
 @container paper (min-width: 1000px) {
-  .paper-layout-container { grid-template-columns: minmax(0, 1fr) 240px; }
-  .paper-toc { position: sticky; top: 1rem; }
+  .paper-layout-container { grid-template-columns: minmax(0, 1fr) 280px; }
+  .paper-toc, .paper-stages { position: sticky; top: 1rem; }
 }
 @media print {
   .paper-space { container-type: normal; }
