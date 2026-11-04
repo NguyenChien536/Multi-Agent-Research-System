@@ -355,5 +355,34 @@ async def test_each_fallback_attempt_is_reserved_and_counted(monkeypatch):
             usage = task.budget_config["_provider_usage"]
             assert usage["llm_calls"] == 2, usage
             assert usage["reservations"] == {}, usage
+            assert task.total_tokens_used == usage['input_tokens'] + usage['output_tokens']
+            assert float(task.total_cost_usd) == round(usage['cost_usd'], 4)
+    finally:
+        await delete_test_user(user_id)
+
+
+@pytest.mark.asyncio
+async def test_running_and_historical_paused_counters_use_settled_ledger_without_leaking_it():
+    from app.schemas.task import ResearchTaskResponse
+    task_id, user_id = await create_running_task()
+    try:
+        reservation = await reserve_provider_call(task_id=task_id, attempt_number=1,
+            kind='llm', model='gemini-3.5-flash-lite', input_tokens=40, output_tokens=20)
+        settlement = dict(task_id=task_id, reservation_id=reservation, input_tokens=40,
+            output_tokens=20, cost_usd=0.002, succeeded=True)
+        await settle_provider_call(**settlement)
+        await settle_provider_call(**settlement)  # Duplicate delivery cannot double-charge.
+        async with AsyncSessionLocal() as db:
+            task = await db.get(ResearchTask, task_id)
+            assert task.status == 'RUNNING'
+            assert task.total_tokens_used == 60
+            assert float(task.total_cost_usd) == .002
+            # Reproduce an old paused record's stale display columns without
+            # changing its persisted source ledger or manuscript.
+            task.status, task.total_tokens_used, task.total_cost_usd = 'WAITING_USER_DATA', 0, 0
+            response = ResearchTaskResponse.model_validate(task)
+            assert response.total_tokens_used == 60 and response.total_cost_usd == .002
+            assert '_provider_usage' not in response.model_dump_json()
+            assert 'budget_config' not in response.model_dump()
     finally:
         await delete_test_user(user_id)

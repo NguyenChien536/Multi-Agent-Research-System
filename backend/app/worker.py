@@ -847,8 +847,13 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                     ).where(AgentRun.research_task_id == task.id)
                 )
                 total_tokens, total_cost = totals_res.one()
-                task.total_tokens_used = int(total_tokens)
-                task.total_cost_usd = round(float(total_cost), 4)
+                usage = (task.budget_config or {}).get('_provider_usage') or {}
+                if any(usage.get(k, 0) for k in ('llm_calls', 'search_calls', 'embedding_calls')):
+                    task.total_tokens_used = int(usage.get('input_tokens', 0)) + int(usage.get('output_tokens', 0))
+                    task.total_cost_usd = round(float(usage.get('cost_usd', 0)), 4)
+                else:
+                    task.total_tokens_used = int(total_tokens)
+                    task.total_cost_usd = round(float(total_cost), 4)
                 await session.commit()
 
                 try:

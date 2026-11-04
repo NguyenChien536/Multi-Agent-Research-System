@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
 class BudgetConfigSchema(BaseModel):
@@ -58,6 +58,18 @@ class ResearchTaskResponse(BaseModel):
     completed_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode='wrap')
+    @classmethod
+    def canonical_usage_totals(cls, value, handler):
+        result = handler(value)
+        # Historical paused records can have stale denormalized totals. Read
+        # their durable ledger without exposing private budget/reservation data.
+        usage = (getattr(value, 'budget_config', None) or {}).get('_provider_usage')
+        if isinstance(usage, dict) and any(usage.get(k, 0) for k in ('llm_calls', 'search_calls', 'embedding_calls')):
+            result.total_tokens_used = int(usage.get('input_tokens', 0)) + int(usage.get('output_tokens', 0))
+            result.total_cost_usd = round(float(usage.get('cost_usd', 0)), 4)
+        return result
 
 
 class PlanReviewResponse(BaseModel):

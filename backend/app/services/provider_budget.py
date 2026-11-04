@@ -256,6 +256,9 @@ async def settle_provider_call(
         usage["cost_usd"] = round(float(usage.get("cost_usd", 0)) + cost_usd, 8)
         config["_provider_usage"] = usage
         task.budget_config = config
+        # Update visible counters at settlement, including pauses and post-run Q&A.
+        task.total_tokens_used = usage["input_tokens"] + usage["output_tokens"]
+        task.total_cost_usd = round(usage["cost_usd"], 4)
         await session.commit()
 
 
