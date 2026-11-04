@@ -208,7 +208,7 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
         # 7. Kiểm tra kết quả trong DB: Task COMPLETED, có ResearchReport
         async with AsyncSessionLocal() as session:
             final_task = await session.scalar(select(ResearchTask).where(ResearchTask.id == uuid.UUID(task_id)))
-            assert final_task.status == "COMPLETED"
+            assert final_task.status == "NEEDS_REVIEW"
             assert final_task.plan_approved is True
             assert final_task.plan["search_queries"] == approved_queries
 
@@ -217,6 +217,8 @@ async def test_hitl_plan_approval_pause_and_resume(monkeypatch):
             version = await session.scalar(select(ReportVersion).where(ReportVersion.report_id == report.id))
             assert version is not None
             assert version.version_number == 1
+            assert version.review_status == "NEEDS_REVIEW"
+            assert "SINGLE_SOURCE_SCOPE" in {item["code"] for item in version.review_metadata["manuscript_findings"]}
             assert "Clinical Multi-Agent Systems" in version.content_markdown
 
 

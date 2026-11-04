@@ -983,9 +983,11 @@ async def test_real_nodes_pipeline_with_mocked_provider_boundaries(monkeypatch):
 
         task = await client.get(f"/api/v1/research/{task_id}", headers=headers)
         report = await client.get(f"/api/v1/research/{task_id}/report", headers=headers)
-        assert task.status_code == 200 and task.json()["status"] == "COMPLETED"
+        assert task.status_code == 200 and task.json()["status"] == "NEEDS_REVIEW"
         assert task.json()["current_step"] == "POST_PROCESSOR"
         assert report.status_code == 200
+        assert report.json()["review_status"] == "NEEDS_REVIEW"
+        assert "SINGLE_SOURCE_SCOPE" in {item["code"] for item in report.json()["review_metadata"]["manuscript_findings"]}
         assert "The source supports the finding. [1]" in report.json()["content_markdown"]
         assert "## Tài liệu tham khảo" in report.json()["content_markdown"]
 
