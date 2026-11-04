@@ -215,8 +215,10 @@ def validate_scientific_reporting(markdown: str, contract: dict | None, context:
                 expected = ((run.get("metrics") or {}).get(key) or {}).get("mae")
                 if expected is None:
                     continue
-                for value in re.findall(rf"\b{label}\b[^\n.]{{0,50}}\bMAE\b\s*(?:=|of|is|là|:)\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)", body, re.I):
-                    if not math.isclose(float(value), float(expected), rel_tol=1e-3, abs_tol=1e-3):
+                for match in re.finditer(rf"\b{label}\b(?P<context>[^\n.]{{0,50}})\bMAE\b\s*(?:=|of|is|là|:)\s*(?P<value>[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)", body, re.I):
+                    if re.search(r'\b(?:delta|difference|reduction|improvement|change)\b|Δ|chênh lệch', match['context'], re.I):
+                        continue  # A delta is not the model's absolute MAE.
+                    if not math.isclose(float(match['value']), float(expected), rel_tol=1e-3, abs_tol=1e-3):
                         add("METRIC_MISMATCH", "A reported MAE differs from the executed result; copy measured values and label their scope.")
     # The generated supplementary search table has its own caption/explanation.
     # It must neither trigger nor satisfy validation of model-authored tables.

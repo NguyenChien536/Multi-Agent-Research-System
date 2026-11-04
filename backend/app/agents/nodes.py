@@ -737,6 +737,12 @@ later applications, variants, reviews and practitioner guides do not establish o
             ],
         )
 
+        from app.services.research_quality import attribute_collection_counts
+        collection_activity = attribute_collection_counts(
+            provider_activity, completed_at.isoformat(), fetched_count=fetched_counts,
+            accepted_count=accepted_counts, fetch_failed_count=failed_counts,
+            abstract_only_count=abstract_counts, previously_seen_count=seen_counts,
+        )
         return {
             "current_agent": "researcher",
             "collected_sources": new_sources,  # Annotated[list, operator.add]
@@ -745,18 +751,7 @@ later applications, variants, reviews and practitioner guides do not establish o
                 f"doi:{res.doi.casefold().removeprefix('https://doi.org/')}"
                 for res in (new_urls_map[url] for url in urls_to_scrape) if res.doi
             }, # URLs and scholarly DOI identities prevent repeat ingestion.
-            "search_activity": [
-                {
-                    **event,
-                    "fetched_count": fetched_counts.get((event.get("provider", ""), event.get("query")), 0),
-                    "accepted_count": accepted_counts.get((event.get("provider", ""), event.get("query")), 0),
-                    "fetch_failed_count": failed_counts.get((event.get("provider", ""), event.get("query")), 0),
-                    "abstract_only_count": abstract_counts.get((event.get("provider", ""), event.get("query")), 0),
-                    "previously_seen_count": seen_counts.get((event.get("provider", ""), event.get("query")), 0),
-                    "completed_at": completed_at.isoformat(),
-                }
-                for event in provider_activity
-            ] or [{
+            "search_activity": collection_activity or [{
                 "provider": "search providers",
                 "queries": queries,
                 "candidate_count": len(search_results),

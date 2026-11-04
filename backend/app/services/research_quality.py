@@ -123,6 +123,22 @@ def guarantee_risks(text):
     return risks
 
 
+def attribute_collection_counts(activity, completed_at, **count_maps):
+    """Attribute downstream totals once per successful provider/query group.
+
+    Discovery adapters retain failed attempts for provenance. A retry must not
+    multiply the later fetch/accept counts or attribute results to a failure.
+    """
+    owners = {(event.get('provider', ''), event.get('query')): index
+              for index, event in enumerate(activity) if event.get('status', 'SUCCESS') == 'SUCCESS'}
+    rows = []
+    for index, event in enumerate(activity):
+        key = (event.get('provider', ''), event.get('query'))
+        rows.append({**event, **{name: values.get(key, 0) if owners.get(key) == index else 0
+                               for name, values in count_maps.items()}, 'completed_at': completed_at})
+    return rows
+
+
 def search_ledger_section(state):
     """Render actual execution data without invented screening counts or criteria."""
     activity = state.get("search_activity") or []

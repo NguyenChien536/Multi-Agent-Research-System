@@ -92,9 +92,7 @@ def test_publication_retains_standard_regression_math_without_enabling_tex_input
     import zipfile
     from app.services.publication_export import _inline, build_publication_bundle
     math_text = r'$\hat{y}=\bar{y}+\boldsymbol{\beta}^{T}\mathbf{x},\quad x\in\mathbb{R}$'
-    # quad is intentionally not allowed by this small subset; test a supported
-    # expression separately from an active TeX input command.
-    supported = math_text.replace(r',\quad ', ', ')
+    supported = math_text
     assert _inline(supported, {}) == supported
     assert r'\input{/etc/passwd}' not in _inline(r'$\input{/etc/passwd}$', {})
     display = '$$\n' + r'\hat{y}=\bar{y}+\boldsymbol{\beta}^{T}\mathbf{x}' + '\n$$'
@@ -103,6 +101,25 @@ def test_publication_retains_standard_regression_math_without_enabling_tex_input
         tex = archive.read('main.tex').decode()
     assert display in tex
     assert 'amssymb' in tex
+
+
+def test_search_retries_do_not_credit_collection_to_failures_or_multiply_counts():
+    from app.services.research_quality import attribute_collection_counts
+    activity = [{'provider': 'Crossref', 'query': 'q', 'status': status}
+                for status in ['FAILED', 'SUCCESS', 'SUCCESS']]
+    rows = attribute_collection_counts(activity, 'now', accepted_count={('Crossref', 'q'): 2})
+    assert [row['accepted_count'] for row in rows] == [0, 0, 2]
+    assert sum(row['accepted_count'] for row in rows) == 2
+    assert 'accepted_count' not in activity[0]
+
+
+def test_delta_mae_is_not_compared_to_absolute_model_mae():
+    contract = manuscript_contract('EMPIRICAL_COMPUTATIONAL', 'en')
+    context = {'analysis': {'status': 'COMPLETED', 'metrics': {'model': {'mae': 1.335145}, 'baseline': {'mae': 12.338741}}}}
+    text = '## Results\n\nRidge regression error yields a Delta MAE of -11.003596. The baseline yielded an MAE of 12.338741.'
+    assert not any(f['code'] == 'METRIC_MISMATCH' for f in validate_scientific_reporting(text, contract, context, []))
+    wrong = text + '\n\nRidge MAE = 55.0.'
+    assert any(f['code'] == 'METRIC_MISMATCH' for f in validate_scientific_reporting(wrong, contract, context, []))
 
 
 @pytest.mark.asyncio

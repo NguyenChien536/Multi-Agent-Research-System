@@ -31,7 +31,7 @@ def _inline(text, labels):
             allowed = {"frac", "sqrt", "sum", "prod", "min", "max", "arg", "log", "exp", "alpha", "beta", "gamma", "delta", "sigma", "mu", "theta", "lambda", "epsilon", "Delta", "Sigma", "in", "leq", "geq", "neq", "times", "cdot", "mathrm", "mathbf", "text", "left", "right", "lVert", "rVert", "infty"}
             allowed |= {"hat", "bar", "overline", "boldsymbol", "mathbb", "mathcal", "mathit",
                         "operatorname", "partial", "nabla", "nu", "pi", "rho", "eta", "tau",
-                        "omega", "Omega", "pm", "approx", "sim", "equiv", "rightarrow", "propto"}
+                        "omega", "Omega", "pm", "approx", "sim", "equiv", "rightarrow", "propto", "quad", "qquad"}
             safe = len(part) <= 500 and commands <= allowed and part.count("{") == part.count("}") and not re.search(r"[%#&]", part)
             result.append(part if safe else tex_escape(part))
         elif part.startswith("**") and part.endswith("**"):
