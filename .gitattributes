@@ -1,0 +1,2 @@
+# Preserve fixture bytes so recorded SHA-256 and replay inputs survive Windows checkout.
+examples/demo/*.csv text eol=lf
