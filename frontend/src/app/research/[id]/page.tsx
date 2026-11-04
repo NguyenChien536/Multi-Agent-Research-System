@@ -1011,7 +1011,7 @@ export default function WorkspacePage() {
           )}
 
           {task.status === 'WAITING_USER_DATA' && task.research_type === 'EMPIRICAL_HUMAN' && (
-            <div id="fieldwork-section" className="p-4 bg-indigo-50/80 border-b border-indigo-200 overflow-y-auto max-h-[32rem] shrink-0 print:hidden">
+            <div id="fieldwork-section" className="p-6 sm:p-8 bg-indigo-50/90 border-b-2 border-indigo-200 overflow-y-auto max-h-[44rem] shrink-0 print:hidden shadow-xs">
               <div className="w-full max-w-7xl mx-auto space-y-4">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-2.5">
@@ -1033,14 +1033,14 @@ export default function WorkspacePage() {
                       <Button
                         variant="outline"
                         onClick={() => void handleDownloadArtifact(task.protocol_artifact_id!, 'study_protocol.md')}
-                        className="h-8 px-3 text-xs border-indigo-300 text-indigo-900 hover:bg-indigo-100/70"
+                        className="h-10 px-4 text-xs sm:text-sm font-semibold border-indigo-300 text-indigo-950 hover:bg-indigo-100/80 rounded-xl"
                       >
                         <Download size={13} className="mr-1.5" /> {isEn ? "Download Protocol (.md)" : "Tải đề cương (.md)"}
                       </Button>
                       <Button
                         variant="outline"
                         onClick={() => setActiveTab('protocol')}
-                        className="h-8 px-3 text-xs border-indigo-300 text-indigo-900 hover:bg-indigo-100/70"
+                        className="h-10 px-4 text-xs sm:text-sm font-semibold border-indigo-300 text-indigo-950 hover:bg-indigo-100/80 rounded-xl"
                       >
                         <FileText size={13} className="mr-1.5" /> {isEn ? "View Full Protocol" : "Xem đề cương chi tiết"}
                       </Button>
@@ -1066,9 +1066,9 @@ export default function WorkspacePage() {
                   </div>
                 )}
 
-                <form onSubmit={handleResumeWithData} className="p-4 bg-white rounded-xl border border-indigo-200/80 text-xs space-y-3 shadow-2xs">
+                <form onSubmit={handleResumeWithData} className="p-6 bg-white rounded-2xl border border-indigo-200 text-sm space-y-4 shadow-sm">
                   <div className="flex items-center justify-between border-b border-zinc-100 pb-2">
-                    <span className="font-semibold text-indigo-950 text-sm">{isEn ? "Submit Fieldwork / Empirical Data" : "Cung cấp dữ liệu thực địa / thực nghiệm"}</span>
+                    <span className="font-extrabold text-indigo-950 text-base sm:text-lg">{isEn ? "Submit Fieldwork / Empirical Data" : "Cung cấp dữ liệu thực địa / thực nghiệm"}</span>
                     <span className="text-[11px] text-zinc-400">{isEn ? "* Result file and provenance are required" : "* Tệp kết quả và nguồn gốc là bắt buộc"}</span>
                   </div>
 
@@ -1096,7 +1096,7 @@ export default function WorkspacePage() {
                           variant="outline"
                           onClick={() => document.getElementById('fieldwork-file')?.click()}
                           disabled={isUploadingResult || isResumingData}
-                          className="text-xs h-8"
+                          className="text-sm h-11 px-5 font-bold rounded-xl border-zinc-300 hover:bg-zinc-100"
                         >
                           <UploadCloud size={13} className="mr-1.5" />
                           {isUploadingResult ? (isEn ? 'Uploading...' : 'Đang nạp...') : (isEn ? 'Upload Result File' : 'Tải tệp kết quả')}
@@ -1847,12 +1847,12 @@ export default function WorkspacePage() {
                 </div>
 
                 {/* PDF Ingestion Card (SRS FR-02 & Private Artifact Grounding) */}
-                <Card className="p-5 border-dashed border-2 border-zinc-200 bg-zinc-50/70 hover:border-zinc-300 transition-colors">
+                <Card className="p-6 sm:p-7 border-dashed border-2 border-zinc-300 bg-white hover:border-zinc-400 transition-colors rounded-2xl shadow-xs">
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <UploadCloud size={20} className="text-zinc-700" />
-                        <h3 className="font-semibold text-sm text-zinc-900">{isEn ? "Upload Private Grounding PDF" : "Tải lên tài liệu PDF riêng tư (Private Grounding)"}</h3>
+                        <h3 className="font-bold text-base sm:text-lg text-zinc-900">{isEn ? "Upload Private Grounding PDF" : "Tải lên tài liệu PDF riêng tư (Private Grounding)"}</h3>
                       </div>
                       <p className="text-xs text-zinc-500 leading-relaxed">
                         {isEn ? "Text is extracted, chunked, and embedded into pgvector as reliable grounding evidence for AI Agents (max 5 files, < 20MB, < 100 pages)." : "Hệ thống sẽ trích xuất văn bản, băm nhỏ chunk, lập chỉ mục pgvector và tích hợp làm bằng chứng tin cậy cho AI Agents (tối đa 5 file, < 20MB, < 100 trang)." }

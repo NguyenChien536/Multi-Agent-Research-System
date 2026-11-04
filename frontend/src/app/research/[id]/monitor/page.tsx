@@ -9,7 +9,7 @@ import {
   BookOpen, FileCheck, AlertCircle, RefreshCw
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { currentStage, stagesFor, stageKey, activityStage, outputLabel } from '@/lib/monitoring';
+import { currentStage, stagesFor, stageKey, activityStage, outputLabel, statusLabel } from '@/lib/monitoring';
 import { useMonitorPoll } from '@/lib/use-monitor-poll';
 import { PollStatus, StatusPill, formatTime } from '@/components/monitoring/MonitorUI';
 import { PipelineFlow } from '@/components/monitoring/PipelineFlow';
@@ -314,7 +314,7 @@ export default function ResearchMonitorPage() {
                 <StatusPill status={snapshot.status} />
                 <Link
                   href={`/research/${id}`}
-                  className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 text-xs font-medium text-white hover:bg-zinc-800 transition-all shadow-2xs"
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-zinc-900 px-5 text-sm font-bold text-white hover:bg-zinc-800 transition-all shadow-sm hover:shadow-md active:scale-[0.99]"
                 >
                   <FileText size={14} />
                   <span>{t('nav_workspace')}</span>
@@ -341,84 +341,116 @@ export default function ResearchMonitorPage() {
               </div>
             )}
 
-            {/* Highlight Stage Card & Action Callout (2-column layout) */}
-            <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xs">
-              <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-12">
+            {/* Highlight Stage Card & Action Callout (Expansive, Balanced, Edge-to-Edge) */}
+            <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xs">
+              <div className="p-6 sm:p-8 lg:p-10 space-y-6">
 
-                {/* Left Highlight Block (7 cols) */}
-                <div className="lg:col-span-7 flex flex-col justify-between space-y-3">
-                  <div>
-                    <div className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-800 bg-zinc-100 px-2.5 py-0.5 rounded-full border border-zinc-200">
-                      <Activity size={12} className={snapshot.status === 'RUNNING' ? 'animate-pulse text-blue-600' : 'text-zinc-500'} />
-                      <span>{t('mon_current_step')}</span>
-                    </div>
-
-                    <h2 className="mt-2 text-xl sm:text-2xl font-semibold text-zinc-900">
-                      {current
-                        ? (isEn ? (current.name_en || current.name) : current.name)
-                        : (snapshot.status === 'QUEUED'
-                          ? (isEn ? 'Queued awaiting available worker' : 'Đang xếp hàng chờ worker nhận việc')
-                          : (isEn ? 'Step not recorded yet' : 'Chưa ghi nhận bước xử lý'))}
-                    </h2>
-
-                    <p className="mt-1 text-xs sm:text-[13px] text-zinc-700 font-normal leading-relaxed">
-                      {current
-                        ? (isEn ? (current.description_en || current.description) : current.description)
-                        : (isEn ? 'Execution steps will appear as soon as the pipeline starts running.' : 'Các bước thực tế sẽ xuất hiện ngay khi workflow bắt đầu ghi nhận tiến độ.')}
-                    </p>
+                {/* Top Status & Agent Metadata Row */}
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="inline-flex items-center gap-2 text-xs font-semibold text-zinc-800 bg-zinc-100 px-3.5 py-1 rounded-full border border-zinc-200">
+                    <Activity size={14} className={snapshot.status === 'RUNNING' ? 'animate-pulse text-blue-600' : 'text-zinc-500'} />
+                    <span>{t('mon_current_step')}</span>
+                    <span className="text-zinc-400">•</span>
+                    <span className="text-blue-700 font-bold uppercase tracking-wider text-[11px]">
+                      {snapshot.status === 'RUNNING' ? (isEn ? 'Processing' : 'Đang xử lý') : statusLabel(snapshot.status, language)}
+                    </span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-zinc-700 font-medium">
-                    <span className="rounded-md bg-zinc-100 px-2.5 py-1 text-zinc-800 border border-zinc-200">
-                      {t('mon_agent_assigned')}: {current?.agent || (isEn ? 'Dispatcher' : 'Hệ thống')}
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-700 font-medium">
+                    <span className="rounded-lg bg-zinc-100 px-3 py-1 text-zinc-800 border border-zinc-200">
+                      {t('mon_agent_assigned')}: <strong className="font-bold text-zinc-900">{current?.agent || (isEn ? 'Dispatcher' : 'Hệ thống')}</strong>
                     </span>
-                    <span className="rounded-md bg-zinc-100 px-2.5 py-1 text-zinc-800 border border-zinc-200">
-                      {t('mon_iteration')} {snapshot.current_iteration}
+                    <span className="rounded-lg bg-zinc-100 px-3 py-1 text-zinc-800 border border-zinc-200">
+                      {t('mon_iteration')}: <strong className="font-bold text-zinc-900">{snapshot.current_iteration}</strong>
                     </span>
-                    <span className="rounded-md bg-zinc-100 px-2.5 py-1 text-zinc-800 border border-zinc-200">
-                      {t('mon_attempt')} #{snapshot.attempt_number}
+                    <span className="rounded-lg bg-zinc-100 px-3 py-1 text-zinc-800 border border-zinc-200">
+                      {t('mon_attempt')}: <strong className="font-bold text-zinc-900">#{snapshot.attempt_number}</strong>
                     </span>
                   </div>
                 </div>
 
-                {/* Right Action Callout Card (5 cols) */}
-                <div className="lg:col-span-5 rounded-xl p-4 sm:p-5 border border-zinc-200 bg-zinc-50/80 flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <span className={`h-2 w-2 rounded-full ${
-                        action.tone === 'amber' ? 'bg-amber-600' :
-                        action.tone === 'red' ? 'bg-red-600' :
-                        action.tone === 'emerald' ? 'bg-emerald-600' : 'bg-blue-600'
-                      }`} />
-                      <h3 className="font-semibold text-sm sm:text-base text-zinc-900">
-                        {action.title}
-                      </h3>
+                {/* Stage Title & Expansive Description - TO TRÀN VIỀN, CHỮ ĐẬM TO HƠN */}
+                <div className="space-y-3">
+                  <h2 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold tracking-tight text-zinc-900 leading-tight">
+                    {current
+                      ? (isEn ? (current.name_en || current.name) : current.name)
+                      : (snapshot.status === 'QUEUED'
+                        ? (isEn ? 'Queued awaiting available worker' : 'Đang xếp hàng chờ worker nhận việc')
+                        : (isEn ? 'Step not recorded yet' : 'Chưa ghi nhận bước xử lý'))}
+                  </h2>
+
+                  <p className="text-sm sm:text-base lg:text-lg text-zinc-700 font-medium leading-relaxed max-w-4xl">
+                    {current
+                      ? (isEn ? (current.description_en || current.description) : current.description)
+                      : (isEn ? 'Execution steps will appear as soon as the pipeline starts running.' : 'Các bước thực tế sẽ xuất hiện ngay khi workflow bắt đầu ghi nhận tiến độ.')}
+                  </p>
+                </div>
+
+                {/* Action Callout Banner - Spans Full Width ('to tràn viền') with Big, Clear Workspace Button */}
+                <div className={`rounded-2xl p-5 sm:p-6 border transition-all ${
+                  action.tone === 'amber'
+                    ? 'border-amber-300 bg-amber-50/90 shadow-xs'
+                    : action.tone === 'red'
+                    ? 'border-red-300 bg-red-50/90 shadow-xs'
+                    : action.tone === 'emerald'
+                    ? 'border-emerald-300 bg-emerald-50/90 shadow-xs'
+                    : 'border-zinc-200 bg-zinc-50/90 shadow-xs'
+                }`}>
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+                    <div className="space-y-1.5 max-w-3xl">
+                      <div className="flex items-center gap-2">
+                        <span className={`h-2.5 w-2.5 rounded-full ${
+                          action.tone === 'amber' ? 'bg-amber-600 animate-pulse' :
+                          action.tone === 'red' ? 'bg-red-600' :
+                          action.tone === 'emerald' ? 'bg-emerald-600' : 'bg-blue-600 animate-pulse'
+                        }`} />
+                        <h3 className="font-bold text-base sm:text-lg text-zinc-900">
+                          {action.title}
+                        </h3>
+                      </div>
+                      <p className="text-xs sm:text-sm text-zinc-700 leading-relaxed font-normal">
+                        {action.text}
+                      </p>
                     </div>
 
-                    <p className="text-xs sm:text-[13px] text-zinc-700 font-normal leading-relaxed">
-                      {action.text}
-                    </p>
-                  </div>
+                    {/* NÚT MỞ WORKSPACE TO RÕ HƠN */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+                      <Link
+                        href={
+                          snapshot.status === 'WAITING_USER_DATA'
+                            ? (snapshot.research_type === 'EMPIRICAL_COMPUTATIONAL' ? `/research/${id}?tab=experiments#upload-dataset` : `/research/${id}#fieldwork-section`)
+                            : snapshot.status === 'WAITING_APPROVAL'
+                            ? `/research/${id}#plan-review-section`
+                            : (current?.key === 'CURATOR' || current?.key === 'RESEARCHER')
+                            ? `/research/${id}?tab=sources`
+                            : `/research/${id}`
+                        }
+                        className={`inline-flex items-center justify-center gap-2.5 rounded-xl px-6 py-3.5 text-sm sm:text-base font-bold transition-all shadow-sm hover:shadow-md active:scale-[0.99] cursor-pointer ${
+                          action.tone === 'amber'
+                            ? 'bg-amber-950 text-white hover:bg-black'
+                            : action.tone === 'red'
+                            ? 'bg-red-700 text-white hover:bg-red-800'
+                            : action.tone === 'emerald'
+                            ? 'bg-emerald-800 text-white hover:bg-emerald-900'
+                            : 'bg-zinc-900 text-white hover:bg-zinc-800'
+                        }`}
+                      >
+                        <FileText size={17} />
+                        <span>{action.button}</span>
+                        <ArrowUpRight size={17} className="shrink-0" />
+                      </Link>
 
-                  <div className="mt-4 pt-3 border-t border-zinc-200 flex flex-wrap items-center justify-between gap-2">
-                    <Link
-                      href={`/research/${id}`}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-zinc-900 px-3.5 py-2 text-xs font-medium text-white hover:bg-zinc-800 transition-colors shadow-2xs"
-                    >
-                      <span>{action.button}</span>
-                      <ArrowUpRight size={13} />
-                    </Link>
-
-                    <span className="text-xs text-zinc-600 font-normal">
-                      {isEn ? 'Saved automatically' : 'Tự động lưu trữ'}
-                    </span>
+                      <span className="text-[11px] text-zinc-500 font-medium text-center sm:text-left">
+                        {isEn ? 'Saved automatically' : 'Tự động lưu trữ'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
               </div>
 
               {/* Research Workflow Pipeline (GitHub Actions style flow) */}
-              <div className="border-t border-zinc-200 bg-zinc-50/40 p-4 sm:p-5">
+              <div className="border-t border-zinc-200 bg-zinc-50/50 p-5 sm:p-6">
                 <PipelineFlow
                   stages={activeStages}
                   currentStep={snapshot.current_step}
