@@ -1756,8 +1756,8 @@ export default function WorkspacePage() {
                           </h3>
                           <p className="text-xs text-zinc-600 mt-0.5">
                             {isEn
-                              ? "Upon pipeline completion, you will receive full academic deliverables backed by verifiable grounding:"
-                              : "Sau khi chuỗi tác tử hoàn tất, bạn sẽ nhận được các tài liệu và bằng chứng học thuật hoàn chỉnh sau:"}
+                              ? "A run may produce a draft and supporting records for the selected study type. Outputs can be incomplete and require human review."
+                              : "Sau một lượt chạy, hệ thống có thể tạo bản thảo và hồ sơ hỗ trợ phù hợp với loại nghiên cứu đã chọn. Kết quả có thể chưa hoàn chỉnh và cần con người rà soát."}
                           </p>
                         </div>
                         <span className="text-xs font-medium px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-700 border border-zinc-200 hidden sm:inline-block">
@@ -1774,15 +1774,15 @@ export default function WorkspacePage() {
                             </div>
                             <div>
                               <h4 className="font-bold text-sm text-zinc-900">
-                                {isEn ? "1. Peer-Reviewed Scientific Paper" : "1. Bản thảo bài báo khoa học chuẩn mực"}
+                                {isEn ? "1. AI-Assisted Research Draft" : "1. Bản thảo nghiên cứu có AI hỗ trợ"}
                               </h4>
-                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "IMRaD structure & formatted citations" : "Cấu trúc IMRaD & định dạng chuẩn"}</span>
+                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Structured for the selected study type" : "Bố cục theo loại nghiên cứu đã chọn"}</span>
                             </div>
                           </div>
                           <p className="text-xs sm:text-[13px] text-zinc-600 leading-relaxed">
                             {isEn
-                              ? "Full scientific report containing Abstract, Introduction, Methodology, Evidence Synthesis, Discussion, Limitations, and full Bibliography."
-                              : "Báo cáo khoa học gồm đầy đủ Abstract, Đặt vấn đề, Phương pháp luận, Tổng hợp bằng chứng, Thảo luận và Danh mục tài liệu tham khảo."}
+                              ? "The draft may contain sections relevant to the selected method. It is not peer-reviewed or publication-ready; incomplete outputs remain marked for review."
+                              : "Bản thảo có thể gồm các mục phù hợp với phương pháp đã chọn. Bài chưa qua phản biện học thuật hay sẵn sàng xuất bản; kết quả chưa hoàn chỉnh sẽ được đánh dấu cần rà soát."}
                           </p>
                         </div>
 
@@ -1794,15 +1794,15 @@ export default function WorkspacePage() {
                             </div>
                             <div>
                               <h4 className="font-bold text-sm text-zinc-900">
-                                {isEn ? "2. Publication Exports (Word & Markdown)" : "2. Xuất bản đa định dạng (.docx, .md, .json)"}
+                                {isEn ? "2. Downloadable Files" : "2. Tệp có thể tải xuống"}
                               </h4>
-                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Ready for journal submission" : "Sẵn sàng gửi hội thảo & tạp chí"}</span>
+                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Formats available for this run" : "Định dạng khả dụng cho lượt chạy này"}</span>
                             </div>
                           </div>
                           <p className="text-xs sm:text-[13px] text-zinc-600 leading-relaxed">
                             {isEn
-                              ? "One-click download as Microsoft Word (.docx) with formatted tables and headings, clean Markdown (.md), or raw JSON research package."
-                              : "Tải về một chạm file Word (.docx) chuẩn bảng biểu, văn bản Markdown (.md) hoặc toàn bộ gói dữ liệu nghiên cứu (.json)."}
+                              ? "Download supported formats such as Word, Markdown, or research packages when available. Export formatting does not establish venue compliance or publication readiness."
+                              : "Tải các định dạng được hỗ trợ như Word, Markdown hoặc gói nghiên cứu khi có. Định dạng tệp không chứng minh bài đã đúng yêu cầu hội thảo/tạp chí hay sẵn sàng xuất bản."}
                           </p>
                         </div>
 
@@ -1816,13 +1816,13 @@ export default function WorkspacePage() {
                               <h4 className="font-bold text-sm text-zinc-900">
                                 {isEn ? "3. Traceable Evidence & Citations" : "3. Bằng chứng trích dẫn có thể truy vết"}
                               </h4>
-                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Zero hallucination guarantee" : "Neo trực tiếp vào nguồn tài liệu"}</span>
+                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Source links where evidence is available" : "Liên kết nguồn khi có bằng chứng"}</span>
                             </div>
                           </div>
                           <p className="text-xs sm:text-[13px] text-zinc-600 leading-relaxed">
                             {isEn
-                              ? "Every substantive claim is tied to an indexed passage with original source URL, similarity score, and verbatim excerpt for peer review."
-                              : "Mỗi luận điểm đều được neo chặt vào đoạn trích nguồn kèm liên kết gốc, điểm tương đồng và trích dẫn nguyên văn phục vụ phản biện."}
+                              ? "Claims can be traced to stored sources and passages where available. A citation does not prove that a source entails the claim, that coverage is complete, or that the draft is error-free."
+                              : "Có thể truy vết luận điểm về nguồn và đoạn trích đã lưu khi dữ liệu sẵn có. Việc có trích dẫn không chứng minh nguồn hỗ trợ đầy đủ luận điểm, phạm vi tài liệu đã đầy đủ hay bản thảo không còn lỗi."}
                           </p>
                         </div>
 
@@ -1834,15 +1834,15 @@ export default function WorkspacePage() {
                             </div>
                             <div>
                               <h4 className="font-bold text-sm text-zinc-900">
-                                {isEn ? "4. Full Reproducibility & Audit Trail" : "4. Hồ sơ minh bạch & Khả năng tái lập"}
+                                {isEn ? "4. Recorded Execution & Experiment Data" : "4. Dữ liệu thực thi và thực nghiệm đã ghi nhận"}
                               </h4>
-                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Auditable agent execution logs" : "Lịch sử thực thi từng tác tử"}</span>
+                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Progress and artifacts where recorded" : "Tiến độ và hiện vật khi được ghi nhận"}</span>
                             </div>
                           </div>
                           <p className="text-xs sm:text-[13px] text-zinc-600 leading-relaxed">
                             {isEn
-                              ? "Complete timeline recording every agent step, input/output tokens, execution latency, and exact monetary cost in USD."
-                              : "Toàn bộ chuỗi thời gian ghi nhận từng bước chạy của agent, số token vào/ra, độ trễ và chi phí tài chính chi tiết theo USD."}
+                              ? "View recorded progress, usage, metrics, and artifacts where available. Reproducing a result depends on preserved inputs, code, configuration, and execution environment."
+                              : "Xem tiến độ, mức sử dụng, chỉ số và hiện vật đã được ghi nhận khi có. Tái lập kết quả còn phụ thuộc vào việc lưu đủ dữ liệu đầu vào, mã, cấu hình và môi trường thực thi."}
                           </p>
                         </div>
                       </div>
