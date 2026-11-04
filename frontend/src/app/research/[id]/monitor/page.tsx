@@ -60,7 +60,7 @@ const ACTIONS_EN: Record<string, ActionItem> = {
   },
   REVIEW_REPORT: {
     title: 'Draft ready for review',
-    text: 'Critic feedback is recorded. Open workspace to inspect paper content, citations, and peer review remarks.',
+    text: 'Internal AI critique is recorded. Open the workspace to inspect the draft, citations, and remaining findings.',
     button: 'Review Draft',
     tone: 'blue'
   },

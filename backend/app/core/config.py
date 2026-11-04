@@ -1,5 +1,5 @@
 from typing import List, Union, Optional
-from pydantic import AnyHttpUrl, field_validator, model_validator
+from pydantic import AnyHttpUrl, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None
+    # Shared across API/worker processes through Redis. Tune to the key's actual quota.
+    GEMINI_REQUESTS_PER_MINUTE: int = Field(default=12, ge=1, le=600)
+    GEMINI_MAX_QUEUE_SECONDS: int = Field(default=90, ge=1, le=300)
     GROQ_API_KEY: str | None = None
     
     # Priority Config (Comma-separated)

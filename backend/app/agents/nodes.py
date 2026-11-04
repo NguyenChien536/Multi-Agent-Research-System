@@ -92,12 +92,14 @@ _BUDGET_CALL_CONTEXT: contextvars.ContextVar[dict[str, Any] | None] = contextvar
 class BudgetedFallbackLLM:
     """Try configured providers in order, reserving budget for every attempt."""
 
-    def __init__(self, models: list[tuple[str, Any]]):
+    def __init__(self, models: list[tuple[str, Any]], *, pace_requests: bool = False):
         self.models = models
+        self.pace_requests = pace_requests
 
     def with_structured_output(self, schema: Any):
         return BudgetedFallbackLLM(
-            [(model_name, compatible_structured_output(model_name, model, schema)) for model_name, model in self.models]
+            [(model_name, compatible_structured_output(model_name, model, schema)) for model_name, model in self.models],
+            pace_requests=self.pace_requests,
         )
 
     async def ainvoke(self, messages: Any, **kwargs: Any):
@@ -105,6 +107,9 @@ class BudgetedFallbackLLM:
         last_error: Exception | None = None
         for model_name, model in self.models:
             reservation_id = None
+            if self.pace_requests:
+                from app.services.provider_pacing import wait_for_gemini_slot
+                await wait_for_gemini_slot(model_name)
             if context:
                 reservation_id = await reserve_provider_call(
                     task_id=context["task_id"],
@@ -148,6 +153,9 @@ class BudgetedFallbackLLM:
                         cost_usd=0,
                         succeeded=False,
                     )
+                if self.pace_requests:
+                    from app.services.provider_pacing import record_gemini_rate_limit
+                    await record_gemini_rate_limit(model_name, exc)
                 logger.warning("LLM provider attempt failed (%s); trying the next configured provider", model_name)
         if last_error:
             raise last_error
@@ -180,7 +188,7 @@ def build_llm_chain(is_smart: bool = False):
             for model_name in _provider_model_names(provider, is_smart):
                 models.append((model_name, ChatGoogleGenerativeAI(
                     model=model_name,
-                    temperature=0.7 if is_smart else 0.2,
+                    temperature=None,
                     google_api_key=settings.GEMINI_API_KEY,
                     max_output_tokens=4096,
                     thinking_level="low",
@@ -220,7 +228,7 @@ def build_llm_chain(is_smart: bool = False):
     if not models:
         raise ValueError("Cần cấu hình ít nhất 1 API KEY hợp lệ trong LLM_PROVIDER_PRIORITY")
         
-    return BudgetedFallbackLLM(models)
+    return BudgetedFallbackLLM(models, pace_requests=True)
 
 
 async def invoke_llm_with_budget(
