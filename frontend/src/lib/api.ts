@@ -32,7 +32,7 @@ async function fetcher<T>(endpoint: string, options?: RequestInit, responseKind:
   const headers = new Headers(options?.headers);
   if (options?.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   const token = getAccessToken();
-  const isPublicAuth = endpoint === '/auth/login' || endpoint === '/auth/register';
+  const isPublicAuth = endpoint === '/auth/login' || endpoint === '/auth/register' || endpoint === '/research/model-connections/options';
   if (token && !isPublicAuth) headers.set('Authorization', `Bearer ${token}`);
 
   const config: RequestInit = {

@@ -48,7 +48,8 @@ router = APIRouter()
 
 
 @router.get("/model-connections/options")
-async def model_connection_options(current_user: User = Depends(get_current_user)):
+async def model_connection_options():
+    """Public connection catalog only; credentials and research remain private."""
     return {"protocol": "openai_compatible", "base_urls": [root.strip().rstrip('/')
         for root in settings.CUSTOM_LLM_API_ROOTS.split(',') if root.strip()]}
 

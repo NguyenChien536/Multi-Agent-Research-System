@@ -214,12 +214,16 @@ def build_connection_client(connection: ModelConnection):
     import httpx
     from langchain_openai import ChatOpenAI
     extra = {}
+    if connection.base_url == "https://openrouter.ai/api/v1":
+        # The free router can select models with mandatory reasoning. Request
+        # low effort rather than disabling it; exclusion only hides the trace.
+        extra["reasoning"] = {"effort": "low", "exclude": True}
     if connection.base_url == "https://openrouter.ai/api/v1" and connection.input_price_per_million == 0 and connection.output_price_per_million == 0:
-        extra = {"provider": {"max_price": {"prompt": 0, "completion": 0, "request": 0}}}
+        extra["provider"] = {"max_price": {"prompt": 0, "completion": 0, "request": 0}, "require_parameters": True}
     # No environment key, global cache, redirect or provider fallback is used.
     client = ChatOpenAI(model=connection.model, api_key=connection.api_key, base_url=connection.base_url,
         max_retries=0, timeout=settings.PROVIDER_CALL_TIMEOUT_SECONDS, cache=False,
-        max_tokens=4096, extra_body=extra, callbacks=[],
+        max_tokens=8192, extra_body=extra, callbacks=[],
         http_client=httpx.Client(follow_redirects=False, trust_env=False),
         http_async_client=httpx.AsyncClient(follow_redirects=False, trust_env=False))
     if hasattr(connection, "register_client"):

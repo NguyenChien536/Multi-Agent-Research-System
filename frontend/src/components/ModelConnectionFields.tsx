@@ -60,14 +60,17 @@ export function ModelConnectionFields({ value, onChange, isEn }: {
 }) {
   const [roots, setRoots] = useState<string[]>([]);
   const [loadError, setLoadError] = useState(false);
+  const [reload, setReload] = useState(0);
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
-    if (!api.auth.hasSession()) { setLoadError(true); return; }
     let active = true;
+    setLoadError(false);
+    setLoading(true);
     api.tasks.modelConnectionOptions().then(result => {
-      if (active) setRoots(result.base_urls);
-    }).catch(() => { if (active) setLoadError(true); });
+      if (active) { setRoots(result.base_urls); setLoadError(result.base_urls.length === 0); }
+    }).catch(() => { if (active) setLoadError(true); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, []);
+  }, [reload]);
   const update = (patch: Partial<ModelConnectionInput>) => { if (value) onChange({ ...value, ...patch }); };
   const inputClass = 'mt-1 w-full rounded-lg border border-zinc-200 bg-white p-2 text-sm outline-none focus:ring-2 focus:ring-zinc-400';
 
@@ -90,16 +93,16 @@ export function ModelConnectionFields({ value, onChange, isEn }: {
       {isEn ? 'Use my API connection' : 'Dùng API key của tôi'}
     </label>
     {value && <>
-      <p className="text-xs text-zinc-500">{isEn
-        ? 'Connect a service that supports the OpenAI-compatible chat format. This does not require an OpenAI account.'
-        : 'Kết nối dịch vụ hỗ trợ định dạng chat tương thích OpenAI. Không bắt buộc dùng dịch vụ của OpenAI.'}</p>
-      {loadError && <p role="alert" className="text-xs text-red-600">{isEn ? 'Sign in and reload to load trusted API addresses.' : 'Đăng nhập và tải lại trang để lấy danh sách địa chỉ API.'}</p>}
+      {loadError && <div role="alert" className="flex items-center justify-between gap-2 text-sm text-red-700">
+        <span>{isEn ? 'Could not load API services.' : 'Không tải được danh sách dịch vụ API.'}</span>
+        <button type="button" onClick={() => setReload(value => value + 1)} className="underline">{isEn ? 'Retry' : 'Thử lại'}</button>
+      </div>}
       <label className="block text-xs font-medium">{isEn ? 'API base URL' : 'Địa chỉ API (base URL)'}
-        <select className={inputClass} required value={value.base_url} onChange={event => handleBaseUrlChange(event.target.value)}>
-          <option value="">{isEn ? 'Select your service address' : 'Chọn địa chỉ dịch vụ bạn dùng'}</option>
+        <select className={inputClass} required disabled={loading} value={value.base_url} onChange={event => handleBaseUrlChange(event.target.value)}>
+          <option value="">{loading ? (isEn ? 'Loading services…' : 'Đang tải dịch vụ…') : (isEn ? 'Select API service' : 'Chọn dịch vụ API')}</option>
           {roots.map(root => (
             <option key={root} value={root}>
-              {KNOWN_PROVIDERS[root]?.label ? `${KNOWN_PROVIDERS[root].label} (${root})` : root}
+              {KNOWN_PROVIDERS[root]?.label || root}
             </option>
           ))}
         </select>
@@ -116,7 +119,8 @@ export function ModelConnectionFields({ value, onChange, isEn }: {
         </label>
       </div>
       <details className="text-xs text-zinc-600">
-        <summary className="cursor-pointer">{isEn ? 'Estimated token prices (default: free tier)' : 'Đơn giá ước tính (mặc định: gói miễn phí)'}</summary>
+        <summary className="cursor-pointer">{isEn ? 'Estimated prices (optional)' : 'Đơn giá ước tính (tùy chọn)'}</summary>
+        <p className="mt-2">{isEn ? 'Prices are your estimates, not a provider invoice.' : 'Giá do bạn khai báo, không phải hóa đơn nhà cung cấp.'}</p>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           <label>{isEn ? 'Input USD / 1M tokens' : 'Đầu vào USD / 1 triệu token'}
             <input className={inputClass} type="number" min={0} max={1000} step="any" required
@@ -128,11 +132,6 @@ export function ModelConnectionFields({ value, onChange, isEn }: {
           </label>
         </div>
       </details>
-      <p className="text-xs leading-relaxed text-zinc-500">{isEn
-        ? 'The key is encrypted for this research, not saved in browser drafts. No automatic fallback to server keys. Discovery uses public scholarly indexes and lexical retrieval. Zero is your declared price; actual billing and free quota depend on your provider.'
-        : 'Key được mã hóa riêng cho bài này, không lưu trong bản nháp trình duyệt. Không tự chuyển sang key máy chủ. Tìm nguồn bằng chỉ mục học thuật công khai và truy xuất từ khóa. Giá 0 do bạn khai báo; phí thực tế và hạn mức miễn phí phụ thuộc dịch vụ.'}</p>
-      {value.base_url === 'https://openrouter.ai/api/v1' && !value.input_price_per_million && !value.output_price_per_million &&
-        <p className="text-xs text-zinc-600">{isEn ? 'Select a model ending in :free or openrouter/free. Paid routing is blocked.' : 'Chọn model có đuôi :free hoặc openrouter/free. Chặn định tuyến sang model trả phí.'}</p>}
     </>}
   </section>;
 }

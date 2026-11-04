@@ -179,6 +179,8 @@ class BudgetedFallbackLLM:
         if last_error:
             if any(name.startswith("byok:") for name, _ in self.models):
                 err_str = str(last_error).lower()
+                if "lengthfinishreason" in type(last_error).__name__.lower() or 'model_output_truncated' in err_str:
+                    raise RuntimeError("MODEL_OUTPUT_TRUNCATED: The model reached its output token limit before completing JSON. This is not an API-key authentication error. Retry with sufficient output capacity.") from None
                 if "429" in err_str or "rate limit" in err_str or "quota" in err_str or "credit" in err_str:
                     raise RuntimeError("Your API connection reached its rate limit or quota (HTTP 429). Please check your account credits.") from None
                 if "401" in err_str or "unauthorized" in err_str or "invalid api key" in err_str or "authentication" in err_str:
@@ -289,6 +291,8 @@ async def invoke_llm_with_budget(
         "prompt_text": prompt_text,
     }
     if isinstance(llm, BudgetedFallbackLLM):
+        if any(name.startswith("byok:") for name, _ in llm.models):
+            context["output_tokens"] = max(output_tokens, 8192)
         token = _BUDGET_CALL_CONTEXT.set(context)
         try:
             return await llm.ainvoke(messages)

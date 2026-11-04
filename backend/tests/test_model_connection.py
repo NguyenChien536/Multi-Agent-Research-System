@@ -26,6 +26,74 @@ SECRET = "disposable-test-key-not-a-real-credential"
 
 
 @pytest.mark.asyncio
+async def test_api_catalog_is_public_even_with_an_expired_session_but_creation_is_private():
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+        for headers in ({}, {'Authorization': 'Bearer expired-test-session'}):
+            result = await client.get('/api/v1/research/model-connections/options', headers=headers)
+            assert result.status_code == 200
+            assert set(result.json()) == {'protocol', 'base_urls'}
+            assert 'https://openrouter.ai/api/v1' in result.json()['base_urls']
+        assert (await client.post('/api/v1/research', json={
+            'title': 'Still requires login', 'research_question': 'Is research creation still private?'})).status_code == 401
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('finish,content,code', [
+    ('length', '{"answer":"complete-looking but truncated"}', 'MODEL_OUTPUT_TRUNCATED'),
+    ('stop', '', 'MODEL_INVALID_JSON'),
+])
+async def test_custom_json_does_not_accept_truncated_or_empty_output(finish, content, code):
+    from langchain_core.runnables import RunnableLambda
+    from langchain_core.messages import AIMessage
+    from app.services.structured_output import compatible_structured_output
+    class Result(BaseModel):
+        answer: str
+    class Model:
+        extra_body = {'provider': {'max_price': {'prompt': 0, 'completion': 0}}}
+        def bind(self, **kwargs):
+            assert kwargs['extra_body']['provider']['max_price']['prompt'] == 0
+            return RunnableLambda(lambda _: AIMessage(content=content, response_metadata={'finish_reason': finish}))
+    with pytest.raises(ValueError, match=code):
+        await compatible_structured_output('byok:test', Model(), Result).ainvoke([])
+
+
+def test_public_errors_explain_truncation_without_exposing_secrets():
+    from app.services.public_errors import public_error
+    assert 'MODEL_OUTPUT_TRUNCATED' in public_error('LengthFinishReasonError ' + SECRET)
+    assert 'PROVIDER_AUTH_FAILED' in public_error('HTTP 401 ' + SECRET)
+    assert SECRET not in public_error('unexpected ' + SECRET)
+
+
+@pytest.mark.asyncio
+async def test_byok_budget_reserves_the_larger_output_limit(monkeypatch):
+    from unittest.mock import AsyncMock
+    from app.agents import nodes
+    from langchain_core.messages import AIMessage
+    model = AsyncMock()
+    model.ainvoke.return_value = AIMessage(content='ok')
+    reserve = AsyncMock(return_value='reservation')
+    monkeypatch.setattr(nodes, 'reserve_provider_call', reserve)
+    monkeypatch.setattr(nodes, 'settle_provider_call', AsyncMock())
+    monkeypatch.setattr('app.services.provider_budget.assert_task_active', AsyncMock())
+    await nodes.invoke_llm_with_budget({'enforce_provider_budget': True, 'task_id': str(uuid.uuid4()), 'attempt_number': 1},
+        nodes.BudgetedFallbackLLM([('byok:test', model)]), [], model_name='byok:test', output_tokens=4096)
+    assert reserve.await_args.kwargs['output_tokens'] == 8192
+
+
+@pytest.mark.asyncio
+async def test_length_error_does_not_blame_the_api_key():
+    from unittest.mock import AsyncMock
+    from app.agents.nodes import BudgetedFallbackLLM
+    class LengthFinishReasonError(Exception):
+        pass
+    model = AsyncMock()
+    model.ainvoke.side_effect = LengthFinishReasonError(SECRET)
+    with pytest.raises(RuntimeError, match='MODEL_OUTPUT_TRUNCATED') as result:
+        await BudgetedFallbackLLM([('byok:test', model)]).ainvoke([])
+    assert SECRET not in str(result.value)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize('has_usage', [False, True])
 async def test_schema_reservation_executes_and_usage_is_not_double_counted(monkeypatch, has_usage):
     from unittest.mock import AsyncMock
@@ -178,7 +246,7 @@ async def test_custom_client_uses_owner_key_model_json_schema_and_never_server_f
             assert EmbedderTool().embeddings is None
             answer = await chain.with_structured_output(Result).ainvoke([HumanMessage(content='Return count 2')])
             assert answer.count == 2
-            with pytest.raises(OutputParserException):
+            with pytest.raises(ValidationError):
                 invalid = client.model_copy()
                 # Local Pydantic validation stays active for a custom endpoint.
                 invalid_chain = compatible_structured_output('byok:test', invalid, Result)
@@ -270,6 +338,7 @@ def test_free_openrouter_is_explicit_and_paid_routes_are_filtered():
     client = build_connection_client(open_connection({'_llm_connection': seal_connection(value, tid, uid)}, tid, uid))
     assert client.extra_body['provider']['max_price'] == {'prompt': 0, 'completion': 0, 'request': 0}
     assert client.cache is False
+    assert client.extra_body['reasoning'] == {'effort': 'low', 'exclude': True}
     client.http_client.close()
 
 

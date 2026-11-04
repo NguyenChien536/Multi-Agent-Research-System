@@ -32,7 +32,21 @@ def compatible_structured_output(model_name: str, model: Any, schema: Any):
         schema_text = json.dumps(schema.model_json_schema(), ensure_ascii=False)
         def add_schema(messages):
             return [SystemMessage(content="Return one JSON object matching this schema exactly:\n" + schema_text), *messages]
-        return RunnableLambda(add_schema) | model.with_structured_output(schema, method="json_mode")
+        def validate_json(response):
+            if (getattr(response, 'response_metadata', None) or {}).get('finish_reason') == 'length':
+                raise ValueError('MODEL_OUTPUT_TRUNCATED: JSON response reached its output limit')
+            content = getattr(response, 'content', None)
+            if not isinstance(content, str) or not content.strip():
+                raise ValueError('MODEL_INVALID_JSON: Provider returned no JSON text')
+            text = content.strip()
+            if text.startswith('```json\n') and text.endswith('```'):
+                text = text[8:-3].strip()
+            return schema.model_validate(json.loads(text))
+        # Send the same JSON-mode request through the standard completion
+        # transport. SDK beta .parse assumes native-provider response details;
+        # custom gateways need local, strict JSON/Pydantic validation instead.
+        body = {**(getattr(model, 'extra_body', None) or {}), 'response_format': {'type': 'json_object'}}
+        return RunnableLambda(add_schema) | model.bind(extra_body=body) | RunnableLambda(validate_json)
     if model_name.startswith("gemini-") and isinstance(schema, type) and issubclass(schema, BaseModel):
         return model.with_structured_output(_gemini_wire_schema(schema.model_json_schema())) | RunnableLambda(schema.model_validate)
     return model.with_structured_output(schema)

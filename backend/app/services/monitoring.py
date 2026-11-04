@@ -12,6 +12,7 @@ from app.models.report import ExportArtifact, ReportVersion, ResearchReport
 from app.models.source import ResearchSource
 from app.models.task import ResearchTask, WorkflowRun
 from app.schemas.monitoring import MonitorActivity, MonitorWorkflow, ResearchMonitorResponse
+from app.services.public_errors import public_error
 
 
 COUNTER_KEYS = {
@@ -118,5 +119,5 @@ async def research_snapshot(db: AsyncSession, task_id: uuid.UUID, user_id: uuid.
                     status=run.status if run.status in {"RUNNING", "SUCCESS", "FAILED"} else "UNKNOWN",
                     iteration=run.iteration, started_at=run.started_at, completed_at=run.completed_at,
                     duration_ms=run.duration_ms, output=safe_output(run.output_summary or {}),
-                    has_error=bool(run.error_message)) for run in activities],
+                    has_error=bool(run.error_message), error_summary=public_error(run.error_message)) for run in activities],
     )

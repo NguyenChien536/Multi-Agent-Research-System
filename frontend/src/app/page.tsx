@@ -449,9 +449,6 @@ export default function Home() {
                   <h3 className="font-semibold text-sm text-zinc-900">
                     {isEn ? 'Research Configuration' : 'Tùy chọn cấu hình nghiên cứu'}
                   </h3>
-                  <p className="text-xs text-zinc-500 mt-0.5">
-                    {isEn ? 'Tune parameters, methodology depth, citation standards, and output language' : 'Tùy biến các tham số cho chuỗi nghiên cứu'}
-                  </p>
                 </div>
 
                 {/* 1. Research Depth (Cards) */}
