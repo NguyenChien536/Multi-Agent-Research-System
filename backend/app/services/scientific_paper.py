@@ -6,6 +6,7 @@ from xml.sax.saxutils import escape
 
 
 def scientific_context(state: dict) -> dict:
+    from app.services.fieldwork_intake import frozen_csv_statistics
     analysis = state.get("analysis_run") or {}
     claims = state.get("claims") or []
     claim_source_ids = {
@@ -23,6 +24,7 @@ def scientific_context(state: dict) -> dict:
                 "analysis_run_id", "status", "routine_name", "metrics", "manifest", "reproducibility_status"
             ) if key in analysis},
             "statistical_significance_tested": False,
+            "fieldwork_csv_statistics": deepcopy(frozen_csv_statistics((state.get('user_data_submission') or {}).get('artifact_evidence'))),
             "independent_datasets_evaluated": 1 if analysis else 0}
 
 
@@ -188,6 +190,11 @@ def validate_scientific_reporting(markdown: str, contract: dict | None, context:
         if (name[0] or name[1]) not in allowed:
             add("UNKNOWN_FIGURE", "Use only figures produced from approved, topic-relevant data.")
     run = context.get("analysis") or {}
+    if contract.get('article_type') == 'EMPIRICAL_STUDY' and context.get('fieldwork_csv_statistics'):
+        from app.services.fieldwork_reporting import numeric_table_mismatches
+        mismatches = numeric_table_mismatches(markdown, context['fieldwork_csv_statistics'])
+        if mismatches:
+            add('FIELDWORK_NUMERIC_MISMATCH', 'Copy computed CSV statistics and counts without inventing values: ' + '; '.join(mismatches))
     if contract.get("article_type") == "COMPUTATIONAL_STUDY":
         if run.get("status") != "COMPLETED" or not (run.get("metrics") or {}).get("baseline") or not (run.get("metrics") or {}).get("model"):
             add("BASELINE_MISSING", "Report real executed baseline/model results before making a computational comparison.")

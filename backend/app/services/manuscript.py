@@ -148,6 +148,7 @@ def manuscript_provenance(state: dict) -> dict:
                                      for event in state.get("source_selection_log", [])],
         "verified_claim_count": len({item.get("claim_id") for item in state.get("claims", []) if item.get("evidence_id")}),
         "distinct_quote_evidence_count": len(unique_quote_claims([c for c in state.get("claims", []) if c.get("evidence_id")])),
+        "grounded_source_count": len({str(c['source_id']) for c in state.get('claims', []) if c.get('source_id') and c.get('evidence_id')}),
         "query_coverage": query_coverage(state),
         "search_activity_this_run": activity,
         "direct_scholarly_index_queries": successful_indexes,
@@ -163,13 +164,20 @@ def manuscript_provenance(state: dict) -> dict:
 def editorial_instructions(contract: dict, provenance: dict) -> str:
     headings = "\n".join(f"## {item['heading']}" for item in contract["sections"])
     source_scope_instruction = ""
-    source_count = provenance.get("available_source_count")
+    source_count = provenance.get("grounded_source_count", provenance.get("available_source_count"))
     if contract.get("article_type") == "NARRATIVE_REVIEW" and isinstance(source_count, int) and source_count < 2:
         source_scope_instruction = (
-            f"Only {source_count} distinct source record(s) are available. Do not present this as a cross-study or field-wide literature synthesis, "
+            f"Only {source_count} distinct source record(s) have source-linked evidence for writing, even if more records were collected. Do not present this as a cross-study or field-wide literature synthesis, "
             "do not claim a field-level research gap or novelty from this corpus, and do not write plural claims about prior studies. "
             "Explicitly state that a gap cannot be established from this small source set. "
             "Describe it as preliminary and single-source (or no-source) work, state that more sources are required, and narrow every conclusion to the supplied material."
+        )
+    elif source_count == 0:
+        source_scope_instruction = (
+            'No source-linked external literature is available for writing. Keep required Related Work and research-gap discussion honest: '
+            'state that a literature-backed comparison or field-level gap cannot be established from this run. '
+            'Report only the recorded own-study methods, supplied observations or executed results. '
+            'Do not add uncited claims about prior studies, historical properties or domain-wide guarantees to fill these sections.'
         )
     return f"""
 MANUSCRIPT CONTRACT v{contract['version']} — {contract['article_type']}:
