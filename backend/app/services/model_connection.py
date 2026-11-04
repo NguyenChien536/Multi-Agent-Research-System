@@ -11,6 +11,7 @@ import asyncio
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
+from typing import Literal
 
 from cryptography.fernet import Fernet, InvalidToken
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
@@ -36,6 +37,8 @@ class ModelConnectionInput(BaseModel):
     # Account-specific prices are estimates declared by the owner, not an invoice.
     input_price_per_million: float = Field(default=0, ge=0, le=1000, allow_inf_nan=False)
     output_price_per_million: float = Field(default=0, ge=0, le=1000, allow_inf_nan=False)
+    output_token_limit: int = Field(default=8192, ge=1024, le=32768)
+    reasoning_effort: Literal['none', 'low', 'medium', 'high'] = 'low'
 
     @field_validator("base_url")
     @classmethod
@@ -77,6 +80,8 @@ class ModelConnection:
     input_price_per_million: float
     output_price_per_million: float
     api_key: str = field(repr=False)
+    output_token_limit: int = 8192
+    reasoning_effort: str = 'low'
     _clients: list = field(default_factory=list, repr=False)
 
     @property
@@ -152,7 +157,8 @@ def open_connection(config: dict | None, task_id, user_id) -> ModelConnection | 
         if payload.pop("task_id") != str(task_id) or payload.pop("user_id") != str(user_id):
             raise ValueError("owner mismatch")
         validated = ModelConnectionInput.model_validate(payload)
-        if validated.model_dump(exclude={"api_key"}) != stored["profile"]:
+        profile = ModelConnectionInput(api_key=validated.api_key, **stored['profile'])
+        if validated.model_dump(exclude={"api_key"}) != profile.model_dump(exclude={'api_key'}):
             raise ValueError("profile mismatch")
         return ModelConnection(**validated.model_dump(exclude={"api_key"}), api_key=validated.api_key.get_secret_value())
     except (InvalidToken, KeyError, TypeError, ValueError):
@@ -217,13 +223,13 @@ def build_connection_client(connection: ModelConnection):
     if connection.base_url == "https://openrouter.ai/api/v1":
         # The free router can select models with mandatory reasoning. Request
         # low effort rather than disabling it; exclusion only hides the trace.
-        extra["reasoning"] = {"effort": "low", "exclude": True}
+        extra["reasoning"] = ({"enabled": False} if connection.reasoning_effort == 'none' else {"effort": connection.reasoning_effort, "exclude": True})
     if connection.base_url == "https://openrouter.ai/api/v1" and connection.input_price_per_million == 0 and connection.output_price_per_million == 0:
         extra["provider"] = {"max_price": {"prompt": 0, "completion": 0, "request": 0}, "require_parameters": True}
     # No environment key, global cache, redirect or provider fallback is used.
     client = ChatOpenAI(model=connection.model, api_key=connection.api_key, base_url=connection.base_url,
         max_retries=0, timeout=settings.PROVIDER_CALL_TIMEOUT_SECONDS, cache=False,
-        max_tokens=8192, extra_body=extra, callbacks=[],
+        max_tokens=connection.output_token_limit, extra_body=extra, callbacks=[],
         http_client=httpx.Client(follow_redirects=False, trust_env=False),
         http_async_client=httpx.AsyncClient(follow_redirects=False, trust_env=False))
     if hasattr(connection, "register_client"):

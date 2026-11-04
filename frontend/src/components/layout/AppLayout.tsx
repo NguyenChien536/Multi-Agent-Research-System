@@ -10,6 +10,7 @@ import {
 import { api } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
 import type { ResearchTaskResponse, UserResponse } from '@/types';
+import { ModelSettingsPanel } from '@/components/ModelSettingsPanel';
 
 const DEFAULT_SIDEBAR_WIDTH = 260;
 const MIN_SIDEBAR_WIDTH = 220;
@@ -24,6 +25,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [recentTasks, setRecentTasks] = useState<ResearchTaskResponse[]>([]);
   const [user, setUser] = useState<UserResponse | null>(null);
+  useEffect(() => {
+    const open = () => setIsSettingsOpen(true);
+    window.addEventListener('synthia-open-settings', open);
+    return () => window.removeEventListener('synthia-open-settings', open);
+  }, []);
 
   // Resizable sidebar state
   const [sidebarWidth, setSidebarWidth] = useState<number>(DEFAULT_SIDEBAR_WIDTH);
@@ -321,7 +327,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Settings Modal (Cài đặt hệ thống & Chuyển ngôn ngữ sang Tiếng Anh / Tiếng Việt) */}
       {isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/40 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-white rounded-2xl border border-zinc-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl border border-zinc-200 shadow-xl animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 bg-zinc-50/70">
               <div className="flex items-center gap-2">
@@ -341,9 +347,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
             {/* Modal Body */}
             <div className="p-6 space-y-5 text-sm">
-              <p className="text-xs text-zinc-600 leading-relaxed">
-                {t('settings_desc')}
-              </p>
+              <ModelSettingsPanel isEn={language === 'en'} taskId={pathname.match(/^\/research\/([0-9a-f-]{36})(?:\/|$)/i)?.[1]} />
 
               {/* Language Selection Setting */}
               <div className="space-y-2.5">

@@ -53,15 +53,24 @@ const KNOWN_PROVIDERS: Record<string, ProviderMeta> = {
   },
 };
 
-export function ModelConnectionFields({ value, onChange, isEn }: {
+export function ModelConnectionFields({ value, onChange, isEn, keyRequired = true, hideToggle = false }: {
   value: ModelConnectionInput | null;
   onChange: (value: ModelConnectionInput | null) => void;
   isEn: boolean;
+  keyRequired?: boolean;
+  hideToggle?: boolean;
 }) {
   const [roots, setRoots] = useState<string[]>([]);
   const [loadError, setLoadError] = useState(false);
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [models, setModels] = useState<string[]>([]);
+  useEffect(() => {
+    if (value?.base_url !== 'https://openrouter.ai/api/v1') return;
+    let active = true;
+    api.tasks.freeModels().then(result => { if(active) setModels(result.models.map(model=>model.id)); }).catch(()=>{});
+    return ()=>{ active=false; };
+  }, [value?.base_url]);
   useEffect(() => {
     let active = true;
     setLoadError(false);
@@ -86,12 +95,12 @@ export function ModelConnectionFields({ value, onChange, isEn }: {
     || (isEn ? 'Model ID from your provider' : 'Model ID do dịch vụ cung cấp');
 
   return <section className="space-y-3 border-t border-zinc-100 pt-4">
-    <label className="flex items-center gap-2 text-sm font-semibold">
+    {!hideToggle && <label className="flex items-center gap-2 text-sm font-semibold">
       <input type="checkbox" checked={!!value} onChange={event => onChange(event.target.checked ? {
         api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0,
       } : null)} />
       {isEn ? 'Use my API connection' : 'Dùng API key của tôi'}
-    </label>
+    </label>}
     {value && <>
       {loadError && <div role="alert" className="flex items-center justify-between gap-2 text-sm text-red-700">
         <span>{isEn ? 'Could not load API services.' : 'Không tải được danh sách dịch vụ API.'}</span>
@@ -109,15 +118,33 @@ export function ModelConnectionFields({ value, onChange, isEn }: {
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-xs font-medium">API key
-          <input className={inputClass} type="password" required minLength={8} maxLength={4096} autoComplete="off"
+          <input className={inputClass} type="password" required={keyRequired} minLength={8} maxLength={4096} autoComplete="off"
+            placeholder={keyRequired ? '' : (isEn ? 'Saved securely · leave blank to keep' : 'Đã lưu an toàn · để trống để giữ key')}
             spellCheck={false} value={value.api_key} onChange={event => update({ api_key: event.target.value })} />
         </label>
         <label className="block text-xs font-medium">{isEn ? 'Exact model ID' : 'Tên model chính xác'}
           <input className={inputClass} required maxLength={200} autoComplete="off" spellCheck={false}
+            list={value.base_url === 'https://openrouter.ai/api/v1' ? 'free-model-options' : undefined}
             placeholder={activePlaceholder}
             value={value.model} onChange={event => update({ model: event.target.value.trim() })} />
+          <datalist id="free-model-options"><option value="openrouter/free" />{models.map(model=><option key={model} value={model} />)}</datalist>
         </label>
       </div>
+      <details className="text-sm text-zinc-700">
+        <summary className="cursor-pointer">{isEn ? 'Model options' : 'Tùy chọn model'}</summary>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          <label>{isEn?'Output token limit':'Giới hạn token đầu ra'}
+            <input type="number" min={1024} max={32768} step={1024} required className={inputClass}
+              value={value.output_token_limit || 8192} onChange={event=>update({output_token_limit:Number(event.target.value)})} />
+          </label>
+          <label>{isEn?'Reasoning effort':'Mức suy luận'}
+            <select className={inputClass} disabled={value.base_url !== 'https://openrouter.ai/api/v1'} title="OpenRouter" value={value.reasoning_effort || 'low'} onChange={event=>update({reasoning_effort:event.target.value as ModelConnectionInput['reasoning_effort']})}>
+              <option value="none">{isEn?'Off (if supported)':'Tắt (nếu model hỗ trợ)'}</option>
+              <option value="low">{isEn?'Low':'Thấp'}</option><option value="medium">{isEn?'Medium':'Vừa'}</option><option value="high">{isEn?'High':'Cao'}</option>
+            </select>
+          </label>
+        </div>
+      </details>
       <details className="text-xs text-zinc-600">
         <summary className="cursor-pointer">{isEn ? 'Estimated prices (optional)' : 'Đơn giá ước tính (tùy chọn)'}</summary>
         <p className="mt-2">{isEn ? 'Prices are your estimates, not a provider invoice.' : 'Giá do bạn khai báo, không phải hóa đơn nhà cung cấp.'}</p>

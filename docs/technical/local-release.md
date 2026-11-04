@@ -1,5 +1,7 @@
 # Bản Docker dùng để demo cuối kỳ
 
+**Cập nhật 05/11/2026 — local:** chỉ dùng `docker-compose.yml` và một Dockerfile cho mỗi app. API/model nằm trong Settings (mặc định và riêng từng bài), key mã hóa, model/token limit/reasoning chỉnh trên giao diện. Backend regression: 701 passed, 3 skipped; frontend 34 passed; Docker builds đạt. Có gate chặn Writer khi không có evidence/provenance, skeleton H2/H3 theo loại bài, và sửa ký tự NUL từ PDF. Một stack local được chọn qua `scratch/local-active.json`; `scripts/release.ps1 -Action status` in URL thực tế. Các stack cũ đã backup và dừng, volumes còn nguyên. **Nghiệm thu bài mới với provider thật chưa đạt:** các lượt free router có truncation và sau đó provider trả 429; không có đầu ra mới được công nhận thành công, không tự chuyển trả phí hoặc tuyên bố chất lượng Q1.
+
 **Nghiệm thu local 03/11/2026:** hạ tầng, backup/restore và luồng nghiên cứu đã chạy thực tế. #93 và #95 đã sửa, kiểm thử và merge vào `develop`. Candidate `2bc6151573d8` đã qua đủ 6 kiểm tra CI và chạy với provider thật; mã runtime tương ứng được merge tại `ac4c886a3eec`. **Chưa đưa lên main hoặc chốt chất lượng bài nộp**: tiếp tục cải thiện độ phủ bằng chứng (#86) và đánh giá pilot (#83).
 
 | Kiểm tra thực tế | Kết quả |

@@ -112,3 +112,17 @@ Delete trả thành công sau khi tombstone bền vững, không có nghĩa file
 4. AnalysisRun, ExperimentJournalEntry append-only, routine manifest, rerun records và provenance kết quả (P5).
 
 Backfill data cũ phải đánh dấu thiếu lineage; không tạo evidence giả để migration pass. Giữ DB demo riêng khi thử upgrade/downgrade. Chi tiết nhiệm vụ và gates ở [Implementation Plan](../project/implementation-plan.md).
+
+
+## Settings API và model — 05/11/2026
+
+`users.model_connection` lưu JSONB gồm profile công khai và ciphertext owner-bound; API không trả key/ciphertext. Bài mới mặc định giải mã cấu hình chủ sở hữu rồi mã hóa lại theo task ID, giữ snapshot riêng. Đổi cấu hình mặc định không đổi các bài cũ. Các endpoint bên dưới yêu cầu đăng nhập và quyền sở hữu:
+
+| Endpoint | Ý nghĩa |
+|---|---|
+| GET/PUT/DELETE `/api/v1/settings/model-connection` | Đọc profile, lưu/cập nhật hoặc xóa mặc định; key bỏ trống giữ key cũ khi cùng dịch vụ |
+| PUT `/api/v1/settings/research/{id}/model-connection` | Đổi kết nối riêng khi bài không RUNNING/QUEUED |
+| POST `/api/v1/settings/research/{id}/use-default` | Áp dụng snapshot mặc định cho bài đã dừng/chờ |
+| POST `/api/v1/settings/research/{id}/save-as-default` | Lưu kết nối bài làm mặc định mà không trả key về browser |
+
+`output_token_limit` và `reasoning_effort` là cấu hình model; reasoning hiện áp dụng qua OpenRouter. Giới hạn ngân sách task vẫn độc lập và không reset khi đổi model. Xóa mặc định không thu hồi snapshot của bài cũ; từng bài có thao tác thu hồi key riêng. Catalog công khai chỉ có địa chỉ/model metadata, không có tài khoản hoặc key.

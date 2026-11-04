@@ -27,6 +27,7 @@ class ResearchTaskCreate(BaseModel):
     citation_style: str = Field(default="IEEE", pattern="^(IEEE|APA|HARVARD)$")
     budget: Optional[BudgetConfigSchema] = None
     llm_connection: Optional[ModelConnectionInput] = Field(default=None, repr=False)
+    use_saved_connection: bool = True
 
 
 class ResearchTaskResponse(BaseModel):
@@ -70,7 +71,7 @@ class ResearchTaskResponse(BaseModel):
         if isinstance(connection, dict):
             profile = connection.get('profile') or {}
             result.model_connection = {key: profile.get(key) for key in (
-                'base_url', 'model', 'input_price_per_million', 'output_price_per_million')}
+                'base_url', 'model', 'input_price_per_million', 'output_price_per_million', 'output_token_limit', 'reasoning_effort')}
             result.model_connection['revoked'] = bool(connection.get('revoked'))
             result.model_connection['cost_basis'] = 'user_declared_estimate_not_invoice'
         # Historical paused records can have stale denormalized totals. Read

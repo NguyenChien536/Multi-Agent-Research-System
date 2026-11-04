@@ -97,7 +97,7 @@ class EmbedderTool:
     def chunk_text(self, text_content: str, metadata: dict = None) -> List[Document]:
         """Băm nhỏ văn bản thành các chunks."""
         metadata = metadata or {}
-        return self.text_splitter.create_documents([text_content], metadatas=[metadata])
+        return self.text_splitter.create_documents([text_content.replace('\x00', ' ')], metadatas=[metadata])
 
     async def embed_and_store(
         self,

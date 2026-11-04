@@ -1412,8 +1412,8 @@ export default function WorkspacePage() {
 
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-zinc-50/60 print:overflow-visible print:h-auto print:p-0 print:m-0 print:bg-white print:block">
             {/* TAB 1: SCIENTIFIC PAPER */}
-            {task.status === 'FAILED' && <ResearchErrorNotice isEn={isEn}
-              error={runs.find(run => run.status === 'FAILED' && run.attempt_number === task.attempt_number)?.error_message} />}
+            {(task.status === 'FAILED' || task.current_step === 'BUDGET_LIMIT') && <ResearchErrorNotice isEn={isEn}
+              error={task.current_step === 'BUDGET_LIMIT' ? 'TASK_BUDGET_LIMIT' : runs.find(run => run.status === 'FAILED' && run.attempt_number === task.attempt_number)?.error_message} />}
             {activeTab === 'report' && (
               <div className={`paper-space w-full ${isWidePaper ? 'max-w-6xl' : 'max-w-4xl'} mx-auto space-y-6 transition-all duration-300 print:max-w-none print:m-0 print:p-0 print:space-y-0`}>
                 {(['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(task.status) || report?.research_task_id === params.id) ? report?.research_task_id === params.id ? (
@@ -2150,7 +2150,7 @@ export default function WorkspacePage() {
 
                             {citation.claim_text && (
                               <div className="text-sm sm:text-base text-zinc-900 font-semibold leading-relaxed">
-                                <span className="text-zinc-500 font-normal">{isEn ? "Verified Claim: " : "Luận điểm xác minh: "}</span>
+                                <span className="text-zinc-500 font-normal">{isEn ? "Source-linked claim: " : "Luận điểm gắn nguồn: "}</span>
                                 {citation.claim_text}
                               </div>
                             )}

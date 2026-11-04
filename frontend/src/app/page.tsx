@@ -11,7 +11,6 @@ import {
 import { api } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
 import type { ResearchType, UserResponse, ModelConnectionInput } from '@/types';
-import { ModelConnectionFields } from '@/components/ModelConnectionFields';
 
 const OUTPUT_LANGUAGES = [
   { code: 'en', name: 'English', native: 'English (Default)', desc_en: 'Standard international scientific draft', desc_vi: 'Văn bản báo cáo chuẩn học thuật quốc tế' },
@@ -40,8 +39,16 @@ export default function Home() {
   const [requirePlanApproval, setRequirePlanApproval] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [maxSources, setMaxSources] = useState(12);
-  // Secrets remain in memory only; never add this to the saved draft.
-  const [modelConnection, setModelConnection] = useState<ModelConnectionInput | null>(null);
+  const [savedModel, setSavedModel] = useState<string | null>(null);
+  useEffect(() => {
+    const refresh = () => {
+      if (!api.auth.hasSession()) return;
+      api.settings.getModelConnection().then(result => setSavedModel(result.connection?.model || null)).catch(()=>setSavedModel(null));
+    };
+    refresh();
+    window.addEventListener('synthia-model-settings', refresh);
+    return () => window.removeEventListener('synthia-model-settings', refresh);
+  }, []);
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -161,6 +168,11 @@ export default function Home() {
     }
 
     setError('');
+    if (!savedModel) {
+      setError(isEn ? 'Save your API connection in Settings first.' : 'Lưu kết nối API trong Settings trước khi chạy bài.');
+      router.push('/settings');
+      return;
+    }
     setIsLoading(true);
     setUploadStatus(isEn ? 'Creating research workspace...' : 'Đang khởi tạo không gian nghiên cứu...');
 
@@ -175,10 +187,8 @@ export default function Home() {
         language: taskLanguage || 'en', // Default to English
         require_plan_approval: requirePlanApproval,
         max_sources: maxSources,
-        llm_connection: modelConnection || undefined,
       });
 
-      setModelConnection(null);
 
       // Tải lên các file PDF riêng tư nếu có trước khi bắt đầu workflow
       if (pdfFiles.length > 0) {
@@ -259,6 +269,7 @@ export default function Home() {
                   <span className="font-normal text-zinc-700 truncate max-w-[140px]">{currentUser.full_name || currentUser.username}</span>
                 </div>
               )}
+              <Button variant="outline" onClick={() => router.push('/settings')} className="text-xs h-8">Settings</Button>
               <Button variant="outline" onClick={() => router.push('/dashboard')} className="text-xs h-8">
                 <LayoutDashboard size={14} className="mr-1.5 text-zinc-500" /> {t('nav_dashboard')}
               </Button>
@@ -452,7 +463,10 @@ export default function Home() {
                 </div>
 
                 {/* 1. Research Depth (Cards) */}
-                <ModelConnectionFields value={modelConnection} onChange={setModelConnection} isEn={isEn} />
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-200 p-3 text-sm">
+                  <span>{savedModel || (isEn ? 'Choose an API connection in Settings' : 'Chọn kết nối API trong Settings')}</span>
+                  <button type="button" className="font-medium underline" onClick={()=>router.push('/settings')}>Settings</button>
+                </div>
                 <label className="block space-y-1 text-xs font-medium text-zinc-700">
                   <span>{isEn ? 'Maximum sources to collect' : 'Số nguồn tối đa cần thu thập'}</span>
                   <input type="number" min={3} max={30} required value={maxSources}

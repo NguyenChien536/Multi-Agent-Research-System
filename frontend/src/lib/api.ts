@@ -32,7 +32,7 @@ async function fetcher<T>(endpoint: string, options?: RequestInit, responseKind:
   const headers = new Headers(options?.headers);
   if (options?.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   const token = getAccessToken();
-  const isPublicAuth = endpoint === '/auth/login' || endpoint === '/auth/register' || endpoint === '/research/model-connections/options';
+  const isPublicAuth = endpoint === '/auth/login' || endpoint === '/auth/register' || endpoint === '/research/model-connections/options' || endpoint === '/research/model-connections/free-models';
   if (token && !isPublicAuth) headers.set('Authorization', `Bearer ${token}`);
 
   const config: RequestInit = {
@@ -65,6 +65,16 @@ async function fetcher<T>(endpoint: string, options?: RequestInit, responseKind:
 }
 
 export const api = {
+  settings: {
+    getModelConnection: () => fetcher<{connection: (Omit<import('../types').ModelConnectionInput, 'api_key'> & {has_key: boolean}) | null}>('/settings/model-connection'),
+    saveModelConnection: (value: Omit<import('../types').ModelConnectionInput, 'api_key'> & {api_key?: string}) =>
+      fetcher<{connection: Omit<import('../types').ModelConnectionInput, 'api_key'> & {has_key: boolean}}>('/settings/model-connection', {method: 'PUT', body: JSON.stringify(value)}),
+    removeModelConnection: () => fetcher<void>('/settings/model-connection', {method: 'DELETE'}),
+    updateTaskConnection: (id: string, value: Omit<import('../types').ModelConnectionInput, 'api_key'> & {api_key?: string}) =>
+      fetcher<unknown>(`/settings/research/${id}/model-connection`, {method: 'PUT', body: JSON.stringify(value)}),
+    applyDefault: (id: string) => fetcher<unknown>(`/settings/research/${id}/use-default`, {method: 'POST'}),
+    saveTaskAsDefault: (id: string) => fetcher<unknown>(`/settings/research/${id}/save-as-default`, {method: 'POST'}),
+  },
   auth: {
     hasSession: () => Boolean(getAccessToken()),
     logout: clearAccessToken,
@@ -84,6 +94,7 @@ export const api = {
   },
   tasks: {
     modelConnectionOptions: () => fetcher<{ protocol: string; base_urls: string[] }>('/research/model-connections/options'),
+    freeModels: () => fetcher<{models: Array<{id:string;context_length:number;max_output_tokens:number | null}>}>('/research/model-connections/free-models'),
     revokeModelConnection: (id: string) => fetcher<void>(`/research/${id}/model-connection`, { method: 'DELETE' }),
     downloadArtifact: (id: string, artifactId: string) =>
       fetcher<Blob>(`/research/${id}/artifacts/${artifactId}/download`, {cache: 'no-store'}, 'blob'),

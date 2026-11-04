@@ -49,7 +49,7 @@ def create_application() -> FastAPI:
     @application.exception_handler(RequestValidationError)
     async def redact_connection_validation(request, exc):
         # Pydantic normally echoes rejected input, including a nested secret.
-        if isinstance(exc.body, dict) and "llm_connection" in exc.body:
+        if isinstance(exc.body, dict) and ("llm_connection" in exc.body or "api_key" in exc.body):
             return JSONResponse(status_code=422, content={"detail": [
                 {"loc": list(error["loc"]), "type": error["type"],
                  "msg": "Invalid API connection configuration" if "llm_connection" in error["loc"] else "Invalid request value"}

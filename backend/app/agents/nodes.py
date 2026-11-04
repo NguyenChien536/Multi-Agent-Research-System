@@ -22,7 +22,7 @@ from app.services.scientific_paper import (
     scientific_context, build_scientific_figures, figure_instructions,
     materialize_figures, validate_scientific_reporting,
 )
-from app.services.academic_writing import writing_guidance, writing_limits
+from app.services.academic_writing import writing_guidance, writing_limits, manuscript_skeleton
 from app.services.research_quality import unique_quote_claims, canonicalize_quote_markers, inject_search_ledger, query_coverage, bounded_quality_batches, LEDGER_HEADINGS
 from app.services.evidence_review import EvidenceReview, prepare_evidence_review, evaluate_evidence_reviews, audit_matches_draft
 from app.services.structured_output import compatible_structured_output
@@ -182,7 +182,7 @@ class BudgetedFallbackLLM:
                 if "lengthfinishreason" in type(last_error).__name__.lower() or 'model_output_truncated' in err_str:
                     raise RuntimeError("MODEL_OUTPUT_TRUNCATED: The model reached its output token limit before completing JSON. This is not an API-key authentication error. Retry with sufficient output capacity.") from None
                 if "429" in err_str or "rate limit" in err_str or "quota" in err_str or "credit" in err_str:
-                    raise RuntimeError("Your API connection reached its rate limit or quota (HTTP 429). Please check your account credits.") from None
+                    raise RuntimeError("Your API connection reached its rate limit or quota (HTTP 429). Wait and check your provider's free allowance before retrying.") from None
                 if "401" in err_str or "unauthorized" in err_str or "invalid api key" in err_str or "authentication" in err_str:
                     raise RuntimeError("Your API key was rejected by the provider (HTTP 401). Please verify your API key.") from None
                 if "404" in err_str or "not found" in err_str:
@@ -292,7 +292,9 @@ async def invoke_llm_with_budget(
     }
     if isinstance(llm, BudgetedFallbackLLM):
         if any(name.startswith("byok:") for name, _ in llm.models):
-            context["output_tokens"] = max(output_tokens, 8192)
+            from app.services.model_connection import current_connection
+            connection = current_connection()
+            context["output_tokens"] = max(output_tokens, connection.output_token_limit if connection else 8192)
         token = _BUDGET_CALL_CONTEXT.set(context)
         try:
             return await llm.ainvoke(messages)
@@ -844,6 +846,10 @@ async def curator_node(state: ResearchState) -> Dict[str, Any]:
 
         async with AsyncSessionLocal() as db:
             for src in sources:
+                # Normalize extracted/search metadata before any PostgreSQL text write.
+                for key, value in list(src.items()):
+                    if isinstance(value, str) and '\x00' in value:
+                        src[key] = value.replace('\x00', ' ')
                 if "db_id" in src:
                     if state.get("enforce_provider_budget"):
                         count = await embedder.embed_existing_chunks(
@@ -1045,10 +1051,17 @@ async def analyst_node(state: ResearchState) -> Dict[str, Any]:
                     return [], []
 
         # Chạy song song tất cả các queries
-        tasks = [process_query(need) for need in needs]
-        # Drain sibling calls before leaving the node. A fail-fast gather would
-        # otherwise let in-flight providers outlive the task/runtime scope.
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        from app.services.model_connection import current_connection
+        # Personal/free accounts have smaller quotas. Avoid reserving five large
+        # outputs at once or allowing sibling calls to waste the remaining cap.
+        if current_connection() is not None:
+            results = []
+            for need in needs:
+                results.append(await process_query(need))
+        else:
+            tasks = [process_query(need) for need in needs]
+            # Drain siblings so provider calls cannot outlive the runtime scope.
+            results = await asyncio.gather(*tasks, return_exceptions=True)
         for result in results:
             if isinstance(result, BaseException):
                 raise result
@@ -1567,6 +1580,13 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     Writer Agent: Viết bản nháp dựa trên Claims & Evidences. (Dùng mô hình xịn)
     """
     await _record_progress(state, "WRITER")
+    from app.services.evidence_policy import has_writing_evidence, InsufficientEvidence
+    if state.get('enforce_provider_budget') and not has_writing_evidence(state):
+        message = 'INSUFFICIENT_EVIDENCE: No source-linked evidence or recorded results support this manuscript. Add relevant sources or result data before writing.'
+        now = datetime.now(timezone.utc)
+        await record_agent_run(task_id=state.get('task_id'), agent_name='Writer', status='FAILED',
+            attempt_number=state.get('attempt_number', 1), started_at=now, completed_at=now, error_message=message)
+        raise InsufficientEvidence(message)
     start_ts = time.monotonic()
     started_at = datetime.now(timezone.utc)
     model_name = get_active_model_name(is_smart=True)
@@ -1592,6 +1612,9 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     analysis_run = state.get("analysis_run")
     length = state.get("report_length", "MEDIUM")
     word_target, output_limit = writing_limits(contract, length)
+    from app.services.model_connection import current_connection
+    if connection := current_connection():
+        output_limit = min(output_limit, connection.output_token_limit)
     if isinstance(llm, BudgetedFallbackLLM):
         for _, model in llm.models:
             if hasattr(model, "max_output_tokens"):
@@ -1701,7 +1724,16 @@ Requested edits: {state.get('revision_instructions')}
     Lưu ý từ vòng sửa trước (nếu có): {feedback}
     Các chủ đề cần tổng hợp/đối chiếu bên trong nội dung: {plan.get('suggested_topics', [])}
     {format_section_outline_prompt(plan.get('section_outline', []), contract)}
+    {manuscript_skeleton(contract, plan.get('section_outline'))}
     {academic_style_instructions}
+    EVIDENCE-TO-ARGUMENT RULE: Ground every substantive empirical/theoretical assertion in supplied
+    claim markers or explicitly recorded study results. Develop paragraphs with a clear argument,
+    the supporting evidence, an explanation of what it supports, and a qualified implication;
+    write natural academic prose, never print these steps as labels. Source existence is not
+    entailment. Preserve assumptions, counterevidence and abstract-only/full-text scope.
+    An interpretation, hypothesis or proposed mechanism must remain explicitly tentative.
+    Do not turn missing evidence into a finding, an exhaustive research gap, a causal conclusion,
+    a numerical result or a fabricated reference. Narrow unsupported claims or state the limitation.
     {editorial_context}
     {writing_guidance(contract)}
     {empirical_section}

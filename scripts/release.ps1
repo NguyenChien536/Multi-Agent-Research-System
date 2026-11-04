@@ -9,11 +9,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
+$activeFile = Join-Path $root 'scratch/local-active.json'
+if (Test-Path -LiteralPath $activeFile) {
+    $activeLocal = Get-Content -Raw -LiteralPath $activeFile | ConvertFrom-Json
+    if (-not $PSBoundParameters.ContainsKey('Project')) { $Project = $activeLocal.project }
+    if (-not $PSBoundParameters.ContainsKey('EnvFile')) { $EnvFile = $activeLocal.env_file }
+    if (-not $PSBoundParameters.ContainsKey('Port')) { $Port = [int]$activeLocal.port }
+}
 if ($Project -notmatch '^synthia-[a-z0-9]+(-[a-z0-9]+)*$') { throw 'Use a synthia-<name> project name.' }
 if ($Port -lt 1024 -or $Port -gt 65535) { throw 'Port must be between 1024 and 65535.' }
 if (-not $EnvFile) { $EnvFile = Join-Path $root 'scratch/release-local/.env' }
 $EnvFile = [IO.Path]::GetFullPath($EnvFile)
-$composeFile = Join-Path $root 'compose.release.yml'
+$composeFile = Join-Path $root 'docker-compose.yml'
 
 function New-Secret {
     $bytes = New-Object byte[] 32
@@ -61,14 +68,14 @@ $env:RELEASE_REVISION = $revision
 
 switch ($Action) {
     'start' {
-        $dirty = & git -C $root status --porcelain -- backend frontend docker scripts compose.release.yml
+        $dirty = & git -C $root status --porcelain -- backend frontend docker scripts docker-compose.yml
         if ($dirty) { throw 'Commit the runtime changes before building a release; image revision must identify its source.' }
         Invoke-Compose -Arguments @('config', '--quiet')
         Invoke-Compose -Arguments @('up', '-d', '--build', '--wait', '--wait-timeout', '240')
         @{ revision=$revision; port=$Port } | ConvertTo-Json | Set-Content -LiteralPath $stateFile
         Write-Output "Release ready: http://127.0.0.1:$Port (revision $revision)"
     }
-    'status' { Invoke-Compose -Arguments @('ps') }
+    'status' { Invoke-Compose -Arguments @('ps'); Write-Output "Local URL: http://127.0.0.1:$Port" }
     'stop' { Invoke-Compose -Arguments @('stop') } # Never removes volumes or data.
     'logs' { Invoke-Compose -Arguments @('logs', '--tail', '100', 'backend', 'worker', 'gateway') }
     'backup' {

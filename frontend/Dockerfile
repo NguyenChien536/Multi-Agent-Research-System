@@ -1,24 +1,22 @@
-FROM node:20-alpine AS dependencies
+FROM node:22-alpine AS build
 WORKDIR /app
+ENV NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json ./
 RUN npm ci
-
-FROM node:20-alpine AS build
-WORKDIR /app
-COPY --from=dependencies /app/node_modules ./node_modules
 COPY . .
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+ARG NEXT_PUBLIC_API_URL=/api/v1
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+RUN npm run build && mkdir -p public
 
-FROM node:20-alpine
+FROM node:22-alpine AS runtime
 WORKDIR /app
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
-COPY --from=build /app/package.json ./package.json
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/.next ./.next
-COPY --from=build /app/public ./public
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 HOSTNAME=0.0.0.0 PORT=3000
+ARG VCS_REF=unknown
+LABEL org.opencontainers.image.revision=$VCS_REF
+RUN addgroup -S -g 10001 appgroup && adduser -S -u 10001 -G appgroup appuser
+COPY --from=build --chown=appuser:appgroup /app/.next/standalone ./
+COPY --from=build --chown=appuser:appgroup /app/.next/static ./.next/static
+COPY --from=build --chown=appuser:appgroup /app/public ./public
+USER appuser
 EXPOSE 3000
-CMD ["npm", "run", "start", "--", "-H", "0.0.0.0"]
+CMD ["node", "server.js"]

@@ -1,0 +1,14 @@
+"""Write-only credential update contracts."""
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from typing import Literal
+
+class ConnectionUpdate(BaseModel):
+    model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
+    api_key: SecretStr | None = Field(default=None, min_length=8, max_length=4096, repr=False)
+    base_url: str
+    model: str
+    input_price_per_million: float = Field(default=0, ge=0, le=1000, allow_inf_nan=False)
+    output_price_per_million: float = Field(default=0, ge=0, le=1000, allow_inf_nan=False)
+    output_token_limit: int = Field(default=8192, ge=1024, le=32768)
+    reasoning_effort: Literal['none', 'low', 'medium', 'high'] = 'low'
+

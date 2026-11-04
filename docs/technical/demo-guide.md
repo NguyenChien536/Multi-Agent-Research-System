@@ -230,7 +230,7 @@ Tổng tần số mỗi biến là 24. Cột `synthetic_response_id` chỉ là I
 | Bài / nguồn / citation | `GET .../{id}/report`, `/sources`, `/citations` |
 | Thí nghiệm / journal | `GET .../{id}/experiments`, `/journal` |
 
-Không tái sử dụng task ID, artifact ID, token hoặc plan version từ máy khác. Không đưa API key vào `task-payloads.json` đã version control. BYOK chỉ dùng sau khi bản Gemini sửa đã qua kiểm và UI/API/worker cùng revision.
+Không tái sử dụng task ID, artifact ID, token hoặc plan version từ máy khác. Không đưa API key vào `task-payloads.json` đã version control. API/model được lưu trong Settings; bài mới tự dùng mặc định, còn bài hiện tại có thể đổi kết nối khi đã dừng.
 
 ## 8. Chuẩn bị và diễn tập trong hôm nay
 

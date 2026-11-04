@@ -14,6 +14,8 @@ export interface ModelConnectionInput {
   model: string;
   input_price_per_million: number;
   output_price_per_million: number;
+  output_token_limit?: number;
+  reasoning_effort?: 'none' | 'low' | 'medium' | 'high';
 }
 
 export interface ResearchTaskCreate {

@@ -53,6 +53,14 @@ async def model_connection_options():
     return {"protocol": "openai_compatible", "base_urls": [root.strip().rstrip('/')
         for root in settings.CUSTOM_LLM_API_ROOTS.split(',') if root.strip()]}
 
+@router.get('/model-connections/free-models')
+async def free_model_options():
+    from app.services.model_catalog import free_models
+    try:
+        return {'models': await free_models()}
+    except Exception:
+        raise HTTPException(503, 'Model catalog is unavailable; enter the exact model ID manually') from None
+
 
 @router.delete("/{task_id}/model-connection", status_code=204)
 async def revoke_model_connection(task_id: uuid.UUID, db: AsyncSession = Depends(get_db),
@@ -125,10 +133,17 @@ async def create_research_task(
         require_plan_approval=task_in.require_plan_approval,
         status="PENDING",
     )
-    if task_in.llm_connection is not None:
+    connection_input = task_in.llm_connection
+    if connection_input is None and task_in.use_saved_connection and current_user.model_connection:
+        from app.services.user_model_settings import decode_input, settings_id
+        try:
+            connection_input = decode_input(current_user.model_connection, current_user.id, settings_id(current_user.id))
+        except ValueError:
+            raise HTTPException(409, 'Update your API connection in Settings before creating research') from None
+    if connection_input is not None:
         from app.services.model_connection import seal_connection
         try:
-            sealed = seal_connection(task_in.llm_connection, task.id, current_user.id)
+            sealed = seal_connection(connection_input, task.id, current_user.id)
         except ValueError:
             raise HTTPException(503, "Private API connections are not configured securely on this server") from None
         task.budget_config = {**budget_dict, "_llm_connection": sealed}
