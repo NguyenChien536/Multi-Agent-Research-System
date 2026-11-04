@@ -43,6 +43,13 @@ async def test_report_versions_are_stable_ordered_and_owner_scoped():
         assert created.status_code == 201, created.text
         task_id = uuid.UUID(created.json()["id"])
 
+        empty_versions = await client.get(f"/api/v1/research/{task_id}/report/versions", headers=owner_headers)
+        assert empty_versions.status_code == 200, empty_versions.text
+        assert empty_versions.json() == []
+        assert (await client.get(
+            f"/api/v1/research/{task_id}/report/versions", headers=reader_headers
+        )).status_code == 404
+
         async with AsyncSessionLocal() as session:
             task = await session.get(ResearchTask, task_id)
             report = ResearchReport(research_task_id=task_id)

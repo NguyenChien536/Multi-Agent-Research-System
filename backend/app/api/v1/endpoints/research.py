@@ -270,9 +270,18 @@ async def list_report_versions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    task = await db.scalar(
+        select(ResearchTask).where(
+            ResearchTask.id == task_id,
+            ResearchTask.user_id == current_user.id,
+            ResearchTask.status != "DELETING",
+        )
+    )
+    if task is None:
+        raise HTTPException(status_code=404, detail="Research task not found")
     report = await _get_owned_report(db, task_id, current_user.id)
     if report is None:
-        raise HTTPException(status_code=404, detail="Report not found for this task")
+        return []
     versions = await db.scalars(
         select(ReportVersion)
         .where(ReportVersion.report_id == report.id)
