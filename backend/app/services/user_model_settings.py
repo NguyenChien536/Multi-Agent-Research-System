@@ -38,4 +38,3 @@ def protect(value, binding_id, owner_id):
         return seal_connection(value, binding_id, owner_id)
     except ValueError:
         raise HTTPException(503, 'Private API connections are not configured securely on this server') from None
-

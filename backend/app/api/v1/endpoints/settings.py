@@ -8,10 +8,10 @@ from app.core.database import get_db
 from app.models.user import User
 from app.models.task import ResearchTask
 
-router = APIRouter()
-
 from app.schemas.model_settings import ConnectionUpdate
 from app.services.user_model_settings import settings_id, decode_input, public_profile, updated_input, protect
+
+router = APIRouter()
 
 @router.get('/model-connection')
 async def get_connection(user: User = Depends(get_current_user)):
