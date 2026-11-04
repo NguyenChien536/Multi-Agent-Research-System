@@ -16,6 +16,8 @@ import { MarkdownViewer, extractHeadings } from '@/components/ui/MarkdownViewer'
 import { PublicationArticle, PublicationExport } from '@/components/research/PublicationPaper';
 import { useLanguage } from '@/lib/i18n';
 import { exportPaperToDocx } from '@/lib/docxExport';
+import { stageState } from '@/lib/monitoring';
+import { withoutRepeatedTitle } from '@/lib/paperPresentation';
 import { api } from '@/lib/api';
 import type {
   CitationResponse, ResearchReportResponse, ResearchSourceResponse,
@@ -91,15 +93,6 @@ const STEP_LABELS_VI: Record<string, string> = {
 function stepLabel(step: string, lang: 'en' | 'vi' = 'en'): string {
   const dict = lang === 'en' ? STEP_LABELS_EN : STEP_LABELS_VI;
   return dict[step] || step;
-}
-
-function stageState(stages: StageConfig[], index: number, status: string, currentStep?: string | null): 'done' | 'active' | 'waiting' {
-  if (status === 'COMPLETED') return 'done';
-  const current = currentStep
-    ? stages.findIndex(stage => stage.steps.includes(currentStep))
-    : stages.findIndex(stage => stage.statuses.includes(status));
-  if (current < 0) return 'waiting';
-  return index < current ? 'done' : index === current ? 'active' : 'waiting';
 }
 
 function statusLabel(status: string, lang: 'en' | 'vi' = 'en') {
@@ -707,13 +700,13 @@ export default function WorkspacePage() {
                   {statusLabel(task.status, language)}
                 </span>
               )}
-              <span className="text-zinc-400">\xb7</span>
+              <span className="text-zinc-400">·</span>
               <span className="text-zinc-600">{isEn ? "Depth: " : "\u0110\u1ed9 s\xe2u: "}{task.research_depth}</span>
-              <span className="text-zinc-400">\xb7</span>
+              <span className="text-zinc-400">·</span>
               <span className="text-zinc-600">{isEn ? "Iteration: " : "V\xf2ng: "}{task.current_iteration}/{task.max_iterations}</span>
               {task.language && (
                 <>
-                  <span className="text-zinc-400">\xb7</span>
+                  <span className="text-zinc-400">·</span>
                   <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-100 text-zinc-800 border border-zinc-200">
                     {isEn ? 'Output: ' : 'Ng\xf4n ng\u1eef: '}{OUTPUT_LANG_NAMES[task.language]?.[language as 'en' | 'vi'] || task.language.toUpperCase()}
                   </span>
@@ -793,7 +786,7 @@ export default function WorkspacePage() {
                   : BASE_STAGES;
                 return currentStages.map((stage, index) => {
                   const state = stageState(currentStages, index, task.status, task.current_step);
-                  const Icon = state === 'done' ? CheckCircle2 : state === 'active' ? Activity : Circle;
+                  const Icon = state === 'done' ? CheckCircle2 : state === 'active' ? Activity : state === 'review' ? AlertTriangle : state === 'failed' ? XCircle : state === 'paused' ? Clock : Circle;
                   return (
                     <div
                       key={isEn ? stage.title_en : stage.title_vi}
@@ -804,7 +797,7 @@ export default function WorkspacePage() {
                       <span className={`absolute left-0 top-1.5 p-1 rounded-full border bg-white ${
                         state === 'done' ? 'text-emerald-500 border-emerald-200'
                         : state === 'active' ? 'text-blue-600 border-blue-300 shadow-sm shadow-blue-100'
-                        : 'text-zinc-300 border-zinc-200'
+                        : ['review', 'paused'].includes(state) ? 'text-amber-600 border-amber-300' : state === 'failed' ? 'text-red-600 border-red-300' : 'text-zinc-300 border-zinc-200'
                       }`}>
                         <Icon size={13} className={state === 'active' ? 'animate-pulse' : ''} />
                       </span>
@@ -820,6 +813,9 @@ export default function WorkspacePage() {
                           <span className="text-[11px] text-blue-600 font-medium">
                             {isEn ? 'In progress…' : 'Đang thực hiện…'}
                           </span>
+                        )}
+                        {['review', 'failed', 'cancelled', 'paused'].includes(state) && (
+                          <span className="text-[11px] text-amber-700 font-medium">{statusLabel(task.status, language)}</span>
                         )}
                         {state === 'done' && (
                           <span className="text-[11px] text-emerald-600 font-medium">
@@ -1230,22 +1226,22 @@ export default function WorkspacePage() {
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-zinc-50/60 print:overflow-visible print:h-auto print:p-0 print:m-0 print:bg-white print:block">
             {/* TAB 1: SCIENTIFIC PAPER */}
             {activeTab === 'report' && (
-              <div className={`w-full ${isWidePaper ? 'max-w-[1600px]' : 'max-w-7xl'} mx-auto space-y-6 transition-all duration-300 print:max-w-none print:m-0 print:p-0 print:space-y-0`}>
+              <div className={`paper-space w-full ${isWidePaper ? 'max-w-[1600px]' : 'max-w-7xl'} mx-auto space-y-6 transition-all duration-300 print:max-w-none print:m-0 print:p-0 print:space-y-0`}>
                 {['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(task.status) ? report?.research_task_id === params.id ? (
                   <div className="space-y-6 print:space-y-0">
                     {task.status !== 'COMPLETED' && (
                       <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800 flex items-center justify-between print:hidden">
-                        <span>{statusLabel(task.status, language)} — {isEn ? "Draft incomplete due to iteration or resource limits." : "Báo cáo chưa đầy đủ do giới hạn vòng lặp hoặc tài nguyên."}</span>
+                        <span>{statusLabel(task.status, language)} — {isEn ? "Review evidence, validation findings and remaining limitations before use." : "Cần rà soát bằng chứng, kết quả kiểm tra và các hạn chế trước khi sử dụng."}</span>
                         <Badge variant="outline">{task.status}</Badge>
                       </div>
                     )}
 
                     {/* Scientific Journal 2-Column Presentation */}
-                    <div className="flex flex-col xl:flex-row gap-8 items-start printable-paper-container">
+                    <div className="paper-layout-container printable-paper-container">
                       {/* Main Scientific Paper Document */}
-                      <article className="printable-article flex-1 min-w-0 bg-white rounded-2xl border border-zinc-200/90 shadow-sm overflow-hidden print:border-none print:shadow-none print:p-0 print:m-0 print:rounded-none">
+                      <article className="printable-article w-full min-w-0 bg-white rounded-2xl border border-zinc-200/90 shadow-sm overflow-hidden print:border-none print:shadow-none print:p-0 print:m-0 print:rounded-none">
                         {/* Journal Cover / Top Masthead */}
-                        <div className="border-b border-zinc-200 bg-linear-to-b from-zinc-50/80 to-white px-6 sm:px-10 md:px-12 pt-8 pb-7 print:px-0 print:pt-0 print:bg-none print:border-b-2 print:border-zinc-800">
+                        <div className="border-b border-zinc-200 bg-gradient-to-b from-zinc-50/80 to-white px-6 sm:px-10 md:px-12 pt-8 pb-7 print:px-0 print:pt-0 print:bg-none print:border-b-2 print:border-zinc-800">
                           {/* Academic Meta Topline */}
                           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-500 font-mono border-b border-zinc-100 pb-3 mb-5 print:border-zinc-300">
                             <div className="flex items-center gap-2">
@@ -1295,7 +1291,7 @@ export default function WorkspacePage() {
                                 title={isEn ? "Print full paper or Save as PDF" : "In toàn bộ bài báo hoặc Lưu thành PDF"}
                                 className="h-8 px-2.5 text-xs hover:bg-zinc-100 cursor-pointer"
                               >
-                                <Printer size={13} className="mr-1.5" /> In / PDF
+                                <Printer size={13} className="mr-1.5" /> {isEn ? 'Print / PDF' : 'In / PDF'}
                               </Button>
                               <Button
                                 variant="outline"
@@ -1420,34 +1416,14 @@ export default function WorkspacePage() {
                             </div>
                           </div>
 
-                          {/* Paper Abstract Box */}
-                          {task.description && (
-                            <div className="mt-5 p-4 sm:p-5 rounded-xl bg-zinc-50/80 border border-zinc-200/80 shadow-2xs print:bg-zinc-50 print:border print:border-zinc-300">
-                              <div className="text-xs font-bold text-zinc-900 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                <BookOpen size={14} className="text-zinc-700" /> {isEn ? "Abstract" : "Tóm tắt nghiên cứu (Abstract)"}
-                              </div>
-                              <p className="text-xs sm:text-sm text-zinc-750 leading-relaxed font-normal">
-                                {task.description}
-                              </p>
-                              {task.plan?.search_queries && task.plan.search_queries.length > 0 && (
-                                <div className="mt-3 pt-3 border-t border-zinc-200/60 flex flex-wrap items-center gap-1.5 text-xs">
-                                  <span className="font-semibold text-zinc-600 text-[11px] uppercase tracking-wide">{isEn ? "Keywords:" : "Từ khóa / Keywords:"}</span>
-                                  {task.plan.search_queries.slice(0, 6).map((q: string, idx: number) => (
-                                    <span key={idx} className="px-2 py-0.5 rounded-md bg-white border border-zinc-200 text-zinc-700 text-[11px] print:border-zinc-400">
-                                      {q}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          )}
+
                         </div>
 
                         <PublicationExport taskId={task.id} version={report.version_number} isEn={isEn} />
                         {/* Scientific Article Body rendered by MarkdownViewer with academicStyle */}
                         <div className="px-6 sm:px-10 md:px-12 py-8">
                           <PublicationArticle metadata={report.review_metadata}
-                            content={report.content_markdown}
+                            content={withoutRepeatedTitle(report.content_markdown, report.title)}
                             academicStyle={true}
                             onCitationClick={(label) => {
                               setHighlightedRef(label);
@@ -1459,20 +1435,20 @@ export default function WorkspacePage() {
                         {/* Publication Footer */}
                         <div className="border-t border-zinc-200 bg-zinc-50/70 px-6 sm:px-10 py-5 text-xs text-zinc-500 flex flex-wrap items-center justify-between gap-4 print:bg-white print:px-0">
                           <div>
-                            <div className="font-medium text-zinc-700">Synthia Multi-Agent Autonomous Research Platform</div>
+                            <div className="font-medium text-zinc-700">Synthia Multi-Agent Research Platform</div>
                             <div>{isEn ? "AI-assisted draft linked to source passages; claims still require scientific review." : "Bản thảo có AI hỗ trợ, gắn với trích đoạn nguồn; luận điểm vẫn cần kiểm chứng khoa học."}</div>
                           </div>
                           <div className="font-mono text-[11px] text-zinc-400">
-                            ID: {task.id} • Hash verification valid
+                            ID: {task.id} · v{report.version_number}
                           </div>
                         </div>
                       </article>
 
                       {/* Right Sidebar: Table of Contents & Article Metadata */}
-                      <div id="toc-sidebar" className="w-full xl:w-72 2xl:w-80 shrink-0 space-y-4 xl:sticky xl:top-4 self-start print:hidden">
+                      <div id="toc-sidebar" className="paper-toc w-full min-w-0 space-y-4 self-start print:hidden">
                         {/* Table of Contents */}
                         {(() => {
-                          const headings = extractHeadings(report.content_markdown);
+                          const headings = extractHeadings(withoutRepeatedTitle(report.content_markdown, report.title));
                           if (headings.length === 0) return null;
                           return (
                             <Card className="p-4 space-y-3 shadow-2xs">

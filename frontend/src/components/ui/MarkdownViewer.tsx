@@ -2,6 +2,8 @@
 
 import React from 'react';
 import { ExternalLink } from 'lucide-react';
+import { PaperMath } from './PaperMath';
+import { safePaperLink } from '../../lib/paperPresentation';
 
 export interface HeadingItem {
   title: string;
@@ -47,11 +49,14 @@ export interface MarkdownViewerProps {
 
 function renderInline(text: string, onCitationClick?: (citationRef: string) => void): React.ReactNode[] {
   // Regex to match inline elements: bold, italic, code, markdown link, and citation references like [1] or [src_01]
-  const regex = /(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|\[\d+\]|\[src_\d+\])/g;
+  const regex = /(`[^`]+`|(?<!\\)\$(?!\s)[^$\n]+(?<!\s)\$(?!\d)|\\\([^\n]*?\\\)|\*\*[^*]+\*\*|\*[^*]+\*|\[[^\]]+\]\([^)]+\)|\[\d+\]|\[src_\d+\])/g;
   const parts = text.split(regex);
 
   return parts.map((part, index) => {
     if (!part) return null;
+
+    if (part.startsWith('$') && part.endsWith('$')) return <PaperMath key={index} source={part.slice(1, -1)} />;
+    if (part.startsWith('\\(') && part.endsWith('\\)')) return <PaperMath key={index} source={part.slice(2, -2)} />;
 
     // Bold: **text**
     if (part.startsWith('**') && part.endsWith('**')) {
@@ -93,10 +98,12 @@ function renderInline(text: string, onCitationClick?: (citationRef: string) => v
     const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
     if (linkMatch) {
       const [, label, href] = linkMatch;
+      const safeHref = safePaperLink(href);
+      if (!safeHref) return <span key={index}>{label}</span>;
       return (
         <a
           key={index}
-          href={href}
+          href={safeHref}
           target="_blank"
           rel="noopener noreferrer"
           className="text-blue-600 hover:underline inline-flex items-center gap-0.5 font-medium"
@@ -107,7 +114,7 @@ function renderInline(text: string, onCitationClick?: (citationRef: string) => v
       );
     }
 
-    return <span key={index}>{part}</span>;
+    return <span key={index}>{part.replace(/\\\$/g, '$')}</span>;
   });
 }
 
@@ -207,6 +214,29 @@ export function MarkdownViewer({ content, onCitationClick, className = '', acade
     if (inCodeBlock) {
       codeBlockContent.push(rawLine);
       continue;
+    }
+
+    // Consume only a closed math block. Unclosed delimiters remain visible text.
+    const delimiter = line.startsWith('$$') ? '$$' : line.startsWith('\\[') ? '\\[' : null;
+    if (delimiter) {
+      const endDelimiter = delimiter === '$$' ? '$$' : '\\]';
+      const rest = line.slice(2);
+      let end = i;
+      let formula: string | null = rest.endsWith(endDelimiter) && rest.length >= 2 ? rest.slice(0, -2) : null;
+      if (formula === null) {
+        for (let j = i + 1; j < lines.length; j++) {
+          if (lines[j].trim().startsWith('```')) break;
+          if (lines[j].trim().endsWith(endDelimiter)) {
+            formula = [rest, ...lines.slice(i + 1, j), lines[j].trim().slice(0, -2)].join('\n');
+            end = j; break;
+          }
+        }
+      }
+      if (formula !== null) {
+        flushList(); flushTable();
+        elements.push(<PaperMath key={`math-${elements.length}`} source={formula} display />);
+        i = end; continue;
+      }
     }
 
     // Markdown Table row: | cell | cell |

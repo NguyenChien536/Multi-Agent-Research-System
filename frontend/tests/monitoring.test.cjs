@@ -14,6 +14,22 @@ function compile(file) {
 const labels = { exports: {} };
 vm.runInNewContext(compile('../src/lib/monitoring.ts'), labels);
 
+test('paper stages stop pulsing at terminal and paused states and preserve unknown steps', () => {
+  const { stageState } = labels.exports;
+  const stages = [{ steps: ['SUPERVISOR'], statuses: ['WAITING_APPROVAL'] },
+    { steps: ['METHODOLOGIST'], statuses: ['WAITING_USER_DATA'] },
+    { steps: ['WRITER', 'CRITIC', 'POST_PROCESSOR'], statuses: ['WRITING'] }];
+  for (const [status, expected] of [['NEEDS_REVIEW', 'review'], ['PARTIAL', 'review'], ['FAILED', 'failed'], ['CANCELLED', 'cancelled']]) {
+    assert.equal(stageState(stages, 2, status, 'POST_PROCESSOR'), expected);
+  }
+  assert.equal(stageState(stages, 2, 'RUNNING', 'Writer'), 'active');
+  assert.equal(stageState(stages, 0, 'RUNNING', 'Writer'), 'done');
+  assert.equal(stageState(stages, 1, 'WAITING_USER_DATA', 'Waiting for dataset'), 'paused');
+  assert.equal(stageState(stages, 0, 'WAITING_APPROVAL', 'SUPERVISOR'), 'paused');
+  for (const status of ['PENDING', 'QUEUED']) assert.equal(stageState(stages, 2, status, 'WRITER'), 'waiting');
+  for (const index of [0, 1, 2]) assert.equal(stageState(stages, index, 'NEEDS_REVIEW', 'BUDGET_LIMIT'), 'waiting');
+});
+
 test('stage names handle live and resumed workflow conventions without inventing a stage', () => {
   const m = labels.exports;
   assert.equal(m.stageKey('POST_PROCESSOR'), 'POST_PROCESSOR');
