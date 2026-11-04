@@ -133,3 +133,42 @@
   .paper-space { container-type: normal; }
   .paper-layout-container { display: block !important; }
 }
+
+/* ==========================================================================
+   ELEGANT CUSTOM SCROLLBARS
+   Replaces harsh OS scrollbars with subtle, modern semi-transparent bars
+   ========================================================================== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(161, 161, 170, 0.4) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(161, 161, 170, 0.35);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(113, 113, 122, 0.6);
+}
+
+/* Hide scrollbars completely on navigation tab bars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}

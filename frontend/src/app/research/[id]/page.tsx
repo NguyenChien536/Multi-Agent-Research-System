@@ -157,6 +157,20 @@ export default function WorkspacePage() {
   const [isWidePaper, setIsWidePaper] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
+
+  const handleToggleWidePaper = useCallback(() => {
+    setIsWidePaper(prev => {
+      const next = !prev;
+      if (next) {
+        setIsLeftSidebarCollapsed(true);
+        setIsRightSidebarCollapsed(true);
+      } else {
+        setIsLeftSidebarCollapsed(false);
+        setIsRightSidebarCollapsed(false);
+      }
+      return next;
+    });
+  }, []);
   const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false);
   const [isExportingDocx, setIsExportingDocx] = useState(false);
   const [activeTocSlug, setActiveTocSlug] = useState<string | null>(null);
@@ -919,13 +933,14 @@ export default function WorkspacePage() {
                     <Badge variant="outline">{task.citation_style}</Badge>
                   </div>
                   <div className="flex justify-between items-center pt-2 border-t border-zinc-100">
-                    <span className="text-zinc-500">{isEn ? "View width:" : "Khổ hiển thị:"}</span>
+                    <span className="text-zinc-500 text-xs">{isEn ? "Reading mode:" : "Chế độ đọc:"}</span>
                     <button
                       type="button"
-                      onClick={() => setIsWidePaper(!isWidePaper)}
-                      className="text-blue-600 hover:text-blue-800 font-semibold cursor-pointer text-xs hover:underline"
+                      onClick={handleToggleWidePaper}
+                      className="text-blue-600 hover:text-blue-800 font-semibold cursor-pointer text-xs hover:underline flex items-center gap-1"
                     >
-                      {isWidePaper ? (isEn ? "Standard (7xl)" : "Kích thước chuẩn (7xl)") : (isEn ? "Expanded (1600px)" : "Mở rộng (1600px)")}
+                      {isWidePaper ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+                      <span>{isWidePaper ? (isEn ? "Standard width" : "Thu gọn về chuẩn") : (isEn ? "Full width" : "Phóng to toàn màn hình ↗")}</span>
                     </button>
                   </div>
                 </div>
@@ -1270,7 +1285,7 @@ export default function WorkspacePage() {
             </div>
           )}
 
-                    <div id="research-tab-bar" className="flex border-b-2 border-zinc-200 px-4 sm:px-6 bg-zinc-50 shrink-0 gap-2 overflow-x-auto print:hidden">
+                    <div id="research-tab-bar" className="flex border-b-2 border-zinc-200 px-4 sm:px-6 bg-zinc-50 shrink-0 gap-2 overflow-x-auto no-scrollbar print:hidden">
             <button
               onClick={() => setActiveTab('report')}
               className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
@@ -1400,7 +1415,7 @@ export default function WorkspacePage() {
             {task.status === 'FAILED' && <ResearchErrorNotice isEn={isEn}
               error={runs.find(run => run.status === 'FAILED' && run.attempt_number === task.attempt_number)?.error_message} />}
             {activeTab === 'report' && (
-              <div className={`paper-space w-full ${isWidePaper ? 'max-w-[1600px]' : 'max-w-7xl'} mx-auto space-y-6 transition-all duration-300 print:max-w-none print:m-0 print:p-0 print:space-y-0`}>
+              <div className={`paper-space w-full ${isWidePaper ? 'max-w-6xl' : 'max-w-4xl'} mx-auto space-y-6 transition-all duration-300 print:max-w-none print:m-0 print:p-0 print:space-y-0`}>
                 {(['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(task.status) || report?.research_task_id === params.id) ? report?.research_task_id === params.id ? (
                   <div className="space-y-6 print:space-y-0">
                     <ManuscriptReadiness report={report} taskId={params.id} isEn={isEn} />
@@ -1478,6 +1493,15 @@ export default function WorkspacePage() {
                               >
                                 {isCopied ? <Check size={13} className="text-emerald-600 mr-1.5" /> : <Copy size={13} className="mr-1.5" />}
                                 {isCopied ? (isEn ? "Copied" : "Đã chép") : (isEn ? "Copy" : "Sao chép")}
+                              </Button>
+                              <Button
+                                variant={isWidePaper ? "primary" : "outline"}
+                                onClick={handleToggleWidePaper}
+                                title={isWidePaper ? (isEn ? "Exit full width reading (show sidebars)" : "Thu gọn về kích thước chuẩn (hiện thanh bên)") : (isEn ? "Full width reading mode (hide sidebars)" : "Phóng to toàn màn hình (ẩn thanh bên)")}
+                                className={`h-8 px-2.5 text-xs font-semibold cursor-pointer ${isWidePaper ? 'bg-zinc-900 text-white' : 'hover:bg-zinc-100'}`}
+                              >
+                                {isWidePaper ? <Minimize2 size={13} className="mr-1.5" /> : <Maximize2 size={13} className="mr-1.5" />}
+                                {isWidePaper ? (isEn ? "Standard" : "Thu gọn") : (isEn ? "Full Width" : "Phóng to")}
                               </Button>
 
                               {/* Download Formats Dropdown */}
@@ -2243,42 +2267,42 @@ export default function WorkspacePage() {
                               </div>
 
                               {/* Token and Cost Metrics */}
-                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs bg-zinc-50/70 p-2.5 rounded-lg border border-zinc-100">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-zinc-50/90 p-3.5 sm:p-4 rounded-xl border border-zinc-200/80">
                                 <div>
-                                  <span className="text-zinc-700 font-medium">Tokens Input:</span>
-                                  <div className="font-semibold text-zinc-800 font-mono">{run.input_tokens.toLocaleString()}</div>
+                                  <span className="text-sm text-zinc-600 font-medium block">Tokens Input:</span>
+                                  <div className="text-base sm:text-lg font-bold text-zinc-900 font-mono mt-0.5">{run.input_tokens.toLocaleString()}</div>
                                 </div>
                                 <div>
-                                  <span className="text-zinc-700 font-medium">Tokens Output:</span>
-                                  <div className="font-semibold text-zinc-800 font-mono">{run.output_tokens.toLocaleString()}</div>
+                                  <span className="text-sm text-zinc-600 font-medium block">Tokens Output:</span>
+                                  <div className="text-base sm:text-lg font-bold text-zinc-900 font-mono mt-0.5">{run.output_tokens.toLocaleString()}</div>
                                 </div>
                                 <div>
-                                  <span className="text-zinc-700 font-medium">{isEn ? "Total Tokens:" : "Tổng Tokens:"}</span>
-                                  <div className="font-semibold text-zinc-800 font-mono">{(run.input_tokens + run.output_tokens).toLocaleString()}</div>
+                                  <span className="text-sm text-zinc-600 font-medium block">{isEn ? "Total Tokens:" : "Tổng Tokens:"}</span>
+                                  <div className="text-base sm:text-lg font-bold text-zinc-900 font-mono mt-0.5">{(run.input_tokens + run.output_tokens).toLocaleString()}</div>
                                 </div>
                                 <div>
-                                  <span className="text-zinc-700 font-medium">{isEn ? "Estimated Cost:" : "Chi phí ước tính:"}</span>
-                                  <div className="font-semibold text-zinc-800 font-mono">${Number(run.estimated_cost).toFixed(6)}</div>
+                                  <span className="text-sm text-zinc-600 font-medium block">{isEn ? "Estimated Cost:" : "Chi phí ước tính:"}</span>
+                                  <div className="text-base sm:text-lg font-bold text-zinc-900 font-mono mt-0.5">${Number(run.estimated_cost).toFixed(6)}</div>
                                 </div>
                               </div>
 
                               {/* Summaries */}
                               {(Object.keys(run.input_summary || {}).length > 0 || Object.keys(run.output_summary || {}).length > 0) && (
-                                <div className="space-y-1.5 text-xs">
+                                <div className="space-y-2 pt-1 text-sm">
                                   {Object.keys(run.output_summary || {}).length > 0 && (
-                                    <div className="text-zinc-600">
-                                      <span className="font-semibold text-zinc-700">{isEn ? "Agent Output: " : "Kết quả đầu ra: "}</span>
-                                      <span className="font-mono text-zinc-800 bg-zinc-100 px-1.5 py-0.5 rounded">
+                                    <div className="text-zinc-700 flex flex-wrap items-center gap-2">
+                                      <span className="font-semibold text-zinc-800 text-sm">{isEn ? "Agent Output: " : "Kết quả đầu ra: "}</span>
+                                      <span className="font-mono text-sm text-zinc-900 bg-zinc-100 px-2 py-1 rounded-md border border-zinc-200/60">
                                         {JSON.stringify(run.output_summary)}
                                       </span>
                                     </div>
                                   )}
                                   {run.tool_calls && run.tool_calls.length > 0 && (
-                                    <div className="text-zinc-600">
-                                      <span className="font-semibold text-zinc-700">{isEn ? "Tools Executed: " : "Công cụ đã gọi: "}</span>
-                                      <span className="font-mono text-zinc-700">
+                                    <div className="text-zinc-700 flex flex-wrap items-center gap-2">
+                                      <span className="font-semibold text-zinc-800 text-sm">{isEn ? "Tools Executed: " : "Công cụ đã gọi: "}</span>
+                                      <span className="font-mono text-zinc-800 flex flex-wrap gap-1.5">
                                         {run.tool_calls.map((tc, idx) => (
-                                          <span key={idx} className="inline-block mr-1.5 px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-800 border border-zinc-200 font-mono text-xs font-medium">
+                                          <span key={idx} className="inline-block px-2 py-0.5 rounded-md bg-zinc-100 text-zinc-900 border border-zinc-200 font-mono text-xs sm:text-sm font-medium">
                                             {tc.tool || JSON.stringify(tc)}
                                           </span>
                                         ))}
