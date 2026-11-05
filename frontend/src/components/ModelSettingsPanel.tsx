@@ -7,6 +7,7 @@ import { ModelConnectionFields } from './ModelConnectionFields';
 const empty: ModelConnectionInput = {api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0};
 
 export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: string}) {
+  const [serverMode, setServerMode] = useState(false);
   const [scope, setScope] = useState<'default' | 'task'>('default');
   const [value, setValue] = useState<ModelConnectionInput | null>({...empty});
   const [savedRoot, setSavedRoot] = useState('');
@@ -23,6 +24,12 @@ export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: stri
     let active = true;
     setLoading(true); setError(''); setNotice('');
     const load = async () => {
+      const options = await api.tasks.modelConnectionOptions();
+      if (options.use_server_providers) {
+        if (active) setServerMode(true);
+        return;
+      }
+      if (active) setServerMode(false);
       let profile: Omit<ModelConnectionInput,'api_key'> | null | undefined;
       let key = false;
       let lock = false;
@@ -87,6 +94,7 @@ export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: stri
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to save default'); }
     finally { setBusy(false); }
   }
+  if (serverMode) return <p className="text-sm text-zinc-600">{isEn ? 'Using the server provider configured in .env.' : 'Đang sử dụng provider cấu hình trong .env của máy chủ.'}</p>;
   if (!signedIn) return <p className="text-sm">{isEn ? 'Sign in to save your API connection.' : 'Đăng nhập để lưu kết nối API.'}</p>;
   return <section className="space-y-3">
     <h4 className="font-semibold">{isEn ? 'API & model' : 'API & model'}</h4>

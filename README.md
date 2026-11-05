@@ -37,6 +37,8 @@ Kiểm hai môi trường đang chạy, không gọi provider: `python scripts/c
 
 ## Cấu hình và dùng
 
+**Chế độ demo tạm:** `USE_SERVER_PROVIDERS=true` trong env riêng của demo dùng provider/key máy chủ, bỏ qua key web khi chạy bài và ẩn form API trên web. Key người dùng đã lưu được giữ nguyên; chuyển cờ về false rồi cập nhật container để dùng lại. File env gốc được đồng bộ có chọn lọc vào env demo; không chép secret ký phiên hoặc database từ env gốc sang demo.
+
 1. Đăng nhập, mở **Settings → API & model**.
 2. Chọn dịch vụ, nhập key và model ID rồi lưu. Key được mã hóa trên server, không trả lại trình duyệt. Để trống key khi sửa model để giữ key cũ.
 3. Bài mới tự dùng bản sao cấu hình mặc định. Đổi mặc định không đổi các bài đã tạo.

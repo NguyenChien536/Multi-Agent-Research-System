@@ -50,8 +50,14 @@ router = APIRouter()
 @router.get("/model-connections/options")
 async def model_connection_options():
     """Public connection catalog only; credentials and research remain private."""
+    provider_keys = {'gemini': settings.GEMINI_API_KEY, 'openai': settings.OPENAI_API_KEY,
+                     'anthropic': settings.ANTHROPIC_API_KEY, 'groq': settings.GROQ_API_KEY}
+    provider = next((name.strip().lower() for name in settings.LLM_PROVIDER_PRIORITY.split(',')
+                     if provider_keys.get(name.strip().lower()) and 'your_' not in provider_keys[name.strip().lower()]), None)
     return {"protocol": "openai_compatible", "base_urls": [root.strip().rstrip('/')
-        for root in settings.CUSTOM_LLM_API_ROOTS.split(',') if root.strip()]}
+        for root in settings.CUSTOM_LLM_API_ROOTS.split(',') if root.strip()],
+        'use_server_providers': settings.USE_SERVER_PROVIDERS,
+        'server_provider_ready': provider is not None, 'server_provider': provider}
 
 @router.get('/model-connections/free-models')
 async def free_model_options():
@@ -136,8 +142,8 @@ async def create_research_task(
         require_plan_approval=task_in.require_plan_approval,
         status="PENDING",
     )
-    connection_input = task_in.llm_connection
-    if connection_input is None and task_in.use_saved_connection and current_user.model_connection:
+    connection_input = None if settings.USE_SERVER_PROVIDERS else task_in.llm_connection
+    if not settings.USE_SERVER_PROVIDERS and connection_input is None and task_in.use_saved_connection and current_user.model_connection:
         from app.services.user_model_settings import decode_input, settings_id
         try:
             connection_input = decode_input(current_user.model_connection, current_user.id, settings_id(current_user.id))

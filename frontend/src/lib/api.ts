@@ -99,7 +99,7 @@ export const api = {
       fetcher<{ status: string }>('/auth/me', { method: 'DELETE', body: JSON.stringify(data) }),
   },
   tasks: {
-    modelConnectionOptions: () => fetcher<{ protocol: string; base_urls: string[] }>('/research/model-connections/options'),
+    modelConnectionOptions: () => fetcher<{ protocol: string; base_urls: string[]; use_server_providers?: boolean; server_provider_ready?: boolean; server_provider?: string | null }>('/research/model-connections/options', {cache: 'no-store'}),
     freeModels: () => fetcher<{models: Array<{id:string;context_length:number;max_output_tokens:number | null}>}>('/research/model-connections/free-models'),
     revokeModelConnection: (id: string) => fetcher<void>(`/research/${id}/model-connection`, { method: 'DELETE' }),
     downloadArtifact: (id: string, artifactId: string) =>

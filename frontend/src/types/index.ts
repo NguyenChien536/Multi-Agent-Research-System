@@ -19,6 +19,7 @@ export interface ModelConnectionInput {
 }
 
 export interface ResearchTaskCreate {
+  use_saved_connection?: boolean;
   title: string;
   research_question: string;
   description?: string;

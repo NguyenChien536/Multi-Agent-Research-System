@@ -7,7 +7,7 @@ def settings_id(user_id):
     return 'settings:' + str(user_id)
 
 def decode_input(stored, owner_id, binding_id):
-    connection = open_connection({'_llm_connection': stored}, binding_id, owner_id)
+    connection = open_connection({'_llm_connection': stored}, binding_id, owner_id, respect_server_mode=False)
     if connection is None:
         return None
     return ModelConnectionInput(api_key=connection.api_key, **stored['profile'])

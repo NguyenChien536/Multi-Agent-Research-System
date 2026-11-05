@@ -40,6 +40,7 @@ export default function Home() {
   const [requirePlanApproval, setRequirePlanApproval] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [maxSources, setMaxSources] = useState(12);
+  const [useServerProviders, setUseServerProviders] = useState(false);
   const [savedModel, setSavedModel] = useState<string | null>(null);
   const [modelStatus, setModelStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
   const [showModelSettings, setShowModelSettings] = useState(false);
@@ -47,7 +48,15 @@ export default function Home() {
     let active = true;
     const refresh = () => {
       if (!api.auth.hasSession()) return;
-      api.settings.getModelConnection().then(result => {
+      api.tasks.modelConnectionOptions().then(options => {
+        if (active) setUseServerProviders(!!options.use_server_providers);
+        if (options.use_server_providers) {
+          if (active) { setSavedModel((options.server_provider || 'Server') + ' (.env)'); setModelStatus(options.server_provider_ready ? 'ready' : 'error'); }
+          return null;
+        }
+        return api.settings.getModelConnection();
+      }).then(result => {
+        if (!result) return;
         if (!active) return;
         const ready = !!result.connection?.has_key && !!result.connection.model;
         setSavedModel(ready ? result.connection!.model : null);
@@ -185,23 +194,29 @@ export default function Home() {
     try {
       // Recheck the server, not the possibly stale/loading summary on this page.
       let connection;
+      let serverMode = false;
       try {
-        connection = (await api.settings.getModelConnection()).connection;
+        const options = await api.tasks.modelConnectionOptions();
+        serverMode = !!options.use_server_providers;
+        setUseServerProviders(serverMode);
+        if (serverMode && !options.server_provider_ready) throw new Error('Server provider is not configured');
+        if (!serverMode) connection = (await api.settings.getModelConnection()).connection;
       } catch {
         setModelStatus('error');
         setError(isEn ? 'Unable to check your saved API connection. Try again; your question and files are preserved.' : 'Không kiểm tra được kết nối API đã lưu. Hãy thử lại; câu hỏi và file vẫn được giữ nguyên.');
         return;
       }
-      if (!connection?.has_key || !connection.model) {
+      if (!serverMode && (!connection?.has_key || !connection.model)) {
         setSavedModel(null);
         setModelStatus('missing');
         setError(isEn ? 'No default API/model is saved for this account. Choose API & model below, save the connection, then start research.' : 'Tài khoản này chưa có API/model mặc định. Chọn API & model bên dưới, lưu kết nối rồi bấm bắt đầu.');
         return;
       }
-      setSavedModel(connection.model);
+      setSavedModel(serverMode ? 'Provider (.env)' : connection!.model);
       setModelStatus('ready');
       setUploadStatus(isEn ? 'Creating research workspace...' : 'Đang khởi tạo không gian nghiên cứu...');
       const task = await api.tasks.create({
+        use_saved_connection: !serverMode,
         title: question.slice(0, 255),
         research_question: question,
         research_type: researchType,
@@ -489,7 +504,7 @@ export default function Home() {
                 {/* 1. Research Depth (Cards) */}
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-200 p-3 text-sm">
                   <span>{savedModel || (isEn ? 'Choose an API connection in Settings' : 'Chọn kết nối API trong Settings')}</span>
-                  <button type="button" className="font-medium underline" onClick={()=>setShowModelSettings(true)}>API & model</button>
+                  {!useServerProviders && <button type="button" className="font-medium underline" onClick={()=>setShowModelSettings(true)}>API & model</button>}
                 </div>
                 <label className="block space-y-1 text-xs font-medium text-zinc-700">
                   <span>{isEn ? 'Maximum sources to collect' : 'Số nguồn tối đa cần thu thập'}</span>
@@ -748,7 +763,7 @@ export default function Home() {
             <span>{modelStatus === 'loading' ? (isEn ? 'Loading API configuration…' : 'Đang tải cấu hình API…')
               : modelStatus === 'error' ? (isEn ? 'API configuration could not be checked' : 'Chưa kiểm tra được cấu hình API')
                 : savedModel || (isEn ? 'No default API/model saved' : 'Chưa có API/model mặc định')}</span>
-            <button type="button" onClick={() => setShowModelSettings(true)} className="font-medium underline">API & model</button>
+            {!useServerProviders && <button type="button" onClick={() => setShowModelSettings(true)} className="font-medium underline">API & model</button>}
           </div>}
 
           {showModelSettings && <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 p-4">

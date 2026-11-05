@@ -11,7 +11,7 @@ const compiled = ts.transpileModule(source, { compilerOptions: {
 } }).outputText;
 const saved = { connection: { model: 'test/free-model', has_key: true } };
 
-async function home({ initial = 'pending', connection = saved, signedIn = true } = {}) {
+async function home({ initial = 'pending', connection = saved, signedIn = true, serverMode = false } = {}) {
   const states = [], effects = [], dependencies = [], routes = [], created = [], started = [];
   const storage = new Map();
   let cursor = 0, calls = 0;
@@ -40,7 +40,7 @@ async function home({ initial = 'pending', connection = saved, signedIn = true }
       if (connection instanceof Error) throw connection;
       return connection;
     } },
-    tasks: { create: async value => { created.push(value); return { id: 'new-research' }; },
+    tasks: { modelConnectionOptions: async () => ({ use_server_providers: serverMode, server_provider_ready: true, server_provider: 'gemini' }), create: async value => { created.push(value); return { id: 'new-research' }; },
       start: async id => { started.push(id); }, uploadPdf: async () => {} },
   };
   const context = { exports: {}, window, sessionStorage, require: name => {
@@ -142,4 +142,13 @@ test('missing configuration and opening its dialog keep the selected PDF in the 
   assert.ok(text(h.render()).includes('retained-source.pdf'));
   assert.equal(h.created.length, 0);
   assert.equal(h.routes.length, 0);
+});
+
+
+test('server env mode starts without reading a saved web API key', async () => {
+  const h = await home({ serverMode: true, connection: new Error('web API configuration must be bypassed') });
+  await submit(h);
+  assert.equal(h.created.length, 1);
+  assert.equal(h.created[0].use_saved_connection, false);
+  assert.deepEqual(h.routes, ['/research/new-research']);
 });

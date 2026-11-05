@@ -31,7 +31,7 @@ async def test_api_catalog_is_public_even_with_an_expired_session_but_creation_i
         for headers in ({}, {'Authorization': 'Bearer expired-test-session'}):
             result = await client.get('/api/v1/research/model-connections/options', headers=headers)
             assert result.status_code == 200
-            assert set(result.json()) == {'protocol', 'base_urls'}
+            assert set(result.json()) == {'protocol', 'base_urls', 'use_server_providers', 'server_provider_ready', 'server_provider'}
             assert 'https://openrouter.ai/api/v1' in result.json()['base_urls']
         assert (await client.post('/api/v1/research', json={
             'title': 'Still requires login', 'research_question': 'Is research creation still private?'})).status_code == 401
