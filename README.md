@@ -2,21 +2,38 @@
 
 Hỗ trợ nghiên cứu từ câu hỏi/nguồn đến bản thảo bài báo có bằng chứng. Cấu hình API và model trên giao diện. Người nghiên cứu kiểm tra kết quả trước khi sử dụng hoặc công bố.
 
-## Chạy local
+## Hai môi trường local
 
-Cần Docker Desktop và Internet cho provider. Chỉ dùng **docker-compose.yml**, một Dockerfile cho mỗi ứng dụng; PostgreSQL/Redis không mở cổng ra ngoài, gateway chỉ bind loopback.
+Cần Docker Desktop. Một **docker-compose.yml** có hai profile, mỗi môi trường có database, Redis, file và secret riêng. Mỗi ứng dụng vẫn có một Dockerfile.
+
+| | Dev — lập trình | Prod local — demo |
+|---|---|---|
+| Web | http://127.0.0.1:3000 | http://127.0.0.1:3082 trên máy hiện tại |
+| Nhóm Docker | synthia-dev | synthia-workflow-check trên máy hiện tại |
+| Code | FE/API tự reload | Image cố định, không mount source |
+| Tài khoản và API key | Đăng ký, lưu Settings riêng | Giữ dữ liệu/cấu hình demo hiện có |
 
 ```powershell
-# Chỉ lần đầu trên máy mới; không ghi đè cấu hình đã có.
-.\scripts\release.ps1 -Action init
-# Build source đã commit, migration và đợi healthy.
+# Dev: init một lần, start dùng code đang sửa.
+.\scripts\dev.ps1 -Action init
+.\scripts\dev.ps1 -Action start
+.\scripts\dev.ps1 -Action status
+# Sau khi sửa agent/tool và các job dev đã xong:
+.\scripts\dev.ps1 -Action restart-worker
+.\scripts\dev.ps1 -Action stop
+
+# Demo: bật lại đúng image đã chốt, không build source đang sửa.
 .\scripts\release.ps1 -Action start
 .\scripts\release.ps1 -Action status
-# Dừng, giữ dữ liệu.
 .\scripts\release.ps1 -Action stop
+
+# Đưa code mới sang demo: test và commit trước.
+.\scripts\release.ps1 -Action deploy
 ```
 
-`status` in địa chỉ đang dùng. Máy mới mặc định http://127.0.0.1:3080; máy đã chuẩn bị demo dùng cấu hình active local. Không dùng `down -v` để cập nhật.
+Máy mới: chạy release `init`, rồi `deploy` một lần; sau đó dùng `start`. Máy hiện tại đã có bản demo, không init lại. `status` in URL thực tế; máy mới mặc định cổng 3080. Không dùng `down -v` hoặc chép secret/database demo sang dev. Database/Redis không publish cổng; dev API có docs tại http://127.0.0.1:8000/api/v1/docs.
+
+Kiểm hai môi trường đang chạy, không gọi provider: `python scripts/check-environments.py`. Script tạo tài khoản/bài tạm rồi tự xóa đúng dữ liệu thử nghiệm đó. Xem [hướng dẫn vận hành](docs/technical/local-release.md).
 
 ## Cấu hình và dùng
 

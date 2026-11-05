@@ -33,8 +33,34 @@ x-app: &app
       max-size: 10m
       max-file: '3'
 
+x-dev-app: &dev-app
+  <<: *app
+  image: synthia-backend-dev:local
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+    args:
+      VCS_REF: development
+  env_file:
+    - ${DEV_ENV_FILE:-.env.example}
+  environment:
+    ENVIRONMENT: development
+    DEBUG: 'false'
+    MOCK_PROVIDERS: 'false'
+    WATCHFILES_FORCE_POLLING: 'true'
+    DATABASE_URL: postgresql+asyncpg://research_user:${POSTGRES_PASSWORD:?required}@dev-postgres:5432/research_db
+    POSTGRES_SYNC_URL: postgresql://research_user:${POSTGRES_PASSWORD:?required}@dev-postgres:5432/research_db
+    REDIS_URL: redis://dev-redis:6379/0
+    ARTIFACTS_DIR: /app/storage/artifacts
+    BACKEND_CORS_ORIGINS: '["http://127.0.0.1:${DEV_UI_PORT:-3000}","http://localhost:${DEV_UI_PORT:-3000}"]'
+  volumes:
+    - dev_artifacts:/app/storage
+    - ./backend/app:/app/app:ro
+    - ./backend/alembic:/app/alembic:ro
+
 services:
   postgres:
+    profiles: [prod]
     image: pgvector/pgvector:pg16
     restart: unless-stopped
     environment:
@@ -52,6 +78,7 @@ services:
     logging: *logging
 
   redis:
+    profiles: [prod]
     image: redis:7-alpine
     restart: unless-stopped
     command: [redis-server, --appendonly, 'yes', --maxmemory, 256mb, --maxmemory-policy, noeviction]
@@ -65,6 +92,7 @@ services:
     logging: *logging
 
   migrate:
+    profiles: [prod]
     <<: *app
     command: [alembic, upgrade, head]
     restart: 'no'
@@ -73,6 +101,7 @@ services:
         condition: service_healthy
 
   backend:
+    profiles: [prod]
     <<: *app
     restart: unless-stopped
     command: [uvicorn, app.main:app, --host, 0.0.0.0, --port, '8000', --proxy-headers, --forwarded-allow-ips, '*']
@@ -90,6 +119,7 @@ services:
     mem_limit: 1g
 
   worker:
+    profiles: [prod]
     <<: *app
     restart: unless-stopped
     command: [sh, -c, 'python -m app.services.runtime_check && exec celery -A app.worker.celery_app worker --loglevel=info -E --concurrency=2']
@@ -107,6 +137,7 @@ services:
     mem_limit: 2g
 
   frontend:
+    profiles: [prod]
     image: synthia-frontend:${RELEASE_REVISION:-local}
     build:
       context: ./frontend
@@ -133,6 +164,7 @@ services:
     logging: *logging
 
   gateway:
+    profiles: [prod]
     image: nginx:1.28-alpine
     labels:
       org.opencontainers.image.revision: ${RELEASE_REVISION:-local}
@@ -159,7 +191,142 @@ services:
       retries: 12
     logging: *logging
 
+  dev-postgres:
+    profiles: [dev]
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: research_user
+      POSTGRES_DB: research_db
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes:
+      - dev_pgdata:/var/lib/postgresql/data
+      - ./docker/release/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U research_user -d research_db']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging: *logging
+
+  dev-redis:
+    profiles: [dev]
+    image: redis:7-alpine
+    command: [redis-server, --appendonly, 'yes', --maxmemory, 128mb, --maxmemory-policy, noeviction]
+    volumes:
+      - dev_redisdata:/data
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    logging: *logging
+
+  dev-migrate:
+    <<: *dev-app
+    profiles: [dev]
+    command: [alembic, upgrade, head]
+    restart: 'no'
+    depends_on:
+      dev-postgres:
+        condition: service_healthy
+
+  dev-backend:
+    <<: *dev-app
+    profiles: [dev]
+    command: [uvicorn, app.main:app, --host, 0.0.0.0, --port, '8000', --reload, --reload-dir, /app/app]
+    ports:
+      - '127.0.0.1:${DEV_API_PORT:-8000}:8000'
+    depends_on:
+      dev-migrate:
+        condition: service_completed_successfully
+      dev-redis:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/ready', timeout=5)"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 15s
+    mem_limit: 1g
+
+  dev-worker:
+    <<: *dev-app
+    profiles: [dev]
+    command: [sh, -c, 'python -m app.services.runtime_check && exec celery -A app.worker.celery_app worker --loglevel=info -E --concurrency=1']
+    stop_grace_period: 120s
+    depends_on:
+      dev-migrate:
+        condition: service_completed_successfully
+      dev-redis:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, 'celery -A app.worker.celery_app inspect ping -d "celery@$$HOSTNAME" --timeout 5 | grep -q pong']
+      interval: 15s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+    mem_limit: 2g
+
+  dev-frontend:
+    profiles: [dev]
+    image: synthia-frontend-dev:local
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: '1'
+      NEXT_PUBLIC_API_URL: /api/v1
+      WATCHPACK_POLLING: 'true'
+    volumes:
+      - ./frontend/src:/app/src:ro
+      - dev_next:/app/.next
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    init: true
+    depends_on:
+      dev-backend:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 15s
+      retries: 15
+      start_period: 20s
+    mem_limit: 1g
+    logging: *logging
+
+  dev-gateway:
+    profiles: [dev]
+    image: nginx:1.28-alpine
+    user: '101:101'
+    ports:
+      - '127.0.0.1:${DEV_UI_PORT:-3000}:8080'
+    volumes:
+      - ./docker/development/nginx.conf:/etc/nginx/nginx.conf:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    depends_on:
+      dev-frontend:
+        condition: service_healthy
+      dev-worker:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, 'http://127.0.0.1:8080/api/v1/ready']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    logging: *logging
+
 volumes:
   pgdata:
   redisdata:
   artifacts:
+  dev_pgdata:
+  dev_redisdata:
+  dev_artifacts:
+  dev_next:
