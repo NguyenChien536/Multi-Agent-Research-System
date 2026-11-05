@@ -155,7 +155,17 @@ Dùng VS Code để đọc/debug code; Antigravity khi muốn AI hỗ trợ sử
 
 ## 7. Trạng thái kiểm chứng
 
-Bản chốt ngày 05/11: commit `068b532876e8`, branch `feature/89-demo-workflow`, draft PR #109 vào develop. Backend **701 passed, 3 skipped**; frontend **34 passed**; CI **6/6 thành công**. Đây là kết quả của bản chốt, không thay kiểm thử sau thay đổi code mới.
+Bản Docker ngày **05/11/2026** chạy commit `b93e9064e46d`, branch `feature/89-demo-workflow`, draft PR #109 vào develop. Backend **800 passed** trên database test riêng; frontend **62 passed** và build production thành công; GitHub CI của bản code này **6/6 thành công**, gồm release runtime. Các dịch vụ demo tại cổng 3082 đều healthy. Các kết quả này kiểm tra phần mềm, không bảo đảm dịch vụ AI miễn phí luôn còn quota hoặc bài đạt chất lượng xuất bản.
+
+| Luồng kiểm tra thật ngày 05/11 | Kết quả quan sát | Dùng khi demo |
+|---|---|---|
+| Tính toán: `af6b2a7e-609b-4aa2-8a68-90238508045e` | Retry vượt qua Methodologist; không lặp Supervisor; upload 120 dòng CSV; runner hoàn tất; Writer, Critic và PostProcessor có bản ghi thành công; lưu bài 2.708 từ, 16 mục con, 4 citation records. Trạng thái cuối `NEEDS_REVIEW`, còn cảnh báo chất lượng. | Có thể mở bài và đối chiếu số liệu với routine; không gọi bản thảo là đã được peer review. |
+| Tổng quan: `e28c3164-4569-40f5-b278-785af5caeca6` | Tạo bài, dừng/duyệt kế hoạch và thu thập nguồn đã chạy. Writer bị provider 429/503; lần thử model hợp lệ khác vẫn 503. Chưa có bản thảo mới cho lượt này. | Chưa nghiệm thu lượt mới. Bản khôi phục cũ `54d2e57e-4732-4743-bba0-fd1b3f99cdd0` có thể minh họa đọc bài nhưng phải nói rõ Critic của lượt đó chưa hoàn tất. |
+| Khảo sát: `9a746583-dd18-4e2c-ab06-17b9af3c55f9` và `8d82d6c0-3538-46dd-825d-357a78a3b857` | Lượt đầu đã tạo protocol, dừng và giải phóng worker, nhận CSV 24 dòng synthetic cùng nguồn gốc, rồi resume; Writer chạm giới hạn. Lượt kiểm tra tiếp gặp 429/timeout ở provider. Chưa có bài khảo sát hoàn chỉnh được nghiệm thu. | Có thể minh họa protocol/upload/resume. Cần provider khả dụng để nghiệm thu đầu ra bài viết. |
+
+Đã sửa việc phản hồi từ chối rõ ràng (401/403/404/429) làm tiêu cả token đầu ra dự kiến dù không có completion. Lượt gọi vẫn được tính; không xóa lịch sử, đặt lại ngân sách, tăng quota hoặc bỏ pacing. Timeout và lỗi 5xx không xác định vẫn được ghi nhận thận trọng. Hàng đợi của model đầu đầy không chặn việc kiểm tra model dự phòng đã cấu hình. Các lượt cũ giữ nguyên ledger và bản ghi lỗi.
+
+Đã kiểm tra Settings lấy danh sách model bằng key lưu kín và thử sinh JSON thật qua kết nối cá nhân. Đã sửa tên model lưu sai `gemini-flash3.5` thành `gemini-3.5-flash`, giữ nguyên key. API Google trả tên dạng `models/...`; danh sách mới bỏ tiền tố này và lọc các model chuyên dụng không phù hợp chat. Key đúng không bảo đảm model còn quota; tải danh sách thành công chưa chứng minh chạy được một bài dài. Giá hiển thị là ước tính, không phải xác nhận đã thu tiền.
 
 Bộ fixture đã kiểm offline: routine baseline/Ridge, chạy lại cùng cấu hình và intake khảo sát. Tạo lại bằng môi trường Python dự án, không gọi provider:
 
@@ -163,7 +173,7 @@ Bộ fixture đã kiểm offline: routine baseline/Ridge, chạy lại cùng c�
 .\.venv\Scripts\python.exe scripts/prepare-demo.py
 ~~~
 
-**Ba lượt nghiệm thu mới gần nhất bị 429 tại Supervisor, chưa tạo được bài mới được nghiệm thu.** Số test và bảng offline không chứng minh pipeline UI/provider đã chạy trọn ba bài hoặc đạt chất lượng xuất bản/Q1. Chỉ gọi bài demo sẵn sàng sau khi đã mở và kiểm đầu ra thật.
+**Chưa nghiệm thu trọn đầu ra mới của cả ba luồng:** bài tính toán đã có bản thảo, hai luồng còn lại còn bị dịch vụ AI chặn. Có thể nhập kết nối khác trong Settings, áp dụng cho **Bài hiện tại**, rồi chạy lại bước lỗi. Không retry liên tục khi provider hết quota. Số test và bảng offline không chứng minh bài đạt chất lượng xuất bản/Q1.
 
 Sau buổi trình bày, dừng dịch vụ và giữ dữ liệu:
 
