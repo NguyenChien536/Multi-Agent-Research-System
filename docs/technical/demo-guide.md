@@ -40,7 +40,13 @@ Lệnh `start` chỉ bật image đã chốt, không build source đang sửa. �
 
 Đăng nhập → **Settings → API & model → Mặc định cho bài mới** → chọn dịch vụ, nhập key và model → **Lưu kết nối**. Không quay màn hình lúc nhập key. Bài mới tự dùng cấu hình đã lưu. Lưu thành công chưa chứng minh provider còn quota.
 
-Đổi một bài hiện có qua Settings của bài khi bài không chạy/không ở hàng đợi. Đổi mặc định không tự đổi các bài cũ và không đặt lại lượng sử dụng đã ghi. API miễn phí vẫn có giới hạn tốc độ/hạn mức.
+Đổi một bài hiện có bằng **API & model** ở đầu workspace → **Bài hiện tại**, khi bài không chạy/không ở hàng đợi. Chọn dịch vụ, nhập key → **Tải danh sách model** → chọn model → **Lưu kết nối**. Key đã lưu được giữ kín; để trống để giữ lại. Một số dịch vụ không cung cấp danh sách thì dùng **Nhập tên model thủ công**. Tải danh sách chưa chứng minh model còn quota hoặc hỗ trợ mọi dạng đầu ra. Với OpenRouter, bộ lọc miễn phí bật mặc định; dịch vụ khác có chính sách giá riêng.
+
+Kết nối riêng được ưu tiên hơn provider máy chủ. Nếu kết nối riêng lỗi, hệ thống không tự chuyển sang dùng tín dụng máy chủ. Đổi mặc định chỉ áp dụng cho bài mới; bài cũ phải chọn **Dùng cấu hình mặc định** trong **Bài hiện tại**. Đổi model không đặt lại lượng sử dụng. API miễn phí vẫn có giới hạn tốc độ/hạn mức.
+
+**Thao tác khi chạy:** thanh đầu workspace luôn có **Dừng nghiên cứu** khi đang chạy/chờ; bài lỗi có **Chạy lại nghiên cứu** để tiếp tục checkpoint của bước lỗi, giữ các bước đã hoàn tất và ngân sách đã dùng. Lỗi và bước lỗi hiện ngay trong khung đỏ. Lỗi 503 là provider quá tải, khác với key bị từ chối (401/403), model không khả dụng (404) và hết hạn mức (429). Retry tự động cho lỗi 502/503/504 có giới hạn và vẫn chịu kiểm soát ngân sách. Nếu Writer đã lưu bản thảo trước khi Critic gặp lỗi provider, bản thảo có thể được giao dưới trạng thái **Cần rà soát**, không được ghi là kiểm tra thành công.
+
+Nút **Tiến trình / Pipeline** ở đầu trang bật lại cột bên phải sau khi thu gọn. **Inspect Error** trong Monitor chuyển tới lịch sử lỗi trên chính trang Monitor. Khi bài tính toán chờ dữ liệu, ô chọn CSV xuất hiện ngay trong workspace; upload hợp lệ tự tiếp tục, không cần bấm chạy lại. Bài khảo sát vẫn cần file và thông tin nguồn gốc rồi bấm **Tiếp tục**.
 
 **Sửa hồ sơ:** Settings → **Thông tin cá nhân → Chỉnh sửa**. Bấm **Lưu thay đổi** mới cập nhật; **Hủy** bỏ các thay đổi chưa lưu. Đổi email cần mật khẩu hiện tại; lần đăng nhập sau dùng email mới. Thanh bên cập nhật ngay sau khi lưu. **Xóa tài khoản** cần mật khẩu và nhập `DELETE`; chỉ thử bằng tài khoản demo riêng vì xác nhận sẽ khóa tài khoản ngay và xóa bài/file ở nền.
 

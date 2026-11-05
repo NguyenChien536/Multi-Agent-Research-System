@@ -48,19 +48,13 @@ export default function Home() {
     let active = true;
     const refresh = () => {
       if (!api.auth.hasSession()) return;
-      api.tasks.modelConnectionOptions().then(options => {
-        if (active) setUseServerProviders(!!options.use_server_providers);
-        if (options.use_server_providers) {
-          if (active) { setSavedModel((options.server_provider || 'Server') + ' (.env)'); setModelStatus(options.server_provider_ready ? 'ready' : 'error'); }
-          return null;
-        }
-        return api.settings.getModelConnection();
-      }).then(result => {
-        if (!result) return;
+      Promise.all([api.tasks.modelConnectionOptions(), api.settings.getModelConnection()]).then(([options, result]) => {
         if (!active) return;
         const ready = !!result.connection?.has_key && !!result.connection.model;
-        setSavedModel(ready ? result.connection!.model : null);
-        setModelStatus(ready ? 'ready' : 'missing');
+        const server = !ready && !!options.use_server_providers;
+        setUseServerProviders(server);
+        setSavedModel(ready ? result.connection!.model : server ? (options.server_provider || 'Server') + ' (.env)' : null);
+        setModelStatus(ready || (server && options.server_provider_ready) ? 'ready' : 'missing');
       }).catch(() => { if (active) setModelStatus('error'); });
     };
     refresh();
@@ -197,10 +191,10 @@ export default function Home() {
       let serverMode = false;
       try {
         const options = await api.tasks.modelConnectionOptions();
-        serverMode = !!options.use_server_providers;
+        connection = (await api.settings.getModelConnection()).connection;
+        serverMode = !!options.use_server_providers && !connection?.has_key;
         setUseServerProviders(serverMode);
         if (serverMode && !options.server_provider_ready) throw new Error('Server provider is not configured');
-        if (!serverMode) connection = (await api.settings.getModelConnection()).connection;
       } catch {
         setModelStatus('error');
         setError(isEn ? 'Unable to check your saved API connection. Try again; your question and files are preserved.' : 'Không kiểm tra được kết nối API đã lưu. Hãy thử lại; câu hỏi và file vẫn được giữ nguyên.');

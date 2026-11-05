@@ -145,10 +145,17 @@ test('missing configuration and opening its dialog keep the selected PDF in the 
 });
 
 
-test('server env mode starts without reading a saved web API key', async () => {
-  const h = await home({ serverMode: true, connection: new Error('web API configuration must be bypassed') });
+test('server env mode starts when no personal connection is saved', async () => {
+  const h = await home({ serverMode: true, connection: { connection: null } });
   await submit(h);
   assert.equal(h.created.length, 1);
   assert.equal(h.created[0].use_saved_connection, false);
+  assert.deepEqual(h.routes, ['/research/new-research']);
+});
+
+test('a saved personal connection takes priority over the server default', async () => {
+  const h = await home({ serverMode: true });
+  await submit(h);
+  assert.equal(h.created[0].use_saved_connection, true);
   assert.deepEqual(h.routes, ['/research/new-research']);
 });

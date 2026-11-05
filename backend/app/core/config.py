@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     MOCK_PROVIDERS: bool = False  # If True, bypass real LLM/Search API calls for tests
-    USE_SERVER_PROVIDERS: bool = False  # Temporary local demo mode: use env providers instead of BYOK.
+    USE_SERVER_PROVIDERS: bool = False  # Allow env provider default; explicit personal connections take priority.
 
     # Security
     APP_SECRET_KEY: str = "development-secret-key-replace-in-production-32-chars-min"

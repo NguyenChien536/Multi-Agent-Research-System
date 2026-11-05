@@ -36,6 +36,34 @@ test('protected auth/me and task requests both include the session token', async
   for (const request of c.requests) assert.equal(request.headers.get('Authorization'), 'Bearer test-token');
 });
 
+test('retry uses its owning article and preserves the session', async () => {
+  const c=client();
+  await c.api.tasks.retry('failed-article');
+  assert.ok(c.requests[0].url.endsWith('/research/failed-article/retry'));
+  assert.equal(c.requests[0].method,'POST');
+  assert.equal(c.requests[0].headers.get('Authorization'),'Bearer test-token');
+});
+
+test('model discovery sends credentials only in the authenticated POST body',async()=>{
+  const c=client();
+  const payload={base_url:'https://api.groq.com/openai/v1',api_key:'fake-catalog-key',task_id:'owned-task'};
+  await c.api.settings.discoverModels(payload);
+  assert.ok(c.requests[0].url.endsWith('/settings/model-connection/models'));
+  assert.ok(!c.requests[0].url.includes(payload.api_key));
+  assert.equal(c.requests[0].method,'POST');
+  assert.equal(c.requests[0].headers.get('Authorization'),'Bearer test-token');
+  assert.deepEqual(JSON.parse(c.requests[0].body),payload);
+});
+
+test('dataset upload shares session expiry handling', async()=>{
+  const c=client({status:401,response:{detail:'Session expired'}});
+  await assert.rejects(c.api.tasks.uploadDataset('owned-task',new Blob(['target\n1'])));
+  assert.ok(c.requests[0].url.endsWith('/research/owned-task/dataset'));
+  assert.ok(c.requests[0].body instanceof FormData);
+  assert.equal(c.storage.get('synthia_access_token'),undefined);
+  assert.equal(c.redirects.length,1);
+});
+
 test('profile edits use the authenticated current-user route and preserve the session', async () => {
   const updated = { id: 'owner-id', username: 'new-name', email: 'new@example.com', full_name: 'New Name' };
   const c = client({ response: updated });

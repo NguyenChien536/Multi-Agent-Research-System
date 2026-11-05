@@ -1,76 +1,74 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/lib/api';
 import type { ModelConnectionInput } from '@/types';
 
 interface ProviderMeta {
   label: string;
-  defaultModel: string;
   placeholder: string;
 }
 
 const KNOWN_PROVIDERS: Record<string, ProviderMeta> = {
   'https://openrouter.ai/api/v1': {
     label: 'OpenRouter (openrouter.ai)',
-    defaultModel: 'meta-llama/llama-3.3-70b-instruct:free',
-    placeholder: 'meta-llama/llama-3.3-70b-instruct:free',
+    placeholder: 'openrouter/free',
   },
   'https://api.groq.com/openai/v1': {
     label: 'Groq Cloud (api.groq.com)',
-    defaultModel: 'llama-3.3-70b-versatile',
     placeholder: 'llama-3.3-70b-versatile',
   },
   'https://generativelanguage.googleapis.com/v1beta/openai': {
     label: 'Google Gemini (OpenAI-compatible)',
-    defaultModel: 'gemini-2.5-flash',
     placeholder: 'gemini-2.5-flash',
   },
   'https://api.deepseek.com/v1': {
     label: 'DeepSeek (api.deepseek.com)',
-    defaultModel: 'deepseek-chat',
     placeholder: 'deepseek-chat',
   },
   'https://api.mistral.ai/v1': {
     label: 'Mistral AI (api.mistral.ai)',
-    defaultModel: 'mistral-small-latest',
     placeholder: 'mistral-small-latest',
   },
   'https://api.openai.com/v1': {
     label: 'OpenAI (api.openai.com)',
-    defaultModel: 'gpt-4o-mini',
     placeholder: 'gpt-4o-mini',
   },
   'https://api.together.xyz/v1': {
     label: 'Together AI (api.together.xyz)',
-    defaultModel: 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
     placeholder: 'meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo',
   },
   'https://api.cerebras.ai/v1': {
     label: 'Cerebras (api.cerebras.ai)',
-    defaultModel: 'llama3.1-70b',
     placeholder: 'llama3.1-70b',
   },
 };
 
-export function ModelConnectionFields({ value, onChange, isEn, keyRequired = true, hideToggle = false }: {
+export function ModelConnectionFields({ value, onChange, isEn, keyRequired = true, hideToggle = false, taskId }: {
   value: ModelConnectionInput | null;
   onChange: (value: ModelConnectionInput | null) => void;
   isEn: boolean;
   keyRequired?: boolean;
   hideToggle?: boolean;
+  taskId?: string;
 }) {
   const [roots, setRoots] = useState<string[]>([]);
   const [loadError, setLoadError] = useState(false);
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState<string[]>([]);
+  const [catalogBusy, setCatalogBusy] = useState(false);
+  const [catalogError, setCatalogError] = useState('');
+  const [catalogChecked, setCatalogChecked] = useState(false);
+  const [manualModel, setManualModel] = useState(false);
+  const [freeOnly, setFreeOnly] = useState(true);
+  const catalogRequest = useRef({sequence: 0});
   useEffect(() => {
-    if (value?.base_url !== 'https://openrouter.ai/api/v1') return;
-    let active = true;
-    api.tasks.freeModels().then(result => { if(active) setModels(result.models.map(model=>model.id)); }).catch(()=>{});
-    return ()=>{ active=false; };
-  }, [value?.base_url]);
+    const tracker = catalogRequest.current;
+    tracker.sequence++;
+    setModels([]); setCatalogChecked(false); setCatalogError(''); setCatalogBusy(false);
+    return () => { tracker.sequence++; };
+  }, [value?.base_url, value?.api_key, taskId, freeOnly]);
   useEffect(() => {
     let active = true;
     setLoadError(false);
@@ -83,11 +81,30 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
   const update = (patch: Partial<ModelConnectionInput>) => { if (value) onChange({ ...value, ...patch }); };
   const inputClass = 'mt-1 w-full rounded-lg border border-zinc-200 bg-white p-2 text-sm outline-none focus:ring-2 focus:ring-zinc-400';
 
+  async function loadModels() {
+    if (!value?.base_url) return;
+    const request = ++catalogRequest.current.sequence;
+    setCatalogBusy(true); setCatalogError(''); setCatalogChecked(false);
+    try {
+      const result = await api.settings.discoverModels({base_url: value.base_url,
+        api_key: value.api_key || undefined, task_id: taskId, free_only: freeOnly});
+      if (request !== catalogRequest.current.sequence) return;
+      const names = result.models.map(model => model.id);
+      setModels(names); setCatalogChecked(true); setManualModel(false);
+      // Keep an explicit user choice. Never silently pick a paid model.
+      if (!value.model && value.base_url === 'https://openrouter.ai/api/v1' && freeOnly) update({model:'openrouter/free'});
+    } catch (err) {
+      if (request === catalogRequest.current.sequence) setCatalogError(err instanceof Error ? err.message : (isEn ? 'Unable to load models.' : 'Không tải được model.'));
+    } finally { if (request === catalogRequest.current.sequence) setCatalogBusy(false); }
+  }
+
   const handleBaseUrlChange = (newUrl: string) => {
     update({
       base_url: newUrl,
       api_key: '',
       model: newUrl === 'https://openrouter.ai/api/v1' ? 'openrouter/free' : '',
+      input_price_per_million: 0,
+      output_price_per_million: 0,
     });
   };
 
@@ -122,14 +139,23 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
             placeholder={keyRequired ? '' : (isEn ? 'Saved securely · leave blank to keep' : 'Đã lưu an toàn · để trống để giữ key')}
             spellCheck={false} value={value.api_key} onChange={event => update({ api_key: event.target.value })} />
         </label>
-        <label className="block text-xs font-medium">{isEn ? 'Exact model ID' : 'Tên model chính xác'}
-          <input className={inputClass} required maxLength={200} autoComplete="off" spellCheck={false}
-            list={value.base_url === 'https://openrouter.ai/api/v1' ? 'free-model-options' : undefined}
-            placeholder={activePlaceholder}
-            value={value.model} onChange={event => update({ model: event.target.value.trim() })} />
-          <datalist id="free-model-options"><option value="openrouter/free" />{models.map(model=><option key={model} value={model} />)}</datalist>
+        <label className="block text-xs font-medium">{isEn ? 'Model' : 'Model'}
+          {!manualModel ? <select className={inputClass} required value={value.model} onChange={event => update({model:event.target.value})}>
+            <option value="">{isEn ? 'Load models, then choose' : 'Tải danh sách rồi chọn model'}</option>
+            {value.model && !models.includes(value.model) && <option value={value.model}>{value.model}</option>}
+            {models.map(model => <option key={model} value={model}>{model}</option>)}
+          </select> : <input className={inputClass} required maxLength={200} autoComplete="off" spellCheck={false}
+            placeholder={activePlaceholder} value={value.model} onChange={event => update({model:event.target.value.trim()})} />}
         </label>
       </div>
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <button type="button" disabled={catalogBusy || !value.base_url || (keyRequired && !value.api_key)} onClick={loadModels}
+          className="rounded-lg border px-3 py-2 font-medium disabled:opacity-40">{catalogBusy ? (isEn ? 'Loading…' : 'Đang tải…') : (isEn ? 'Load available models' : 'Tải danh sách model')}</button>
+        <button type="button" className="underline" onClick={()=>setManualModel(v=>!v)}>{manualModel ? (isEn ? 'Choose from list' : 'Chọn từ danh sách') : (isEn ? 'Enter model ID manually' : 'Nhập tên model thủ công')}</button>
+        {value.base_url === 'https://openrouter.ai/api/v1' && <label className="flex items-center gap-1"><input type="checkbox" checked={freeOnly} onChange={event=>setFreeOnly(event.target.checked)} />{isEn ? 'Free models only' : 'Chỉ model miễn phí'}</label>}
+      </div>
+      {catalogError && <p role="alert" className="text-sm text-red-700">{catalogError}</p>}
+      {catalogChecked && <p role="status" className="text-xs text-emerald-700">{isEn ? 'Model list loaded. No text was generated. Quota and generation access may differ by model.' : 'Đã tải danh sách; chưa sinh văn bản. Quota và quyền tạo nội dung phụ thuộc model.'}</p>}
       <details className="text-sm text-zinc-700">
         <summary className="cursor-pointer">{isEn ? 'Model options' : 'Tùy chọn model'}</summary>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">

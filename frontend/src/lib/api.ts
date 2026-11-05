@@ -67,6 +67,8 @@ async function fetcher<T>(endpoint: string, options?: RequestInit, responseKind:
 
 export const api = {
   settings: {
+    discoverModels: (value: {base_url: string; api_key?: string; task_id?: string; free_only?: boolean}) =>
+      fetcher<{models: Array<{id: string; free: boolean | null}>; check: string; generation_calls: number}>('/settings/model-connection/models', {method: 'POST', body: JSON.stringify(value)}),
     getModelConnection: () => fetcher<{connection: (Omit<import('../types').ModelConnectionInput, 'api_key'> & {has_key: boolean}) | null}>('/settings/model-connection', { cache: 'no-store' }),
     saveModelConnection: (value: Omit<import('../types').ModelConnectionInput, 'api_key'> & {api_key?: string}) =>
       fetcher<{connection: Omit<import('../types').ModelConnectionInput, 'api_key'> & {has_key: boolean}}>('/settings/model-connection', {method: 'PUT', body: JSON.stringify(value)}),
@@ -99,6 +101,7 @@ export const api = {
       fetcher<{ status: string }>('/auth/me', { method: 'DELETE', body: JSON.stringify(data) }),
   },
   tasks: {
+    retry: (id: string) => fetcher<unknown>(`/research/${id}/retry`, {method:'POST'}),
     modelConnectionOptions: () => fetcher<{ protocol: string; base_urls: string[]; use_server_providers?: boolean; server_provider_ready?: boolean; server_provider?: string | null }>('/research/model-connections/options', {cache: 'no-store'}),
     freeModels: () => fetcher<{models: Array<{id:string;context_length:number;max_output_tokens:number | null}>}>('/research/model-connections/free-models'),
     revokeModelConnection: (id: string) => fetcher<void>(`/research/${id}/model-connection`, { method: 'DELETE' }),
@@ -252,23 +255,9 @@ export const api = {
       fetcher<ExperimentJournalEntryResponse[]>(`/research/${id}/journal`),
 
     uploadDataset: async (id: string, file: File) => {
-      const token = getAccessToken();
-      const headers = new Headers();
-      if (token) headers.set('Authorization', `Bearer ${token}`);
-
       const formData = new FormData();
       formData.append('file', file);
-
-      const response = await fetch(`${API_BASE_URL}/research/${id}/dataset`, {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new APIError(response.status, data || { detail: 'Upload dataset failed' });
-      }
-      return data as DatasetUploadResponse;
+      return fetcher<DatasetUploadResponse>(`/research/${id}/dataset`, {method:'POST', body:formData});
     },
   }
 };

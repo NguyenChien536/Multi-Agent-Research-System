@@ -41,6 +41,8 @@ class ResearchTaskResponse(BaseModel):
     language: str
     status: str
     current_step: Optional[str] = None
+    latest_error: Optional[str] = None
+    failed_agent: Optional[str] = None
     require_plan_approval: bool
     max_sources: int
     max_iterations: int

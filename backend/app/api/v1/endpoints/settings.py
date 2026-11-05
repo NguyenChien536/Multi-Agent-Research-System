@@ -8,10 +8,40 @@ from app.core.database import get_db
 from app.models.user import User
 from app.models.task import ResearchTask
 
-from app.schemas.model_settings import ConnectionUpdate
+from app.schemas.model_settings import ConnectionUpdate, ModelCatalogRequest
 from app.services.user_model_settings import settings_id, decode_input, public_profile, updated_input, protect
 
 router = APIRouter()
+
+
+@router.post('/model-connection/models')
+async def list_connection_models(payload: ModelCatalogRequest, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    from app.services.model_catalog import discover_models
+    from app.services.model_connection import validate_api_root
+    try:
+        root = validate_api_root(payload.base_url)
+    except ValueError:
+        raise HTTPException(422, 'Choose a trusted API service') from None
+    stored, binding = user.model_connection, settings_id(user.id)
+    if payload.task_id:
+        task = await db.scalar(select(ResearchTask).where(ResearchTask.id == payload.task_id,
+            ResearchTask.user_id == user.id, ResearchTask.status != 'DELETING'))
+        if task is None:
+            raise HTTPException(404, 'Research task not found')
+        stored, binding = (task.budget_config or {}).get('_llm_connection'), task.id
+    if payload.api_key is not None:
+        key = payload.api_key.get_secret_value()
+        if key != key.strip() or any(ord(c) < 33 or ord(c) > 126 for c in key):
+            raise HTTPException(422, 'API key must not contain spaces or control characters')
+    else:
+        try:
+            previous = decode_input(stored, user.id, binding)
+        except ValueError:
+            raise HTTPException(409, 'Enter a new API key to restore this connection') from None
+        if previous is None or previous.base_url != root:
+            raise HTTPException(400, 'Enter an API key for the selected service first')
+        key = previous.api_key.get_secret_value()
+    return await discover_models(root, key, payload.free_only)
 
 @router.get('/model-connection')
 async def get_connection(user: User = Depends(get_current_user)):

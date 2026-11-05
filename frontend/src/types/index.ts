@@ -46,6 +46,8 @@ export interface ResearchTaskResponse {
   language: string;
   status: string; // PENDING, QUEUED, PLANNING, WAITING_APPROVAL, WAITING_USER_DATA, RESEARCHING, etc.
   current_step?: string | null;
+  latest_error?: string | null;
+  failed_agent?: string | null;
   require_plan_approval: boolean;
   max_sources: number;
   max_iterations: number;

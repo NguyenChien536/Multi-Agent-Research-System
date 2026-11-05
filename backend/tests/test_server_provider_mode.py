@@ -13,19 +13,21 @@ from app.services.user_model_settings import decode_input, settings_id
 from tests.test_provider_budget import create_running_task, delete_test_user
 
 
-def test_server_mode_bypasses_stored_connections_without_destroying_them(monkeypatch):
+def test_personal_connection_wins_and_invalid_key_never_silently_uses_server(monkeypatch):
     owner, task = uuid.uuid4(), uuid.uuid4()
     value = ModelConnectionInput(api_key='fake-private-user-key', base_url='https://api.groq.com/openai/v1',
                                  model='test-model', input_price_per_million=0, output_price_per_million=0)
     stored = seal_connection(value, task, owner)
     monkeypatch.setattr(settings, 'USE_SERVER_PROVIDERS', True)
-    assert open_connection({'_llm_connection': stored}, task, owner) is None
-    assert open_connection({'_llm_connection': {'secret': 'broken-old-key'}}, task, owner) is None
+    assert open_connection({'_llm_connection': stored}, task, owner).model == 'test-model'
+    assert open_connection({}, task, owner) is None
+    with pytest.raises(ValueError):
+        open_connection({'_llm_connection': {'secret': 'broken-old-key'}}, task, owner)
     assert decode_input(stored, owner, task).api_key.get_secret_value() == 'fake-private-user-key'
 
 
 @pytest.mark.asyncio
-async def test_server_mode_task_creation_ignores_web_keys_and_never_exposes_server_secret(monkeypatch):
+async def test_server_mode_preserves_personal_choice_and_explicit_server_fallback(monkeypatch):
     _, uid = await create_running_task()
     value = ModelConnectionInput(api_key='fake-saved-key', base_url='https://api.groq.com/openai/v1',
                                  model='old-user-model', input_price_per_million=0, output_price_per_million=0)
@@ -44,6 +46,9 @@ async def test_server_mode_task_creation_ignores_web_keys_and_never_exposes_serv
             assert 'fake-server-secret' not in options.text
             result = await client.post('/api/v1/research', headers={'Authorization': 'Bearer ' + create_access_token(uid)},
                                        json={'title': 'Server provider demo', 'research_question': 'Can this run use the server without web API setup?'})
+            assert result.status_code == 201 and result.json()['model_connection']['model'] == 'old-user-model'
+            result = await client.post('/api/v1/research', headers={'Authorization': 'Bearer ' + create_access_token(uid)},
+                json={'title': 'Explicit env provider', 'research_question': 'Can this article explicitly use the server provider?', 'use_saved_connection':False})
             assert result.status_code == 201 and result.json()['model_connection'] is None
         async with AsyncSessionLocal() as db:
             assert (await db.get(User, uid)).model_connection == stored

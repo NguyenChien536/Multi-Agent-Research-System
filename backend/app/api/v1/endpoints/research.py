@@ -142,8 +142,8 @@ async def create_research_task(
         require_plan_approval=task_in.require_plan_approval,
         status="PENDING",
     )
-    connection_input = None if settings.USE_SERVER_PROVIDERS else task_in.llm_connection
-    if not settings.USE_SERVER_PROVIDERS and connection_input is None and task_in.use_saved_connection and current_user.model_connection:
+    connection_input = task_in.llm_connection
+    if connection_input is None and task_in.use_saved_connection and current_user.model_connection:
         from app.services.user_model_settings import decode_input, settings_id
         try:
             connection_input = decode_input(current_user.model_connection, current_user.id, settings_id(current_user.id))
@@ -192,7 +192,24 @@ async def get_research_task(
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Research task not found")
-    return task
+    response = ResearchTaskResponse.model_validate(task)
+    if task.status == 'FAILED':
+        from app.models.agent_run import AgentRun
+        from app.services.public_errors import public_error
+        failure = await db.scalar(select(AgentRun).where(
+            AgentRun.research_task_id == task.id,
+            AgentRun.attempt_number == task.attempt_number,
+            AgentRun.status == 'FAILED',
+        ).order_by(AgentRun.started_at.desc()).limit(1))
+        if failure:
+            response.latest_error = public_error(failure.error_message)
+            response.failed_agent = failure.agent_name
+        else:
+            saved_failure = (task.budget_config or {}).get('_last_failure') or {}
+            if saved_failure.get('attempt_number') == task.attempt_number:
+                response.latest_error = public_error(saved_failure.get('message'))
+                response.failed_agent = task.current_step
+    return response
 
 
 @router.post("/{task_id}/start", status_code=status.HTTP_202_ACCEPTED)
@@ -259,6 +276,38 @@ async def start_research_task(
     await db.commit()
 
     return {"status": "QUEUED", "message": "Workflow accepted for dispatch", "task_id": str(task_id)}
+
+
+@router.post('/{task_id}/retry', status_code=status.HTTP_202_ACCEPTED)
+async def retry_failed_research(task_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Resume the owning failed run's durable checkpoint without repeating completed nodes."""
+    from app.models.task import WorkflowRun
+    task = await db.scalar(select(ResearchTask).where(ResearchTask.id == task_id,
+        ResearchTask.user_id == current_user.id).with_for_update())
+    if task is None or task.status == 'DELETING':
+        raise HTTPException(404, 'Research task not found')
+    if task.status != 'FAILED':
+        raise HTTPException(409, 'Only failed research can be retried from its saved step')
+    run = await db.scalar(select(WorkflowRun).where(WorkflowRun.research_task_id == task.id,
+        WorkflowRun.status == 'FAILED').order_by(WorkflowRun.run_number.desc()).limit(1).with_for_update())
+    if run is None:
+        raise HTTPException(409, 'No saved failed workflow is available; start a new research run instead')
+    from app.services.provider_budget import pause_budget_config
+    task.budget_config = pause_budget_config(task.budget_config, now=task.completed_at)
+    run.status, run.completed_at = 'RUNNING', None
+    task.status, task.completed_at = 'QUEUED', None
+    task.worker_lease_until = None
+    task.queued_at = datetime.now(timezone.utc)
+    event = await db.scalar(select(TaskDispatchOutbox).where(TaskDispatchOutbox.research_task_id == task.id,
+        TaskDispatchOutbox.event_type == 'START_RESEARCH').with_for_update())
+    if event is None:
+        db.add(TaskDispatchOutbox(research_task_id=task.id, event_type='START_RESEARCH'))
+    else:
+        event.dispatched_at = event.locked_until = event.last_error = None
+        event.available_at = datetime.now(timezone.utc)
+        event.attempts = event.unclaimed_retries = 0
+    await db.commit()
+    return {'status':'QUEUED','task_id':str(task_id),'message':'Retry accepted from the saved workflow step'}
 
 @router.get("/{task_id}/report", response_model=ResearchReportResponse)
 async def get_research_report(

@@ -7,10 +7,11 @@ from app import worker
 from app.services import provider_budget
 from app.services.provider_budget import ProviderBudgetExceeded, ResearchTaskStopped
 from app.services.provider_pacing import ProviderQueueTimeout
+from app.services.public_errors import ProviderUnavailable
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('stop_type', [ProviderBudgetExceeded, ProviderQueueTimeout])
+@pytest.mark.parametrize('stop_type', [ProviderBudgetExceeded, ProviderQueueTimeout, ProviderUnavailable])
 @pytest.mark.parametrize("invalid", [None, "formatter_upgrade", "empty", "task", "run", "attempt", "uncheckpointed", "cancelled"])
 async def test_only_current_owned_complete_checkpoint_can_recover(monkeypatch, invalid, stop_type):
     task = SimpleNamespace(id=uuid.uuid4())
@@ -55,7 +56,7 @@ async def test_only_current_owned_complete_checkpoint_can_recover(monkeypatch, i
         assert result["critic_review_metadata"]["status"] == "NEEDS_REVIEW"
         assert result["critic_review_metadata"]["draft_recovery"]["review_incomplete"] is True
         assert result['critic_review_metadata']['budget_limited'] is (stop_type is ProviderBudgetExceeded)
-        assert result['critic_review_metadata']['provider_limited'] is (stop_type is ProviderQueueTimeout)
+        assert result['critic_review_metadata']['provider_limited'] is (stop_type is not ProviderBudgetExceeded)
         assert result["citations"] == []
         if invalid == "formatter_upgrade":
             assert result["critic_review_metadata"]["formatter_findings"] == ["retained"]

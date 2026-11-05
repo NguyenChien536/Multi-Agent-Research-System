@@ -410,16 +410,20 @@ export default function ResearchMonitorPage() {
                         </h3>
                       </div>
                       <p className="text-xs sm:text-sm text-zinc-700 leading-relaxed font-normal">
-                        {action.text}
+                        {snapshot.status === 'FAILED'
+                          ? researchErrorText(snapshot.activities.find(activity => activity.has_error)?.error_summary, isEn)
+                          : action.text}
                       </p>
                     </div>
 
-                    {/* NÚT MỞ WORKSPACE TO RÕ HƠN */}
+                    {/* Failure details stay on this monitor; other actions open their workspace inputs. */}
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
                       <Link
                         href={
-                          snapshot.status === 'WAITING_USER_DATA'
-                            ? (snapshot.research_type === 'EMPIRICAL_COMPUTATIONAL' ? `/research/${id}?tab=experiments#upload-dataset` : `/research/${id}#fieldwork-section`)
+                          snapshot.next_action === 'CHECK_FAILURE'
+                            ? '#execution-errors'
+                            : snapshot.status === 'WAITING_USER_DATA'
+                            ? `/research/${id}#fieldwork-section`
                             : snapshot.status === 'WAITING_APPROVAL'
                             ? `/research/${id}#plan-review-section`
                             : (current?.key === 'CURATOR' || current?.key === 'RESEARCHER')
@@ -547,7 +551,7 @@ export default function ResearchMonitorPage() {
             <div className="grid items-start gap-5 lg:grid-cols-3">
 
               {/* Left Column: Activity Log Timeline (2/3 width) */}
-              <section className="rounded-xl border border-zinc-200 bg-white shadow-2xs lg:col-span-2 overflow-hidden" aria-label="Activity Log">
+              <section id="execution-errors" className="rounded-xl border border-zinc-200 bg-white shadow-2xs lg:col-span-2 overflow-hidden scroll-mt-6" aria-label="Activity Log">
                 <div className="border-b border-zinc-200 bg-zinc-50/60 p-4 sm:p-5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h2 className="flex items-center gap-2 font-semibold text-sm sm:text-base text-zinc-900">

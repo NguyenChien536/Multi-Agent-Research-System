@@ -22,6 +22,13 @@ test('authentication errors advise checking key and service address', () => {
   assert.match(researchErrorText('HTTP 401', false), /từ chối xác thực/);
   assert.match(researchErrorText('PROVIDER_AUTH_FAILED', true), /matching API address/);
 });
+test('overload and unavailable models have specific guidance without blaming a valid key', () => {
+  assert.match(researchErrorText('PROVIDER_UNAVAILABLE: 503', true), /overloaded/);
+  assert.match(researchErrorText('PROVIDER_UNAVAILABLE: 503', false), /không nhất thiết bị sai/);
+  assert.match(researchErrorText('PROVIDER_MODEL_NOT_FOUND', true), /reload the model list/i);
+  assert.match(researchErrorText('PROVIDER_MODEL_NOT_FOUND: The model is unavailable for this API connection.', true), /reload the model list/i);
+  assert.match(researchErrorText('Gemini request queue is full', true), /rate limit/);
+});
 test('unknown and known errors never echo a credential from the provider body', () => {
   const secret = 'fake-test-key-never-real';
   for (const raw of ['Unexpected ' + secret, 'HTTP 401 ' + secret, 'LengthFinishReasonError ' + secret]) {

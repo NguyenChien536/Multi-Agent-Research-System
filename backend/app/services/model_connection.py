@@ -146,9 +146,10 @@ def seal_connection(value: ModelConnectionInput, task_id, user_id) -> dict:
     return {"profile": profile, "secret": _cipher().encrypt(json.dumps(payload).encode()).decode()}
 
 
-def open_connection(config: dict | None, task_id, user_id, *, respect_server_mode: bool = True) -> ModelConnection | None:
-    if respect_server_mode and settings.USE_SERVER_PROVIDERS:
-        return None
+def open_connection(config: dict | None, task_id, user_id) -> ModelConnection | None:
+    # A personal connection always takes precedence. Server mode supplies the
+    # default only when the article has no personal connection; never silently
+    # spend server credits after a user's connection fails.
     stored = (config or {}).get("_llm_connection")
     if stored is None:
         return None

@@ -1,6 +1,7 @@
 'use client';
-import { ResearchErrorNotice } from '@/components/ResearchErrorNotice';
+import { ResearchErrorNotice, researchErrorText } from '@/components/ResearchErrorNotice';
 import { ModelConnectionSummary } from '@/components/ModelConnectionSummary';
+import { ModelSettingsPanel } from '@/components/ModelSettingsPanel';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -151,6 +152,8 @@ export default function WorkspacePage() {
   const [reloadKey, setReloadKey] = useState(0);
 
   const [isStarting, setIsStarting] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [showModelSettings, setShowModelSettings] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
@@ -408,27 +411,33 @@ export default function WorkspacePage() {
   }, [task?.status]);
 
   const handleStartTask = async () => {
-    if (!task) return;
+    if (!task || isStarting || isCancelling) return;
+    if (task.status !== 'PENDING' && task.status !== 'FAILED' && !window.confirm(isEn
+      ? 'Run research again? Saved reports and files are kept. This starts a new workflow and uses the remaining article allowance.'
+      : 'Chạy lại nghiên cứu? Bài viết và tệp đã lưu được giữ lại. Lượt mới sử dụng phần ngân sách còn lại của bài.')) return;
     setIsStarting(true);
+    setActionError('');
     try {
-      await api.tasks.start(task.id);
+      if (task.status === 'FAILED') await api.tasks.retry(task.id);
+      else await api.tasks.start(task.id);
       setReloadKey(v => v + 1);
     } catch (err) {
-      alert(err instanceof Error ? err.message : (isEn ? 'Unable to start research.' : 'Không thể bắt đầu nghiên cứu.'));
+      setActionError(err instanceof Error ? err.message : (isEn ? 'Unable to start research.' : 'Không thể bắt đầu nghiên cứu.'));
     } finally {
       setIsStarting(false);
     }
   };
 
   const handleCancelTask = async () => {
-    if (!task) return;
+    if (!task || isCancelling || isStarting) return;
     if (!confirm(isEn ? 'Are you sure you want to cancel this research task?' : 'Bạn có chắc chắn muốn hủy bài nghiên cứu này?')) return;
     setIsCancelling(true);
+    setActionError('');
     try {
       await api.tasks.cancel(task.id);
       setReloadKey(v => v + 1);
     } catch (err) {
-      alert(err instanceof Error ? err.message : (isEn ? 'Unable to cancel research.' : 'Không thể hủy bài nghiên cứu.'));
+      setActionError(err instanceof Error ? err.message : (isEn ? 'Unable to cancel research.' : 'Không thể hủy bài nghiên cứu.'));
     } finally {
       setIsCancelling(false);
     }
@@ -800,29 +809,44 @@ export default function WorkspacePage() {
         </div>
 
         {/* Action Controls */}
-        <div className="flex items-center gap-2">
-          {(task.status === 'PENDING' || task.status === 'CANCELLED') && (
+        <div className="flex flex-wrap items-center gap-2" aria-label={isEn ? 'Research controls' : 'Thao tác bài nghiên cứu'}>
+          {['PENDING', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'].includes(task.status) && (
             <Button
               variant={task.status === 'CANCELLED' ? 'primary' : 'success'}
               onClick={() => void handleStartTask()}
               isLoading={isStarting}
             >
-              <Play size={15} className="mr-1.5" /> {task.status === 'CANCELLED' ? (isEn ? 'Rerun Research' : 'Chạy lại nghiên cứu') : (isEn ? 'Start Research' : 'Bắt đầu nghiên cứu')}
+              <Play size={15} className="mr-1.5" /> {task.status !== 'PENDING' ? (isEn ? 'Retry research' : 'Chạy lại nghiên cứu') : (isEn ? 'Start Research' : 'Bắt đầu nghiên cứu')}
             </Button>
           )}
 
           {canCancel && (
             <Button variant="danger-outline" onClick={() => void handleCancelTask()} isLoading={isCancelling}>
-              <XCircle size={15} className="mr-1.5" /> {isEn ? 'Cancel Research' : 'Hủy nghiên cứu'}
+              <XCircle size={15} className="mr-1.5" /> {isEn ? 'Stop research' : 'Dừng nghiên cứu'}
             </Button>
           )}
-
-
+          <Button variant="outline" onClick={() => setShowModelSettings(true)}>{isEn ? 'API & model' : 'API & model'}</Button>
+          <Button variant="outline" aria-controls="toc-sidebar" aria-expanded={!isLeftSidebarCollapsed}
+            onClick={() => setIsLeftSidebarCollapsed(v => !v)} aria-label={isEn ? 'Toggle contents' : 'Bật/tắt mục lục'}>
+            <PanelLeft size={15} />
+          </Button>
+          <Button variant="outline" aria-controls="stages-sidebar" aria-expanded={!isRightSidebarCollapsed}
+            onClick={() => setIsRightSidebarCollapsed(v => !v)}>
+            <PanelRight size={15} className="mr-1.5" />{isEn ? 'Pipeline' : 'Tiến trình'}
+          </Button>
           <Button variant="outline" onClick={() => setReloadKey(v => v + 1)} aria-label={isEn ? "Refresh" : "Làm mới"}>
             <RefreshCw size={15} />
           </Button>
         </div>
       </div>
+      {actionError && <div role="alert" className="border-b border-red-200 bg-red-50 px-6 py-3 text-sm text-red-800">{actionError}</div>}
+      {showModelSettings && <div role="dialog" aria-modal="true" aria-label="API & model" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+          <div className="mb-4 flex items-center justify-between"><h2 className="font-semibold">API & model</h2>
+            <Button variant="outline" onClick={() => { setShowModelSettings(false); setReloadKey(v => v + 1); }}>{isEn ? 'Close' : 'Đóng'}</Button></div>
+          <ModelSettingsPanel isEn={isEn} taskId={task.id} />
+        </div>
+      </div>}
 
       {/* Main Workspace Body */}
       <div className="flex flex-1 overflow-hidden flex-col lg:flex-row print:overflow-visible print:h-auto print:block">
@@ -1075,9 +1099,13 @@ export default function WorkspacePage() {
           )}
 
           {task.status === 'WAITING_USER_DATA' && task.research_type === 'EMPIRICAL_COMPUTATIONAL' && (
-            <div id="fieldwork-section" className="p-4 bg-indigo-50 border-b border-indigo-200 text-sm print:hidden" role="status">
-              {isEn ? "Computational run is awaiting a CSV dataset. Upload data under Experiments & Journal to proceed." : "Bài tính toán đang chờ tập dữ liệu CSV. Tải dữ liệu trong mục Thực nghiệm để tiếp tục."}
-              <Button variant="outline" className="ml-3" onClick={() => setActiveTab('experiments')}>{isEn ? "Open Experiments" : "Mở thực nghiệm"}</Button>
+            <div id="fieldwork-section" className="p-4 bg-indigo-50 border-b border-indigo-200 text-sm print:hidden shrink-0">
+              <h2 className="font-semibold">{isEn ? 'Upload your CSV to continue' : 'Tải CSV để tiếp tục'}</h2>
+              <p className="my-2">{isEn ? 'Numeric columns and a target column are required. A valid upload resumes this article automatically.' : 'CSV cần các cột số và cột đích target. Tệp hợp lệ sẽ tự tiếp tục bài này.'}</p>
+              <input type="file" accept=".csv" aria-label={isEn ? 'Upload computational CSV' : 'Tải CSV tính toán'} disabled={isUploadingDataset} onChange={handleUploadDataset} className="block w-full text-sm" />
+              {isUploadingDataset && <p role="status">{isEn ? 'Uploading…' : 'Đang tải…'}</p>}
+              {datasetUploadError && <p role="alert" className="mt-2 text-red-700">{datasetUploadError}</p>}
+              {datasetUploadSuccess && <p role="status" className="mt-2 text-emerald-700">{datasetUploadSuccess}</p>}
             </div>
           )}
 
@@ -1413,7 +1441,8 @@ export default function WorkspacePage() {
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-zinc-50/60 print:overflow-visible print:h-auto print:p-0 print:m-0 print:bg-white print:block">
             {/* TAB 1: SCIENTIFIC PAPER */}
             {(task.status === 'FAILED' || task.current_step === 'BUDGET_LIMIT') && <ResearchErrorNotice isEn={isEn}
-              error={task.current_step === 'BUDGET_LIMIT' ? 'TASK_BUDGET_LIMIT' : runs.find(run => run.status === 'FAILED' && run.attempt_number === task.attempt_number)?.error_message} />}
+              step={task.failed_agent || (task.current_step ? stepLabel(task.current_step, language) : null)}
+              error={task.current_step === 'BUDGET_LIMIT' ? 'TASK_BUDGET_LIMIT' : task.latest_error || runs.filter(run => run.status === 'FAILED' && run.attempt_number === task.attempt_number).at(-1)?.error_message} />}
             {activeTab === 'report' && (
               <div className={`paper-space w-full ${isWidePaper ? 'max-w-6xl' : 'max-w-4xl'} mx-auto space-y-6 transition-all duration-300 print:max-w-none print:m-0 print:p-0 print:space-y-0`}>
                 {(['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(task.status) || report?.research_task_id === params.id) ? report?.research_task_id === params.id ? (
@@ -1721,8 +1750,8 @@ export default function WorkspacePage() {
                                   : "Tài liệu đang được thu thập, trích xuất đoạn và nhúng vào vector database. Agent phân tích sẽ đối soát chéo bằng chứng trước khi soạn thảo.")
                               : task.status === 'FAILED'
                               ? (isEn
-                                  ? "An error occurred during workflow execution. Check the Agent Runs tab or Live Monitor for diagnostic logs."
-                                  : "Đã xảy ra sự cố trong quá trình thực thi. Vui lòng kiểm tra tab Tiến trình Agent hoặc Màn hình giám sát để xem log.")
+                                  ? researchErrorText(task.latest_error, true)
+                                  : researchErrorText(task.latest_error, false))
                               : task.status === 'CANCELLED'
                               ? (isEn
                                   ? "Execution was manually cancelled. You can restart the pipeline at any time with the button below."

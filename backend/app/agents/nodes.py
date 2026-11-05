@@ -108,7 +108,15 @@ class BudgetedFallbackLLM:
     async def ainvoke(self, messages: Any, **kwargs: Any):
         context = _BUDGET_CALL_CONTEXT.get()
         last_error: Exception | None = None
-        for model_name, model in self.models:
+        # One bounded second pass for temporary upstream 502/503/504 failures.
+        # Each attempt still passes pacing, cancellation and the durable budget.
+        # Authentication/quota/invalid-output errors never trigger this pass.
+        for index, (model_name, model) in enumerate(self.models * 2):
+            if index >= len(self.models):
+                from app.services.public_errors import is_transient_provider_error
+                if not is_transient_provider_error(last_error):
+                    break
+                await asyncio.sleep(2)
             reservation_id = None
             if self.pace_requests:
                 from app.services.provider_pacing import wait_for_gemini_slot
@@ -178,6 +186,9 @@ class BudgetedFallbackLLM:
                     await record_gemini_rate_limit(model_name, exc)
                 logger.warning("LLM provider attempt failed (%s); trying the next configured provider", model_name)
         if last_error:
+            from app.services.public_errors import ProviderUnavailable, is_transient_provider_error
+            if is_transient_provider_error(last_error):
+                raise ProviderUnavailable('PROVIDER_UNAVAILABLE: Provider temporarily overloaded (503); bounded retries exhausted.') from None
             if any(name.startswith("byok:") for name, _ in self.models):
                 err_str = str(last_error).lower()
                 if "lengthfinishreason" in type(last_error).__name__.lower() or 'model_output_truncated' in err_str:

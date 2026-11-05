@@ -80,10 +80,11 @@ async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRu
     """
     from app.services.provider_budget import ProviderBudgetExceeded, assert_task_active
     from app.services.provider_pacing import ProviderQueueTimeout
+    from app.services.public_errors import ProviderUnavailable
 
     try:
         return await _invoke_checkpointed_graph_unchecked(graph, initial_state, task, run, preloaded_dataset_csv)
-    except (ProviderBudgetExceeded, ProviderQueueTimeout) as stopped:
+    except (ProviderBudgetExceeded, ProviderQueueTimeout, ProviderUnavailable) as stopped:
         if not hasattr(graph, "aget_state") or getattr(graph, "checkpointer", None) is None:
             raise
         config = {"configurable": {"thread_id": run.checkpoint_thread_id}}
@@ -107,7 +108,8 @@ async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRu
             "provider_limited": not budget_limited,
             "review_scope": "internal_quality_control_not_peer_review",
             "draft_recovery": {
-                "reason": "PROVIDER_BUDGET_LIMIT" if budget_limited else "PROVIDER_QUEUE_TIMEOUT",
+                "reason": ("PROVIDER_BUDGET_LIMIT" if budget_limited else
+                           "PROVIDER_UNAVAILABLE" if isinstance(stopped, ProviderUnavailable) else "PROVIDER_QUEUE_TIMEOUT"),
                 "source": "last_completed_checkpoint",
                 "workflow_run_id": str(run.id),
                 "review_incomplete": True,
@@ -828,6 +830,10 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 task.completed_at = datetime.now(timezone.utc)
                 from app.services.provider_budget import pause_budget_config
                 task.budget_config = pause_budget_config(task.budget_config, now=task.completed_at)
+                from app.services.public_errors import public_error
+                task.budget_config = {**(task.budget_config or {}), '_last_failure': {
+                    'attempt_number': claim_attempt, 'message': public_error(str(e)), 'step': task.current_step,
+                }}
                 task.worker_lease_until = None
                 if isinstance(e, ProviderBudgetExceeded):
                     task.current_step = "BUDGET_LIMIT"
@@ -889,6 +895,10 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                         failed_task.completed_at = datetime.now(timezone.utc)
                         from app.services.provider_budget import pause_budget_config
                         failed_task.budget_config = pause_budget_config(failed_task.budget_config, now=failed_task.completed_at)
+                        from app.services.public_errors import public_error
+                        failed_task.budget_config = {**(failed_task.budget_config or {}), '_last_failure': {
+                            'attempt_number': claim_attempt, 'message': public_error(str(exc)), 'step': failed_task.current_step,
+                        }}
                         failed_task.resume_action = None
                         failed_task.resume_payload = None
                         summary = f"Research execution could not initialize/continue ({type(exc).__name__}). Check worker runtime logs."
