@@ -65,6 +65,15 @@ async def test_free_catalog_filters_paid_models_and_keeps_router(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_google_resource_names_become_completion_model_ids(monkeypatch):
+    def handler(_):
+        return httpx.Response(200,json={'data':[{'id':'models/gemini-test-flash'}, {'id':'models/lyria-test'}, {'id':'models/gemini-test-image'}]})
+    catalog_transport(monkeypatch,handler)
+    result=await model_catalog.discover_models('https://generativelanguage.googleapis.com/v1beta/openai',KEY)
+    assert result['models']==[{'id':'gemini-test-flash','free':None}]
+
+
+@pytest.mark.asyncio
 async def test_catalog_endpoint_reuses_only_owned_saved_key_and_validates_service(monkeypatch):
     tid,uid=await create_running_task()
     other_tid,other_uid=await create_running_task()

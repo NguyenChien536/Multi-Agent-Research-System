@@ -3,6 +3,23 @@ class ProviderUnavailable(RuntimeError):
     """Configured providers exhausted their bounded retries for an upstream outage."""
 
 
+class ProviderRequestRejected(RuntimeError):
+    """The provider explicitly rejected authentication, access, model or quota."""
+
+
+def provider_request_rejected(error):
+    """Only explicit HTTP rejection statuses, never message substrings/timeouts.
+
+    These responses contain no generated completion. Keep the attempted call in
+    the ledger, but do not charge a hypothetical full output-token reservation.
+    Unknown failures and upstream 5xx remain conservatively reserved.
+    """
+    status = getattr(error, 'status_code', getattr(error, 'code', None))
+    if status is None:
+        status = getattr(getattr(error, 'response', None), 'status_code', None)
+    return status in (401, 403, 404, 429) or type(error).__name__ in ('GoogleRateLimitError', 'RateLimitError')
+
+
 def is_transient_provider_error(error):
     if error is None:
         return False

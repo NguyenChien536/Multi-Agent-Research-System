@@ -70,13 +70,21 @@ async def discover_models(base_url: str, api_key: str, free_only: bool = True):
         if not isinstance(item, dict):
             continue
         name = item.get('id')
+        if isinstance(name, str) and root == 'https://generativelanguage.googleapis.com/v1beta/openai':
+            # Google's compatibility catalog returns resource names; completion
+            # requests and Settings use the model ID, without the models/ prefix.
+            name = name.removeprefix('models/')
+            if not name.startswith(('gemini-', 'gemma-')):
+                continue
+            if any(word in name for word in ('-live', 'computer-use', 'robotics', 'nano-banana', 'customtools')):
+                continue
         if not isinstance(name, str) or not MODEL_ID.fullmatch(name) or api_key in name:
             continue
         architecture = item.get('architecture')
         output = architecture.get('output_modalities') if isinstance(architecture, dict) else None
         if isinstance(output, list) and 'text' not in output:
             continue
-        if any(word in name.lower() for word in ('embedding', 'whisper', 'tts', 'transcribe', 'image', 'moderation', 'realtime', 'audio')):
+        if any(word in name.lower() for word in ('embedding', 'whisper', 'tts', 'transcribe', 'image', 'moderation', 'realtime', 'audio', 'dall-e', 'sora', 'video')):
             continue
         pricing = item.get('pricing') if isinstance(item.get('pricing'), dict) else {}
         free = bool(pricing) and all(str(pricing.get(key, '')) in ('0', '0.0') for key in ('prompt', 'completion'))

@@ -119,8 +119,12 @@ class BudgetedFallbackLLM:
                 await asyncio.sleep(2)
             reservation_id = None
             if self.pace_requests:
-                from app.services.provider_pacing import wait_for_gemini_slot
-                await wait_for_gemini_slot(model_name)
+                from app.services.provider_pacing import wait_for_gemini_slot, ProviderQueueTimeout
+                try:
+                    await wait_for_gemini_slot(model_name)
+                except ProviderQueueTimeout as exc:
+                    last_error = exc
+                    continue  # No call/reservation; try the next configured model's own gate.
             extra_tokens = 0
             if context and self.structured_schema is not None:
                 import json
@@ -173,6 +177,7 @@ class BudgetedFallbackLLM:
             except Exception as exc:
                 last_error = exc
                 if reservation_id:
+                    from app.services.public_errors import provider_request_rejected
                     await settle_provider_call(
                         task_id=context["task_id"],
                         reservation_id=reservation_id,
@@ -180,30 +185,36 @@ class BudgetedFallbackLLM:
                         output_tokens=0,
                         cost_usd=0,
                         succeeded=False,
+                        rejected=provider_request_rejected(exc),
                     )
                 if self.pace_requests:
                     from app.services.provider_pacing import record_gemini_rate_limit
                     await record_gemini_rate_limit(model_name, exc)
-                logger.warning("LLM provider attempt failed (%s); trying the next configured provider", model_name)
+                from app.services.public_errors import public_error
+                logger.warning("LLM provider attempt failed (%s): %s; trying the next configured provider", model_name, public_error(str(exc)))
         if last_error:
-            from app.services.public_errors import ProviderUnavailable, is_transient_provider_error
+            from app.services.public_errors import ProviderUnavailable, ProviderRequestRejected, is_transient_provider_error, provider_request_rejected
             if is_transient_provider_error(last_error):
                 raise ProviderUnavailable('PROVIDER_UNAVAILABLE: Provider temporarily overloaded (503); bounded retries exhausted.') from None
             if any(name.startswith("byok:") for name, _ in self.models):
                 err_str = str(last_error).lower()
+                failure_type = ProviderRequestRejected if provider_request_rejected(last_error) else RuntimeError
                 if "lengthfinishreason" in type(last_error).__name__.lower() or 'model_output_truncated' in err_str:
                     raise RuntimeError("MODEL_OUTPUT_TRUNCATED: The model reached its output token limit before completing JSON. This is not an API-key authentication error. Retry with sufficient output capacity.") from None
                 if "429" in err_str or "rate limit" in err_str or "quota" in err_str or "credit" in err_str:
-                    raise RuntimeError("Your API connection reached its rate limit or quota (HTTP 429). Wait and check your provider's free allowance before retrying.") from None
+                    raise failure_type("Your API connection reached its rate limit or quota (HTTP 429). Wait and check your provider's free allowance before retrying.") from None
                 if "401" in err_str or "unauthorized" in err_str or "invalid api key" in err_str or "authentication" in err_str:
-                    raise RuntimeError("Your API key was rejected by the provider (HTTP 401). Please verify your API key.") from None
+                    raise failure_type("Your API key was rejected by the provider (HTTP 401). Please verify your API key.") from None
                 if "404" in err_str or "not found" in err_str:
-                    raise RuntimeError("The model was not found on this provider (HTTP 404). Please verify your model name.") from None
+                    raise failure_type("The model was not found on this provider (HTTP 404). Please verify your model name.") from None
                 if "outputparser" in last_error.__class__.__name__.lower() or "validation" in err_str or "json" in err_str:
                     raise RuntimeError("The model failed to produce valid structured JSON output for this workflow step. Please check if this model supports structured output.") from None
                 if isinstance(last_error, (TimeoutError, asyncio.TimeoutError)) or "timeout" in err_str:
                     raise RuntimeError("The API connection timed out. The provider endpoint may be unreachable or responding too slowly.") from None
                 raise RuntimeError(f"Your API connection failed ({last_error.__class__.__name__}). Check its key, model, quota and supported output format.") from None
+            if provider_request_rejected(last_error):
+                from app.services.public_errors import public_error
+                raise ProviderRequestRejected(public_error(str(last_error))) from None
             raise last_error
         raise RuntimeError("No LLM provider is configured")
 

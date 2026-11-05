@@ -242,8 +242,13 @@ async def settle_provider_call(
     output_tokens: int,
     cost_usd: float,
     succeeded: bool,
+    rejected: bool = False,
 ) -> None:
-    """Reconcile a completed call; failed/uncertain calls consume their reservation."""
+    """Reconcile usage; explicit rejection releases tokens, uncertain failures consume the reservation.
+
+    Admission already counted the call. A rejection never restores that call
+    allowance or changes provider pacing and never resets previous usage.
+    """
     parsed_id = uuid.UUID(str(task_id))
     async with AsyncSessionLocal() as session:
         task = await session.scalar(
@@ -256,7 +261,7 @@ async def settle_provider_call(
         reservation = usage["reservations"].pop(reservation_id, None)
         if reservation is None:
             return
-        if succeeded:
+        if succeeded or rejected:
             input_tokens = max(0, int(input_tokens))
             output_tokens = max(0, int(output_tokens))
             cost_usd = max(0.0, float(cost_usd))

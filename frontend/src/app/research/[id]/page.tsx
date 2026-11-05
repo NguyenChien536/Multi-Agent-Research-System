@@ -779,7 +779,7 @@ export default function WorkspacePage() {
               ) : task.status === 'WAITING_USER_DATA' ? (
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-50 border border-amber-300 text-amber-900 font-semibold">
                   <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
-                  {isEn ? 'Awaiting field data upload \u2193' : 'Ch\u1edd t\u1ea3i l\xean d\u1eef li\u1ec7u \u2193'}
+                  {task.research_type === 'EMPIRICAL_COMPUTATIONAL' ? (isEn ? 'Awaiting CSV dataset' : 'Chờ tập dữ liệu CSV') : (isEn ? 'Awaiting field data upload' : 'Chờ tải lên dữ liệu')}
                 </span>
               ) : isWorking ? (
                 <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-200 text-blue-800 font-semibold">
@@ -1730,6 +1730,10 @@ export default function WorkspacePage() {
                               ? (isEn ? "Autonomous agents are gathering and synthesizing evidence" : "Các tác tử tự trị đang thu thập và phân tích dữ liệu")
                               : task.status === 'FAILED'
                               ? (isEn ? "Research stopped due to an execution error" : "Bài nghiên cứu đã dừng do phát sinh lỗi")
+                              : task.status === 'WAITING_USER_DATA'
+                              ? (isEn ? 'Waiting for your data' : 'Đang chờ dữ liệu của bạn')
+                              : task.status === 'WAITING_APPROVAL'
+                              ? (isEn ? 'Review the research plan above' : 'Duyệt kế hoạch nghiên cứu ở trên')
                               : task.status === 'CANCELLED'
                               ? (isEn ? "Research task was cancelled" : "Bài nghiên cứu đã được hủy")
                               : (isEn ? "Research task is ready to begin" : "Bài nghiên cứu sẵn sàng bắt đầu")}
@@ -1752,6 +1756,10 @@ export default function WorkspacePage() {
                               ? (isEn
                                   ? researchErrorText(task.latest_error, true)
                                   : researchErrorText(task.latest_error, false))
+                              : task.status === 'WAITING_USER_DATA'
+                              ? (isEn ? 'Your progress is saved. Upload the requested data above to continue this article.' : 'Tiến độ đã được lưu. Tải dữ liệu ở ô phía trên để tiếp tục bài này.')
+                              : task.status === 'WAITING_APPROVAL'
+                              ? (isEn ? 'Approve or revise the proposed plan before research continues.' : 'Duyệt hoặc yêu cầu sửa kế hoạch trước khi tiếp tục nghiên cứu.')
                               : task.status === 'CANCELLED'
                               ? (isEn
                                   ? "Execution was manually cancelled. You can restart the pipeline at any time with the button below."
@@ -2530,7 +2538,7 @@ export default function WorkspacePage() {
                       <Button
                         variant="outline"
                         onClick={() => datasetFileInputRef.current?.click()}
-                        disabled={isUploadingDataset || task.status === 'RUNNING'}
+                        disabled={isUploadingDataset || !['PENDING', 'WAITING_APPROVAL', 'WAITING_USER_DATA'].includes(task.status)}
                         className="text-xs"
                       >
                         <UploadCloud size={14} className="mr-1.5" />

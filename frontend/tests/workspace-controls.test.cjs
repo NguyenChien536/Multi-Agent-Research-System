@@ -91,6 +91,7 @@ test('waiting computational research accepts CSV directly on the default workspa
   const h=await workspace('WAITING_USER_DATA','EMPIRICAL_COMPUTATIONAL');
   const input=elements(h.render()).find(node=>node.props?.['aria-label']==='Upload computational CSV');
   assert.ok(input);
+  assert.ok(!text(h.render()).includes("Click 'Start Research Now'"));
   await input.props.onChange({target:{files:[{name:'synthetic.csv'}],value:'file'}});
   assert.deepEqual(h.calls,[['dataset','fixture','synthetic.csv']]);
   assert.ok(text(h.render()).includes('Uploaded successfully'));

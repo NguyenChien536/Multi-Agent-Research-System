@@ -80,6 +80,45 @@ def test_public_errors_do_not_expose_provider_bodies():
 
 
 @pytest.mark.asyncio
+async def test_explicit_quota_rejection_counts_call_without_spending_unproduced_tokens():
+    from app.services.provider_budget import reserve_provider_call,settle_provider_call,ProviderBudgetExceeded
+    tid,uid=await create_running_task(max_llm_calls=1)
+    try:
+        reservation=await reserve_provider_call(task_id=tid,attempt_number=1,kind='llm',model='gemini-3.5-flash',input_tokens=500,output_tokens=12000)
+        await settle_provider_call(task_id=tid,reservation_id=reservation,input_tokens=0,output_tokens=0,cost_usd=0,succeeded=False,rejected=True)
+        async with AsyncSessionLocal() as db:
+            usage=(await db.get(ResearchTask,tid)).budget_config['_provider_usage']
+            assert usage['llm_calls']==1 and usage['input_tokens']==0 and usage['output_tokens']==0
+            assert usage['reservations']=={}
+        with pytest.raises(ProviderBudgetExceeded,match='call limit'):
+            await reserve_provider_call(task_id=tid,attempt_number=1,kind='llm',model='gemini-3.5-flash',input_tokens=1,output_tokens=1)
+    finally:
+        await delete_test_user(uid)
+
+
+def test_only_explicit_rejection_statuses_can_release_unproduced_output_reservations():
+    from app.services.public_errors import provider_request_rejected
+    for code in (401,403,404,429):
+        assert provider_request_rejected(SimpleNamespace(status_code=code))
+    for error in (TimeoutError('429 in an arbitrary message'),RuntimeError('unauthorized'),SimpleNamespace(status_code=503)):
+        assert not provider_request_rejected(error)
+
+
+@pytest.mark.asyncio
+async def test_a_full_model_queue_does_not_prevent_configured_fallback(monkeypatch):
+    from app.services import provider_pacing
+    visited=[]
+    async def gate(name):
+        visited.append(name)
+        if name=='first': raise provider_pacing.ProviderQueueTimeout('queue full')
+    async def unexpected(_): raise AssertionError('Blocked provider was contacted')
+    async def good(_): return SimpleNamespace(content='ok')
+    monkeypatch.setattr(provider_pacing,'wait_for_gemini_slot',gate)
+    result=await nodes.BudgetedFallbackLLM([('first',SimpleNamespace(ainvoke=unexpected)),('second',SimpleNamespace(ainvoke=good))],pace_requests=True).ainvoke([])
+    assert result.content=='ok' and visited==['first','second']
+
+
+@pytest.mark.asyncio
 async def test_initialization_failure_is_visible_without_an_agent_run():
     tid,uid=await create_running_task()
     try:
