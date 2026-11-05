@@ -48,6 +48,14 @@ test('profile edits use the authenticated current-user route and preserve the se
   assert.equal(c.storage.get('synthia_access_token'), 'test-token');
 });
 
+test('saved model checks are authenticated and never reuse a cached profile', async () => {
+  const c = client({ response: { connection: { model: 'free-model', has_key: true } } });
+  assert.equal((await c.api.settings.getModelConnection()).connection.model, 'free-model');
+  assert.ok(c.requests[0].url.endsWith('/settings/model-connection'));
+  assert.equal(c.requests[0].headers.get('Authorization'), 'Bearer test-token');
+  assert.equal(c.requests[0].cache, 'no-store');
+});
+
 test('profile conflicts keep the current session and expose the server status', async () => {
   const c = client({ status: 409, response: { detail: 'Already registered' } });
   await assert.rejects(c.api.auth.updateProfile({ username: 'taken' }), error => error.status === 409);

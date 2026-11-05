@@ -10,7 +10,8 @@ import {
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
-import type { ResearchType, UserResponse, ModelConnectionInput } from '@/types';
+import { ModelSettingsPanel } from '@/components/ModelSettingsPanel';
+import type { ResearchType, UserResponse } from '@/types';
 
 const OUTPUT_LANGUAGES = [
   { code: 'en', name: 'English', native: 'English (Default)', desc_en: 'Standard international scientific draft', desc_vi: 'Văn bản báo cáo chuẩn học thuật quốc tế' },
@@ -40,14 +41,23 @@ export default function Home() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [maxSources, setMaxSources] = useState(12);
   const [savedModel, setSavedModel] = useState<string | null>(null);
+  const [modelStatus, setModelStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
+  const [showModelSettings, setShowModelSettings] = useState(false);
   useEffect(() => {
+    let active = true;
     const refresh = () => {
       if (!api.auth.hasSession()) return;
-      api.settings.getModelConnection().then(result => setSavedModel(result.connection?.model || null)).catch(()=>setSavedModel(null));
+      api.settings.getModelConnection().then(result => {
+        if (!active) return;
+        const ready = !!result.connection?.has_key && !!result.connection.model;
+        setSavedModel(ready ? result.connection!.model : null);
+        setModelStatus(ready ? 'ready' : 'missing');
+      }).catch(() => { if (active) setModelStatus('error'); });
     };
     refresh();
-    window.addEventListener('synthia-model-settings', refresh);
-    return () => window.removeEventListener('synthia-model-settings', refresh);
+    const settingsChanged = () => { setError(''); refresh(); };
+    window.addEventListener('synthia-model-settings', settingsChanged);
+    return () => { active = false; window.removeEventListener('synthia-model-settings', settingsChanged); };
   }, []);
   const [pdfFiles, setPdfFiles] = useState<File[]>([]);
 
@@ -141,6 +151,7 @@ export default function Home() {
 
   const handleStartResearch = async (e: FormEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     const question = topic.trim();
     if (question.length < 10) {
       setError(isEn ? 'Please enter a research question with at least 10 characters.' : 'Vui lòng nhập câu hỏi nghiên cứu dài ít nhất 10 ký tự.');
@@ -168,15 +179,28 @@ export default function Home() {
     }
 
     setError('');
-    if (!savedModel) {
-      setError(isEn ? 'Save your API connection in Settings first.' : 'Lưu kết nối API trong Settings trước khi chạy bài.');
-      router.push('/settings');
-      return;
-    }
     setIsLoading(true);
-    setUploadStatus(isEn ? 'Creating research workspace...' : 'Đang khởi tạo không gian nghiên cứu...');
+    setUploadStatus(isEn ? 'Checking saved API connection...' : 'Đang kiểm tra kết nối API đã lưu...');
 
     try {
+      // Recheck the server, not the possibly stale/loading summary on this page.
+      let connection;
+      try {
+        connection = (await api.settings.getModelConnection()).connection;
+      } catch {
+        setModelStatus('error');
+        setError(isEn ? 'Unable to check your saved API connection. Try again; your question and files are preserved.' : 'Không kiểm tra được kết nối API đã lưu. Hãy thử lại; câu hỏi và file vẫn được giữ nguyên.');
+        return;
+      }
+      if (!connection?.has_key || !connection.model) {
+        setSavedModel(null);
+        setModelStatus('missing');
+        setError(isEn ? 'No default API/model is saved for this account. Choose API & model below, save the connection, then start research.' : 'Tài khoản này chưa có API/model mặc định. Chọn API & model bên dưới, lưu kết nối rồi bấm bắt đầu.');
+        return;
+      }
+      setSavedModel(connection.model);
+      setModelStatus('ready');
+      setUploadStatus(isEn ? 'Creating research workspace...' : 'Đang khởi tạo không gian nghiên cứu...');
       const task = await api.tasks.create({
         title: question.slice(0, 255),
         research_question: question,
@@ -465,7 +489,7 @@ export default function Home() {
                 {/* 1. Research Depth (Cards) */}
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-200 p-3 text-sm">
                   <span>{savedModel || (isEn ? 'Choose an API connection in Settings' : 'Chọn kết nối API trong Settings')}</span>
-                  <button type="button" className="font-medium underline" onClick={()=>router.push('/settings')}>Settings</button>
+                  <button type="button" className="font-medium underline" onClick={()=>setShowModelSettings(true)}>API & model</button>
                 </div>
                 <label className="block space-y-1 text-xs font-medium text-zinc-700">
                   <span>{isEn ? 'Maximum sources to collect' : 'Số nguồn tối đa cần thu thập'}</span>
@@ -719,6 +743,23 @@ export default function Home() {
               </div>
             )}
           </form>
+
+          {hasSession && <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-zinc-600">
+            <span>{modelStatus === 'loading' ? (isEn ? 'Loading API configuration…' : 'Đang tải cấu hình API…')
+              : modelStatus === 'error' ? (isEn ? 'API configuration could not be checked' : 'Chưa kiểm tra được cấu hình API')
+                : savedModel || (isEn ? 'No default API/model saved' : 'Chưa có API/model mặc định')}</span>
+            <button type="button" onClick={() => setShowModelSettings(true)} className="font-medium underline">API & model</button>
+          </div>}
+
+          {showModelSettings && <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 p-4">
+            <section role="dialog" aria-modal="true" aria-labelledby="research-api-settings-title" className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <h2 id="research-api-settings-title" className="font-semibold">API & model</h2>
+                <button type="button" onClick={() => setShowModelSettings(false)} aria-label={isEn ? 'Close API settings' : 'Đóng cài đặt API'} className="rounded-lg p-2 hover:bg-zinc-100"><X size={18} /></button>
+              </div>
+              <ModelSettingsPanel isEn={isEn} />
+            </section>
+          </div>}
 
           {error && (
             <p role="alert" className="text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2 text-center">

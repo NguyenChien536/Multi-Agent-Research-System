@@ -67,7 +67,7 @@ async function fetcher<T>(endpoint: string, options?: RequestInit, responseKind:
 
 export const api = {
   settings: {
-    getModelConnection: () => fetcher<{connection: (Omit<import('../types').ModelConnectionInput, 'api_key'> & {has_key: boolean}) | null}>('/settings/model-connection'),
+    getModelConnection: () => fetcher<{connection: (Omit<import('../types').ModelConnectionInput, 'api_key'> & {has_key: boolean}) | null}>('/settings/model-connection', { cache: 'no-store' }),
     saveModelConnection: (value: Omit<import('../types').ModelConnectionInput, 'api_key'> & {api_key?: string}) =>
       fetcher<{connection: Omit<import('../types').ModelConnectionInput, 'api_key'> & {has_key: boolean}}>('/settings/model-connection', {method: 'PUT', body: JSON.stringify(value)}),
     removeModelConnection: () => fetcher<void>('/settings/model-connection', {method: 'DELETE'}),
