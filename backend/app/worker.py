@@ -240,11 +240,13 @@ async def run_langgraph_workflow(task_id: str) -> dict:
 
             # Atomically serialize capacity checks for this user across concurrent workers.
             if task.user_id:
-                await session.execute(
+                owner = await session.scalar(
                     select(User.id)
-                    .where(User.id == task.user_id)
+                    .where(User.id == task.user_id, User.deleted_at.is_(None))
                     .with_for_update()
                 )
+                if owner is None:
+                    return {"status": "IGNORED", "task_id": task_id, "message": "Account deletion requested"}
 
             # Enforce the per-user running job limit.
             # Queued and WAITING_* states do not consume running slots.
@@ -1084,9 +1086,14 @@ async def run_task_deletion(task_id: str) -> dict:
                 seconds=max(settings.WORKER_LEASE_SECONDS * 2, settings.OUTBOX_DISPATCH_ACK_TIMEOUT_SECONDS * 2)
             )
             outbox_id = outbox.id
+            thread_ids = list(await session.scalars(select(WorkflowRun.checkpoint_thread_id).where(
+                WorkflowRun.research_task_id == task_uuid,
+            )))
 
     try:
         await asyncio.to_thread(artifact_store.delete_task_artifacts, task_uuid)
+        from app.services.account_deletion import delete_checkpoint_threads
+        await delete_checkpoint_threads(thread_ids)
     except Exception as exc:
         async with AsyncSessionLocal() as session:
             async with session.begin():

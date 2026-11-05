@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 
@@ -65,6 +65,20 @@ class UserProfileUpdate(BaseModel):
         if not self.model_fields_set.intersection({"username", "email", "full_name"}):
             raise ValueError("Provide at least one profile field")
         return self
+
+
+class UserDeletionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    current_password: str = Field(min_length=1, max_length=128, repr=False)
+    confirmation: Literal["DELETE"]
+
+    @field_validator("current_password")
+    @classmethod
+    def validate_password_bytes(cls, value):
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password must be at most 72 UTF-8 bytes")
+        return value
 
 
 class UserResponse(UserBase):

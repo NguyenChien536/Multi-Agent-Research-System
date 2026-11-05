@@ -107,6 +107,9 @@ async def create_research_task(
     current_user: User = Depends(get_current_user),
 ):
     """Tạo mới một Research Task."""
+    owner = await db.scalar(select(User).where(User.id == current_user.id, User.deleted_at.is_(None)).with_for_update(read=True))
+    if owner is None:
+        raise HTTPException(status_code=401, detail="Please sign in again.")
     
     budget_dict = task_in.budget.model_dump() if task_in.budget else {
         "max_cost_usd": 2.0,
@@ -581,33 +584,8 @@ async def delete_research_task(
 
     if task.status == "DELETING":
         return {"status": "DELETING", "message": "Task deletion is already queued", "task_id": str(task_id)}
-    task.status = "DELETING"
-    task.deleted_at = datetime.now(timezone.utc)
-    from app.services.provider_budget import pause_budget_config
-    task.budget_config = pause_budget_config(task.budget_config)
-    active_runs = await db.execute(
-        select(WorkflowRun).where(
-            WorkflowRun.research_task_id == task.id,
-            WorkflowRun.status.in_(["RUNNING", "WAITING_APPROVAL", "WAITING_USER_DATA"]),
-        ).with_for_update()
-    )
-    for workflow_run in active_runs.scalars():
-        workflow_run.status = "CANCELLED"
-        workflow_run.completed_at = datetime.now(timezone.utc)
-    pending_dispatches = await db.execute(
-        select(TaskDispatchOutbox).where(
-            TaskDispatchOutbox.research_task_id == task.id,
-            TaskDispatchOutbox.dispatched_at.is_(None),
-        ).with_for_update()
-    )
-    for event in pending_dispatches.scalars():
-        event.dispatched_at = datetime.now(timezone.utc)
-        event.last_error = "Task deleted by owner"
-    deletion_outbox = await db.scalar(
-        select(TaskDeletionOutbox).where(TaskDeletionOutbox.research_task_id == task.id).with_for_update()
-    )
-    if deletion_outbox is None:
-        db.add(TaskDeletionOutbox(research_task_id=task.id))
+    from app.services.account_deletion import tombstone_task
+    await tombstone_task(db, task)
     await db.commit()
     return {"status": "DELETING", "message": "Task hidden; cleanup queued", "task_id": str(task_id)}
 

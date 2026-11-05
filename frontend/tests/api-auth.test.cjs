@@ -55,6 +55,16 @@ test('profile conflicts keep the current session and expose the server status', 
   assert.equal(c.redirects.length, 0);
 });
 
+test('account deletion sends explicit confirmation and password on the authenticated self route', async () => {
+  const c = client({ response: { status: 'DELETING' } });
+  const payload = { current_password: 'fake-password', confirmation: 'DELETE' };
+  assert.equal((await c.api.auth.deleteAccount(payload)).status, 'DELETING');
+  assert.ok(c.requests[0].url.endsWith('/auth/me'));
+  assert.equal(c.requests[0].method, 'DELETE');
+  assert.equal(c.requests[0].headers.get('Authorization'), 'Bearer test-token');
+  assert.deepEqual(JSON.parse(c.requests[0].body), payload);
+});
+
 test('artifact downloads use shared authenticated binary handling and expire sessions consistently', async () => {
   const blob = new Blob(['private artifact']);
   const c = client({response: blob});

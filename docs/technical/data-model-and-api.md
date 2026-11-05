@@ -122,6 +122,8 @@ Backfill data cũ phải đánh dấu thiếu lineage; không tạo evidence gi�
 
 Giao diện: **Settings → Thông tin cá nhân** trên trang `/settings` và hộp thoại Settings. Sau khi lưu, thông tin ở thanh bên được cập nhật ngay. Email mới chưa được xác minh bằng email; đây là luồng tài khoản local, chưa có hệ thống gửi thư xác minh.
 
+Hồ sơ mặc định chỉ xem; bấm **Chỉnh sửa** để mở form, **Lưu thay đổi** mới gửi PATCH, **Hủy** bỏ bản nháp. **Xóa tài khoản** mở xác nhận riêng: nhập mật khẩu hiện tại và đúng chữ `DELETE`. `DELETE /api/v1/auth/me` nhận `current_password`, `confirmation`, trả 202. Migration `f297c20d0003` thêm `users.deleted_at` làm ý định xóa bền vững. Ngay sau xác nhận, đăng nhập/token cũ và provider calls mới bị từ chối, key mặc định bị gỡ. Dispatcher đánh dấu từng bài để tái sử dụng outbox xóa file; worker chờ lease đang hoạt động, xóa file và checkpoint đúng thread rồi xóa dữ liệu task. Chỉ xóa bản ghi tài khoản khi hết task. Lỗi cleanup giữ ý định/outbox để retry qua lần khởi động sau, không cascade mất thông tin dọn file. Khóa tài khoản không thể hủy qua giao diện. Các backup ngoại tuyến có sẵn không tự bị xóa bởi endpoint này; quy trình backup/khôi phục được quản lý riêng.
+
 `users.model_connection` lưu JSONB gồm profile công khai và ciphertext owner-bound; API không trả key/ciphertext. Bài mới mặc định giải mã cấu hình chủ sở hữu rồi mã hóa lại theo task ID, giữ snapshot riêng. Đổi cấu hình mặc định không đổi các bài cũ. Các endpoint bên dưới yêu cầu đăng nhập và quyền sở hữu:
 
 | Endpoint | Ý nghĩa |

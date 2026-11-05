@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
 from app.models.task import ResearchTask
+from app.models.user import User
 from app.services.agent_run import MODEL_PRICING, estimate_cost
 
 logger = logging.getLogger(__name__)
@@ -150,7 +151,7 @@ async def reserve_provider_call(
     reservation_id = str(uuid.uuid4())
     async with AsyncSessionLocal() as session:
         task = await session.scalar(
-            select(ResearchTask).where(ResearchTask.id == parsed_id).with_for_update(key_share=True)
+            select(ResearchTask).join(User).where(ResearchTask.id == parsed_id, User.deleted_at.is_(None)).with_for_update(of=ResearchTask, key_share=True)
         )
         if task is None:
             raise ResearchTaskStopped("Research task no longer exists")
@@ -283,7 +284,7 @@ async def assert_task_active(
     """Check task ownership before persisting workflow side effects."""
     parsed_id = uuid.UUID(str(task_id))
     async with AsyncSessionLocal() as session:
-        task = await session.scalar(select(ResearchTask).where(ResearchTask.id == parsed_id))
+        task = await session.scalar(select(ResearchTask).join(User).where(ResearchTask.id == parsed_id, User.deleted_at.is_(None)))
         allowed_pre_run = {"PENDING", "WAITING_APPROVAL", "WAITING_USER_DATA"}
         if task is None:
             raise ResearchTaskStopped("Research task no longer exists")

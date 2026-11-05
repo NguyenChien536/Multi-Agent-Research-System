@@ -16,6 +16,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     full_name = Column(String(100), nullable=True)
     model_connection = Column(JSONB, nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
 

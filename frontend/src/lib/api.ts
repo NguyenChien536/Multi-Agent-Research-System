@@ -95,6 +95,8 @@ export const api = {
     updateProfile: (data: UserProfileUpdate) => fetcher<UserResponse>('/auth/me', {
       method: 'PATCH', body: JSON.stringify(data),
     }),
+    deleteAccount: (data: { current_password: string; confirmation: string }) =>
+      fetcher<{ status: string }>('/auth/me', { method: 'DELETE', body: JSON.stringify(data) }),
   },
   tasks: {
     modelConnectionOptions: () => fetcher<{ protocol: string; base_urls: string[] }>('/research/model-connections/options'),

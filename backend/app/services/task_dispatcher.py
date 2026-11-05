@@ -456,10 +456,12 @@ async def outbox_dispatch_loop() -> None:
     """Poll the durable outbox; unavailable broker/DB never drops queued work."""
     while True:
         try:
+            from app.services.account_deletion import progress_account_deletion
+            account_progressed = await progress_account_deletion()
             research_dispatched = await dispatch_one_outbox_event()
             ingestion_dispatched = await dispatch_one_document_ingestion_event()
             deletion_dispatched = await dispatch_one_task_deletion_event()
-            dispatched = research_dispatched or ingestion_dispatched or deletion_dispatched
+            dispatched = account_progressed or research_dispatched or ingestion_dispatched or deletion_dispatched
         except asyncio.CancelledError:
             raise
         except Exception:
