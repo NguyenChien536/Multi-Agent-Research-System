@@ -1,5 +1,6 @@
 ﻿import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, UserDataResumeRequest, ProtocolResponse, AnalysisRunResponse, ExperimentJournalEntryResponse, DatasetUploadResponse, TokenResponse, UserCreate, UserResponse } from '../types';
 import type { ResearchMonitor } from '../types/monitoring';
+import type { UserProfileUpdate } from '../types';
 import type { ReportQuestion, ReportQuestionHistory, ReportVersionMetadata } from '../types/report-questions';
 import type { ReportRevision } from '../types/report-revisions';
 
@@ -91,6 +92,9 @@ export const api = {
       return token;
     },
     me: () => fetcher<UserResponse>('/auth/me'),
+    updateProfile: (data: UserProfileUpdate) => fetcher<UserResponse>('/auth/me', {
+      method: 'PATCH', body: JSON.stringify(data),
+    }),
   },
   tasks: {
     modelConnectionOptions: () => fetcher<{ protocol: string; base_urls: string[] }>('/research/model-connections/options'),

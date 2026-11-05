@@ -116,6 +116,12 @@ Backfill data cũ phải đánh dấu thiếu lineage; không tạo evidence gi�
 
 ## Settings API và model — 05/11/2026
 
+### Thông tin cá nhân
+
+`GET /api/v1/auth/me` đọc hồ sơ; `PATCH /api/v1/auth/me` cập nhật tài khoản đang đăng nhập. Các trường cho phép: `full_name` (tối đa 100 ký tự, có thể xóa), `username` (3–50 ký tự), `email` (email hợp lệ, tối đa 255 ký tự). Chỉ gửi trường cần sửa; không nhận user ID hoặc trường nội bộ. Đổi email cần `current_password` đúng; lần đăng nhập tiếp theo dùng email mới. Trùng email/username trả 409, sai/thiếu mật khẩu đổi email trả 403, dữ liệu sai trả 422, chưa đăng nhập trả 401. Mật khẩu không được trả trong response hoặc lỗi validation. Không đổi password, quyền sở hữu bài hoặc cấu hình model khi sửa hồ sơ. Các trường đã có trong bảng users nên không cần migration.
+
+Giao diện: **Settings → Thông tin cá nhân** trên trang `/settings` và hộp thoại Settings. Sau khi lưu, thông tin ở thanh bên được cập nhật ngay. Email mới chưa được xác minh bằng email; đây là luồng tài khoản local, chưa có hệ thống gửi thư xác minh.
+
 `users.model_connection` lưu JSONB gồm profile công khai và ciphertext owner-bound; API không trả key/ciphertext. Bài mới mặc định giải mã cấu hình chủ sở hữu rồi mã hóa lại theo task ID, giữ snapshot riêng. Đổi cấu hình mặc định không đổi các bài cũ. Các endpoint bên dưới yêu cầu đăng nhập và quyền sở hữu:
 
 | Endpoint | Ý nghĩa |

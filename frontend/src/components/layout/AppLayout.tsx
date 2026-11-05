@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
 import type { ResearchTaskResponse, UserResponse } from '@/types';
 import { ModelSettingsPanel } from '@/components/ModelSettingsPanel';
+import { ProfileSettingsPanel } from '@/components/ProfileSettingsPanel';
 
 const DEFAULT_SIDEBAR_WIDTH = 260;
 const MIN_SIDEBAR_WIDTH = 220;
@@ -25,6 +26,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [recentTasks, setRecentTasks] = useState<ResearchTaskResponse[]>([]);
   const [user, setUser] = useState<UserResponse | null>(null);
+  useEffect(() => {
+    const updated = (event: Event) => setUser((event as CustomEvent<UserResponse>).detail);
+    window.addEventListener('synthia-profile-updated', updated);
+    return () => window.removeEventListener('synthia-profile-updated', updated);
+  }, []);
   useEffect(() => {
     const open = () => setIsSettingsOpen(true);
     window.addEventListener('synthia-open-settings', open);
@@ -347,6 +353,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
             {/* Modal Body */}
             <div className="p-6 space-y-5 text-sm">
+              <ProfileSettingsPanel isEn={language === 'en'} />
+              <div className="border-t border-zinc-200" />
               <ModelSettingsPanel isEn={language === 'en'} taskId={pathname.match(/^\/research\/([0-9a-f-]{36})(?:\/|$)/i)?.[1]} />
 
               {/* Language Selection Setting */}

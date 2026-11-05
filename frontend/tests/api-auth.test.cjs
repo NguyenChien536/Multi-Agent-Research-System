@@ -36,6 +36,25 @@ test('protected auth/me and task requests both include the session token', async
   for (const request of c.requests) assert.equal(request.headers.get('Authorization'), 'Bearer test-token');
 });
 
+test('profile edits use the authenticated current-user route and preserve the session', async () => {
+  const updated = { id: 'owner-id', username: 'new-name', email: 'new@example.com', full_name: 'New Name' };
+  const c = client({ response: updated });
+  const payload = { email: 'new@example.com', current_password: 'fake-current-password' };
+  assert.equal(await c.api.auth.updateProfile(payload), updated);
+  assert.ok(c.requests[0].url.endsWith('/auth/me'));
+  assert.equal(c.requests[0].method, 'PATCH');
+  assert.equal(c.requests[0].headers.get('Authorization'), 'Bearer test-token');
+  assert.deepEqual(JSON.parse(c.requests[0].body), payload);
+  assert.equal(c.storage.get('synthia_access_token'), 'test-token');
+});
+
+test('profile conflicts keep the current session and expose the server status', async () => {
+  const c = client({ status: 409, response: { detail: 'Already registered' } });
+  await assert.rejects(c.api.auth.updateProfile({ username: 'taken' }), error => error.status === 409);
+  assert.equal(c.storage.get('synthia_access_token'), 'test-token');
+  assert.equal(c.redirects.length, 0);
+});
+
 test('artifact downloads use shared authenticated binary handling and expire sessions consistently', async () => {
   const blob = new Blob(['private artifact']);
   const c = client({response: blob});

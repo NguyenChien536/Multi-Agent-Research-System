@@ -89,6 +89,13 @@ export interface UserResponse {
   full_name?: string | null;
 }
 
+export interface UserProfileUpdate {
+  username?: string;
+  email?: string;
+  full_name?: string | null;
+  current_password?: string;
+}
+
 export interface TokenResponse {
   access_token: string;
   token_type: 'bearer';
