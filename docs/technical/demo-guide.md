@@ -135,6 +135,7 @@ Nếu còn thời gian, thử [CSV negative control](../../examples/demo/computa
 | PostgreSQL / SQLAlchemy | Lưu bài, nguồn, trạng thái và phiên bản | `backend/app/models/`, `backend/alembic/versions/` |
 | Redis / Celery | Gửi và chạy việc dài ở nền | `backend/app/services/task_dispatcher.py`, `backend/app/worker.py` |
 | LangGraph | Chuyển bước, vòng lặp, dừng và tiếp tục | `backend/app/agents/graph.py`, `state.py`, `nodes.py` |
+| Prompt riêng | Nội dung chỉ dẫn ở file txt, code chỉ truyền dữ liệu | `backend/app/prompts/templates/`, hướng dẫn trong `backend/app/prompts/README.md` |
 | Runner / intake | Tính baseline/Ridge và kiểm dữ liệu khảo sát | `backend/app/services/experiment_runner.py`, `isolated_experiment.py`, `fieldwork_intake.py` |
 | API/model Settings | Lưu khóa mã hóa và cấu hình mặc định/riêng | `backend/app/services/user_model_settings.py`, `model_connection.py` |
 

@@ -4,6 +4,7 @@ from typing import Any
 
 from langchain_core.runnables import RunnableLambda
 from pydantic import BaseModel
+from app.prompts import render_prompt
 
 
 def _gemini_wire_schema(schema: dict) -> dict:
@@ -31,7 +32,8 @@ def compatible_structured_output(model_name: str, model: Any, schema: Any):
         from langchain_core.messages import SystemMessage
         schema_text = json.dumps(schema.model_json_schema(), ensure_ascii=False)
         def add_schema(messages):
-            return [SystemMessage(content="Return one JSON object matching this schema exactly:\n" + schema_text), *messages]
+            instruction = render_prompt('structured_output', json_schema=schema_text)
+            return [SystemMessage(content=instruction), *messages]
         def validate_json(response):
             if (getattr(response, 'response_metadata', None) or {}).get('finish_reason') == 'length':
                 raise ValueError('MODEL_OUTPUT_TRUNCATED: JSON response reached its output limit')

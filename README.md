@@ -68,6 +68,7 @@ Modular monolith, API/worker là tiến trình riêng; mỗi agent là vai trò 
 | backend/app/api, schemas | HTTP, auth/ownership, hợp đồng dữ liệu |
 | backend/app/services | Settings/key, budget, evidence, manuscript, thí nghiệm, export |
 | backend/app/agents | State, nodes, routing và research/revision loops |
+| backend/app/prompts/templates | Chỉ dẫn model ở file txt; code nạp qua render_prompt, không hard-code các prompt dài |
 | backend/app/tools, models, alembic | Search/retrieval, persistence và migration |
 | frontend/src/app, components, lib/api.ts | Settings, workspace, monitor và HTTP client |
 | backend/tests, frontend/tests, .github/workflows | Regression và CI |

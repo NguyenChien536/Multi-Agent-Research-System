@@ -1,2 +1,4 @@
 # Preserve fixture bytes so recorded SHA-256 and replay inputs survive Windows checkout.
 examples/demo/*.csv text eol=lf
+# Prompt text preserves the original model input, including intentional padding.
+backend/app/prompts/templates/*.txt text eol=lf whitespace=-trailing-space
