@@ -35,6 +35,7 @@ def public_error(raw):
         return None
     value = raw.lower()
     cases = [
+        (('workflow_resume_conflict', 'invalid_concurrent_graph_update', 'can receive only one value per step'), 'WORKFLOW_RESUME_CONFLICT: The saved workflow could not resume safely. Previous results are retained; refresh and retry after the workflow fix is deployed.'),
         (('insufficient_evidence',), 'INSUFFICIENT_EVIDENCE: Add relevant sources or recorded result data before writing a manuscript.'),
         (('lengthfinishreason', 'model_output_truncated'), 'MODEL_OUTPUT_TRUNCATED: Model output was cut off before completing JSON.'),
         (('provider_auth_failed', '401', 'unauthorized', 'invalid api key', 'api_key_invalid', 'permission_denied', '403'), 'PROVIDER_AUTH_FAILED: Provider rejected the key or access permission. Check the service and key permissions.'),

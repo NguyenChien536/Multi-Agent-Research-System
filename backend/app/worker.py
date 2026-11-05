@@ -136,7 +136,34 @@ async def _invoke_checkpointed_graph_unchecked(graph, initial_state, task, run: 
     if not hasattr(graph, "aget_state") or getattr(graph, "checkpointer", None) is None:
         return await graph.ainvoke(initial_state), config
 
-    snapshot = await graph.aget_state(config)
+    checkpoint_update = {key: initial_state[key] for key in (
+        "attempt_number", "report_length", "citation_style", "max_sources", "enforce_provider_budget"
+    ) if key in initial_state}
+    repaired_legacy_input = False
+    try:
+        snapshot = await graph.aget_state(config)
+    except Exception as exc:
+        from langgraph.errors import InvalidUpdateError
+        if not isinstance(exc, InvalidUpdateError):
+            raise
+        # Legacy retries can leave conflicting uncommitted input writes. Read
+        # the latest committed checkpoint explicitly, without replaying those
+        # inputs; update_state below creates a clean, owned claim checkpoint.
+        store = graph.checkpointer
+        if not hasattr(store, 'aget_tuple'):
+            raise
+        committed = await store.aget_tuple(config)
+        if not committed:
+            raise
+        values = committed.checkpoint.get('channel_values') or {}
+        if values.get('task_id') != str(task.id) or values.get('workflow_run_id') != str(run.id):
+            raise RuntimeError('WORKFLOW_RESUME_CONFLICT: Checkpoint ownership mismatch') from None
+        allowed = set(checkpoint_update) | {'__error__'}
+        if any(channel not in allowed for _, channel, _ in (committed.pending_writes or [])):
+            raise RuntimeError('WORKFLOW_RESUME_CONFLICT: Uncommitted workflow results require inspection') from None
+        config = await graph.aupdate_state(committed.config, checkpoint_update)
+        snapshot = await graph.aget_state(config)
+        repaired_legacy_input = True
     if snapshot and getattr(snapshot, "values", None):
         pending_interrupts = [
             item.value
@@ -172,13 +199,18 @@ async def _invoke_checkpointed_graph_unchecked(graph, initial_state, task, run: 
         if not getattr(snapshot, "next", ()) and snapshot.values.get("final_report_markdown"):
             return snapshot.values, config
 
-        # The checkpoint advanced before a worker crash but the task row still
-        # carries the submitted decision. Resume from graph state, never replay it.
-        return await graph.ainvoke(
-            Command(update={key: initial_state[key] for key in (
-                "attempt_number", "report_length", "citation_style", "max_sources", "enforce_provider_budget"
-            ) if key in initial_state}), config=config
-        ), config
+        # A failed superstep can retain pending Command(update=...) writes.
+        # Sending another Command accumulates scalar writes and fails on the
+        # third claim. Commit the new claim in its own checkpoint, then resume
+        # with no input. This workflow is serial: require the same pending node
+        # so no completed agent/experiment is replayed or failed node skipped.
+        if len(snapshot.next) != 1:
+            raise RuntimeError('WORKFLOW_RESUME_CONFLICT: Expected one saved workflow step')
+        updated_config = config if repaired_legacy_input else await graph.aupdate_state(config, checkpoint_update)
+        updated = await graph.aget_state(updated_config)
+        if updated.next != snapshot.next:
+            raise RuntimeError('WORKFLOW_RESUME_CONFLICT: Saved workflow step changed during recovery')
+        return await graph.ainvoke(None, config=updated_config), updated_config
 
     return await graph.ainvoke(initial_state, config=config), config
 

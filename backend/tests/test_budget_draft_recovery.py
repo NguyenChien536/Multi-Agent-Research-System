@@ -32,7 +32,10 @@ async def test_only_current_owned_complete_checkpoint_can_recover(monkeypatch, i
 
         async def aget_state(self, config):
             assert config["configurable"]["thread_id"] == run.checkpoint_thread_id
-            return SimpleNamespace(values=saved, next=(), tasks=())
+            return SimpleNamespace(values=saved, next=('critic',), tasks=())
+
+        async def aupdate_state(self, config, _values):
+            return config
 
     async def active(*_args):
         if invalid == "cancelled": raise ResearchTaskStopped("Owner cancelled")
