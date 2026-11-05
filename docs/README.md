@@ -4,6 +4,8 @@
 
 **Cập nhật 05/11/2026:** bản local đã gộp một Docker Compose; Settings lưu API/model mặc định và cấu hình riêng cho bài. Kiểm thử code: 701 backend pass, 3 skip; 34 frontend pass; Docker builds đạt. Xem [Vận hành local](technical/local-release.md) và [Hiểu code/demo](technical/demo-guide.md). Provider miễn phí đang trả 429 nên chưa nghiệm thu được các bài mới, chưa chứng nhận production hoặc chất lượng Q1.
 
+**Chuẩn bị thuyết trình:** [Hướng dẫn demo dễ hiểu](technical/demo-guide.md) và [Kịch bản nói/thao tác cho ba luồng](technical/demo-presentation-script.md).
+
 ## Chỉ cần mở ba tài liệu thường xuyên
 
 | Bạn muốn biết | Mở |
