@@ -8,6 +8,10 @@ from typing import Any
 import redis.asyncio as aioredis
 from app.core.config import settings
 
+
+class ProviderQueueTimeout(TimeoutError):
+    """The pacing gate stopped a request before contacting the provider."""
+
 RESERVE_LUA = """
 local key = KEYS[1]
 local interval = tonumber(ARGV[1])
@@ -70,17 +74,17 @@ async def wait_for_gemini_slot(model: str) -> None:
         while True:
             remaining = math.floor((deadline - time.monotonic()) * 1000)
             if remaining <= 0:
-                raise TimeoutError("Gemini request queue deadline reached before provider call")
+                raise ProviderQueueTimeout("Gemini request queue deadline reached before provider call")
             delay = await r.eval(RESERVE_LUA, 1, key, interval_ms, remaining)
             if delay == -1:
-                raise TimeoutError("Gemini request queue is full; no provider call made")
+                raise ProviderQueueTimeout("Gemini request queue is full; no provider call made")
             if delay > 0:
                 await asyncio.sleep(delay / 1000.0)
             # A 429 arriving while we slept invalidates the old slot. Reserve a
             # new spaced slot after cooldown rather than releasing all waiters together.
             if await r.pttl(key + ':cooldown') <= 0:
                 if time.monotonic() >= deadline:
-                    raise TimeoutError("Gemini request queue deadline reached before provider call")
+                    raise ProviderQueueTimeout("Gemini request queue deadline reached before provider call")
                 return
 
 

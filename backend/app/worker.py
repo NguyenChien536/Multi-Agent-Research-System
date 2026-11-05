@@ -79,10 +79,11 @@ async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRu
     provider calls, resumes no graph nodes and never publishes a partial Writer response.
     """
     from app.services.provider_budget import ProviderBudgetExceeded, assert_task_active
+    from app.services.provider_pacing import ProviderQueueTimeout
 
     try:
         return await _invoke_checkpointed_graph_unchecked(graph, initial_state, task, run, preloaded_dataset_csv)
-    except ProviderBudgetExceeded as stopped:
+    except (ProviderBudgetExceeded, ProviderQueueTimeout) as stopped:
         if not hasattr(graph, "aget_state") or getattr(graph, "checkpointer", None) is None:
             raise
         config = {"configurable": {"thread_id": run.checkpoint_thread_id}}
@@ -98,13 +99,15 @@ async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRu
                 or not str(saved.get("draft_report_markdown") or "").strip()):
             raise
         await assert_task_active(str(task.id), initial_state["attempt_number"])
+        budget_limited = isinstance(stopped, ProviderBudgetExceeded)
         metadata = {
             **(saved.get("critic_review_metadata") or {}),
             "status": "NEEDS_REVIEW", "verdict": "NEEDS_REVIEW",
-            "budget_limited": True,
+            "budget_limited": budget_limited,
+            "provider_limited": not budget_limited,
             "review_scope": "internal_quality_control_not_peer_review",
             "draft_recovery": {
-                "reason": "PROVIDER_BUDGET_LIMIT",
+                "reason": "PROVIDER_BUDGET_LIMIT" if budget_limited else "PROVIDER_QUEUE_TIMEOUT",
                 "source": "last_completed_checkpoint",
                 "workflow_run_id": str(run.id),
                 "review_incomplete": True,
@@ -116,7 +119,8 @@ async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRu
         await assert_task_active(str(task.id), initial_state["attempt_number"])
         final_metadata = {**(finalized.get("critic_review_metadata") or metadata),
                           "status": "NEEDS_REVIEW", "verdict": "NEEDS_REVIEW",
-                          "budget_limited": True, "draft_recovery": metadata["draft_recovery"],
+                          "budget_limited": budget_limited, "provider_limited": not budget_limited,
+                          "draft_recovery": metadata["draft_recovery"],
                           "review_scope": "internal_quality_control_not_peer_review"}
         return {**recovered, **finalized, "status": "NEEDS_REVIEW",
                 "critic_verdict": "NEEDS_REVIEW", "critic_review_metadata": final_metadata}, config
