@@ -205,6 +205,11 @@ class BudgetedFallbackLLM:
             from app.services.structured_output import StructuredOutputFailure
             if isinstance(last_error, StructuredOutputFailure):
                 raise last_error
+            from httpx import TimeoutException
+            from openai import APITimeoutError
+            from app.services.public_errors import ProviderResponseTimeout
+            if isinstance(last_error, (TimeoutError, TimeoutException, APITimeoutError)):
+                raise ProviderResponseTimeout('PROVIDER_TIMEOUT: Provider response timed out.') from None
             from app.services.public_errors import ProviderUnavailable, ProviderRequestRejected, is_transient_provider_error, provider_request_rejected
             if is_transient_provider_error(last_error):
                 raise ProviderUnavailable('PROVIDER_UNAVAILABLE: Provider temporarily overloaded (503); bounded retries exhausted.') from None

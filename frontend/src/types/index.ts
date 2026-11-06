@@ -125,6 +125,8 @@ export interface ResearchReportResponse {
     lineage_findings?: string[];
     automatic_revision_stopped?: boolean;
     budget_limited?: boolean;
+    provider_limited?: boolean;
+    draft_recovery?: { reason?: string; review_incomplete?: boolean };
     review_scope?: string;
     [key: string]: unknown;
   };

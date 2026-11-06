@@ -380,7 +380,7 @@ async def test_byok_error_handling_user_messages_and_no_leak():
     llm = BudgetedFallbackLLM([("byok:gpt-4o", mock_model_timeout)])
     with pytest.raises(RuntimeError) as exc_info:
         await llm.ainvoke("test")
-    assert "connection timed out" in str(exc_info.value)
+    assert "PROVIDER_TIMEOUT" in str(exc_info.value)
 
 
 @pytest.mark.asyncio
@@ -465,3 +465,15 @@ async def test_byok_curator_monitor_does_not_claim_server_embedding_usage():
             assert run.output_summary['chunks_indexed'] == 8
     finally:
         await delete_test_user(uid)
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('model_name', ['byok:test', 'native-fixture'])
+async def test_only_actual_provider_timeouts_get_the_recoverable_type(model_name):
+    from unittest.mock import AsyncMock
+    from app.agents.nodes import BudgetedFallbackLLM
+    from app.services.public_errors import ProviderResponseTimeout
+    model = AsyncMock()
+    model.ainvoke.side_effect = TimeoutError('private transport details')
+    with pytest.raises(ProviderResponseTimeout, match='PROVIDER_TIMEOUT') as caught:
+        await BudgetedFallbackLLM([(model_name, model)]).ainvoke([])
+    assert 'private transport details' not in str(caught.value)

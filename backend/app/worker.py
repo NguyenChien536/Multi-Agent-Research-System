@@ -80,12 +80,12 @@ async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRu
     """
     from app.services.provider_budget import ProviderBudgetExceeded, assert_task_active
     from app.services.provider_pacing import ProviderQueueTimeout
-    from app.services.public_errors import ProviderUnavailable, ProviderRequestRejected
+    from app.services.public_errors import ProviderUnavailable, ProviderRequestRejected, ProviderResponseTimeout
     from app.services.structured_output import StructuredOutputFailure
 
     try:
         return await _invoke_checkpointed_graph_unchecked(graph, initial_state, task, run, preloaded_dataset_csv)
-    except (ProviderBudgetExceeded, ProviderQueueTimeout, ProviderUnavailable, ProviderRequestRejected, StructuredOutputFailure) as stopped:
+    except (ProviderBudgetExceeded, ProviderQueueTimeout, ProviderUnavailable, ProviderRequestRejected, ProviderResponseTimeout, StructuredOutputFailure) as stopped:
         if not hasattr(graph, "aget_state") or getattr(graph, "checkpointer", None) is None:
             raise
         config = {"configurable": {"thread_id": run.checkpoint_thread_id}}
@@ -112,6 +112,7 @@ async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRu
                 "reason": ("PROVIDER_BUDGET_LIMIT" if budget_limited else
                            "PROVIDER_UNAVAILABLE" if isinstance(stopped, ProviderUnavailable) else
                            "PROVIDER_REJECTED" if isinstance(stopped, ProviderRequestRejected) else
+                           "PROVIDER_TIMEOUT" if isinstance(stopped, ProviderResponseTimeout) else
                            "MODEL_INVALID_JSON" if isinstance(stopped, StructuredOutputFailure) else "PROVIDER_QUEUE_TIMEOUT"),
                 "source": "last_completed_checkpoint",
                 "workflow_run_id": str(run.id),

@@ -7,6 +7,10 @@ class ProviderRequestRejected(RuntimeError):
     """The provider explicitly rejected authentication, access, model or quota."""
 
 
+class ProviderResponseTimeout(RuntimeError):
+    """A timeout at the provider boundary, distinct from unrelated workflow bugs."""
+
+
 def provider_request_rejected(error):
     """Only explicit HTTP rejection statuses, never message substrings/timeouts.
 

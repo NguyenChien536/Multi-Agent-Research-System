@@ -7,7 +7,7 @@ from app import worker
 from app.services import provider_budget
 from app.services.provider_budget import ProviderBudgetExceeded, ResearchTaskStopped
 from app.services.provider_pacing import ProviderQueueTimeout
-from app.services.public_errors import ProviderUnavailable, ProviderRequestRejected
+from app.services.public_errors import ProviderUnavailable, ProviderRequestRejected, ProviderResponseTimeout
 from app.services.structured_output import StructuredOutputFailure
 
 
@@ -18,7 +18,7 @@ class InvalidReviewResponse(StructuredOutputFailure):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('stop_type', [ProviderBudgetExceeded, ProviderQueueTimeout, ProviderUnavailable, ProviderRequestRejected,
-                                     InvalidReviewResponse])
+                                     ProviderResponseTimeout, InvalidReviewResponse])
 @pytest.mark.parametrize("invalid", [None, "formatter_upgrade", "empty", "task", "run", "attempt", "uncheckpointed", "cancelled"])
 async def test_only_current_owned_complete_checkpoint_can_recover(monkeypatch, invalid, stop_type):
     task = SimpleNamespace(id=uuid.uuid4())

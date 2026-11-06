@@ -32,3 +32,19 @@ test('missing review metadata or a budget limit never claims automated checks pa
   assert.ok(!render({ review_status: 'PASSED', review_metadata: { budget_limited: true } }).includes('Automated checks passed'));
   assert.ok(render({ review_status: 'PASSED' }).includes('Automated checks passed'));
 });
+
+test('a recovered draft shows the review failure and never claims PASS', () => {
+  const html = render({review_status: 'PASSED', review_metadata: {provider_limited: true,
+    draft_recovery: {reason: 'MODEL_INVALID_JSON', review_incomplete: true}}});
+  assert.ok(html.includes('valid review response'));
+  assert.ok(html.includes('draft is saved; it has not passed review'));
+  assert.ok(html.includes('/research/task-1/monitor#execution-errors'));
+  assert.ok(!html.includes('Automated checks passed'));
+});
+
+test('unknown recovery reasons never expose raw provider text', () => {
+  const html = render({review_status: 'NEEDS_REVIEW', review_metadata: {
+    draft_recovery: {reason: 'private-provider-body-secret', review_incomplete: true}}});
+  assert.ok(html.includes('review was interrupted'));
+  assert.ok(!html.includes('private-provider-body-secret'));
+});

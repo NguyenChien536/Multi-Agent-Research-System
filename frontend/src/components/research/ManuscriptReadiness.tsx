@@ -18,7 +18,12 @@ export function ManuscriptReadiness({ report, taskId, isEn }: {
   }
   for (const section of metadata?.section_reviews || []) notes.push(...(section.feedback || []));
   const findings = Array.from(new Set(notes));
-  const passed = report.review_status === 'PASSED' && !findings.length && !metadata?.budget_limited;
+  const incomplete = metadata?.provider_limited || metadata?.draft_recovery?.review_incomplete;
+  const reason = metadata?.draft_recovery?.reason;
+  const interruptedMessage = reason === 'MODEL_INVALID_JSON' || reason === 'MODEL_OUTPUT_TRUNCATED'
+    ? (isEn ? 'The model could not complete a valid review response.' : 'Model chưa trả được kết quả phản biện đúng định dạng.')
+    : (isEn ? 'The AI review was interrupted by a provider or allowance limit.' : 'Bước phản biện bị gián đoạn do dịch vụ AI hoặc giới hạn lượt chạy.');
+  const passed = report.review_status === 'PASSED' && !findings.length && !metadata?.budget_limited && !incomplete;
   return <section aria-label={isEn ? 'Manuscript review' : 'Kiểm tra bản thảo'}
     className="print:hidden rounded-xl border border-zinc-200 bg-white p-4 space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -38,6 +43,12 @@ export function ManuscriptReadiness({ report, taskId, isEn }: {
     {metadata?.budget_limited && <p className="text-xs text-amber-800">{isEn
       ? 'The run reached its budget limit. Some checks may be incomplete.'
       : 'Đã chạm giới hạn ngân sách. Một số bước kiểm tra có thể chưa hoàn tất.'}</p>}
+    {incomplete && <div role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
+      <p>{interruptedMessage} {isEn ? 'Your draft is saved; it has not passed review.' : 'Bản thảo đã lưu, chưa được xác nhận qua phản biện.'}</p>
+      <Link href={`/research/${taskId}/monitor#execution-errors`} className="mt-1 inline-block underline">
+        {isEn ? 'View review interruption' : 'Xem bước bị gián đoạn'}
+      </Link>
+    </div>}
     {findings.length > 0 && <details className="border-t border-zinc-100 pt-3">
       <summary className="cursor-pointer text-xs font-medium text-zinc-700">{isEn
         ? `View ${findings.length} review ${findings.length === 1 ? 'note' : 'notes'}` : `Xem ${findings.length} góp ý kiểm tra`}</summary>
