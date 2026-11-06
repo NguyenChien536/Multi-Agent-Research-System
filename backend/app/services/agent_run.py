@@ -86,6 +86,8 @@ def extract_tokens(
     output_str: str = "",
 ) -> Tuple[int, int]:
     """Extract or estimate input and output token counts from a model response or text."""
+    if getattr(response, '_reused_provider_result', False):
+        return 0, 0
     input_tokens = 0
     output_tokens = 0
 

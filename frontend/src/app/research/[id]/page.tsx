@@ -1446,6 +1446,9 @@ export default function WorkspacePage() {
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-zinc-50/60 print:overflow-visible print:h-auto print:p-0 print:m-0 print:bg-white print:block">
             {/* TAB 1: SCIENTIFIC PAPER */}
             <ResearchRecoveryNotice task={task} isEn={isEn} busy={isStarting} onContinue={() => void handleStartTask()} />
+            {task.writing_progress && !report && <p role="status" className="mb-4 text-sm text-zinc-700">
+              {isEn ? 'Writing groups saved: ' : 'Nhóm phần đã lưu: '}{task.writing_progress.completed}/{task.writing_progress.total}
+            </p>}
             {(task.status === 'FAILED' || task.current_step === 'BUDGET_LIMIT') && <ResearchErrorNotice isEn={isEn}
               step={task.failed_agent || (task.current_step ? stepLabel(task.current_step, language) : null)}
               error={task.current_step === 'BUDGET_LIMIT' ? 'TASK_BUDGET_LIMIT' : task.latest_error || runs.filter(run => run.status === 'FAILED' && run.attempt_number === task.attempt_number).at(-1)?.error_message} />}

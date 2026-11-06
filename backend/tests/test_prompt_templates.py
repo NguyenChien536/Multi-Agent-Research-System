@@ -8,7 +8,7 @@ from app import prompts
 
 @pytest.mark.parametrize('name', [
     'supervisor', 'source_triage', 'evidence_analyst', 'methodologist', 'writer',
-    'critic', 'critic_evidence_support', 'report_question_answering', 'structured_output',
+    'critic', 'critic_evidence_support', 'report_question_answering', 'structured_output', 'structured_output_retry', 'writer_sections',
 ])
 def test_prompt_assets_render_with_explicit_context_and_keep_data_literal(name):
     template = (Path(prompts.__file__).parent / 'templates' / (name + '.txt')).read_text(encoding='utf-8')

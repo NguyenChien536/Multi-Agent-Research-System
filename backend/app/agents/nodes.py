@@ -342,6 +342,23 @@ async def invoke_llm_with_budget(
         "prompt_text": prompt_text,
     }
     if isinstance(llm, BudgetedFallbackLLM):
+        saved_work = None
+        result_key = None
+        if llm.structured_schema is not None:
+            from app.services.completed_work import CompletedWork
+            saved_work = CompletedWork.for_state(state)
+            if saved_work:
+                operation = 'json:' + llm.structured_schema.__name__[:70]
+                result_key = saved_work.fingerprint({'messages': [
+                    {'role': getattr(message, 'type', 'text'), 'content': getattr(message, 'content', str(message))}
+                    for message in messages], 'schema': llm.structured_schema.model_json_schema(),
+                    'limits': llm.output_limits})
+                cached = await saved_work.load(operation, result_key)
+                if cached:
+                    result = llm.structured_schema.model_validate(cached['value'])
+                    object.__setattr__(result, '_reused_provider_result', True)
+                    logger.info('Reused completed unit task=%s operation=%s', state['task_id'], operation)
+                    return result
         if any(name.startswith("byok:") for name, _ in llm.models):
             from app.services.model_connection import current_connection
             connection = current_connection()
@@ -354,7 +371,10 @@ async def invoke_llm_with_budget(
                 output_tokens, connection.output_token_limit if connection else 8192)
         token = _BUDGET_CALL_CONTEXT.set(context)
         try:
-            return await llm.ainvoke(messages)
+            response = await llm.ainvoke(messages)
+            if saved_work and result_key:
+                await saved_work.save(operation, result_key, {'value': response.model_dump()})
+            return response
         finally:
             _BUDGET_CALL_CONTEXT.reset(token)
 
@@ -1727,9 +1747,27 @@ Requested edits: {state.get('revision_instructions')}
     )
 
     try:
-        response = await invoke_llm_with_budget(
-            state, llm, [HumanMessage(content=prompt)], model_name=model_name, output_tokens=output_limit
-        )
+        from app.services.completed_work import CompletedWork
+        from app.services.sectional_writer import write_section_groups
+        from app.services.public_errors import ProviderResponseTimeout
+        saved_work = CompletedWork.for_state(state) if contract else None
+        strategy_key = saved_work.fingerprint({'writer_strategy': 1, 'prompt': prompt, 'capacity': output_limit}) if saved_work else None
+        async def invoke_writer(messages):
+            return await invoke_llm_with_budget(state, llm, messages, model_name=model_name, output_tokens=output_limit)
+        if saved_work and await saved_work.load('writer-strategy', strategy_key):
+            response = await write_section_groups(state, prompt, contract, saved_work, invoke_writer)
+        else:
+            try:
+                response = await invoke_writer([HumanMessage(content=prompt)])
+            except ProviderResponseTimeout:
+                if not saved_work:
+                    raise
+                await saved_work.save('writer-strategy', strategy_key, {'mode': 'sections'})
+                response = await write_section_groups(state, prompt, contract, saved_work, invoke_writer)
+            reason = str((getattr(response, 'response_metadata', None) or {}).get('finish_reason', '')).upper()
+            if saved_work and reason in {'LENGTH', 'MAX_TOKENS'}:
+                await saved_work.save('writer-strategy', strategy_key, {'mode': 'sections'})
+                response = await write_section_groups(state, prompt, contract, saved_work, invoke_writer)
         content = response.content
         if isinstance(content, list):
             draft_markdown = "".join(
@@ -1773,7 +1811,10 @@ Requested edits: {state.get('revision_instructions')}
             output_summary={"draft_words": len(draft_markdown.split()), "truncated": truncated,
                 "finish_reason": finish_reason or "unavailable",
                 "reported_model": str((getattr(response, "response_metadata", None) or {}).get("model_name") or
-                                      (getattr(response, "response_metadata", None) or {}).get("model_version") or "unavailable")},
+                                      (getattr(response, "response_metadata", None) or {}).get("model_version") or "unavailable"),
+                **({'writer_strategy': response.response_metadata['writer_strategy'],
+                    'reused_groups': response.response_metadata.get('reused_groups', 0)}
+                   if (getattr(response, 'response_metadata', None) or {}).get('writer_strategy') else {})},
             tool_calls=[],
         )
 

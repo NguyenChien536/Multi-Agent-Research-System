@@ -247,6 +247,7 @@ async def start_research_task(
     # hours spent reading a finished report as active research on explicit retry.
     from app.services.provider_budget import pause_budget_config
     task.budget_config = pause_budget_config(task.budget_config, now=task.completed_at)
+    task.budget_config = {key: value for key, value in task.budget_config.items() if key not in {'_writer_progress', '_provider_wait'}}
     task.status = "QUEUED"
     task.completed_at = None
     task.worker_lease_until = None

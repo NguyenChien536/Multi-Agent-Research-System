@@ -45,6 +45,7 @@ class ResearchTaskResponse(BaseModel):
     failed_agent: Optional[str] = None
     retry_blocked_reason: Optional[str] = None
     provider_wait: Optional[Dict[str, Any]] = None
+    writing_progress: Optional[Dict[str, int]] = None
     require_plan_approval: bool
     max_sources: int
     max_iterations: int
@@ -76,6 +77,9 @@ class ResearchTaskResponse(BaseModel):
         waiting = (getattr(value, 'budget_config', None) or {}).get('_provider_wait')
         if result.status == 'QUEUED' and isinstance(waiting, dict):
             result.provider_wait = {key: waiting.get(key) for key in ('reason', 'retry_at', 'retry_count')}
+        writing = (getattr(value, 'budget_config', None) or {}).get('_writer_progress')
+        if isinstance(writing, dict):
+            result.writing_progress = {key: int(writing.get(key, 0)) for key in ('completed', 'total')}
         connection = (getattr(value, 'budget_config', None) or {}).get('_llm_connection')
         if isinstance(connection, dict):
             profile = connection.get('profile') or {}

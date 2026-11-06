@@ -39,6 +39,7 @@ def public_error(raw):
         return None
     value = raw.lower()
     cases = [
+        (('manuscript_incomplete',), 'MANUSCRIPT_INCOMPLETE: A writing section is incomplete. Saved sections are retained; continue from the failed step.'),
         (('provider_daily_limit',), 'PROVIDER_DAILY_LIMIT: Provider daily request allowance reached. Wait for its reset or choose another configured service.'),
         (('workflow_resume_conflict', 'invalid_concurrent_graph_update', 'can receive only one value per step'), 'WORKFLOW_RESUME_CONFLICT: The saved workflow could not resume safely. Previous results are retained; refresh and retry after the workflow fix is deployed.'),
         (('insufficient_evidence',), 'INSUFFICIENT_EVIDENCE: Add relevant sources or recorded result data before writing a manuscript.'),
