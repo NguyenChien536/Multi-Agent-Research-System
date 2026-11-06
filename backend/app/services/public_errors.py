@@ -7,7 +7,7 @@ class ProviderRequestRejected(RuntimeError):
     """The provider explicitly rejected authentication, access, model or quota."""
 
 
-class ProviderResponseTimeout(RuntimeError):
+class ProviderResponseTimeout(TimeoutError):
     """A timeout at the provider boundary, distinct from unrelated workflow bugs."""
 
 

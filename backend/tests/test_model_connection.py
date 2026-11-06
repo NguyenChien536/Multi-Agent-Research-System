@@ -378,7 +378,8 @@ async def test_byok_error_handling_user_messages_and_no_leak():
     mock_model_timeout = AsyncMock()
     mock_model_timeout.ainvoke.side_effect = TimeoutError("Request timed out")
     llm = BudgetedFallbackLLM([("byok:gpt-4o", mock_model_timeout)])
-    with pytest.raises(RuntimeError) as exc_info:
+    from app.services.public_errors import ProviderResponseTimeout
+    with pytest.raises(ProviderResponseTimeout) as exc_info:
         await llm.ainvoke("test")
     assert "PROVIDER_TIMEOUT" in str(exc_info.value)
 
@@ -477,3 +478,13 @@ async def test_only_actual_provider_timeouts_get_the_recoverable_type(model_name
     with pytest.raises(ProviderResponseTimeout, match='PROVIDER_TIMEOUT') as caught:
         await BudgetedFallbackLLM([(model_name, model)]).ainvoke([])
     assert 'private transport details' not in str(caught.value)
+
+def test_structured_roles_keep_the_users_output_capacity(monkeypatch):
+    from types import SimpleNamespace
+    from app.agents.nodes import build_llm_chain
+    tid, uid = uuid.uuid4(), uuid.uuid4()
+    value = connection_input(output_token_limit=12288)
+    client = SimpleNamespace(max_tokens=12288)
+    monkeypatch.setattr('app.services.model_connection.build_connection_client', lambda _: client)
+    with connection_scope({'_llm_connection': seal_connection(value, tid, uid)}, tid, uid):
+        assert build_llm_chain().models[0][1].max_tokens == 12288

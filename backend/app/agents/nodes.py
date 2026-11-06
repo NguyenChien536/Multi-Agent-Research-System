@@ -256,8 +256,6 @@ def build_llm_chain(is_smart: bool = False):
     from app.services.model_connection import current_connection, build_connection_client
     if connection := current_connection():
         client = build_connection_client(connection)
-        if not is_smart:
-            client.max_tokens = min(connection.output_token_limit, DEFAULT_CALL_OUTPUT_TOKENS)
         return BudgetedFallbackLLM([(connection.model_tag, client)])
     providers = [p.strip().lower() for p in settings.LLM_PROVIDER_PRIORITY.split(",")]
     models: list[tuple[str, Any]] = []
