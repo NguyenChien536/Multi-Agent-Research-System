@@ -31,6 +31,17 @@ def strict_wire_schema(schema):
     return result
 
 
+def supports_strict_schema(schema):
+    """Arbitrary-key dictionaries cannot be closed without losing domain data."""
+    if isinstance(schema, list):
+        return all(supports_strict_schema(item) for item in schema)
+    if not isinstance(schema, dict):
+        return True
+    if schema.get('type') == 'object' and 'properties' not in schema and schema.get('additionalProperties') is not False:
+        return False
+    return all(supports_strict_schema(value) for value in schema.values())
+
+
 def _gemini_wire_schema(schema: dict) -> dict:
     # Gemini rejected the bounded Critic schema with INVALID_ARGUMENT but accepted
     # this simpler wire schema in a controlled integration pilot. Defaults and
@@ -83,7 +94,7 @@ def compatible_structured_output(model_name: str, model: Any, schema: Any):
         body = {**(getattr(model, 'extra_body', None) or {}), 'response_format': {'type': 'json_object'}}
         from app.services.model_connection import current_connection
         connection = current_connection()
-        if connection and connection.structured_output_mode == 'json_schema':
+        if connection and connection.structured_output_mode == 'json_schema' and supports_strict_schema(schema.model_json_schema()):
             body['response_format'] = {'type': 'json_schema', 'json_schema': {
                 'name': schema.__name__[:64], 'strict': True,
                 'schema': strict_wire_schema(schema.model_json_schema()),

@@ -130,3 +130,21 @@ async def test_json_correction_is_one_bounded_call_and_never_repairs_truncation(
         assert (await chain.ainvoke([HumanMessage(content='original')])).answer=='verified'
         assert len(calls)==2
         assert 'Do not invent' in calls[1][-1].content
+
+@pytest.mark.asyncio
+async def test_dynamic_protocol_variables_keep_json_compatibility_without_dropping_data(monkeypatch):
+    from types import SimpleNamespace
+    from langchain_core.messages import AIMessage
+    from pydantic import BaseModel
+    class Protocol(BaseModel):
+        variables: dict[str,str]
+    seen={}
+    class Model:
+        extra_body={}
+        def bind(self, **kwargs):
+            seen.update(kwargs)
+            return RunnableLambda(lambda _:AIMessage(content='{"variables":{"temperature":"measured exposure"}}'))
+    monkeypatch.setattr('app.services.model_connection.current_connection',lambda:SimpleNamespace(structured_output_mode='json_schema'))
+    value=await compatible_structured_output('byok:fixture',Model(),Protocol).ainvoke([])
+    assert seen['extra_body']['response_format']['type']=='json_object'
+    assert value.variables=={'temperature':'measured exposure'}

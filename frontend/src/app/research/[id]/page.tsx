@@ -1454,7 +1454,7 @@ export default function WorkspacePage() {
               error={task.current_step === 'BUDGET_LIMIT' ? 'TASK_BUDGET_LIMIT' : task.latest_error || runs.filter(run => run.status === 'FAILED' && run.attempt_number === task.attempt_number).at(-1)?.error_message} />}
             {activeTab === 'report' && (
               <div className={`paper-space w-full ${isWidePaper ? 'max-w-6xl' : 'max-w-4xl'} mx-auto space-y-6 transition-all duration-300 print:max-w-none print:m-0 print:p-0 print:space-y-0`}>
-                {(['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(task.status) || report?.research_task_id === params.id) ? report?.research_task_id === params.id ? (
+                {(['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW', 'FAILED'].includes(task.status) || report?.research_task_id === params.id) ? report?.research_task_id === params.id ? (
                   <div className="space-y-6 print:space-y-0">
                     <ManuscriptReadiness report={report} taskId={params.id} isEn={isEn} />
                     {['FAILED', 'CANCELLED'].includes(task.status) && (
