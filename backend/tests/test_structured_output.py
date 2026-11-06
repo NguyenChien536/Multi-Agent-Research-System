@@ -57,3 +57,94 @@ def test_schema_keyword_names_are_preserved_when_they_are_domain_fields():
     client = StructuredClient({"default": "a", "maxLength": "b"})
     compatible_structured_output("gemini-fixture", client, schema)
     assert set(client.schema["properties"]) == {"default", "maxLength"}
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('content,finish,valid', [('{"answer":"ok"}', 'STOP', True), ('```json\n{"answer":"ok"}\n```', 'stop', True), ('{"answer":null}', 'stop', False), ('not json', 'stop', False), ('{"answer":"ok"}', 'LENGTH', False)])
+async def test_custom_json_keeps_usage_without_weakening_validation(content, finish, valid):
+    from langchain_core.messages import AIMessage
+    from pydantic import BaseModel
+    from app.services.structured_output import StructuredOutputFailure
+    class Output(BaseModel):
+        answer: str
+    response = AIMessage(content=content, usage_metadata={'input_tokens': 31, 'output_tokens': 8, 'total_tokens': 39}, response_metadata={'finish_reason': finish})
+    class Model:
+        extra_body = {}
+        def bind(self, **kwargs):
+            return RunnableLambda(lambda _: response)
+    chain = compatible_structured_output('byok:fixture', Model(), Output)
+    if valid:
+        result = await chain.ainvoke([])
+        assert result.usage_metadata == response.usage_metadata
+        assert result.model_dump() == {'answer': 'ok'}
+    else:
+        with pytest.raises(StructuredOutputFailure) as caught:
+            await chain.ainvoke([])
+        assert caught.value.response.usage_metadata['output_tokens'] == 8
+        assert content not in str(caught.value)
+
+@pytest.mark.asyncio
+async def test_strict_wire_keeps_domain_field_names_and_local_validation(monkeypatch):
+    from types import SimpleNamespace
+    from langchain_core.messages import AIMessage
+    from pydantic import BaseModel
+    class Output(BaseModel):
+        default: str
+        optional: str = ''
+    seen={}
+    class Model:
+        extra_body={}
+        def bind(self, **kwargs):
+            seen.update(kwargs)
+            return RunnableLambda(lambda _: AIMessage(content='{"default":"verified","optional":""}'))
+    monkeypatch.setattr('app.services.model_connection.current_connection',lambda:SimpleNamespace(structured_output_mode='json_schema'))
+    result=await compatible_structured_output('byok:fixture',Model(),Output).ainvoke([])
+    schema=seen['extra_body']['response_format']['json_schema']['schema']
+    assert seen['extra_body']['response_format']['type']=='json_schema'
+    assert set(schema['required'])=={'default','optional'}
+    assert schema['additionalProperties'] is False
+    assert 'default' in schema['properties']
+    assert result.default=='verified'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('truncated', [False, True])
+async def test_json_correction_is_one_bounded_call_and_never_repairs_truncation(truncated):
+    from app.agents.nodes import BudgetedFallbackLLM
+    from app.services.structured_output import StructuredOutputFailure
+    from pydantic import BaseModel
+    from langchain_core.messages import AIMessage, HumanMessage
+    class Output(BaseModel):
+        answer: str
+    calls=[]
+    class Model:
+        async def ainvoke(self,messages):
+            calls.append(messages)
+            if len(calls)==1:
+                raise StructuredOutputFailure('MODEL_OUTPUT_TRUNCATED: cut off' if truncated else 'MODEL_INVALID_JSON: invalid shape',AIMessage(content='bad'))
+            return Output(answer='verified')
+    chain=BudgetedFallbackLLM([('byok:fixture',Model())],structured_schema=Output)
+    if truncated:
+        with pytest.raises(StructuredOutputFailure):await chain.ainvoke([HumanMessage(content='original')])
+        assert len(calls)==1
+    else:
+        assert (await chain.ainvoke([HumanMessage(content='original')])).answer=='verified'
+        assert len(calls)==2
+        assert 'Do not invent' in calls[1][-1].content
+
+@pytest.mark.asyncio
+async def test_dynamic_protocol_variables_keep_json_compatibility_without_dropping_data(monkeypatch):
+    from types import SimpleNamespace
+    from langchain_core.messages import AIMessage
+    from pydantic import BaseModel
+    class Protocol(BaseModel):
+        variables: dict[str,str]
+    seen={}
+    class Model:
+        extra_body={}
+        def bind(self, **kwargs):
+            seen.update(kwargs)
+            return RunnableLambda(lambda _:AIMessage(content='{"variables":{"temperature":"measured exposure"}}'))
+    monkeypatch.setattr('app.services.model_connection.current_connection',lambda:SimpleNamespace(structured_output_mode='json_schema'))
+    value=await compatible_structured_output('byok:fixture',Model(),Protocol).ainvoke([])
+    assert seen['extra_body']['response_format']['type']=='json_object'
+    assert value.variables=={'temperature':'measured exposure'}

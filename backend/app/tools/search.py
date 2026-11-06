@@ -113,6 +113,9 @@ async def execute_parallel_searches(
     if runtime := current_runtime():
         return await runtime.search(queries, max_results_per_query, include_activity=include_activity)
     tool = TavilySearchTool()
+    from app.services.model_connection import current_connection
+    if current_connection() is not None:
+        tool.client = None  # Do not spend the server's search credits for a BYOK task.
     depth = search_depth or settings.TAVILY_SEARCH_DEPTH
     if depth not in {"basic", "advanced", "fast", "ultra-fast"}:
         raise ValueError("Unsupported Tavily search depth")

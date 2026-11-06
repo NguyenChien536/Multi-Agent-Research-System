@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from app.core.database import AsyncSessionLocal
 from app.models.task import ResearchTask
+from app.models.user import User
 from app.services.agent_run import MODEL_PRICING, estimate_cost
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,20 @@ class ProviderBudgetExceeded(RuntimeError):
 
 class ResearchTaskStopped(RuntimeError):
     """The worker no longer owns a running task (cancelled or superseded)."""
+
+
+def retry_block_reason(task) -> str | None:
+    """Expose a safe action decision, never credentials or raw reservation data."""
+    if getattr(task, 'current_step', None) == 'BUDGET_LIMIT':
+        return 'TASK_BUDGET_LIMIT'
+    config = getattr(task, 'budget_config', None) or {}
+    usage = _usage(config)
+    calls, inputs, outputs, cost, seconds = _limits(config)
+    if any((usage.get(key, 0) >= limit) for key, limit in (
+        ('llm_calls', calls), ('input_tokens', inputs), ('output_tokens', outputs),
+        ('cost_usd', cost), ('active_seconds', seconds))):
+        return 'TASK_BUDGET_LIMIT'
+    return None
 
 
 def _usage(config: dict[str, Any]) -> dict[str, Any]:
@@ -150,7 +165,7 @@ async def reserve_provider_call(
     reservation_id = str(uuid.uuid4())
     async with AsyncSessionLocal() as session:
         task = await session.scalar(
-            select(ResearchTask).where(ResearchTask.id == parsed_id).with_for_update(key_share=True)
+            select(ResearchTask).join(User).where(ResearchTask.id == parsed_id, User.deleted_at.is_(None)).with_for_update(of=ResearchTask, key_share=True)
         )
         if task is None:
             raise ResearchTaskStopped("Research task no longer exists")
@@ -171,20 +186,32 @@ async def reserve_provider_call(
 
         input_tokens = max(0, int(input_tokens))
         output_tokens = max(0, int(output_tokens))
+        from app.services.model_connection import open_connection
+        connection = open_connection(config, task.id, task.user_id)
         if kind == "llm":
-            if not model or not any(key in model.lower() for key in MODEL_PRICING):
+            if connection is not None:
+                if model != connection.model_tag:
+                    raise ProviderBudgetExceeded("Only the task owner's configured model may be called")
+                call_cost = connection.estimate(input_tokens, output_tokens)
+            elif not model or model.startswith("byok:") or not any(key in model.lower() for key in MODEL_PRICING):
                 raise ProviderBudgetExceeded("Cannot price an unidentified LLM; provider call blocked")
-            call_cost = estimate_cost(model, input_tokens, output_tokens)
+            else:
+                call_cost = estimate_cost(model, input_tokens, output_tokens)
             next_llm_calls = int(usage.get("llm_calls", 0)) + 1
             if next_llm_calls > limits[0]:
                 raise ProviderBudgetExceeded(f"LLM call limit reached ({limits[0]})")
         elif kind == "embedding":
+            if connection is not None:
+                raise ProviderBudgetExceeded("Server embedding credentials are disabled for custom API tasks")
             if not model or not any(key in model.lower() for key in MODEL_PRICING):
                 raise ProviderBudgetExceeded("Cannot price unidentified embeddings; provider call blocked")
             call_cost = estimate_cost(model, input_tokens, 0)
             next_embedding_calls = int(usage.get("embedding_calls", 0)) + 1
         elif kind == "search":
-            if fixed_cost_usd is None or fixed_cost_usd <= 0:
+            if connection is not None and (model not in {"public:crossref", "public:openalex"} or fixed_cost_usd != 0):
+                raise ProviderBudgetExceeded("Custom API tasks use only unkeyed scholarly discovery")
+            public_search = model in {"public:crossref", "public:openalex"} and fixed_cost_usd == 0
+            if not public_search and (fixed_cost_usd is None or fixed_cost_usd <= 0):
                 raise ProviderBudgetExceeded("Search price is unknown; configure a positive per-request ceiling")
             call_cost = float(fixed_cost_usd)
             next_search_calls = int(usage.get("search_calls", 0)) + 1
@@ -229,8 +256,16 @@ async def settle_provider_call(
     output_tokens: int,
     cost_usd: float,
     succeeded: bool,
+    rejected: bool = False,
+    usage_reported: bool = False,
 ) -> None:
-    """Reconcile a completed call; failed/uncertain calls consume their reservation."""
+    """Reconcile measured completions/rejections; uncertain failures consume the reservation.
+
+    Admission already counted the call. A rejection never restores that call
+    allowance or changes provider pacing and never resets previous usage.
+    A completed response with invalid JSON still incurs its reported usage;
+    usage_reported must only be set when transport usage metadata is present.
+    """
     parsed_id = uuid.UUID(str(task_id))
     async with AsyncSessionLocal() as session:
         task = await session.scalar(
@@ -243,7 +278,7 @@ async def settle_provider_call(
         reservation = usage["reservations"].pop(reservation_id, None)
         if reservation is None:
             return
-        if succeeded:
+        if succeeded or rejected or usage_reported:
             input_tokens = max(0, int(input_tokens))
             output_tokens = max(0, int(output_tokens))
             cost_usd = max(0.0, float(cost_usd))
@@ -271,7 +306,7 @@ async def assert_task_active(
     """Check task ownership before persisting workflow side effects."""
     parsed_id = uuid.UUID(str(task_id))
     async with AsyncSessionLocal() as session:
-        task = await session.scalar(select(ResearchTask).where(ResearchTask.id == parsed_id))
+        task = await session.scalar(select(ResearchTask).join(User).where(ResearchTask.id == parsed_id, User.deleted_at.is_(None)))
         allowed_pre_run = {"PENDING", "WAITING_APPROVAL", "WAITING_USER_DATA"}
         if task is None:
             raise ResearchTaskStopped("Research task no longer exists")

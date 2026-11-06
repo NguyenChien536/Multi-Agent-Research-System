@@ -1,5 +1,7 @@
 # Bản Docker dùng để demo cuối kỳ
 
+**Cập nhật 05/11/2026:** một Compose có profile dev/prod; phần 1 mô tả cách chạy mới. Dev 3000, demo hiện tại 3082, dữ liệu/secret riêng. release start bật image đã chốt; release deploy mới build code đã commit. Các mốc nghiệm thu bên dưới là lịch sử trên revision ghi kèm, không tự trở thành kết quả của bản mới. Model miễn phí vẫn có thể trả 429; không coi chia môi trường hoặc build đạt là chứng nhận chất lượng Q1.
+
 **Nghiệm thu local 03/11/2026:** hạ tầng, backup/restore và luồng nghiên cứu đã chạy thực tế. #93 và #95 đã sửa, kiểm thử và merge vào `develop`. Candidate `2bc6151573d8` đã qua đủ 6 kiểm tra CI và chạy với provider thật; mã runtime tương ứng được merge tại `ac4c886a3eec`. **Chưa đưa lên main hoặc chốt chất lượng bài nộp**: tiếp tục cải thiện độ phủ bằng chứng (#86) và đánh giá pilot (#83).
 
 | Kiểm tra thực tế | Kết quả |
@@ -12,25 +14,64 @@
 | Giữ bản nháp khi provider từ chối do hạn mức | #93 lấy đúng checkpoint của task/run/attempt rồi chỉ định dạng bằng code. 158 test liên quan pass; test API→worker tái hiện đúng nhánh budget exception, cancellation và duplicate delivery. Lần REVIEW thật mới hoàn tất qua nhánh Critic budget-limited, không dùng riêng nhánh phục hồi checkpoint; hai loại bằng chứng kiểm thử được phân biệt |
 | Backup và restore sang project riêng | Kiểm tra trên candidate trước (`1a84aeb84c30`): đăng nhập lại, phục hồi 3 bài; manuscript khớp nguyên bản, artifact tải xuống có cùng SHA-256; project phục hồi đã dừng. Không có migration thay đổi cấu trúc dữ liệu trong #93/#95 |
 
-## 1. Phạm vi và cách chạy
+## 1. Hai môi trường local — cập nhật 05/11/2026
 
-Bản release chạy trên **máy hiện tại**, truy cập tại **http://127.0.0.1:3080**. Đây là cấu hình triển khai local: không bật reload, không mount mã nguồn, không mở cổng PostgreSQL/Redis ra máy chủ. Bản này có database, Redis và kho file riêng với môi trường phát triển ở cổng 3000/8000; các bài cũ ở môi trường phát triển không tự xuất hiện trong release.
+**Dev để sửa code; prod local để demo bản đã kiểm.** Cùng codebase và một `docker-compose.yml`, nhưng có hai profile, hai project Docker và dữ liệu riêng. Các số liệu nghiệm thu ở các mục lịch sử của tài liệu chỉ áp dụng cho đúng revision được nêu.
 
-Mở PowerShell tại thư mục gốc dự án, bật Docker Desktop rồi chạy:
+| | Dev | Prod local / demo |
+|---|---|---|
+| Script | scripts/dev.ps1 | scripts/release.ps1 |
+| Docker project | synthia-dev | Giữ synthia-workflow-check trên máy hiện tại |
+| Web | http://127.0.0.1:3000 | http://127.0.0.1:3082 trên máy hiện tại; máy mới mặc định 3080 |
+| API trực tiếp | http://127.0.0.1:8000/api/v1/docs | Qua gateway /api/v1, không publish API riêng |
+| Dữ liệu | Volume dev_pgdata/dev_redisdata/dev_artifacts của project dev | Giữ các volume pgdata/redisdata/artifacts trong project demo |
+| Env | scratch/development/.env, secret mới, không copy provider key | Env riêng theo scratch/local-active.json trên máy này |
+| Source | FE/API bind mount và reload, worker restart riêng | Image gắn revision, không mount code FE/API từ host |
+
+Mở PowerShell tại thư mục gốc, bật Docker Desktop. Khởi tạo dev một lần:
 
 ```powershell
-# Chỉ chạy một lần; tạo secret riêng và sao chép cấu hình provider từ .env trên máy.
-.\scripts\release.ps1 -Action init
+.\scripts\dev.ps1 -Action init
+.\scripts\dev.ps1 -Action start
+.\scripts\dev.ps1 -Action status
+.\scripts\dev.ps1 -Action logs
+# Sau khi sửa agent/tool, đợi job dev xong rồi restart worker:
+.\scripts\dev.ps1 -Action restart-worker
+.\scripts\dev.ps1 -Action stop
+```
 
-# Build, migration, đợi các service healthy.
+FE dùng Next.js dev; API dùng Uvicorn reload, với polling cho bind mount Windows. Container chỉ đọc source; cache Next ở volume dev riêng. Thay dependency/Dockerfile/next.config thì chạy lại `dev start`; thêm migration thì chạy lại dev start để nâng DB dev. Worker không tự bị ngắt khi lưu code: restart-worker từ chối nếu còn job RUNNING/QUEUED.
+
+Đăng ký tài khoản và cấu hình model/API trong Settings của dev. Không tự sao chép tài khoản, key hoặc bài từ demo sang dev. File `.env` gốc không tự thay env riêng này. Dev vẫn dùng provider thật khi chạy bài; không mặc định bật mock.
+
+Bật lại demo và đưa code mới sang demo:
+
+```powershell
+# Dùng đúng image đã chốt, không build HEAD dù source đang sửa.
 .\scripts\release.ps1 -Action start
 .\scripts\release.ps1 -Action status
 
-# Dừng và giữ toàn bộ dữ liệu.
+# Khi code mới đã test, review, commit; không còn job đang chạy:
+.\scripts\release.ps1 -Action backup
+.\scripts\release.ps1 -Action deploy
+
+# Dừng và giữ dữ liệu.
 .\scripts\release.ps1 -Action stop
 ```
 
-Không đưa `scratch/release-local/.env`, tài khoản demo, bản thảo riêng hoặc bản backup lên GitHub. `init` không thay secret đã có; thay secret sau khi đã dùng sẽ làm phiên đăng nhập cũ hết hiệu lực. Provider vẫn cần Internet và quota/API key hợp lệ; Docker không thay thế nhà cung cấp mô hình/tìm kiếm.
+Máy mới chưa có release: chạy release init rồi deploy một lần. `start` cần state và image đã chốt; image mất thì báo lỗi thay vì build source mới dưới tag cũ. `deploy` kiểm runtime source đã commit và từ chối nếu có research RUNNING/QUEUED; chỉ triển khai khi không có người gửi bài mới. Đây là local deployment, chưa phải hệ thống public/zero-downtime. Nhánh Git develop/main không tự cập nhật demo mỗi lần commit.
+
+Máy này giữ nguyên project, port, secret và volume demo; không init lại, không thay APP_SECRET_KEY và không xóa volume. Cả hai môi trường bind localhost. Backend tests vẫn dùng database test riêng, không dùng database dev hoặc demo để chạy suite.
+
+Kiểm cách ly khi cả hai môi trường đang chạy:
+
+```powershell
+python scripts/check-environments.py
+```
+
+Script kiểm mode, secret khác nhau, volume/network riêng và source chỉ mount ở dev. Nó tạo cùng username/email ở hai nơi để kiểm token/bài không truy cập chéo, thử Redis rồi dọn đúng các tài khoản/bài tạm đã tạo. Không gọi model/search. Không dùng smoke `--generate` khi chưa chốt provider/quota/ngân sách.
+
+Env, tài khoản, bản thảo và backup riêng không đưa lên Git. Backup cần secret tương ứng để khôi phục key mã hóa. Provider vẫn cần Internet và quota; chia môi trường không khắc phục hạn mức 429.
 
 ## 2. Kiến trúc thực sự chạy trong bản release
 

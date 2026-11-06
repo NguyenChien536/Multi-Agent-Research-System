@@ -79,10 +79,16 @@ async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRu
     provider calls, resumes no graph nodes and never publishes a partial Writer response.
     """
     from app.services.provider_budget import ProviderBudgetExceeded, assert_task_active
+    from app.services.provider_pacing import ProviderQueueTimeout
+    from app.services.public_errors import ProviderUnavailable, ProviderRequestRejected, ProviderResponseTimeout
+    from app.services.structured_output import StructuredOutputFailure
 
     try:
         return await _invoke_checkpointed_graph_unchecked(graph, initial_state, task, run, preloaded_dataset_csv)
-    except ProviderBudgetExceeded as stopped:
+    except (ProviderBudgetExceeded, ProviderQueueTimeout, ProviderUnavailable, ProviderRequestRejected, ProviderResponseTimeout, StructuredOutputFailure) as stopped:
+        from app.services.provider_recovery import can_defer
+        if can_defer(stopped, getattr(task, 'budget_config', None), run.id):
+            raise
         if not hasattr(graph, "aget_state") or getattr(graph, "checkpointer", None) is None:
             raise
         config = {"configurable": {"thread_id": run.checkpoint_thread_id}}
@@ -98,13 +104,19 @@ async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRu
                 or not str(saved.get("draft_report_markdown") or "").strip()):
             raise
         await assert_task_active(str(task.id), initial_state["attempt_number"])
+        budget_limited = isinstance(stopped, ProviderBudgetExceeded)
         metadata = {
             **(saved.get("critic_review_metadata") or {}),
             "status": "NEEDS_REVIEW", "verdict": "NEEDS_REVIEW",
-            "budget_limited": True,
+            "budget_limited": budget_limited,
+            "provider_limited": not budget_limited,
             "review_scope": "internal_quality_control_not_peer_review",
             "draft_recovery": {
-                "reason": "PROVIDER_BUDGET_LIMIT",
+                "reason": ("PROVIDER_BUDGET_LIMIT" if budget_limited else
+                           "PROVIDER_UNAVAILABLE" if isinstance(stopped, ProviderUnavailable) else
+                           "PROVIDER_REJECTED" if isinstance(stopped, ProviderRequestRejected) else
+                           "PROVIDER_TIMEOUT" if isinstance(stopped, ProviderResponseTimeout) else
+                           "MODEL_INVALID_JSON" if isinstance(stopped, StructuredOutputFailure) else "PROVIDER_QUEUE_TIMEOUT"),
                 "source": "last_completed_checkpoint",
                 "workflow_run_id": str(run.id),
                 "review_incomplete": True,
@@ -116,7 +128,8 @@ async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRu
         await assert_task_active(str(task.id), initial_state["attempt_number"])
         final_metadata = {**(finalized.get("critic_review_metadata") or metadata),
                           "status": "NEEDS_REVIEW", "verdict": "NEEDS_REVIEW",
-                          "budget_limited": True, "draft_recovery": metadata["draft_recovery"],
+                          "budget_limited": budget_limited, "provider_limited": not budget_limited,
+                          "draft_recovery": metadata["draft_recovery"],
                           "review_scope": "internal_quality_control_not_peer_review"}
         return {**recovered, **finalized, "status": "NEEDS_REVIEW",
                 "critic_verdict": "NEEDS_REVIEW", "critic_review_metadata": final_metadata}, config
@@ -129,7 +142,34 @@ async def _invoke_checkpointed_graph_unchecked(graph, initial_state, task, run: 
     if not hasattr(graph, "aget_state") or getattr(graph, "checkpointer", None) is None:
         return await graph.ainvoke(initial_state), config
 
-    snapshot = await graph.aget_state(config)
+    checkpoint_update = {key: initial_state[key] for key in (
+        "attempt_number", "report_length", "citation_style", "max_sources", "enforce_provider_budget"
+    ) if key in initial_state}
+    repaired_legacy_input = False
+    try:
+        snapshot = await graph.aget_state(config)
+    except Exception as exc:
+        from langgraph.errors import InvalidUpdateError
+        if not isinstance(exc, InvalidUpdateError):
+            raise
+        # Legacy retries can leave conflicting uncommitted input writes. Read
+        # the latest committed checkpoint explicitly, without replaying those
+        # inputs; update_state below creates a clean, owned claim checkpoint.
+        store = graph.checkpointer
+        if not hasattr(store, 'aget_tuple'):
+            raise
+        committed = await store.aget_tuple(config)
+        if not committed:
+            raise
+        values = committed.checkpoint.get('channel_values') or {}
+        if values.get('task_id') != str(task.id) or values.get('workflow_run_id') != str(run.id):
+            raise RuntimeError('WORKFLOW_RESUME_CONFLICT: Checkpoint ownership mismatch') from None
+        allowed = set(checkpoint_update) | {'__error__'}
+        if any(channel not in allowed for _, channel, _ in (committed.pending_writes or [])):
+            raise RuntimeError('WORKFLOW_RESUME_CONFLICT: Uncommitted workflow results require inspection') from None
+        config = await graph.aupdate_state(committed.config, checkpoint_update)
+        snapshot = await graph.aget_state(config)
+        repaired_legacy_input = True
     if snapshot and getattr(snapshot, "values", None):
         pending_interrupts = [
             item.value
@@ -165,13 +205,18 @@ async def _invoke_checkpointed_graph_unchecked(graph, initial_state, task, run: 
         if not getattr(snapshot, "next", ()) and snapshot.values.get("final_report_markdown"):
             return snapshot.values, config
 
-        # The checkpoint advanced before a worker crash but the task row still
-        # carries the submitted decision. Resume from graph state, never replay it.
-        return await graph.ainvoke(
-            Command(update={key: initial_state[key] for key in (
-                "attempt_number", "report_length", "citation_style", "max_sources", "enforce_provider_budget"
-            ) if key in initial_state}), config=config
-        ), config
+        # A failed superstep can retain pending Command(update=...) writes.
+        # Sending another Command accumulates scalar writes and fails on the
+        # third claim. Commit the new claim in its own checkpoint, then resume
+        # with no input. This workflow is serial: require the same pending node
+        # so no completed agent/experiment is replayed or failed node skipped.
+        if len(snapshot.next) != 1:
+            raise RuntimeError('WORKFLOW_RESUME_CONFLICT: Expected one saved workflow step')
+        updated_config = config if repaired_legacy_input else await graph.aupdate_state(config, checkpoint_update)
+        updated = await graph.aget_state(updated_config)
+        if updated.next != snapshot.next:
+            raise RuntimeError('WORKFLOW_RESUME_CONFLICT: Saved workflow step changed during recovery')
+        return await graph.ainvoke(None, config=updated_config), updated_config
 
     return await graph.ainvoke(initial_state, config=config), config
 
@@ -222,6 +267,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
     revision_request = None
     claim_attempt: int | None = None
     workflow_run_id: uuid.UUID | None = None
+    connection_token = None
     try:
         async with AsyncSessionLocal() as session:
             # Claim only a queued task. A duplicate Celery delivery is acknowledged
@@ -236,14 +282,19 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 return {"status": "FAILED", "task_id": task_id, "message": "Task not found in DB"}
             if task.status != "QUEUED":
                 return {"status": "IGNORED", "task_id": task_id, "message": f"Task is {task.status}"}
+            waiting = (task.budget_config or {}).get('_provider_wait') or {}
+            if waiting.get('retry_at') and datetime.fromisoformat(waiting['retry_at']) > datetime.now(timezone.utc):
+                return {"status": "QUEUED", "task_id": task_id, "message": "Provider cooldown has not ended"}
 
             # Atomically serialize capacity checks for this user across concurrent workers.
             if task.user_id:
-                await session.execute(
+                owner = await session.scalar(
                     select(User.id)
-                    .where(User.id == task.user_id)
+                    .where(User.id == task.user_id, User.deleted_at.is_(None))
                     .with_for_update()
                 )
+                if owner is None:
+                    return {"status": "IGNORED", "task_id": task_id, "message": "Account deletion requested"}
 
             # Enforce the per-user running job limit.
             # Queued and WAITING_* states do not consume running slots.
@@ -281,6 +332,8 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 }
 
             task.status = "RUNNING"
+            if '_provider_wait' in (task.budget_config or {}):
+                task.budget_config = {key: value for key, value in task.budget_config.items() if key != '_provider_wait'}
             task.current_step = None
             task.attempt_number += 1
             task.worker_lease_until = datetime.now(timezone.utc) + timedelta(seconds=settings.WORKER_LEASE_SECONDS)
@@ -331,6 +384,8 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             claim_attempt = task.attempt_number
             user_id = task.user_id
             await session.commit()
+            from app.services.model_connection import activate_connection
+            connection_token = activate_connection(task.budget_config, task.id, task.user_id)
             await _ensure_checkpoint_schema()
             heartbeat = asyncio.create_task(renew_worker_lease(task_id, claim_attempt))
             from app.services.provider_budget import resume_active_clock, remaining_active_seconds
@@ -815,10 +870,19 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 if task.status != "RUNNING" or task.attempt_number != claim_attempt:
                     return {"status": "SUPERSEDED", "task_id": task_id}
                 from app.services.provider_budget import ProviderBudgetExceeded, ResearchTaskStopped
+                from app.services.provider_recovery import schedule_provider_resume
+                await session.refresh(workflow_run, with_for_update=True)
+                if await schedule_provider_resume(session, task, workflow_run, e):
+                    await session.commit()
+                    return {"status": "QUEUED", "task_id": task_id, "message": "Provider retry scheduled from checkpoint"}
                 task.status = "NEEDS_REVIEW" if isinstance(e, (ProviderBudgetExceeded, ResearchTaskStopped)) else "FAILED"
                 task.completed_at = datetime.now(timezone.utc)
                 from app.services.provider_budget import pause_budget_config
                 task.budget_config = pause_budget_config(task.budget_config, now=task.completed_at)
+                from app.services.public_errors import public_error
+                task.budget_config = {**(task.budget_config or {}), '_last_failure': {
+                    'attempt_number': claim_attempt, 'message': public_error(str(e)), 'step': task.current_step,
+                }}
                 task.worker_lease_until = None
                 if isinstance(e, ProviderBudgetExceeded):
                     task.current_step = "BUDGET_LIMIT"
@@ -880,6 +944,10 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                         failed_task.completed_at = datetime.now(timezone.utc)
                         from app.services.provider_budget import pause_budget_config
                         failed_task.budget_config = pause_budget_config(failed_task.budget_config, now=failed_task.completed_at)
+                        from app.services.public_errors import public_error
+                        failed_task.budget_config = {**(failed_task.budget_config or {}), '_last_failure': {
+                            'attempt_number': claim_attempt, 'message': public_error(str(exc)), 'step': failed_task.current_step,
+                        }}
                         failed_task.resume_action = None
                         failed_task.resume_payload = None
                         summary = f"Research execution could not initialize/continue ({type(exc).__name__}). Check worker runtime logs."
@@ -898,6 +966,9 @@ async def run_langgraph_workflow(task_id: str) -> dict:
         logger.exception("Research execution failed task=%s attempt=%s", task_id, claim_attempt)
         raise
     finally:
+        if connection_token is not None:
+            from app.services.model_connection import reset_connection_async
+            await reset_connection_async(connection_token)
         if heartbeat is not None:
             heartbeat.cancel()
             try:
@@ -1078,9 +1149,14 @@ async def run_task_deletion(task_id: str) -> dict:
                 seconds=max(settings.WORKER_LEASE_SECONDS * 2, settings.OUTBOX_DISPATCH_ACK_TIMEOUT_SECONDS * 2)
             )
             outbox_id = outbox.id
+            thread_ids = list(await session.scalars(select(WorkflowRun.checkpoint_thread_id).where(
+                WorkflowRun.research_task_id == task_uuid,
+            )))
 
     try:
         await asyncio.to_thread(artifact_store.delete_task_artifacts, task_uuid)
+        from app.services.account_deletion import delete_checkpoint_threads
+        await delete_checkpoint_threads(thread_ids)
     except Exception as exc:
         async with AsyncSessionLocal() as session:
             async with session.begin():

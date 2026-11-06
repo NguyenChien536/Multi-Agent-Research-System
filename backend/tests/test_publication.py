@@ -38,21 +38,38 @@ def test_v2_requires_related_work_and_a_research_argument():
 
 
 def test_figures_are_built_from_measured_outputs_and_label_their_limits():
-    figures = build_scientific_figures(measured_context(), {"available_source_count": 3})
-    assert [f["kind"] for f in figures] == ["conceptual", "measured"]
-    assert figures[1]["data"] == {"baseline_mae": 3.0, "ridge_mae": 1.5}
-    assert "no confidence intervals" in figures[1]["caption"]
-    assert "1.5" in figures[1]["svg"]
-    assert "statistical_significance_tested" not in figures[1]["data"]
-    assert not build_scientific_figures({}, {})
+    figures = build_scientific_figures(measured_context())
+    assert [f["kind"] for f in figures] == ["measured"]
+    assert figures[0]["number"] == 1
+    assert figures[0]["data"] == {"baseline_mae": 3.0, "ridge_mae": 1.5}
+    assert "no confidence intervals" in figures[0]["caption"]
+    assert "1.5" in figures[0]["svg"]
+    assert "statistical_significance_tested" not in figures[0]["data"]
+    assert not build_scientific_figures({})
     context = measured_context(); context["analysis"]["metrics"]["model"]["mae"] = math.nan
     with pytest.raises(ValueError):
-        build_scientific_figures(context, {})
+        build_scientific_figures(context)
+
+
+def test_review_without_topic_specific_data_does_not_get_a_decorative_workflow_figure():
+    context = {"research_type": "REVIEW", "figure_style_version": 3,
+               "available_source_count": 1, "analysis": {"status": "PENDING"}}
+    figures = build_scientific_figures(context)
+    assert figures == []
+
+
+def test_historical_contract_keeps_its_saved_figure_policy_for_export():
+    old_context = {"research_type": "REVIEW", "figure_style_version": 2, "available_source_count": 1}
+    old_figures = build_scientific_figures(old_context)
+    assert [figure["id"] for figure in old_figures] == ["workflow"]
+    assert "not a count of screened studies" in old_figures[0]["caption"]
+    current_context = {**old_context, "figure_style_version": 3}
+    assert build_scientific_figures(current_context) == []
 
 
 def test_scientific_gates_require_baseline_and_interpretation_not_promotional_claims():
     contract = manuscript_contract("EMPIRICAL_COMPUTATIONAL", "en")
-    figs = build_scientific_figures(measured_context(), {})
+    figs = build_scientific_figures(measured_context())
     bad = "Our method is significantly better and achieves perfect accuracy.\n\n[[figure:evaluation]]"
     codes = {f["code"] for f in validate_scientific_reporting(bad, contract, {}, figs)}
     assert {"BASELINE_MISSING", "FIGURE_UNEXPLAINED", "UNSUPPORTED_SIGNIFICANCE", "UNSUPPORTED_SUPERLATIVE"} <= codes
@@ -78,6 +95,21 @@ def test_a_negative_clause_does_not_hide_an_unsupported_positive_claim():
     assert any(f["code"] == "UNSUPPORTED_SIGNIFICANCE" for f in findings)
 
 
+def test_review_with_fewer_than_two_cited_sources_is_marked_as_preliminary_scope():
+    contract = manuscript_contract("REVIEW", "en")
+    findings = validate_scientific_reporting("A bounded synthesis.", contract, {"used_source_count": 1}, [])
+    assert "SINGLE_SOURCE_SCOPE" in {item["code"] for item in findings}
+
+
+def test_source_scope_prompt_does_not_claim_cross_study_synthesis_from_one_source():
+    from app.services.manuscript import editorial_instructions
+    contract = manuscript_contract("REVIEW", "en")
+    guidance = editorial_instructions(contract, {"available_source_count": 1})
+    assert "preliminary and single-source" in guidance
+    assert "do not claim a field-level research gap or novelty" in guidance
+    assert "a gap cannot be established" in guidance
+
+
 def test_writer_receives_one_citation_identity_and_caption_is_not_interpretation():
     claim_id, evidence_id = str(uuid.uuid4()), str(uuid.uuid4())
     context = writer_claim_context([{"claim_id":claim_id,"evidence_id":evidence_id,"source_id":str(uuid.uuid4()),"claim":"A grounded result.","evidence_quote":"The original supporting passage."}])
@@ -85,7 +117,7 @@ def test_writer_receives_one_citation_identity_and_caption_is_not_interpretation
     assert context[0]["claim"] == "A grounded result."
     assert context[0]["evidence_quote"] == "The original supporting passage."
     assert evidence_id not in json.dumps(context)
-    figs = build_scientific_figures(measured_context(), {})
+    figs = build_scientific_figures(measured_context())
     findings = validate_scientific_reporting("*Figure 1: This is a long caption with many words but it is not an explanatory analytical paragraph.*\n\n[[figure:evaluation]]", manuscript_contract("EMPIRICAL_COMPUTATIONAL","en"), measured_context(), figs)
     assert any(f["code"] == "FIGURE_UNEXPLAINED" for f in findings)
 
@@ -132,19 +164,21 @@ async def test_many_claims_from_one_source_have_one_bibliography_entry(style):
 
 @pytest.mark.parametrize("template,document_class", [("IEEE_CONFERENCE", "IEEEtran"), ("ACM_SIGCONF", "acmart")])
 def test_publication_source_uses_official_class_measured_figures_and_escaped_text(template, document_class):
-    context = measured_context(); figures = build_scientific_figures(context, {})
+    context = measured_context(); figures = build_scientific_figures(context)
     contract = manuscript_contract("EMPIRICAL_COMPUTATIONAL", "en")
     draft = complete_manuscript("A result [1].\n\nFigure 1 compares the measured baseline and model errors on the held-out observations; it does not estimate uncertainty.\n\n[[figure:evaluation]]", "EMPIRICAL_COMPUTATIONAL", "en")
     md = materialize_figures(draft, figures) + "\n\n" + r"$\input{/etc/passwd}$"
     data, manifest = build_publication_bundle(r"A title \write18{bad}", md,
         {"manuscript_contract": contract, "scientific_context": context, "scientific_figures": figures, "status": "NEEDS_REVIEW"},
-        [{"source_id": "s1", "source_title": "Known source", "source_url":"https://example.org/paper%20name#section", "citation_label": "[1]"}], template, version_id="v1", version_number=1)
+        [{"source_id": "s1", "source_tag": "nested_cv", "source_title": "nested_cv", "source_url":"https://example.org/paper%20name#section", "citation_label": "[1]"}], template, version_id="v1", version_number=1)
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         tex = archive.read("main.tex").decode()
         assert "{" + document_class + "}" in tex
         assert r"\input{/etc/passwd}" not in tex
         assert r"\write18{bad}" not in tex
         assert r"\cite{ref1}" in tex
+        assert "[Title unavailable]" in tex
+        assert "nested\\_cv" not in tex
         assert r"\url{https://example.org/paper%20name#section}" in tex
         assert "paper%2520" not in tex
         assert "figures/evaluation.tex" in archive.namelist()
@@ -152,6 +186,7 @@ def test_publication_source_uses_official_class_measured_figures_and_escaped_tex
         assert all(not name.startswith(("/", "..")) for name in archive.namelist())
         assert json.loads(archive.read("provenance.json"))["report_version_id"] == "v1"
     assert manifest["review_status"] == "NEEDS_REVIEW"
+    assert "title_may_be_internal_source_label" in manifest["reference_metadata_notes"][0]["missing"]
 
 
 @pytest.mark.asyncio
@@ -181,3 +216,23 @@ async def test_publication_api_is_owner_scoped_and_version_pinned():
         async with AsyncSessionLocal() as db:
             task = await db.get(ResearchTask, tid); task.status = "DELETING"; await db.commit()
         assert (await client.get(url, headers=owner)).status_code == 404
+
+@pytest.mark.parametrize('claim', [
+    'These findings confirm that standardized features significantly improves predictive accuracy.',
+    'Ridge significantly improved accuracy on the synthetic sample.',
+    'Our algorithm significantly reduces prediction error.',
+    'The intervention significantly increased retention.',
+    'This procedure significantly enhances candidate satisfaction.',
+])
+def test_unexecuted_significance_cannot_hide_behind_other_comparative_verbs(claim):
+    contract = manuscript_contract('EMPIRICAL_COMPUTATIONAL', 'en')
+    codes = {f['code'] for f in validate_scientific_reporting(claim, contract, measured_context(), [])}
+    assert 'UNSUPPORTED_SIGNIFICANCE' in codes
+    supported = {**measured_context(), 'statistical_significance_tested': True}
+    assert 'UNSUPPORTED_SIGNIFICANCE' not in {f['code'] for f in validate_scientific_reporting(claim, contract, supported, [])}
+
+
+def test_explicitly_untested_significance_is_not_an_asserted_result():
+    text = 'The observed error reduction does not establish that Ridge significantly improves accuracy.'
+    codes = {f['code'] for f in validate_scientific_reporting(text, manuscript_contract('EMPIRICAL_COMPUTATIONAL', 'en'), measured_context(), [])}
+    assert 'UNSUPPORTED_SIGNIFICANCE' not in codes

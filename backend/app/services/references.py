@@ -11,8 +11,19 @@ def reference_identity(item: dict) -> str:
     return str(item.get("source_id") or item.get("source_url") or item.get("claim_id"))
 
 
+def reference_title(item: dict) -> str:
+    """Return a source title only when it is bibliographic metadata, not an ingestion tag."""
+    raw_title = _text(item.get("source_title"))
+    source_tag = _text(item.get("source_tag"))
+    if not raw_title or (source_tag and raw_title.casefold() == source_tag.casefold()):
+        return "[Title unavailable]"
+    return raw_title
+
+
 def _parts(item: dict) -> tuple[str, str, str, str, str, str]:
-    title = _text(item.get("source_title") or item.get("source_url") or item.get("source_tag") or "Untitled")
+    # A source tag is an ingestion identifier, not bibliographic metadata.
+    # Never turn it into a seemingly genuine article title in References.
+    title = reference_title(item)
     author = _text(item.get("source_author"))
     match = re.search(r"\b(?:19|20)\d{2}\b", _text(item.get("publication_date")))
     return (title, author, match[0] if match else "n.d.", _text(item.get("source_url")),
@@ -75,8 +86,12 @@ def reference_metadata_notes(items: list[dict]) -> list[dict]:
         seen.add(identity)
         title, author, year, url, venue, doi = _parts(item)
         missing = []
-        if not item.get("source_title"):
+        raw_title = _text(item.get("source_title"))
+        source_tag = _text(item.get("source_tag"))
+        if not raw_title:
             missing.append("title")
+        elif source_tag and raw_title.casefold() == source_tag.casefold():
+            missing.append("title_may_be_internal_source_label")
         if not author:
             missing.append("author")
         if year == "n.d.":

@@ -1,4 +1,4 @@
-export interface BudgetConfig {
+﻿export interface BudgetConfig {
   max_cost_usd?: number;
   max_llm_calls?: number;
   max_input_tokens?: number;
@@ -8,7 +8,19 @@ export interface BudgetConfig {
 
 export type ResearchType = "REVIEW" | "EMPIRICAL_COMPUTATIONAL" | "EMPIRICAL_HUMAN";
 
+export interface ModelConnectionInput {
+  api_key: string;
+  base_url: string;
+  model: string;
+  input_price_per_million: number;
+  output_price_per_million: number;
+  output_token_limit?: number;
+  reasoning_effort?: 'none' | 'low' | 'medium' | 'high';
+  structured_output_mode?: 'json_object' | 'json_schema';
+}
+
 export interface ResearchTaskCreate {
+  use_saved_connection?: boolean;
   title: string;
   research_question: string;
   description?: string;
@@ -21,6 +33,7 @@ export interface ResearchTaskCreate {
   report_length?: "SHORT" | "MEDIUM" | "LONG";
   citation_style?: "IEEE" | "APA" | "HARVARD";
   budget?: BudgetConfig;
+  llm_connection?: ModelConnectionInput;
 }
 
 export interface ResearchTaskResponse {
@@ -34,6 +47,11 @@ export interface ResearchTaskResponse {
   language: string;
   status: string; // PENDING, QUEUED, PLANNING, WAITING_APPROVAL, WAITING_USER_DATA, RESEARCHING, etc.
   current_step?: string | null;
+  latest_error?: string | null;
+  failed_agent?: string | null;
+  retry_blocked_reason?: string | null;
+  provider_wait?: { reason: string; retry_at: string; retry_count: number } | null;
+  writing_progress?: {completed: number; total: number} | null;
   require_plan_approval: boolean;
   max_sources: number;
   max_iterations: number;
@@ -43,6 +61,7 @@ export interface ResearchTaskResponse {
   citation_style?: string;
   total_cost_usd: number;
   total_tokens_used: number;
+  model_connection?: Omit<ModelConnectionInput, 'api_key'> & { revoked: boolean; cost_basis: string };
   plan?: {
     research_angle?: string;
     search_queries?: string[];
@@ -77,6 +96,13 @@ export interface UserResponse {
   full_name?: string | null;
 }
 
+export interface UserProfileUpdate {
+  username?: string;
+  email?: string;
+  full_name?: string | null;
+  current_password?: string;
+}
+
 export interface TokenResponse {
   access_token: string;
   token_type: 'bearer';
@@ -103,6 +129,8 @@ export interface ResearchReportResponse {
     lineage_findings?: string[];
     automatic_revision_stopped?: boolean;
     budget_limited?: boolean;
+    provider_limited?: boolean;
+    draft_recovery?: { reason?: string; review_incomplete?: boolean };
     review_scope?: string;
     [key: string]: unknown;
   };
@@ -113,6 +141,7 @@ export interface ResearchReportResponse {
 
 export interface CitationResponse {
   id: string;
+  report_version_id?: string;
   citation_number?: number | null;
   citation_label: string;
   claim_text?: string | null;
@@ -131,15 +160,22 @@ export interface ResearchSourceResponse {
   source_type: string;
   author?: string | null;
   publication_date?: string | null;
+  doi?: string | null;
+  venue?: string | null;
+  search_provider?: string | null;
+  full_text_url?: string | null;
+  text_scope?: string | null;
+  discovery_queries?: string[];
   content_snippet?: string | null;
   summary?: string | null;
   relevance_score: number;
+  ingestion_status?: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | string;
+  ingestion_error?: string | null;
   attribution?: string | null;
   provider_name?: string | null;
   license_name?: string | null;
   created_at: string;
 }
-
 export interface AgentRunResponse {
   id: string;
   research_task_id: string;

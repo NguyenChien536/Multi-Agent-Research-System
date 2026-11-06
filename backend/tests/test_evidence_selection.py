@@ -416,6 +416,51 @@ async def test_analyst_tracks_quote_candidates_and_gaps_across_study_types(corpu
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize('failure', ['truncated', 'json', 'timeout', 'auth'])
+async def test_personal_analyst_preserves_provider_failure_without_spending_on_other_needs(corpus, monkeypatch, failure):
+    from langchain_core.messages import AIMessage
+    from app.agents import nodes
+    from app.tools import embedder as module
+    from app.services import model_connection
+    from app.services.structured_output import StructuredOutputFailure
+    from app.services.public_errors import ProviderResponseTimeout, ProviderRequestRejected
+    tid, _, chunks = corpus
+    errors = {
+        'truncated': StructuredOutputFailure('MODEL_OUTPUT_TRUNCATED: bounded response', AIMessage(content='')),
+        'json': StructuredOutputFailure('MODEL_INVALID_JSON: bounded response', AIMessage(content='')),
+        'timeout': ProviderResponseTimeout('PROVIDER_TIMEOUT: bounded response'),
+        'auth': ProviderRequestRejected('PROVIDER_AUTH_FAILED: rejected'),
+    }
+    failure_error = errors[failure]
+    calls = []
+
+    class Retriever:
+        async def search_similar_chunks(self, db, task_id, query, **_kwargs):
+            return [(await db.get(DocumentChunk, chunks[1].id), 1.)]
+
+    class LLM:
+        def with_structured_output(self, _schema): return self
+        async def ainvoke(self, messages):
+            calls.append(True)
+            raise failure_error
+
+    monkeypatch.setattr(module, 'EmbedderTool', Retriever)
+    monkeypatch.setattr(model_connection, 'current_connection', lambda: object())
+    monkeypatch.setattr(nodes, 'get_active_model_name', lambda **_kwargs: 'byok:fixture')
+    monkeypatch.setattr(nodes, 'get_fast_llm', lambda: LLM())
+    monkeypatch.setattr(nodes, '_record_progress', AsyncMock())
+    audit = AsyncMock()
+    monkeypatch.setattr(nodes, 'record_agent_run', audit)
+    needs = [dict(need_id=f'n{i}', question=f'Evidence question {i}', section_id='discussion') for i in range(3)]
+    with pytest.raises(type(failure_error)) as caught:
+        await nodes.analyst_node({'task_id': str(tid), 'plan': {'evidence_needs': needs}})
+    assert caught.value is failure_error
+    assert len(calls) == 1
+    assert audit.await_args.kwargs['status'] == 'FAILED'
+    assert audit.await_args.kwargs['error_message'] == str(failure_error)
+
+
+@pytest.mark.asyncio
 async def test_macro_loop_keeps_web_vector_cap_and_does_not_expand_provider_spend(corpus, monkeypatch):
     from app.tools import embedder as module
     tid, sources, _ = corpus

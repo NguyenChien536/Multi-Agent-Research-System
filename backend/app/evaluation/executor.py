@@ -77,7 +77,7 @@ async def single_controller(state, runtime, corpus):
     contract = state["plan"]["manuscript_contract"]
     word_target, output_limit = writing_limits(contract, state.get("report_length", "MEDIUM"))
     paper = scientific_context(state)
-    figures = build_scientific_figures(paper, manuscript_provenance(state))
+    figures = build_scientific_figures(paper)
     state.update(scientific_context=paper, scientific_figures=figures)
     context, retrieved, history = [], {}, []
     llm = runtime.llm.with_structured_output(ControllerStep)
@@ -119,7 +119,7 @@ async def single_controller(state, runtime, corpus):
             # up to the provider's input cap; no rubric or target answers enter here.
             context = [{"chunk_id": str(c.id), "text": c.content} for c in retrieved.values()]
             paper = scientific_context(state)
-            figures = build_scientific_figures(paper, manuscript_provenance(state))
+            figures = build_scientific_figures(paper)
             state.update(scientific_context=paper, scientific_figures=figures)
             history.append({"action": "RETRIEVE", "query": step.query})
             continue

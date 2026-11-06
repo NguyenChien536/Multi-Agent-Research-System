@@ -29,8 +29,8 @@ Slug chỉ dùng chữ thường ASCII, số và dấu `-`; ngắn, mô tả **c
 ## Điều kiện để `main` luôn demo được
 
 1. Với đúng commit dự định merge, CI phải xanh: branch policy, cú pháp backend, toàn bộ backend tests (gồm API → graph → worker → report với provider giả), frontend build và Compose build. Không bỏ qua check đỏ.
-2. Chạy stack với cấu hình và khóa provider dùng cho demo: `docker compose up -d --build` (dịch vụ `migrate` tự nâng cấp DB trước API/worker), rồi `pwsh -File scripts/smoke-demo.ps1` (Windows PowerShell: `powershell -File scripts/smoke-demo.ps1`). Script tự đăng ký tài khoản tạm, tạo và chạy task, đợi worker hoàn tất, đọc lại báo cáo đã lưu; exit code khác 0 là không đạt.
-3. Mở `http://localhost:3000`, đăng nhập và kiểm luồng tạo task → theo dõi trạng thái → xem báo cáo trên trình duyệt. Ghi nhận dữ liệu nguồn/trích dẫn và lỗi nếu có. CI dùng provider giả nên không thay thế bước này.
+2. Chạy stack với cấu hình và khóa provider dùng cho demo: `pwsh -File scripts/release.ps1 -Action deploy` (dịch vụ `migrate` tự nâng cấp DB trước API/worker), rồi `pwsh -File scripts/smoke-demo.ps1` (Windows PowerShell: `powershell -File scripts/smoke-demo.ps1`). Truyền cổng demo vào smoke script bằng -ApiBaseUrl và -FrontendUrl; mặc định 3000/8000 thuộc dev. Script tự đăng ký tài khoản tạm, tạo và chạy task, đợi worker hoàn tất, đọc lại báo cáo đã lưu; exit code khác 0 là không đạt.
+3. Mở URL do `scripts/release.ps1 -Action status` in ra (máy demo hiện tại cổng 3082), đăng nhập và kiểm luồng tạo task → theo dõi trạng thái → xem báo cáo trên trình duyệt. Ghi nhận dữ liệu nguồn/trích dẫn và lỗi nếu có. CI dùng provider giả nên không thay thế bước này.
 4. Chỉ merge `main` khi smoke với **provider thật** và UI đều đạt trên cùng bản code; nếu sửa code sau smoke, chạy lại. Với hotfix cũng dùng cùng cổng. `main` hiện là baseline lịch sử chưa có bằng chứng end-to-end, vì vậy không được coi là bản demo đã nghiệm thu cho đến khi qua cổng này.
 
 ## Các cổng tự động

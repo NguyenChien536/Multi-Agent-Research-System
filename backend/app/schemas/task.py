@@ -2,6 +2,7 @@ import uuid
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict, model_validator
+from app.services.model_connection import ModelConnectionInput
 
 
 class BudgetConfigSchema(BaseModel):
@@ -25,6 +26,8 @@ class ResearchTaskCreate(BaseModel):
     report_length: str = Field(default="MEDIUM", pattern="^(SHORT|MEDIUM|LONG)$")
     citation_style: str = Field(default="IEEE", pattern="^(IEEE|APA|HARVARD)$")
     budget: Optional[BudgetConfigSchema] = None
+    llm_connection: Optional[ModelConnectionInput] = Field(default=None, repr=False)
+    use_saved_connection: bool = True
 
 
 class ResearchTaskResponse(BaseModel):
@@ -38,6 +41,11 @@ class ResearchTaskResponse(BaseModel):
     language: str
     status: str
     current_step: Optional[str] = None
+    latest_error: Optional[str] = None
+    failed_agent: Optional[str] = None
+    retry_blocked_reason: Optional[str] = None
+    provider_wait: Optional[Dict[str, Any]] = None
+    writing_progress: Optional[Dict[str, int]] = None
     require_plan_approval: bool
     max_sources: int
     max_iterations: int
@@ -47,6 +55,7 @@ class ResearchTaskResponse(BaseModel):
     citation_style: str = "IEEE"
     total_cost_usd: float
     total_tokens_used: int
+    model_connection: Optional[Dict[str, Any]] = None
     plan: Optional[Dict[str, Any]] = None
     plan_version: int = 0
     plan_approved: bool = False
@@ -63,6 +72,21 @@ class ResearchTaskResponse(BaseModel):
     @classmethod
     def canonical_usage_totals(cls, value, handler):
         result = handler(value)
+        from app.services.provider_budget import retry_block_reason
+        result.retry_blocked_reason = retry_block_reason(value)
+        waiting = (getattr(value, 'budget_config', None) or {}).get('_provider_wait')
+        if result.status == 'QUEUED' and isinstance(waiting, dict):
+            result.provider_wait = {key: waiting.get(key) for key in ('reason', 'retry_at', 'retry_count')}
+        writing = (getattr(value, 'budget_config', None) or {}).get('_writer_progress')
+        if isinstance(writing, dict):
+            result.writing_progress = {key: int(writing.get(key, 0)) for key in ('completed', 'total')}
+        connection = (getattr(value, 'budget_config', None) or {}).get('_llm_connection')
+        if isinstance(connection, dict):
+            profile = connection.get('profile') or {}
+            result.model_connection = {key: profile.get(key) for key in (
+                'base_url', 'model', 'input_price_per_million', 'output_price_per_million', 'output_token_limit', 'reasoning_effort', 'structured_output_mode')}
+            result.model_connection['revoked'] = bool(connection.get('revoked'))
+            result.model_connection['cost_basis'] = 'user_declared_estimate_not_invoice'
         # Historical paused records can have stale denormalized totals. Read
         # their durable ledger without exposing private budget/reservation data.
         usage = (getattr(value, 'budget_config', None) or {}).get('_provider_usage')

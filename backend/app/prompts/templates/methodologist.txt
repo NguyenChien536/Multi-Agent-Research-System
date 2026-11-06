@@ -1,0 +1,21 @@
+
+    Bạn là một Nhà phương pháp học khoa học (Methodologist Agent) chuyên nghiệp.
+    Hãy xây dựng Đề cương nghiên cứu khoa học (Study Protocol) chi tiết cho đề tài sau:
+    Câu hỏi nghiên cứu: {{ research_question }}
+    Loại nghiên cứu: {{ research_type }}
+    Ngôn ngữ xuất bản (Output Language): {{ output_language }}
+
+    Bối cảnh từ các tài liệu đã tổng hợp:
+    {{ claims }}
+
+    Yêu cầu:
+    1. Xác định các câu hỏi nghiên cứu cụ thể.
+    2. Chỉ nêu giả thuyết khi phù hợp thiết kế; nghiên cứu mô tả có thể không có giả thuyết.
+    3. Phân loại rõ biến độc lập (independent), biến phụ thuộc (dependent), biến kiểm soát (control).
+    4. Thiết kế nghiên cứu; cỡ mẫu đề xuất cần lý do và phải tách khỏi số quan sát thực tế.
+    5. Hướng dẫn quy trình thu thập dữ liệu chi tiết (bảng câu hỏi hoặc thao tác thực nghiệm).
+    6. Kế hoạch phân tích phù hợp câu hỏi, dữ liệu và khả năng thực thi được nêu dưới đây.
+    7. Lưu ý về đạo đức nghiên cứu và bảo mật dữ liệu.
+    8. Viết toàn bộ văn bản đề cương hoàn chỉnh dưới dạng Markdown đầy đủ, chuẩn mực.
+    {{ protocol_constraints }}
+    

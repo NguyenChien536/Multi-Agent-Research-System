@@ -42,6 +42,9 @@ def get_active_model_name(is_smart: bool = False) -> str:
     from app.core.runtime import current_runtime
     if runtime := current_runtime():
         return runtime.model_name
+    from app.services.model_connection import current_connection
+    if connection := current_connection():
+        return connection.model_tag
     providers = [p.strip().lower() for p in settings.LLM_PROVIDER_PRIORITY.split(",")]
     primary_provider = providers[0] if providers else "gemini"
 
@@ -58,6 +61,10 @@ def get_active_model_name(is_smart: bool = False) -> str:
 
 def estimate_cost(model_name: Optional[str], input_tokens: int, output_tokens: int) -> float:
     """Calculate estimated cost in USD based on model pricing per 1M tokens."""
+    from app.services.model_connection import current_connection
+    if connection := current_connection():
+        if model_name == connection.model_tag:
+            return connection.estimate(input_tokens, output_tokens)
     if not model_name:
         pricing = DEFAULT_PRICING
     else:
@@ -79,6 +86,8 @@ def extract_tokens(
     output_str: str = "",
 ) -> Tuple[int, int]:
     """Extract or estimate input and output token counts from a model response or text."""
+    if getattr(response, '_reused_provider_result', False):
+        return 0, 0
     input_tokens = 0
     output_tokens = 0
 
@@ -144,6 +153,14 @@ async def record_agent_run(
         output_summary = {**(output_summary or {}), "usage_accounting": "private evaluation provider trace"}
         if agent_name == "Curator":
             model = "local-frozen-chunks-no-embedding"
+    elif agent_name == "Curator":
+        from app.services.model_connection import current_connection
+        if current_connection() is not None:
+            # BYOK ingestion uses stored text and lexical retrieval; it never
+            # calls the server embedding provider or incurs embedding charges.
+            model = "local-lexical-indexer"
+            input_tokens, output_tokens, estimated_cost = 0, 0, 0.0
+            output_summary = {**(output_summary or {}), "retrieval_mode": "lexical_no_embedding_api"}
     run_record = AgentRun(
         research_task_id=parsed_task_id,
         agent_name=agent_name,
