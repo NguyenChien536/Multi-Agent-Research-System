@@ -39,6 +39,7 @@ class ModelConnectionInput(BaseModel):
     output_price_per_million: float = Field(default=0, ge=0, le=1000, allow_inf_nan=False)
     output_token_limit: int = Field(default=8192, ge=1024, le=32768)
     reasoning_effort: Literal['none', 'low', 'medium', 'high'] = 'low'
+    structured_output_mode: Literal['json_object', 'json_schema'] = 'json_object'
 
     @field_validator("base_url")
     @classmethod
@@ -82,6 +83,7 @@ class ModelConnection:
     api_key: str = field(repr=False)
     output_token_limit: int = 8192
     reasoning_effort: str = 'low'
+    structured_output_mode: str = 'json_object'
     _clients: list = field(default_factory=list, repr=False)
 
     @property

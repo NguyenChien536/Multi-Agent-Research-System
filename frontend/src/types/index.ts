@@ -16,6 +16,7 @@ export interface ModelConnectionInput {
   output_price_per_million: number;
   output_token_limit?: number;
   reasoning_effort?: 'none' | 'low' | 'medium' | 'high';
+  structured_output_mode?: 'json_object' | 'json_schema';
 }
 
 export interface ResearchTaskCreate {

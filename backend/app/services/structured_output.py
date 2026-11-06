@@ -5,6 +5,7 @@ from typing import Any
 from langchain_core.runnables import RunnableLambda
 from pydantic import BaseModel
 from app.prompts import render_prompt
+import re
 
 
 class StructuredOutputFailure(ValueError):
@@ -13,6 +14,21 @@ class StructuredOutputFailure(ValueError):
     def __init__(self, code, response):
         super().__init__(code)
         self.response = response
+
+
+def strict_wire_schema(schema):
+    """Constrain object keys at transport; keep original Pydantic validation."""
+    if isinstance(schema, list):
+        return [strict_wire_schema(item) for item in schema]
+    if not isinstance(schema, dict):
+        return schema
+    result = {key: ({name: strict_wire_schema(child) for name, child in value.items()}
+                    if key in {'properties', '$defs', 'definitions'} else strict_wire_schema(value))
+              for key, value in schema.items() if key != 'default'}
+    if result.get('type') == 'object' and 'properties' in result:
+        result['required'] = list(result['properties'])
+        result['additionalProperties'] = False
+    return result
 
 
 def _gemini_wire_schema(schema: dict) -> dict:
@@ -49,8 +65,9 @@ def compatible_structured_output(model_name: str, model: Any, schema: Any):
             if not isinstance(content, str) or not content.strip():
                 raise StructuredOutputFailure('MODEL_INVALID_JSON: Provider returned no JSON text', response)
             text = content.strip()
-            if text.startswith('```json\n') and text.endswith('```'):
-                text = text[8:-3].strip()
+            fence = re.fullmatch(r'```(?:json)?\s*\n([\s\S]*?)\n?```', text, re.I)
+            if fence:
+                text = fence[1].strip()
             try:
                 validated = schema.model_validate(json.loads(text))
             except ValueError:
@@ -64,6 +81,13 @@ def compatible_structured_output(model_name: str, model: Any, schema: Any):
         # transport. SDK beta .parse assumes native-provider response details;
         # custom gateways need local, strict JSON/Pydantic validation instead.
         body = {**(getattr(model, 'extra_body', None) or {}), 'response_format': {'type': 'json_object'}}
+        from app.services.model_connection import current_connection
+        connection = current_connection()
+        if connection and connection.structured_output_mode == 'json_schema':
+            body['response_format'] = {'type': 'json_schema', 'json_schema': {
+                'name': schema.__name__[:64], 'strict': True,
+                'schema': strict_wire_schema(schema.model_json_schema()),
+            }}
         return RunnableLambda(add_schema) | model.bind(extra_body=body) | RunnableLambda(validate_json)
     if model_name.startswith("gemini-") and isinstance(schema, type) and issubclass(schema, BaseModel):
         return model.with_structured_output(_gemini_wire_schema(schema.model_json_schema())) | RunnableLambda(schema.model_validate)

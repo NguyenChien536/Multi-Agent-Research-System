@@ -115,11 +115,17 @@ class BudgetedFallbackLLM:
         # Each attempt still passes pacing, cancellation and the durable budget.
         # Authentication/quota/invalid-output errors never trigger this pass.
         for index, (model_name, model) in enumerate(self.models * 2):
+            retry_hint = ''
             if index >= len(self.models):
                 from app.services.public_errors import is_transient_provider_error
-                if not is_transient_provider_error(last_error):
+                from app.services.structured_output import StructuredOutputFailure
+                repairable = self.structured_schema is not None and isinstance(last_error, StructuredOutputFailure) and str(last_error).startswith('MODEL_INVALID_JSON:')
+                if not is_transient_provider_error(last_error) and not repairable:
                     break
-                await asyncio.sleep(2)
+                if repairable:
+                    retry_hint = render_prompt('structured_output_retry')
+                else:
+                    await asyncio.sleep(2)
             reservation_id = None
             if self.pace_requests:
                 from app.services.provider_pacing import wait_for_gemini_slot, ProviderQueueTimeout
@@ -145,7 +151,7 @@ class BudgetedFallbackLLM:
                     attempt_number=context["attempt_number"],
                     kind="llm",
                     model=model_name,
-                    input_tokens=context["input_tokens"] + extra_tokens,
+                    input_tokens=context["input_tokens"] + extra_tokens + (estimate_tokens(retry_hint) if retry_hint else 0),
                     output_tokens=context["output_tokens"],
                 )
             try:
@@ -155,7 +161,8 @@ class BudgetedFallbackLLM:
                 async with asyncio.timeout(settings.PROVIDER_CALL_TIMEOUT_SECONDS):
                     from langsmith import tracing_context
                     with tracing_context(enabled=False if model_name.startswith("byok:") else None):
-                        response = await model.ainvoke(messages, **kwargs)
+                        attempt_messages = [*messages, HumanMessage(content=retry_hint)] if retry_hint and isinstance(messages, list) else messages
+                        response = await model.ainvoke(attempt_messages, **kwargs)
                 if reservation_id:
                     prompt_text = context["prompt_text"]
                     output_text = response.model_dump_json() if hasattr(response, "model_dump_json") else str(

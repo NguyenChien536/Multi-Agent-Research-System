@@ -33,7 +33,7 @@ async def test_catalog_uses_fixed_url_authorization_and_never_generates(monkeypa
         return httpx.Response(200, json={'data':[{'id':'chat-fixture'}, {'id':'embedding-fixture'}, {'id':KEY}, None]})
     catalog_transport(monkeypatch,handler)
     result = await model_catalog.discover_models(ROOT,KEY)
-    assert result['models']==[{'id':'chat-fixture','free':None}]
+    assert result['models']==[{'id':'chat-fixture','free':None,'supports_json_schema':False}]
     assert result['generation_calls']==0 and len(requests)==1
     assert KEY not in json.dumps(result)
 
@@ -70,7 +70,7 @@ async def test_google_resource_names_become_completion_model_ids(monkeypatch):
         return httpx.Response(200,json={'data':[{'id':'models/gemini-test-flash'}, {'id':'models/lyria-test'}, {'id':'models/gemini-test-image'}]})
     catalog_transport(monkeypatch,handler)
     result=await model_catalog.discover_models('https://generativelanguage.googleapis.com/v1beta/openai',KEY)
-    assert result['models']==[{'id':'gemini-test-flash','free':None}]
+    assert result['models']==[{'id':'gemini-test-flash','free':None,'supports_json_schema':False}]
 
 
 @pytest.mark.asyncio
@@ -81,7 +81,7 @@ async def test_catalog_endpoint_reuses_only_owned_saved_key_and_validates_servic
     calls=[]
     async def discover(root,key,free_only):
         calls.append((root,key,free_only))
-        return {'models':[{'id':'chat-fixture','free':None}],'generation_calls':0,'check':'catalog_only_not_generation_or_quota'}
+        return {'models':[{'id':'chat-fixture','free':None,'supports_json_schema':False}],'generation_calls':0,'check':'catalog_only_not_generation_or_quota'}
     monkeypatch.setattr(model_catalog,'discover_models',discover)
     try:
         async with AsyncSessionLocal() as db:

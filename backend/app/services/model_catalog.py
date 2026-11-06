@@ -91,7 +91,8 @@ async def discover_models(base_url: str, api_key: str, free_only: bool = True):
         if root == 'https://openrouter.ai/api/v1' and free_only:
             if not (free and name.endswith(':free')):
                 continue
-        models[name] = {'id': name, 'free': free if pricing else None}
+        models[name] = {'id': name, 'free': free if pricing else None,
+                        'supports_json_schema': 'structured_outputs' in (item.get('supported_parameters') or [])}
     if root == 'https://openrouter.ai/api/v1' and free_only:
         models['openrouter/free'] = {'id': 'openrouter/free', 'free': True}
     if not models:

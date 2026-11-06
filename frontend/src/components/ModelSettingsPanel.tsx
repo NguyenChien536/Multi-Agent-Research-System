@@ -42,7 +42,8 @@ export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: stri
       if (active) {
         setValue(profile ? {api_key:'', base_url:profile.base_url, model:profile.model,
           input_price_per_million:profile.input_price_per_million, output_price_per_million:profile.output_price_per_million,
-          output_token_limit: profile.output_token_limit || 8192, reasoning_effort: profile.reasoning_effort || 'low'} : {...empty});
+          output_token_limit: profile.output_token_limit || 8192, reasoning_effort: profile.reasoning_effort || 'low',
+          structured_output_mode: profile.structured_output_mode || 'json_object'} : {...empty});
         setSavedRoot(profile?.base_url || ''); setHasKey(key); setLocked(lock);
       }
     };

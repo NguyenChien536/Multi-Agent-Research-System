@@ -57,6 +57,7 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
   const [reload, setReload] = useState(0);
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState<string[]>([]);
+  const [schemaModels, setSchemaModels] = useState<Record<string, boolean>>({});
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [catalogError, setCatalogError] = useState('');
   const [catalogChecked, setCatalogChecked] = useState(false);
@@ -66,7 +67,7 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
   useEffect(() => {
     const tracker = catalogRequest.current;
     tracker.sequence++;
-    setModels([]); setCatalogChecked(false); setCatalogError(''); setCatalogBusy(false);
+    setModels([]); setSchemaModels({}); setCatalogChecked(false); setCatalogError(''); setCatalogBusy(false);
     return () => { tracker.sequence++; };
   }, [value?.base_url, value?.api_key, taskId, freeOnly]);
   useEffect(() => {
@@ -90,6 +91,7 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
         api_key: value.api_key || undefined, task_id: taskId, free_only: freeOnly});
       if (request !== catalogRequest.current.sequence) return;
       const names = result.models.map(model => model.id);
+      setSchemaModels(Object.fromEntries(result.models.map(model => [model.id, !!model.supports_json_schema])));
       setModels(names); setCatalogChecked(true); setManualModel(false);
       // Keep an explicit user choice. Never silently pick a paid model.
       if (!value.model && value.base_url === 'https://openrouter.ai/api/v1' && freeOnly) update({model:'openrouter/free'});
@@ -100,6 +102,7 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
 
   const handleBaseUrlChange = (newUrl: string) => {
     update({
+      structured_output_mode: 'json_object',
       base_url: newUrl,
       api_key: '',
       model: newUrl === 'https://openrouter.ai/api/v1' ? 'openrouter/free' : '',
@@ -140,12 +143,12 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
             spellCheck={false} value={value.api_key} onChange={event => update({ api_key: event.target.value })} />
         </label>
         <label className="block text-xs font-medium">{isEn ? 'Model' : 'Model'}
-          {!manualModel ? <select className={inputClass} required value={value.model} onChange={event => update({model:event.target.value})}>
+          {!manualModel ? <select className={inputClass} required value={value.model} onChange={event => update({model:event.target.value, structured_output_mode:schemaModels[event.target.value] ? 'json_schema' : 'json_object'})}>
             <option value="">{isEn ? 'Load models, then choose' : 'Tải danh sách rồi chọn model'}</option>
             {value.model && !models.includes(value.model) && <option value={value.model}>{value.model}</option>}
-            {models.map(model => <option key={model} value={model}>{model}</option>)}
+            {models.map(model => <option key={model} value={model}>{model}{schemaModels[model] ? ' · JSON Schema' : ''}</option>)}
           </select> : <input className={inputClass} required maxLength={200} autoComplete="off" spellCheck={false}
-            placeholder={activePlaceholder} value={value.model} onChange={event => update({model:event.target.value.trim()})} />}
+            placeholder={activePlaceholder} value={value.model} onChange={event => update({model:event.target.value.trim(), structured_output_mode:'json_object'})} />}
         </label>
       </div>
       <div className="flex flex-wrap items-center gap-3 text-xs">
@@ -159,6 +162,12 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
       <details className="text-sm text-zinc-700">
         <summary className="cursor-pointer">{isEn ? 'Model options' : 'Tùy chọn model'}</summary>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          <label>{isEn ? 'Structured data compatibility' : 'Tương thích dữ liệu có cấu trúc'}
+            <select className={inputClass} value={value.structured_output_mode || 'json_object'} onChange={event=>update({structured_output_mode:event.target.value as ModelConnectionInput['structured_output_mode']})}>
+              <option value="json_object">{isEn ? 'JSON · broad compatibility' : 'JSON · tương thích rộng'}</option>
+              <option value="json_schema">{isEn ? 'JSON Schema · supported endpoints' : 'JSON Schema · endpoint có hỗ trợ'}</option>
+            </select>
+          </label>
           <label>{isEn?'Output token limit':'Giới hạn token đầu ra'}
             <input type="number" min={1024} max={32768} step={1024} required className={inputClass}
               value={value.output_token_limit || 8192} onChange={event=>update({output_token_limit:Number(event.target.value)})} />
