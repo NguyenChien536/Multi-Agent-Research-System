@@ -29,6 +29,20 @@ class ResearchTaskStopped(RuntimeError):
     """The worker no longer owns a running task (cancelled or superseded)."""
 
 
+def retry_block_reason(task) -> str | None:
+    """Expose a safe action decision, never credentials or raw reservation data."""
+    if getattr(task, 'current_step', None) == 'BUDGET_LIMIT':
+        return 'TASK_BUDGET_LIMIT'
+    config = getattr(task, 'budget_config', None) or {}
+    usage = _usage(config)
+    calls, inputs, outputs, cost, seconds = _limits(config)
+    if any((usage.get(key, 0) >= limit) for key, limit in (
+        ('llm_calls', calls), ('input_tokens', inputs), ('output_tokens', outputs),
+        ('cost_usd', cost), ('active_seconds', seconds))):
+        return 'TASK_BUDGET_LIMIT'
+    return None
+
+
 def _usage(config: dict[str, Any]) -> dict[str, Any]:
     usage = config.get("_provider_usage")
     if not isinstance(usage, dict):

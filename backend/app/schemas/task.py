@@ -43,6 +43,8 @@ class ResearchTaskResponse(BaseModel):
     current_step: Optional[str] = None
     latest_error: Optional[str] = None
     failed_agent: Optional[str] = None
+    retry_blocked_reason: Optional[str] = None
+    provider_wait: Optional[Dict[str, Any]] = None
     require_plan_approval: bool
     max_sources: int
     max_iterations: int
@@ -69,6 +71,11 @@ class ResearchTaskResponse(BaseModel):
     @classmethod
     def canonical_usage_totals(cls, value, handler):
         result = handler(value)
+        from app.services.provider_budget import retry_block_reason
+        result.retry_blocked_reason = retry_block_reason(value)
+        waiting = (getattr(value, 'budget_config', None) or {}).get('_provider_wait')
+        if result.status == 'QUEUED' and isinstance(waiting, dict):
+            result.provider_wait = {key: waiting.get(key) for key in ('reason', 'retry_at', 'retry_count')}
         connection = (getattr(value, 'budget_config', None) or {}).get('_llm_connection')
         if isinstance(connection, dict):
             profile = connection.get('profile') or {}

@@ -6,6 +6,9 @@ const vm = require('node:vm');
 const ts = require('typescript');
 const source=fs.readFileSync(path.join(__dirname,'../src/app/research/[id]/page.tsx'),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+const recovery={};
+const recoveryCode=ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src/components/ResearchRecoveryNotice.tsx'),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+new Function('require','exports',recoveryCode)(name=>name==='next/link'?{default:'a'}:require(name),recovery);
 
 function elements(node) {
   if (!node || typeof node!=='object') return [];
@@ -51,6 +54,7 @@ async function workspace(status='FAILED',kind='REVIEW',retryError=false) {
       if(name==='@/lib/docxExport')return {exportPaperToDocx(){}};
       if(name==='@/components/ui/MarkdownViewer')return {extractHeadings:()=>[],MarkdownViewer:'markdown'};
       if(name==='@/components/ResearchErrorNotice')return {ResearchErrorNotice:'error-notice',researchErrorText:()=> 'Provider is overloaded (503).'};
+      if(name==='@/components/ResearchRecoveryNotice')return recovery;
       if(name==='lucide-react')return new Proxy({},{get:(_,key)=>key});
       if(name.startsWith('@/components/'))return new Proxy({},{get:(_,key)=>key==='Button'?'button':key});
       throw new Error('Unexpected import '+name);
@@ -70,7 +74,7 @@ test('failed workspace shows retry and uses the saved-step retry endpoint',async
   const notice=elements(tree).find(node=>node.type==='error-notice');
   assert.equal(notice.props.error,'PROVIDER_UNAVAILABLE: 503');
   assert.equal(notice.props.step,'Methodologist');
-  await elements(tree).find(node=>node.type==='button' && text(node).includes('Retry research')).props.onClick();
+  await elements(tree).find(node=>node.type==='button' && text(node).includes('Continue from failed step')).props.onClick();
   assert.deepEqual(h.calls,[['retry','fixture']]);
 });
 test('running workspace exposes the stop control',async()=>{
@@ -98,7 +102,7 @@ test('waiting computational research accepts CSV directly on the default workspa
 });
 test('retry errors stay visible inside the workspace',async()=>{
   const h=await workspace('FAILED','REVIEW',true);
-  await elements(h.render()).find(node=>node.type==='button' && text(node).includes('Retry research')).props.onClick();
+  await elements(h.render()).find(node=>node.type==='button' && text(node).includes('Continue from failed step')).props.onClick();
   await new Promise(resolve=>setImmediate(resolve));
   assert.ok(elements(h.render()).some(node=>node.props?.role==='alert' && text(node).includes('Network failure')));
 });

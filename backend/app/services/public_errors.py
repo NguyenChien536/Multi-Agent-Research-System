@@ -21,7 +21,7 @@ def provider_request_rejected(error):
     status = getattr(error, 'status_code', getattr(error, 'code', None))
     if status is None:
         status = getattr(getattr(error, 'response', None), 'status_code', None)
-    return status in (401, 403, 404, 429) or type(error).__name__ in ('GoogleRateLimitError', 'RateLimitError')
+    return str(status) in ('401', '403', '404', '429') or type(error).__name__ in ('GoogleRateLimitError', 'RateLimitError')
 
 
 def is_transient_provider_error(error):
@@ -39,6 +39,7 @@ def public_error(raw):
         return None
     value = raw.lower()
     cases = [
+        (('provider_daily_limit',), 'PROVIDER_DAILY_LIMIT: Provider daily request allowance reached. Wait for its reset or choose another configured service.'),
         (('workflow_resume_conflict', 'invalid_concurrent_graph_update', 'can receive only one value per step'), 'WORKFLOW_RESUME_CONFLICT: The saved workflow could not resume safely. Previous results are retained; refresh and retry after the workflow fix is deployed.'),
         (('insufficient_evidence',), 'INSUFFICIENT_EVIDENCE: Add relevant sources or recorded result data before writing a manuscript.'),
         (('lengthfinishreason', 'model_output_truncated'), 'MODEL_OUTPUT_TRUNCATED: Model output was cut off before completing JSON.'),

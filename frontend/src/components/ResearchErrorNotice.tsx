@@ -1,6 +1,7 @@
 export function researchErrorText(raw: string | null | undefined, isEn: boolean): string {
   const value = (raw || '').toLowerCase();
   const cases: [RegExp, string, string][] = [
+    [/provider_daily_limit/, 'Dịch vụ đã hết hạn mức lượt gọi trong ngày. Chờ dịch vụ đặt lại hạn mức hoặc chọn kết nối khác trong Settings.', 'The provider daily request allowance is exhausted. Wait for its reset or choose another service in Settings.'],
     [/workflow_resume_conflict|invalid_concurrent_graph_update/, 'Không thể tiếp tục bước đã lưu do xung đột trạng thái. Nguồn và kết quả trước đó vẫn được giữ. Làm mới trang và thử lại sau khi hệ thống được cập nhật.', 'The saved workflow could not resume safely. Existing sources and results are retained. Refresh and retry after the workflow fix is deployed.'],
     [/insufficient_evidence/, 'Chưa đủ bằng chứng để viết bài. Hãy bổ sung nguồn phù hợp hoặc dữ liệu kết quả; hệ thống không tự tạo luận điểm và số liệu thay thế.', 'There is not enough evidence to write the article. Add relevant sources or recorded results; unsupported findings will not be fabricated.'],
     [/lengthfinishreason|model_output_truncated/, 'Model hết giới hạn token đầu ra trước khi hoàn tất câu trả lời. Lỗi này không phải do API key. Hãy thử lại với model có đủ dung lượng đầu ra.', 'The model reached its output token limit. This is not an API-key error. Retry with sufficient output capacity.'],

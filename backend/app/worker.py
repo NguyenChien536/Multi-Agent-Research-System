@@ -86,6 +86,9 @@ async def _invoke_checkpointed_graph(graph, initial_state, task, run: WorkflowRu
     try:
         return await _invoke_checkpointed_graph_unchecked(graph, initial_state, task, run, preloaded_dataset_csv)
     except (ProviderBudgetExceeded, ProviderQueueTimeout, ProviderUnavailable, ProviderRequestRejected, ProviderResponseTimeout, StructuredOutputFailure) as stopped:
+        from app.services.provider_recovery import can_defer
+        if can_defer(stopped, getattr(task, 'budget_config', None), run.id):
+            raise
         if not hasattr(graph, "aget_state") or getattr(graph, "checkpointer", None) is None:
             raise
         config = {"configurable": {"thread_id": run.checkpoint_thread_id}}
@@ -279,6 +282,9 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 return {"status": "FAILED", "task_id": task_id, "message": "Task not found in DB"}
             if task.status != "QUEUED":
                 return {"status": "IGNORED", "task_id": task_id, "message": f"Task is {task.status}"}
+            waiting = (task.budget_config or {}).get('_provider_wait') or {}
+            if waiting.get('retry_at') and datetime.fromisoformat(waiting['retry_at']) > datetime.now(timezone.utc):
+                return {"status": "QUEUED", "task_id": task_id, "message": "Provider cooldown has not ended"}
 
             # Atomically serialize capacity checks for this user across concurrent workers.
             if task.user_id:
@@ -326,6 +332,8 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 }
 
             task.status = "RUNNING"
+            if '_provider_wait' in (task.budget_config or {}):
+                task.budget_config = {key: value for key, value in task.budget_config.items() if key != '_provider_wait'}
             task.current_step = None
             task.attempt_number += 1
             task.worker_lease_until = datetime.now(timezone.utc) + timedelta(seconds=settings.WORKER_LEASE_SECONDS)
@@ -862,6 +870,11 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 if task.status != "RUNNING" or task.attempt_number != claim_attempt:
                     return {"status": "SUPERSEDED", "task_id": task_id}
                 from app.services.provider_budget import ProviderBudgetExceeded, ResearchTaskStopped
+                from app.services.provider_recovery import schedule_provider_resume
+                await session.refresh(workflow_run, with_for_update=True)
+                if await schedule_provider_resume(session, task, workflow_run, e):
+                    await session.commit()
+                    return {"status": "QUEUED", "task_id": task_id, "message": "Provider retry scheduled from checkpoint"}
                 task.status = "NEEDS_REVIEW" if isinstance(e, (ProviderBudgetExceeded, ResearchTaskStopped)) else "FAILED"
                 task.completed_at = datetime.now(timezone.utc)
                 from app.services.provider_budget import pause_budget_config

@@ -229,6 +229,9 @@ async def start_research_task(
         raise HTTPException(status_code=404, detail="Research task not found")
     if task.status not in ("PENDING", "CANCELLED", "FAILED", "NEEDS_REVIEW"):
         raise HTTPException(status_code=409, detail=f"Research task cannot be started from status {task.status}")
+    from app.services.provider_budget import retry_block_reason
+    if retry_block_reason(task):
+        raise HTTPException(409, 'TASK_BUDGET_LIMIT: This article cannot continue within its remaining allowance. Saved results are retained; create a new research article.')
 
     pending_ingestion = await db.scalar(
         select(func.count(ResearchSource.id)).where(
@@ -288,6 +291,9 @@ async def retry_failed_research(task_id: uuid.UUID, db: AsyncSession = Depends(g
         raise HTTPException(404, 'Research task not found')
     if task.status != 'FAILED':
         raise HTTPException(409, 'Only failed research can be retried from its saved step')
+    from app.services.provider_budget import retry_block_reason
+    if retry_block_reason(task):
+        raise HTTPException(409, 'TASK_BUDGET_LIMIT: This article cannot continue within its remaining allowance. Saved results are retained; create a new research article.')
     run = await db.scalar(select(WorkflowRun).where(WorkflowRun.research_task_id == task.id,
         WorkflowRun.status == 'FAILED').order_by(WorkflowRun.run_number.desc()).limit(1).with_for_update())
     if run is None:

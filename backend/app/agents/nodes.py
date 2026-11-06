@@ -202,6 +202,9 @@ class BudgetedFallbackLLM:
                 from app.services.public_errors import public_error
                 logger.warning("LLM provider attempt failed (%s): %s; trying the next configured provider", model_name, public_error(str(exc)))
         if last_error:
+            from app.services.provider_recovery import rate_limit_error
+            if limited := rate_limit_error(last_error):
+                raise limited from None
             from app.services.structured_output import StructuredOutputFailure
             if isinstance(last_error, StructuredOutputFailure):
                 raise last_error
@@ -1045,7 +1048,8 @@ async def analyst_node(state: ResearchState) -> Dict[str, Any]:
                                  for c in extraction.claims]
                     return extracted, retrieved_chunks
                 except Exception as e:
-                    if isinstance(e, (ProviderBudgetExceeded, ResearchTaskStopped)):
+                    from app.services.provider_recovery import ProviderRateLimited
+                    if isinstance(e, (ProviderBudgetExceeded, ResearchTaskStopped, ProviderRateLimited)):
                         raise
                     print(f"Lỗi khi trích xuất claims: {e}")
                     return [], []

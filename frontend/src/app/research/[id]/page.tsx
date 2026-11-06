@@ -1,5 +1,6 @@
 'use client';
 import { ResearchErrorNotice, researchErrorText } from '@/components/ResearchErrorNotice';
+import { ResearchRecoveryNotice, researchBudgetBlocked } from '@/components/ResearchRecoveryNotice';
 import { ModelConnectionSummary } from '@/components/ModelConnectionSummary';
 import { ModelSettingsPanel } from '@/components/ModelSettingsPanel';
 
@@ -412,6 +413,7 @@ export default function WorkspacePage() {
 
   const handleStartTask = async () => {
     if (!task || isStarting || isCancelling) return;
+    if (researchBudgetBlocked(task)) return;
     if (task.status !== 'PENDING' && task.status !== 'FAILED' && !window.confirm(isEn
       ? 'Run research again? Saved reports and files are kept. This starts a new workflow and uses the remaining article allowance.'
       : 'Chạy lại nghiên cứu? Bài viết và tệp đã lưu được giữ lại. Lượt mới sử dụng phần ngân sách còn lại của bài.')) return;
@@ -810,13 +812,16 @@ export default function WorkspacePage() {
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2" aria-label={isEn ? 'Research controls' : 'Thao tác bài nghiên cứu'}>
-          {['PENDING', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'].includes(task.status) && (
+          {researchBudgetBlocked(task) && <Button onClick={() => router.push('/dashboard')}>
+            {isEn ? 'Create new research' : 'Tạo nghiên cứu mới'}
+          </Button>}
+          {!researchBudgetBlocked(task) && ['PENDING', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'].includes(task.status) && (
             <Button
               variant={task.status === 'CANCELLED' ? 'primary' : 'success'}
               onClick={() => void handleStartTask()}
               isLoading={isStarting}
             >
-              <Play size={15} className="mr-1.5" /> {task.status !== 'PENDING' ? (isEn ? 'Retry research' : 'Chạy lại nghiên cứu') : (isEn ? 'Start Research' : 'Bắt đầu nghiên cứu')}
+              <Play size={15} className="mr-1.5" /> {task.status === 'FAILED' ? (isEn ? 'Continue from failed step' : 'Tiếp tục từ bước lỗi') : task.status !== 'PENDING' ? (isEn ? 'Start another run' : 'Bắt đầu lượt mới') : (isEn ? 'Start Research' : 'Bắt đầu nghiên cứu')}
             </Button>
           )}
 
@@ -1440,6 +1445,7 @@ export default function WorkspacePage() {
 
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-zinc-50/60 print:overflow-visible print:h-auto print:p-0 print:m-0 print:bg-white print:block">
             {/* TAB 1: SCIENTIFIC PAPER */}
+            <ResearchRecoveryNotice task={task} isEn={isEn} busy={isStarting} onContinue={() => void handleStartTask()} />
             {(task.status === 'FAILED' || task.current_step === 'BUDGET_LIMIT') && <ResearchErrorNotice isEn={isEn}
               step={task.failed_agent || (task.current_step ? stepLabel(task.current_step, language) : null)}
               error={task.current_step === 'BUDGET_LIMIT' ? 'TASK_BUDGET_LIMIT' : task.latest_error || runs.filter(run => run.status === 'FAILED' && run.attempt_number === task.attempt_number).at(-1)?.error_message} />}
@@ -1673,8 +1679,8 @@ export default function WorkspacePage() {
                   </div>
                 ) : (
                   <div className="text-center py-12 text-zinc-600">
-                    {reportError || (isEn ? 'Preparing scientific paper draft...' : 'Đang chuẩn bị bản thảo bài báo...')}
-                    {reportError && <button className="underline ml-2" onClick={() => void loadReport()}>{isEn ? "Retry" : "Thử lại"}</button>}
+                    {isEn ? 'No saved manuscript is available yet.' : 'Chưa có bản thảo được lưu.'}
+                    {reportError && <button className="underline ml-2" onClick={() => void loadReport()}>{isEn ? 'Check for saved draft' : 'Kiểm tra bản thảo đã lưu'}</button>}
                   </div>
                 ) : (
                   <div className="w-full max-w-5xl mx-auto space-y-6">

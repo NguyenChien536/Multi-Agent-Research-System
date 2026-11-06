@@ -48,6 +48,8 @@ export interface ResearchTaskResponse {
   current_step?: string | null;
   latest_error?: string | null;
   failed_agent?: string | null;
+  retry_blocked_reason?: string | null;
+  provider_wait?: { reason: string; retry_at: string; retry_count: number } | null;
   require_plan_approval: boolean;
   max_sources: number;
   max_iterations: number;
