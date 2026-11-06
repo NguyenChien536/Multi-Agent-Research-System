@@ -230,7 +230,7 @@ def validate_scientific_reporting(markdown: str, contract: dict | None, context:
         lowered = sentence.lower()
         if re.search(r"\b(not|no|without|không|chưa)\b", lowered):
             continue
-        if re.search(r"significantly (?:better|outperform)|statistically significant|vượt trội có ý nghĩa|có ý nghĩa thống kê", lowered) and not context.get("statistical_significance_tested"):
+        if re.search(r"significantly (?:better|outperform|improv|reduc|increas|enhanc)|statistically significant|vượt trội có ý nghĩa|có ý nghĩa thống kê", lowered) and not context.get("statistical_significance_tested"):
             add("UNSUPPORTED_SIGNIFICANCE", "No statistical significance test was executed; report descriptive differences and exploratory limits.")
         if re.search(r"\b(?:best (?:model|method|algorithm|performance)|perfect (?:accuracy|performance|results))\b", lowered):
             add("UNSUPPORTED_SUPERLATIVE", "Replace absolute superiority claims with a specific supported comparison and its evaluation scope.")
