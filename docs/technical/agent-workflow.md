@@ -1,6 +1,6 @@
 # Agent Workflow — vai trò, điều phối và kiểm tra
 
-**Cập nhật thiết kế:** 09/10/2026. Xem [SRS](../requirements/SRS.md), [System Design](../architecture/system-design.md), [ADR-004](../architecture/decisions/ADR-004-multi-agent-research-delivery.md).
+**Thiết kế gốc:** 09/10/2026; bổ sung cơ chế tiếp tục và phục hồi ngày 06/11/2026 ở mục 10. Xem [SRS](../requirements/SRS.md), [System Design](../architecture/system-design.md), [ADR-004](../architecture/decisions/ADR-004-multi-agent-research-delivery.md).
 
 ## 1. Agent và công cụ khác nhau thế nào?
 
@@ -241,3 +241,23 @@ Tham khảo kỹ thuật: [PostgreSQL full-text ranking](https://www.postgresql.
 The application LLM factory coordinates Gemini calls through Redis using an atomic server-time reservation for each configured API key and model. `GEMINI_REQUESTS_PER_MINUTE` defaults to 12; `GEMINI_MAX_QUEUE_SECONDS` bounds total waiting at 90 seconds. Set the rate to the actual project quota, allowing for requests made outside this application. This limits request bursts; it does not guarantee remaining daily/token quota or provider availability.
 
 Waiting happens before the provider budget reservation. A full queue makes no provider request. A 429 records a bounded shared cooldown; requests already waiting re-reserve spaced slots instead of all waking together. There is no hidden same-provider retry. Cancellation and task budget checks still run before the actual request. Redis errors fail closed. The frozen evaluation transport is separate; the earlier pilot's rate-limit failures remain recorded and are not retrospectively repaired.
+
+## 10. Tiếp tục sau lỗi và giới hạn provider — 06/11/2026
+
+**Retry không đặt lại bài.** Endpoint retry tiếp tục checkpoint của workflow hiện có, giữ nguồn, artifacts, lịch sử và ledger. Nút workspace là **Continue from failed step**; tải lại report là thao tác đọc riêng. Bài chạm `BUDGET_LIMIT` hoặc hết một allowance bị chặn trước khi tạo job; giao diện giải thích và mở form tạo bài mới. Không tự tăng cap hoặc xóa usage khi đổi model.
+
+### 10.1. Chờ dịch vụ mà không giữ worker
+
+429 được phân loại từ HTTP status/metadata đã nhận: giới hạn ngày, upstream tạm thời, tốc độ hoặc chưa xác định. Chỉ tạm hoãn khi có tín hiệu retry phù hợp, tối đa hai lần trong cùng workflow và tối đa 300 giây mỗi lần. Checkpoint và `run_id` giữ nguyên; task về QUEUED, worker lease và đồng hồ active được nhả; outbox có `available_at` để dispatcher đánh thức sau. Delivery sớm không chạy workflow. Daily limit hoặc thời gian chờ không phù hợp cần quyết định người dùng. Raw response/key không được công bố.
+
+### 10.2. Đầu ra có cấu trúc và lỗi phân tích
+
+BYOK dùng JSON Schema khi người dùng chọn khả năng này và schema có thể đóng các object keys an toàn. Schema chứa dictionary động dùng JSON object để không mất biến nghiên cứu; cả hai đều được Pydantic kiểm đầy đủ. JSON không hợp lệ có tối đa một correction pass; output bị cắt không được sửa đoán. Mỗi attempt đều reserve/reconcile ngân sách. Một extraction hợp lệ rỗng nghĩa là chưa có bằng chứng hỗ trợ; lỗi provider không được biến thành extraction rỗng rồi tiếp tục tiêu hết ngân sách ở các câu hỏi khác.
+
+### 10.3. Lưu đơn vị đã hoàn tất
+
+`provider_results` lưu JSON đã kiểm tra và các nhóm Writer hoàn chỉnh, riêng cho task/workflow. Fingerprint bao gồm input, schema, model, giới hạn và cấu hình kết nối; không lưu key trong payload. Đọc/ghi kiểm owner, trạng thái task/run, attempt và lease; hủy hoặc delivery cũ không được ghi thêm. Một kết quả khớp dùng lại không tạo call hay usage mới. Thay input/config tạo fingerprint khác. Đây không phải bảo đảm exactly-once với provider: nếu tiến trình chết trước khi lưu phản hồi thì lần sau có thể cần gọi lại.
+
+Writer thử bản thảo đầy đủ trước. Khi provider timeout hoặc output bị cắt, chiến lược chuyển sang nhóm phần, viết Abstract sau cùng nhưng lắp theo thứ tự contract. Mỗi nhóm phải đủ heading đúng thứ tự và có dấu kết thúc hợp lệ trước khi lưu. Retry giữ chiến lược và bỏ qua nhóm đã hoàn tất. Chưa đủ nhóm thì báo `MANUSCRIPT_INCOMPLETE`; không ghép đoạn bị cắt thành bài hoàn chỉnh. References vẫn được tạo từ lineage đã lưu. Tiến độ UI chỉ công bố số nhóm hoàn tất/tổng nhóm, không tiết lộ chain-of-thought.
+
+Các cơ chế trên có kiểm thử lỗi, hủy, lặp delivery, cấu hình đổi và ba loại bài. Chúng giảm công việc lặp, không bảo đảm provider miễn phí luôn còn quota hoặc manuscript đạt chất lượng xuất bản.

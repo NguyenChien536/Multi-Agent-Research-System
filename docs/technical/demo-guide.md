@@ -1,6 +1,6 @@
 # Hướng dẫn demo Synthia
 
-Cập nhật **05/11/2026**. Đọc tài liệu này để hiểu sản phẩm và diễn tập. Khi trình bày, mở [Kịch bản thuyết trình](demo-presentation-script.md): có lời nói, ba câu hỏi và từng bước thao tác.
+Cập nhật **06/11/2026**. Đọc tài liệu này để hiểu sản phẩm và diễn tập. Khi trình bày, mở [Kịch bản thuyết trình](demo-presentation-script.md): có lời nói, ba câu hỏi và từng bước thao tác.
 
 ## 1. Vấn đề và mục tiêu
 
@@ -44,7 +44,13 @@ Lệnh `start` chỉ bật image đã chốt, không build source đang sửa. �
 
 Kết nối riêng được ưu tiên hơn provider máy chủ. Nếu kết nối riêng lỗi, hệ thống không tự chuyển sang dùng tín dụng máy chủ. Đổi mặc định chỉ áp dụng cho bài mới; bài cũ phải chọn **Dùng cấu hình mặc định** trong **Bài hiện tại**. Đổi model không đặt lại lượng sử dụng. API miễn phí vẫn có giới hạn tốc độ/hạn mức.
 
-**Thao tác khi chạy:** thanh đầu workspace luôn có **Dừng nghiên cứu** khi đang chạy/chờ; bài lỗi có **Chạy lại nghiên cứu** để tiếp tục checkpoint của bước lỗi, giữ các bước đã hoàn tất và ngân sách đã dùng. Lỗi và bước lỗi hiện ngay trong khung đỏ. Lỗi 503 là provider quá tải, khác với key bị từ chối (401/403), model không khả dụng (404) và hết hạn mức (429). Retry tự động cho lỗi 502/503/504 có giới hạn và vẫn chịu kiểm soát ngân sách. Nếu Writer đã lưu bản thảo trước khi Critic gặp lỗi provider, bản thảo có thể được giao dưới trạng thái **Cần rà soát**, không được ghi là kiểm tra thành công.
+**Thao tác khi chạy:** thanh đầu workspace có **Dừng nghiên cứu** khi đang chạy/chờ. Bài lỗi có **Tiếp tục từ bước lỗi / Continue from failed step**, ở cả thanh đầu và vùng báo lỗi: tiếp tục checkpoint, giữ kết quả đã lưu và lượng sử dụng. Nút **Kiểm tra bản thảo đã lưu / Check for saved draft** chỉ tải lại bản thảo, không chạy workflow. Nếu đã hết allowance hoặc phần còn lại không đủ cho bước tiếp theo (`BUDGET_LIMIT`), nút chính chuyển sang **Tạo nghiên cứu mới**; đổi model hay bấm tiếp không đặt lại ngân sách.
+
+Lỗi và bước lỗi hiện ngay trong khung đỏ. Lỗi 503 là provider quá tải, khác với key bị từ chối (401/403), model không khả dụng (404) và giới hạn dịch vụ (429). Retry tự động cho lỗi 502/503/504 có giới hạn và vẫn chịu ngân sách. Với 429 tạm thời có tín hiệu phù hợp, hệ thống lưu thời điểm thử lại, đưa bài về hàng đợi và giải phóng worker; giao diện báo **Đang chờ dịch vụ AI**. Tối đa hai lần hoãn tự động trong cùng workflow, mỗi lần không quá 300 giây; hết hạn mức ngày hoặc không xác định được thời gian chờ thì cần người dùng xử lý. Nếu Writer đã lưu bản thảo trước khi Critic gặp lỗi provider, bản thảo có thể được giao dưới trạng thái **Cần rà soát**, không được ghi là kiểm tra thành công.
+
+**Chọn model:** danh sách đánh dấu **JSON Schema** khi dịch vụ quảng bá khả năng này. Khi chọn, ứng dụng ưu tiên định dạng đó; schema có trường từ điển động vẫn dùng JSON object và kiểm tra bằng code để giữ đầy đủ dữ liệu. Đây là kiểm tra khả năng kết nối, không bảo đảm model sẽ viết đúng hoặc còn quota. Khi trả JSON lỗi, có tối đa một lượt yêu cầu sửa định dạng, vẫn tính trong ngân sách. Phản hồi bị cắt không được ghép đoán thành kết quả hợp lệ.
+
+**Giữ phần đã làm:** các đầu ra có cấu trúc đã kiểm tra được lưu riêng cho đúng bài, workflow, input và cấu hình model. Tiếp tục cùng điều kiện có thể dùng lại chúng; đổi cấu hình/input không tái dùng kết quả không còn khớp. Khi một lần viết dài bị timeout hoặc cắt, hệ thống có thể viết theo nhóm phần và lưu từng nhóm hoàn chỉnh. Giao diện hiển thị số nhóm đã lưu; chỉ lắp bản thảo khi đủ nhóm hợp lệ, không trình bày bài đang viết dở như đã hoàn tất.
 
 Nút **Tiến trình / Pipeline** ở đầu trang bật lại cột bên phải sau khi thu gọn. **Inspect Error** trong Monitor chuyển tới lịch sử lỗi trên chính trang Monitor. Khi bài tính toán chờ dữ liệu, ô chọn CSV xuất hiện ngay trong workspace; upload hợp lệ tự tiếp tục, không cần bấm chạy lại. Bài khảo sát vẫn cần file và thông tin nguồn gốc rồi bấm **Tiếp tục**.
 
@@ -63,6 +69,8 @@ Các file dưới đây nằm trong `examples/demo/`. Câu hỏi tiếng Anh có
 **Synthetic = dữ liệu mô phỏng**, không phải điện năng đo thực hoặc phản hồi của người thật.
 
 Cấu hình diễn tập: **STANDARD**, **MEDIUM**, **English**, tối đa **12 nguồn**, **2 vòng**; APA cho A/C, IEEE cho B. Đây là cấu hình gợi ý, không bảo đảm model miễn phí đủ quota. Nguồn tối đa là giới hạn thu thập, không phải số nguồn chắc chắn được trích.
+
+Chọn luồng theo **việc cần làm**, không chỉ theo chủ đề. Câu hỏi về spaced practice ở bài A là đọc và tổng hợp nghiên cứu, nên chọn REVIEW. Chỉ chọn tính toán nếu có phép thử được hỗ trợ và dataset phù hợp; chọn nhầm sẽ đưa bài qua bước thiết kế/thực nghiệm không cần thiết. Giới hạn token/lượt gọi vẫn áp dụng kể cả khi chi phí ước tính là 0 USD.
 
 ### A. Tổng quan: từ nguồn đến lập luận
 
@@ -120,15 +128,15 @@ Nếu còn thời gian, thử [CSV negative control](../../examples/demo/computa
 
 | Trạng thái/lỗi | Ý nghĩa và cách xử lý |
 |---|---|
-| `QUEUED` | Chờ worker nhận. Nếu kéo dài, kiểm worker/dispatcher và monitor |
+| `QUEUED` | Chờ worker; nếu có thông báo chờ dịch vụ AI thì xem thời điểm tự thử lại. Nếu không có và chờ lâu, kiểm worker/dispatcher |
 | `RUNNING` | Đang xử lý; xem bước mới nhất trong monitor |
 | `WAITING_APPROVAL` | Cần duyệt/sửa kế hoạch |
 | `WAITING_USER_DATA` | Cần dataset hoặc dữ liệu khảo sát, upload đúng ô |
 | `NEEDS_REVIEW` / `PARTIAL` | Có thể có bản thảo nhưng còn thiếu sót; đọc lý do, không coi là đã đạt |
-| `FAILED` | Lỗi làm gián đoạn; đọc thông báo trước khi chạy lại |
+| `FAILED` | Đọc khung đỏ; sửa nguyên nhân/cấu hình nếu cần rồi bấm **Continue from failed step** |
 | 429 | Provider giới hạn tốc độ/hạn mức. Chờ hoặc cấu hình dịch vụ/model còn quota; không retry liên tục |
 | Thiếu bằng chứng | Bổ sung nguồn/kết quả, không yêu cầu Writer tự lấp chỗ trống |
-| Hết budget/token | Đổi model không reset lượng sử dụng; có thể cần task mới với cấu hình phù hợp |
+| Hết budget/token | Nút **Tạo nghiên cứu mới** mở form; chọn đúng loại và cấu hình phù hợp. Kết quả bài cũ vẫn được giữ |
 
 ## 6. Hiểu code để trả lời thầy
 
@@ -155,7 +163,9 @@ Dùng VS Code để đọc/debug code; Antigravity khi muốn AI hỗ trợ sử
 
 ## 7. Trạng thái kiểm chứng — 06/11/2026
 
-Bản Docker tại **http://127.0.0.1:3082** chạy commit `b55332dfda0f`, branch `feature/89-demo-workflow`, draft PR #109 vào develop. Backend **841 test passed** trên database test riêng; frontend **64 test passed** và build production thành công. GitHub CI của bản code này **6/6 thành công**, gồm release runtime. Các dịch vụ demo đều healthy. Chưa merge vào main.
+Mã nguồn `49a15a0` trên branch `feature/89-demo-workflow`, draft PR #109 vào develop: backend **883 test passed** trên database test riêng; frontend **67 test passed** và build production thành công. GitHub CI **6/6 thành công**, gồm release runtime. Không lấy số test này làm bằng chứng rằng mọi bài mới với provider miễn phí đều hoàn tất. Bản demo vẫn dùng **http://127.0.0.1:3082**; chưa merge vào main.
+
+Docker demo đã triển khai revision **`49a15a0ef145`**; sáu dịch vụ healthy sau migration. Các lượt kiểm tra provider dưới đây chạy trên `1c34ad0`, trước bản sửa dừng Analyst sớm ở `49a15a0`.
 
 ### Ba bản thảo có thể mở để demo
 
@@ -179,6 +189,10 @@ Một nguồn có thể hỗ trợ nhiều claim/citation records. Không lấy 
 |---|---|
 | Không rõ vì sao bài dừng | Khung đỏ hiển thị nhóm lỗi và bước lỗi; phân biệt xác thực, model, hạn mức, quá tải, timeout, JSON và ngân sách. Không đưa key hay phản hồi thô của provider ra màn hình. |
 | Chạy lại làm lại từ đầu hoặc xung đột checkpoint | Retry tiếp tục bước lỗi của workflow hiện tại; giữ kết quả đã lưu, lịch sử và ngân sách. Có kiểm thử nhiều lần lỗi liên tiếp với checkpoint PostgreSQL. |
+| Bấm tiếp dù allowance không đủ | API chặn tạo job mới, giao diện giải thích và có nút tạo nghiên cứu mới. Không reset usage khi đổi model. |
+| Không biết đang chờ worker hay dịch vụ AI | Chờ 429 tạm thời có thông báo và thời điểm thử lại; worker được giải phóng. Giới hạn ngày không bị retry vô hạn. |
+| Lặp lại đầu ra đã làm khi retry | Tái dùng JSON hợp lệ theo đúng workflow/input/config; Writer dài có thể lưu từng nhóm phần và tiếp tục nhóm còn thiếu. Không dùng output bị cắt như bản hoàn chỉnh. |
+| JSON lỗi bị biến thành “không có bằng chứng”, rồi hết budget | Analyst dừng và giữ nguyên lỗi provider. Chỉ extraction hợp lệ rỗng mới có nghĩa là chưa tìm được claim hỗ trợ. |
 | Writer xong nhưng Critic lỗi làm mất cả bài | Chỉ giữ bản thảo đã được bước Writer lưu vào checkpoint đúng bài/run/lượt hiện tại. Ghi **Cần rà soát**, phản biện chưa hoàn tất; không coi lỗi workflow bất kỳ là đã tạo bài thành công. |
 | Không thấy Dừng / Chạy lại / bật lại sidebar | Các nút nằm trên thanh đầu workspace; Pipeline mở lại cột phải. Inspect Error ở lại trang Monitor, không quay về workspace. |
 | Chờ CSV nhưng không thấy chỗ upload | Ô dữ liệu xuất hiện trong workspace. CSV tính toán hợp lệ tự tiếp tục; khảo sát cần thêm thông tin nguồn gốc rồi bấm Tiếp tục. |
@@ -196,6 +210,18 @@ Lượt tổng quan `ed03bf8d-2c16-4ca0-9faf-83ac813f97c9` thu được nguồn 
 Bản demo local đã tăng thời gian chờ mỗi provider call lên **180 giây**, vẫn giữ trần thời gian hoạt động mỗi bài và các giới hạn khác. Key hợp lệ hoặc tải được danh sách model không chứng minh model còn quota, hỗ trợ schema ổn định hoặc viết tốt bài dài. Khi 429, chờ theo chính sách dịch vụ hoặc lưu kết nối còn hạn mức trong Settings; không nhập key vào chat. Chỉ thay đổi model sau khi dừng bài nếu bài đang chạy.
 
 **Mức nghiệm thu:** ba luồng có bản thảo thật và bộ nguồn xuất được; các thao tác chính và lỗi đã có kiểm thử. Chất lượng lập luận, độ phủ tài liệu và độ ổn định của provider miễn phí vẫn cần rà soát. Không tuyên bố đã test mọi trường hợp, không còn lỗi, hoặc bài đạt chuẩn xuất bản chỉ dựa vào số test.
+
+### Kiểm tra lại với OpenRouter/free — 06/11, sau bổ sung phục hồi
+
+Chạy **tuần tự**, mỗi bài tối đa 12 LLM calls, 100.000 input token, 50.000 output token, 900 giây hoạt động; model `openrouter/free`, output cap 8.192, reasoning low, ưu tiên JSON Schema khi schema phù hợp. Kết nối giới hạn nhà cung cấp miễn phí và không chuyển sang tín dụng máy chủ. Tổng số call được ghi nhận của ba bài là **24**, dưới trần chiến dịch 36. Đây là kiểm tra smoke có giới hạn, không phải benchmark chứng minh chất lượng giữa các model.
+
+| Bài kiểm tra mới | Kết quả quan sát được | Kết luận |
+|---|---|---|
+| REVIEW — `1fc22521-50fd-48f7-8e01-451d471a27ec` | Duyệt kế hoạch → tìm nguồn → Analyst gặp JSON lỗi/cắt nhiều lần → `BUDGET_LIMIT`; 6 calls, 43.803 output token được ghi nhận | Chưa có bản thảo. Phát hiện việc Analyst nuốt lỗi rồi làm tiếp; đã sửa dừng sớm và kiểm thử trong `49a15a0`. Không xóa lượng đã dùng của lượt này. |
+| COMPUTATIONAL — `284bc5ca-ad57-456b-acb1-0c98b5476124` | Tới Methodologist rồi `MODEL_OUTPUT_TRUNCATED`; 8 calls, 31.930 output token được ghi nhận | Chưa tới upload/chạy routine trong lượt mới; không coi là bài thực nghiệm hoàn tất. |
+| HUMAN — `6b81d47c-e89d-4cc3-8f08-7cb765051a1a` | Protocol → `WAITING_USER_DATA` → upload CSV/provenance thành công → Writer timeout → lưu **1/4 nhóm phần** → `BUDGET_LIMIT`; 10 calls, 43.457 output token được ghi nhận | Resume và lưu nhóm đã hoạt động; chưa có bản thảo để phát hành. Nhóm riêng còn có diễn giải quá mức về nguồn gốc thang đo và gap; chưa qua Critic/validation, không dùng làm bài demo hoàn chỉnh. |
+
+Output token ở đây theo ledger: có phản hồi dùng token suy luận và có attempt timeout phải ghi nhận thận trọng khi thiếu usage. Không coi tất cả token là số từ văn bản nhận được hoặc hóa đơn. Cả ba lượt mới **chưa đạt điều kiện bản thảo hoàn chỉnh**; không được thay thế ba bản đã chạy trước bằng các lượt này trong phần trình diễn kết quả. Provider miễn phí và output dài vẫn là hạn chế thực tế; thay đổi phần mềm không thể bảo đảm quota/đầu ra của dịch vụ ngoài.
 
 Bộ fixture đã kiểm offline: routine baseline/Ridge, chạy lại cùng cấu hình và intake khảo sát. Tạo lại bằng môi trường Python dự án, không gọi provider:
 
