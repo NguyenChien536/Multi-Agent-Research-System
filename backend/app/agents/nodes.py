@@ -1067,19 +1067,15 @@ async def analyst_node(state: ResearchState) -> Dict[str, Any]:
                     source_passages=context_text,
                 )
 
-                try:
-                    extraction = await invoke_llm_with_budget(
-                        state, llm, [HumanMessage(content=prompt)], model_name=model_name, output_tokens=4096
-                    )
-                    extracted = [{**c.model_dump(), "evidence_need_id": need["need_id"]}
-                                 for c in extraction.claims]
-                    return extracted, retrieved_chunks
-                except Exception as e:
-                    from app.services.provider_recovery import ProviderRateLimited
-                    if isinstance(e, (ProviderBudgetExceeded, ResearchTaskStopped, ProviderRateLimited)):
-                        raise
-                    print(f"Lỗi khi trích xuất claims: {e}")
-                    return [], []
+                # An empty, valid extraction means the passages offer no support.
+                # A failed model call does not: preserve its error so retries can
+                # reuse completed units without burning the rest of the budget.
+                extraction = await invoke_llm_with_budget(
+                    state, llm, [HumanMessage(content=prompt)], model_name=model_name, output_tokens=4096
+                )
+                extracted = [{**c.model_dump(), "evidence_need_id": need["need_id"]}
+                             for c in extraction.claims]
+                return extracted, retrieved_chunks
 
         # Chạy song song tất cả các queries
         from app.services.model_connection import current_connection

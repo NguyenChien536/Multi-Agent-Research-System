@@ -3,6 +3,10 @@
                 Evidence need ID: {{ evidence_need_id }}; section: {{ section_id }}
                 Evidence question: {{ evidence_question }}
                 Extract up to six distinct, relevant claim/quote pairs from the passages below.
+                Keep each claim to one concise sentence and each quote to a short, contiguous
+                passage (normally one or two sentences). Select a shorter exact passage rather
+                than copying a whole chunk. Preserve the qualifying context; return fewer pairs
+                when the evidence cannot be represented accurately within a compact response.
                 Preserve conditions, assumptions, disagreements and negative findings. A keyword match
                 is not support for a theorem, causal conclusion, fairness guarantee or superiority claim.
                 Copy evidence_quote EXACTLY in its original language, including punctuation; never
