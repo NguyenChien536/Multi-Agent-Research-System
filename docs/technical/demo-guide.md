@@ -38,9 +38,9 @@ Mở Docker Desktop rồi mở terminal tại thư mục gốc dự án:
 
 Lệnh `start` chỉ bật image đã chốt, không build source đang sửa. Đưa code mới sang demo phải test, commit rồi dùng `release.ps1 -Action deploy`. Dev chạy bằng `dev.ps1 -Action start` ở cổng 3000, với dữ liệu và Settings riêng. Xem [cách dùng hai môi trường](local-release.md).
 
-Đăng nhập → **Settings → API & model → Mặc định cho bài mới** → chọn dịch vụ, nhập key và model → **Lưu kết nối**. Không quay màn hình lúc nhập key. Bài mới tự dùng cấu hình đã lưu. Lưu thành công chưa chứng minh provider còn quota.
+Đăng nhập → **Settings → API & model → Mặc định cho bài mới** → chọn dịch vụ, nhập key và model → **Lưu mặc định**. Không quay màn hình lúc nhập key. Bài mới tự dùng cấu hình đã lưu. Lưu thành công chưa chứng minh provider còn quota.
 
-Đổi một bài hiện có bằng **API & model** ở đầu workspace → **Bài hiện tại**, khi bài không chạy/không ở hàng đợi. Chọn dịch vụ, nhập key → **Tải danh sách model** → chọn model → **Lưu kết nối**. Key đã lưu được giữ kín; để trống để giữ lại. Một số dịch vụ không cung cấp danh sách thì dùng **Nhập tên model thủ công**. Tải danh sách chưa chứng minh model còn quota hoặc hỗ trợ mọi dạng đầu ra. Với OpenRouter, bộ lọc miễn phí bật mặc định; dịch vụ khác có chính sách giá riêng.
+Đổi một bài hiện có bằng **API & model** ở đầu workspace → **Bài hiện tại**, khi bài không chạy/không ở hàng đợi. Chọn dịch vụ, nhập key → **Tải danh sách model** → chọn model → **Lưu cho bài này**. Key đã lưu được giữ kín; để trống để giữ lại. Một số dịch vụ không cung cấp danh sách thì dùng **Nhập tên model thủ công**. Tải danh sách chưa chứng minh model còn quota hoặc hỗ trợ mọi dạng đầu ra. Với OpenRouter, bộ lọc miễn phí bật mặc định; dịch vụ khác có chính sách giá riêng.
 
 Kết nối riêng được ưu tiên hơn provider máy chủ. Nếu kết nối riêng lỗi, hệ thống không tự chuyển sang dùng tín dụng máy chủ. Đổi mặc định chỉ áp dụng cho bài mới; bài cũ phải chọn **Dùng cấu hình mặc định** trong **Bài hiện tại**. Đổi model không đặt lại lượng sử dụng. API miễn phí vẫn có giới hạn tốc độ/hạn mức.
 
@@ -153,27 +153,55 @@ Kiến trúc là **modular monolith**, API/worker chạy thành các tiến trì
 
 Dùng VS Code để đọc/debug code; Antigravity khi muốn AI hỗ trợ sửa. Cùng một thư mục dự án, không cần tạo bản sao. Tránh để hai công cụ cùng sửa một file.
 
-## 7. Trạng thái kiểm chứng
+## 7. Trạng thái kiểm chứng — 06/11/2026
 
-Bản Docker ngày **05/11/2026** chạy commit `b93e9064e46d`, branch `feature/89-demo-workflow`, draft PR #109 vào develop. Backend **800 passed** trên database test riêng; frontend **62 passed** và build production thành công; GitHub CI của bản code này **6/6 thành công**, gồm release runtime. Các dịch vụ demo tại cổng 3082 đều healthy. Các kết quả này kiểm tra phần mềm, không bảo đảm dịch vụ AI miễn phí luôn còn quota hoặc bài đạt chất lượng xuất bản.
+Bản Docker tại **http://127.0.0.1:3082** chạy commit `b55332dfda0f`, branch `feature/89-demo-workflow`, draft PR #109 vào develop. Backend **841 test passed** trên database test riêng; frontend **64 test passed** và build production thành công. GitHub CI của bản code này **6/6 thành công**, gồm release runtime. Các dịch vụ demo đều healthy. Chưa merge vào main.
 
-| Luồng kiểm tra thật ngày 05/11 | Kết quả quan sát | Dùng khi demo |
+### Ba bản thảo có thể mở để demo
+
+Các bản này là **kết quả đã chạy trước**, không giới thiệu như vừa sinh tức thì. Cả ba có đủ phần chính, các mục con, Conclusion và References; không còn marker claim nội bộ chưa được chuyển đổi. Cả ba vẫn là **NEEDS_REVIEW**, không phải bài đã qua peer review hoặc được xác nhận đạt Q1.
+
+| Luồng và đường dẫn mở trực tiếp | Đã kiểm tra thực tế | Giới hạn cần nói rõ |
 |---|---|---|
-| Tính toán: `af6b2a7e-609b-4aa2-8a68-90238508045e` | Retry vượt qua Methodologist; không lặp Supervisor; upload 120 dòng CSV; runner hoàn tất; Writer, Critic và PostProcessor có bản ghi thành công; lưu bài 2.708 từ, 16 mục con, 4 citation records. Trạng thái cuối `NEEDS_REVIEW`, còn cảnh báo chất lượng. | Có thể mở bài và đối chiếu số liệu với routine; không gọi bản thảo là đã được peer review. |
-| Tổng quan: `e28c3164-4569-40f5-b278-785af5caeca6` | Tạo bài, dừng/duyệt kế hoạch và thu thập nguồn đã chạy. Writer bị provider 429/503; lần thử model hợp lệ khác vẫn 503. Chưa có bản thảo mới cho lượt này. | Chưa nghiệm thu lượt mới. Bản khôi phục cũ `54d2e57e-4732-4743-bba0-fd1b3f99cdd0` có thể minh họa đọc bài nhưng phải nói rõ Critic của lượt đó chưa hoàn tất. |
-| Khảo sát: `9a746583-dd18-4e2c-ab06-17b9af3c55f9` và `8d82d6c0-3538-46dd-825d-357a78a3b857` | Lượt đầu đã tạo protocol, dừng và giải phóng worker, nhận CSV 24 dòng synthetic cùng nguồn gốc, rồi resume; Writer chạm giới hạn. Lượt kiểm tra tiếp gặp 429/timeout ở provider. Chưa có bài khảo sát hoàn chỉnh được nghiệm thu. | Có thể minh họa protocol/upload/resume. Cần provider khả dụng để nghiệm thu đầu ra bài viết. |
+| **A — Tổng quan:** http://127.0.0.1:3082/research/54d2e57e-4732-4743-bba0-fd1b3f99cdd0 | Bản thảo 2.464 từ, 14 mục con, 3 nguồn được dẫn. Có phạm vi tìm kiếm, tổng hợp theo chủ đề, Discussion và Conclusion. | Khôi phục từ Writer sau khi phản biện bị gián đoạn. Còn góp ý về research gap và cách mô tả phương pháp tìm tài liệu. Phạm vi nguồn nhỏ; không gọi là tổng quan hệ thống đầy đủ. |
+| **B — Tính toán:** http://127.0.0.1:3082/research/af6b2a7e-609b-4aa2-8a68-90238508045e | Upload 120 dòng CSV; routine và kiểm tra lặp lại hoàn tất. Bản thảo 2.708 từ, 16 mục con, 3 nguồn / 4 citation records; có bảng và hình MAE từ kết quả đã chạy. | Một tập dữ liệu giả lập, một lần chia train/test. Critic đã chạy nhưng ngân sách giới hạn việc kiểm tra; trạng thái bản thảo vẫn cần rà soát. Còn góp ý về research gap, văn phân tích và câu dùng “significantly improves” khi chưa có kiểm định. Không suy ra ưu thế tổng quát hoặc ý nghĩa thống kê. |
+| **C — Nghiên cứu ngoài hệ thống:** http://127.0.0.1:3082/research/168039ac-79be-4fe4-94ff-b9463381f664 | Protocol → chờ dữ liệu, giải phóng worker → nhận CSV 24 dòng cùng nguồn gốc → tiếp tục → lưu bản thảo 1.623 từ, 13 mục con, 4 nguồn / 7 citation records. Means, sample SD và tần suất khớp CSV. | Dữ liệu **synthetic**, không phải người tham gia thật. Critic gặp JSON lỗi/timeout; bản thảo được giữ lại với giới hạn phản biện rõ ràng, không ghi PASS. Còn góp ý về research gap. |
 
-Đã sửa việc phản hồi từ chối rõ ràng (401/403/404/429) làm tiêu cả token đầu ra dự kiến dù không có completion. Lượt gọi vẫn được tính; không xóa lịch sử, đặt lại ngân sách, tăng quota hoặc bỏ pacing. Timeout và lỗi 5xx không xác định vẫn được ghi nhận thận trọng. Hàng đợi của model đầu đầy không chặn việc kiểm tra model dự phòng đã cấu hình. Các lượt cũ giữ nguyên ledger và bản ghi lỗi.
+Một nguồn có thể hỗ trợ nhiều claim/citation records. Không lấy số citation records làm số bài báo được trích độc lập. Chỉ thêm nguồn liên quan có bằng chứng; không chèn bibliography cho đủ số lượng.
 
-Đã kiểm tra Settings lấy danh sách model bằng key lưu kín và thử sinh JSON thật qua kết nối cá nhân. Đã sửa tên model lưu sai `gemini-flash3.5` thành `gemini-3.5-flash`, giữ nguyên key. API Google trả tên dạng `models/...`; danh sách mới bỏ tiền tố này và lọc các model chuyên dụng không phù hợp chat. Key đúng không bảo đảm model còn quota; tải danh sách thành công chưa chứng minh chạy được một bài dài. Giá hiển thị là ước tính, không phải xác nhận đã thu tiền.
+### Kiểm tra xuất bản thảo
+
+Đã gọi API xuất theo đúng phiên bản cho cả A/B/C, với cả hai mẫu **IEEE_CONFERENCE** và **ACM_SIGCONF**: **6/6 thành công**. Đã kiểm tra ZIP hợp lệ, chứa `main.tex`, bản Markdown, provenance và danh mục nguồn; file TeX có các subsection. Bài B có SVG, dữ liệu và phần vẽ hình từ số liệu đã ghi nhận. Đây là **bộ nguồn để định dạng bài**, chưa phải xác nhận đã biên dịch PDF, đáp ứng mọi quy định của hội nghị hoặc được chấp nhận xuất bản.
+
+### Những lỗi luồng đã sửa
+
+| Vấn đề | Hành vi hiện tại |
+|---|---|
+| Không rõ vì sao bài dừng | Khung đỏ hiển thị nhóm lỗi và bước lỗi; phân biệt xác thực, model, hạn mức, quá tải, timeout, JSON và ngân sách. Không đưa key hay phản hồi thô của provider ra màn hình. |
+| Chạy lại làm lại từ đầu hoặc xung đột checkpoint | Retry tiếp tục bước lỗi của workflow hiện tại; giữ kết quả đã lưu, lịch sử và ngân sách. Có kiểm thử nhiều lần lỗi liên tiếp với checkpoint PostgreSQL. |
+| Writer xong nhưng Critic lỗi làm mất cả bài | Chỉ giữ bản thảo đã được bước Writer lưu vào checkpoint đúng bài/run/lượt hiện tại. Ghi **Cần rà soát**, phản biện chưa hoàn tất; không coi lỗi workflow bất kỳ là đã tạo bài thành công. |
+| Không thấy Dừng / Chạy lại / bật lại sidebar | Các nút nằm trên thanh đầu workspace; Pipeline mở lại cột phải. Inspect Error ở lại trang Monitor, không quay về workspace. |
+| Chờ CSV nhưng không thấy chỗ upload | Ô dữ liệu xuất hiện trong workspace. CSV tính toán hợp lệ tự tiếp tục; khảo sát cần thêm thông tin nguồn gốc rồi bấm Tiếp tục. |
+| Lưu nhầm cấu hình bài cũ và mặc định | Nút phân biệt **Lưu cho bài này** và **Lưu mặc định**. Đổi mặc định áp dụng cho bài mới; bài cũ dùng thao tác áp dụng mặc định riêng. |
+| Tính token bị phình khi đọc JSON | Giữ usage của phản hồi đã hoàn tất, kể cả khi JSON không đạt schema. Thiếu usage hoặc timeout vẫn ghi nhận thận trọng; không reset ledger. Dự trù theo cap thực tế của node, giữ dung lượng người dùng đã chọn; không ép mọi model suy luận vào 4.096 token. |
+| Monitor báo dùng Gemini embedding dù chạy key riêng | Kết nối cá nhân dùng lưu văn bản / lexical retrieval, không gọi embedding máy chủ; bản ghi mới thể hiện đúng và không tính phí embedding giả định. |
+| Kết luận mạnh hơn số liệu | Kiểm tra bổ sung các cụm như “significantly improves/reduces/increases” khi không có kiểm định đã ghi nhận. Kiểm tra bằng code là bộ lọc hỗ trợ, không bảo đảm mọi lập luận đều đúng. |
+
+### Kết nối miễn phí và các lượt mới
+
+Kết nối mặc định của tài khoản hiện đã lưu là **OpenRouter / openrouter/free**; key được giữ kín. Bài dùng kết nối riêng không tự chuyển sang provider máy chủ hoặc dịch vụ trả phí khi lỗi. Các con số chi phí lịch sử từ cấu hình máy chủ là **ước tính**, không phải bằng chứng người dùng đã bị thu tiền. Không sửa lịch sử chi phí chỉ vì vừa đổi key/model.
+
+Lượt tổng quan `ed03bf8d-2c16-4ca0-9faf-83ac813f97c9` thu được nguồn nhưng trích xuất chỉ xác thực được một nguồn, sau đó Writer timeout; **không có bài mới đủ để nghiệm thu**. Lượt `ab0dd983-ac18-43a5-a25a-bc5aed9f8782` thử model miễn phí cố định; sau timeout, một lần retry với model khác trong catalog nhận **429** ở Supervisor. Không dùng hai lượt này làm ví dụ đầu ra tốt và không tiếp tục retry liên tục.
+
+Bản demo local đã tăng thời gian chờ mỗi provider call lên **180 giây**, vẫn giữ trần thời gian hoạt động mỗi bài và các giới hạn khác. Key hợp lệ hoặc tải được danh sách model không chứng minh model còn quota, hỗ trợ schema ổn định hoặc viết tốt bài dài. Khi 429, chờ theo chính sách dịch vụ hoặc lưu kết nối còn hạn mức trong Settings; không nhập key vào chat. Chỉ thay đổi model sau khi dừng bài nếu bài đang chạy.
+
+**Mức nghiệm thu:** ba luồng có bản thảo thật và bộ nguồn xuất được; các thao tác chính và lỗi đã có kiểm thử. Chất lượng lập luận, độ phủ tài liệu và độ ổn định của provider miễn phí vẫn cần rà soát. Không tuyên bố đã test mọi trường hợp, không còn lỗi, hoặc bài đạt chuẩn xuất bản chỉ dựa vào số test.
 
 Bộ fixture đã kiểm offline: routine baseline/Ridge, chạy lại cùng cấu hình và intake khảo sát. Tạo lại bằng môi trường Python dự án, không gọi provider:
 
 ~~~powershell
 .\.venv\Scripts\python.exe scripts/prepare-demo.py
 ~~~
-
-**Chưa nghiệm thu trọn đầu ra mới của cả ba luồng:** bài tính toán đã có bản thảo, hai luồng còn lại còn bị dịch vụ AI chặn. Có thể nhập kết nối khác trong Settings, áp dụng cho **Bài hiện tại**, rồi chạy lại bước lỗi. Không retry liên tục khi provider hết quota. Số test và bảng offline không chứng minh bài đạt chất lượng xuất bản/Q1.
 
 Sau buổi trình bày, dừng dịch vụ và giữ dữ liệu:
 
