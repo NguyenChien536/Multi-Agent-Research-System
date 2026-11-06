@@ -7,6 +7,14 @@ from pydantic import BaseModel
 from app.prompts import render_prompt
 
 
+class StructuredOutputFailure(ValueError):
+    """A completed provider response failed local validation; never expose its body."""
+
+    def __init__(self, code, response):
+        super().__init__(code)
+        self.response = response
+
+
 def _gemini_wire_schema(schema: dict) -> dict:
     # Gemini rejected the bounded Critic schema with INVALID_ARGUMENT but accepted
     # this simpler wire schema in a controlled integration pilot. Defaults and
@@ -35,15 +43,23 @@ def compatible_structured_output(model_name: str, model: Any, schema: Any):
             instruction = render_prompt('structured_output', json_schema=schema_text)
             return [SystemMessage(content=instruction), *messages]
         def validate_json(response):
-            if (getattr(response, 'response_metadata', None) or {}).get('finish_reason') == 'length':
-                raise ValueError('MODEL_OUTPUT_TRUNCATED: JSON response reached its output limit')
+            if str((getattr(response, 'response_metadata', None) or {}).get('finish_reason', '')).lower() == 'length':
+                raise StructuredOutputFailure('MODEL_OUTPUT_TRUNCATED: JSON response reached its output limit', response)
             content = getattr(response, 'content', None)
             if not isinstance(content, str) or not content.strip():
-                raise ValueError('MODEL_INVALID_JSON: Provider returned no JSON text')
+                raise StructuredOutputFailure('MODEL_INVALID_JSON: Provider returned no JSON text', response)
             text = content.strip()
             if text.startswith('```json\n') and text.endswith('```'):
                 text = text[8:-3].strip()
-            return schema.model_validate(json.loads(text))
+            try:
+                validated = schema.model_validate(json.loads(text))
+            except ValueError:
+                raise StructuredOutputFailure('MODEL_INVALID_JSON: Model returned invalid structured data.', response) from None
+            # Pydantic serialization stays unchanged, while budget accounting
+            # retains provider-reported usage (including reasoning tokens).
+            object.__setattr__(validated, 'usage_metadata', getattr(response, 'usage_metadata', None))
+            object.__setattr__(validated, 'response_metadata', getattr(response, 'response_metadata', None))
+            return validated
         # Send the same JSON-mode request through the standard completion
         # transport. SDK beta .parse assumes native-provider response details;
         # custom gateways need local, strict JSON/Pydantic validation instead.

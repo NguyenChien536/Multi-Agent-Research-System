@@ -246,7 +246,8 @@ async def test_custom_client_uses_owner_key_model_json_schema_and_never_server_f
             assert EmbedderTool().embeddings is None
             answer = await chain.with_structured_output(Result).ainvoke([HumanMessage(content='Return count 2')])
             assert answer.count == 2
-            with pytest.raises(ValidationError):
+            from app.services.structured_output import StructuredOutputFailure
+            with pytest.raises(StructuredOutputFailure, match='MODEL_INVALID_JSON'):
                 invalid = client.model_copy()
                 # Local Pydantic validation stays active for a custom endpoint.
                 invalid_chain = compatible_structured_output('byok:test', invalid, Result)
@@ -411,3 +412,56 @@ async def test_schema_extra_tokens_and_section_outline_prompt():
     # Empty outline returns empty string
     assert format_section_outline_prompt([]) == ""
 
+
+@pytest.mark.asyncio
+async def test_invalid_json_charges_reported_usage_without_claiming_success(monkeypatch):
+    from unittest.mock import AsyncMock
+    from langchain_core.messages import AIMessage
+    from app.agents import nodes
+    from app.services.structured_output import StructuredOutputFailure
+    response = AIMessage(content='not JSON', usage_metadata={'input_tokens': 40, 'output_tokens': 5, 'total_tokens': 45})
+    model = AsyncMock()
+    model.ainvoke.side_effect = StructuredOutputFailure('MODEL_INVALID_JSON', response)
+    reserve, settle = AsyncMock(return_value='reservation'), AsyncMock()
+    monkeypatch.setattr(nodes, 'reserve_provider_call', reserve)
+    monkeypatch.setattr(nodes, 'settle_provider_call', settle)
+    monkeypatch.setattr('app.services.provider_budget.assert_task_active', AsyncMock())
+    with pytest.raises(StructuredOutputFailure):
+        await nodes.invoke_llm_with_budget({'enforce_provider_budget': True, 'task_id': str(uuid.uuid4()), 'attempt_number': 1},
+            nodes.BudgetedFallbackLLM([('byok:test', model)]), [], model_name='byok:test')
+    assert settle.await_args.kwargs['usage_reported'] is True
+    assert settle.await_args.kwargs['succeeded'] is False
+    assert settle.await_args.kwargs['output_tokens'] == 5
+
+
+@pytest.mark.asyncio
+async def test_json_node_reserves_its_actual_cap_instead_of_manuscript_limit(monkeypatch):
+    from unittest.mock import AsyncMock
+    from langchain_core.messages import AIMessage
+    from app.agents import nodes
+    model = AsyncMock()
+    model.ainvoke.return_value = AIMessage(content='ok')
+    reserve = AsyncMock(return_value='reservation')
+    monkeypatch.setattr(nodes, 'reserve_provider_call', reserve)
+    monkeypatch.setattr(nodes, 'settle_provider_call', AsyncMock())
+    monkeypatch.setattr('app.services.provider_budget.assert_task_active', AsyncMock())
+    await nodes.invoke_llm_with_budget({'enforce_provider_budget': True, 'task_id': str(uuid.uuid4()), 'attempt_number': 1},
+        nodes.BudgetedFallbackLLM([('byok:test', model)], output_limits={'byok:test': 2048}), [], model_name='byok:test')
+    assert reserve.await_args.kwargs['output_tokens'] == 2048
+
+@pytest.mark.asyncio
+async def test_byok_curator_monitor_does_not_claim_server_embedding_usage():
+    from app.services.agent_run import record_agent_run
+    from app.models.agent_run import AgentRun
+    tid, uid = await create_running_task()
+    try:
+        with connection_scope({'_llm_connection': seal_connection(connection_input(), tid, uid)}, tid, uid):
+            run_id = await record_agent_run(str(tid), 'Curator', model='gemini-embedding-2',
+                input_tokens=1000, estimated_cost=0.01, output_summary={'chunks_indexed': 8})
+        async with AsyncSessionLocal() as db:
+            run = await db.get(AgentRun, run_id)
+            assert run.model == 'local-lexical-indexer'
+            assert run.input_tokens == 0 and run.estimated_cost == 0
+            assert run.output_summary['chunks_indexed'] == 8
+    finally:
+        await delete_test_user(uid)

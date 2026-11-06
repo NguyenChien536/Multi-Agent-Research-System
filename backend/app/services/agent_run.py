@@ -151,6 +151,14 @@ async def record_agent_run(
         output_summary = {**(output_summary or {}), "usage_accounting": "private evaluation provider trace"}
         if agent_name == "Curator":
             model = "local-frozen-chunks-no-embedding"
+    elif agent_name == "Curator":
+        from app.services.model_connection import current_connection
+        if current_connection() is not None:
+            # BYOK ingestion uses stored text and lexical retrieval; it never
+            # calls the server embedding provider or incurs embedding charges.
+            model = "local-lexical-indexer"
+            input_tokens, output_tokens, estimated_cost = 0, 0, 0.0
+            output_summary = {**(output_summary or {}), "retrieval_mode": "lexical_no_embedding_api"}
     run_record = AgentRun(
         research_task_id=parsed_task_id,
         agent_name=agent_name,

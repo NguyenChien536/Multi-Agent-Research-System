@@ -93,16 +93,19 @@ _BUDGET_CALL_CONTEXT: contextvars.ContextVar[dict[str, Any] | None] = contextvar
 class BudgetedFallbackLLM:
     """Try configured providers in order, reserving budget for every attempt."""
 
-    def __init__(self, models: list[tuple[str, Any]], *, pace_requests: bool = False, structured_schema: Any = None):
+    def __init__(self, models: list[tuple[str, Any]], *, pace_requests: bool = False, structured_schema: Any = None, output_limits=None):
         self.models = models
         self.pace_requests = pace_requests
         self.structured_schema = structured_schema
+        self.output_limits = output_limits or {}
 
     def with_structured_output(self, schema: Any):
         return BudgetedFallbackLLM(
             [(model_name, compatible_structured_output(model_name, model, schema)) for model_name, model in self.models],
             pace_requests=self.pace_requests,
             structured_schema=schema,
+            output_limits={name: getattr(model, 'max_tokens', None) or getattr(model, 'max_output_tokens', None)
+                           for name, model in self.models},
         )
 
     async def ainvoke(self, messages: Any, **kwargs: Any):
@@ -178,14 +181,20 @@ class BudgetedFallbackLLM:
                 last_error = exc
                 if reservation_id:
                     from app.services.public_errors import provider_request_rejected
+                    from app.services.structured_output import StructuredOutputFailure
+                    measured = isinstance(exc, StructuredOutputFailure) and (
+                        getattr(exc.response, 'usage_metadata', None) or
+                        (getattr(exc.response, 'response_metadata', None) or {}).get('token_usage'))
+                    used_in, used_out = extract_tokens(exc.response) if measured else (0, 0)
                     await settle_provider_call(
                         task_id=context["task_id"],
                         reservation_id=reservation_id,
-                        input_tokens=0,
-                        output_tokens=0,
-                        cost_usd=0,
+                        input_tokens=used_in,
+                        output_tokens=used_out,
+                        cost_usd=estimate_cost(model_name, used_in, used_out) if measured else 0,
                         succeeded=False,
                         rejected=provider_request_rejected(exc),
+                        usage_reported=bool(measured),
                     )
                 if self.pace_requests:
                     from app.services.provider_pacing import record_gemini_rate_limit
@@ -193,6 +202,9 @@ class BudgetedFallbackLLM:
                 from app.services.public_errors import public_error
                 logger.warning("LLM provider attempt failed (%s): %s; trying the next configured provider", model_name, public_error(str(exc)))
         if last_error:
+            from app.services.structured_output import StructuredOutputFailure
+            if isinstance(last_error, StructuredOutputFailure):
+                raise last_error
             from app.services.public_errors import ProviderUnavailable, ProviderRequestRejected, is_transient_provider_error, provider_request_rejected
             if is_transient_provider_error(last_error):
                 raise ProviderUnavailable('PROVIDER_UNAVAILABLE: Provider temporarily overloaded (503); bounded retries exhausted.') from None
@@ -238,7 +250,10 @@ def build_llm_chain(is_smart: bool = False):
         return runtime.llm
     from app.services.model_connection import current_connection, build_connection_client
     if connection := current_connection():
-        return BudgetedFallbackLLM([(connection.model_tag, build_connection_client(connection))])
+        client = build_connection_client(connection)
+        if not is_smart:
+            client.max_tokens = min(connection.output_token_limit, DEFAULT_CALL_OUTPUT_TOKENS)
+        return BudgetedFallbackLLM([(connection.model_tag, client)])
     providers = [p.strip().lower() for p in settings.LLM_PROVIDER_PRIORITY.split(",")]
     models: list[tuple[str, Any]] = []
     
@@ -317,7 +332,13 @@ async def invoke_llm_with_budget(
         if any(name.startswith("byok:") for name, _ in llm.models):
             from app.services.model_connection import current_connection
             connection = current_connection()
-            context["output_tokens"] = max(output_tokens, connection.output_token_limit if connection else 8192)
+            # Use the limit actually sent by this node, rather than reserving
+            # the full manuscript allowance for every short JSON response.
+            limits = [llm.output_limits.get(name) or getattr(model, 'max_tokens', None)
+                      for name, model in llm.models]
+            numeric_limits = [limit for limit in limits if isinstance(limit, int) and not isinstance(limit, bool)]
+            context["output_tokens"] = max(numeric_limits) if numeric_limits else max(
+                output_tokens, connection.output_token_limit if connection else 8192)
         token = _BUDGET_CALL_CONTEXT.set(context)
         try:
             return await llm.ainvoke(messages)
@@ -1773,6 +1794,9 @@ async def critic_node(state: ResearchState) -> Dict[str, Any]:
     model_name = get_active_model_name(is_smart=False)
     critic_contract = (state.get("plan") or {}).get("manuscript_contract") or {}
     critic_output_tokens = 2048 if critic_contract.get("evidence_review_policy") else 768
+    from app.services.model_connection import current_connection
+    if connection := current_connection():
+        critic_output_tokens = min(connection.output_token_limit, 8192)
     base_llm = get_fast_llm()
     if isinstance(base_llm, BudgetedFallbackLLM):
         for _, client in base_llm.models:

@@ -243,11 +243,14 @@ async def settle_provider_call(
     cost_usd: float,
     succeeded: bool,
     rejected: bool = False,
+    usage_reported: bool = False,
 ) -> None:
-    """Reconcile usage; explicit rejection releases tokens, uncertain failures consume the reservation.
+    """Reconcile measured completions/rejections; uncertain failures consume the reservation.
 
     Admission already counted the call. A rejection never restores that call
     allowance or changes provider pacing and never resets previous usage.
+    A completed response with invalid JSON still incurs its reported usage;
+    usage_reported must only be set when transport usage metadata is present.
     """
     parsed_id = uuid.UUID(str(task_id))
     async with AsyncSessionLocal() as session:
@@ -261,7 +264,7 @@ async def settle_provider_call(
         reservation = usage["reservations"].pop(reservation_id, None)
         if reservation is None:
             return
-        if succeeded or rejected:
+        if succeeded or rejected or usage_reported:
             input_tokens = max(0, int(input_tokens))
             output_tokens = max(0, int(output_tokens))
             cost_usd = max(0.0, float(cost_usd))

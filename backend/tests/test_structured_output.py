@@ -57,3 +57,27 @@ def test_schema_keyword_names_are_preserved_when_they_are_domain_fields():
     client = StructuredClient({"default": "a", "maxLength": "b"})
     compatible_structured_output("gemini-fixture", client, schema)
     assert set(client.schema["properties"]) == {"default", "maxLength"}
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('content,finish,valid', [('{"answer":"ok"}', 'STOP', True), ('```json\n{"answer":"ok"}\n```', 'stop', True), ('{"answer":null}', 'stop', False), ('not json', 'stop', False), ('{"answer":"ok"}', 'LENGTH', False)])
+async def test_custom_json_keeps_usage_without_weakening_validation(content, finish, valid):
+    from langchain_core.messages import AIMessage
+    from pydantic import BaseModel
+    from app.services.structured_output import StructuredOutputFailure
+    class Output(BaseModel):
+        answer: str
+    response = AIMessage(content=content, usage_metadata={'input_tokens': 31, 'output_tokens': 8, 'total_tokens': 39}, response_metadata={'finish_reason': finish})
+    class Model:
+        extra_body = {}
+        def bind(self, **kwargs):
+            return RunnableLambda(lambda _: response)
+    chain = compatible_structured_output('byok:fixture', Model(), Output)
+    if valid:
+        result = await chain.ainvoke([])
+        assert result.usage_metadata == response.usage_metadata
+        assert result.model_dump() == {'answer': 'ok'}
+    else:
+        with pytest.raises(StructuredOutputFailure) as caught:
+            await chain.ainvoke([])
+        assert caught.value.response.usage_metadata['output_tokens'] == 8
+        assert content not in str(caught.value)

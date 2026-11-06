@@ -60,7 +60,9 @@ export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: stri
       if (scope === 'task' && taskId) await api.settings.updateTaskConnection(taskId, payload);
       else await api.settings.saveModelConnection(payload);
       setHasKey(true); setSavedRoot(value.base_url); setValue({...value, api_key:''});
-      setNotice(isEn ? 'Connection settings saved.' : 'Đã lưu cấu hình kết nối.');
+      setNotice(scope === 'task'
+        ? (isEn ? 'Saved for this article.' : 'Đã lưu cho bài hiện tại.')
+        : (isEn ? 'Saved as default for new articles.' : 'Đã lưu mặc định cho bài mới.'));
       window.dispatchEvent(new Event('synthia-model-settings'));
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to save settings'); }
     finally { setBusy(false); }
@@ -95,8 +97,8 @@ export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: stri
     <h4 className="font-semibold">{isEn ? 'API & model' : 'API & model'}</h4>
     {serverMode && <p className="text-sm text-zinc-600">{isEn ? 'Your saved connection takes priority. Articles without a personal connection use the server provider.' : 'Kết nối riêng được ưu tiên. Bài không có kết nối riêng dùng provider máy chủ.'}</p>}
     <div className="flex gap-2 text-sm">
-      <button type="button" onClick={()=>setScope('default')} className={`rounded-lg px-3 py-2 ${scope==='default'?'bg-zinc-900 text-white':'bg-zinc-100'}`}>{isEn?'Default for new articles':'Mặc định cho bài mới'}</button>
-      {taskId && <button type="button" onClick={()=>setScope('task')} className={`rounded-lg px-3 py-2 ${scope==='task'?'bg-zinc-900 text-white':'bg-zinc-100'}`}>{isEn?'Current article':'Bài hiện tại'}</button>}
+      <button type="button" aria-pressed={scope==='default'} onClick={()=>setScope('default')} className={`rounded-lg px-3 py-2 ${scope==='default'?'bg-zinc-900 text-white':'bg-zinc-100'}`}>{isEn?'Default for new articles':'Mặc định cho bài mới'}</button>
+      {taskId && <button type="button" aria-pressed={scope==='task'} onClick={()=>setScope('task')} className={`rounded-lg px-3 py-2 ${scope==='task'?'bg-zinc-900 text-white':'bg-zinc-100'}`}>{isEn?'Current article':'Bài hiện tại'}</button>}
     </div>
     {loading ? <p>{isEn?'Loading…':'Đang tải…'}</p> : <form onSubmit={save} className="space-y-3">
       {locked && <p role="status" className="text-amber-700">{isEn?'Stop the article before changing its connection.':'Dừng bài trước khi đổi kết nối.'}</p>}
@@ -105,7 +107,7 @@ export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: stri
           keyRequired={!hasKey || value?.base_url !== savedRoot} taskId={scope === 'task' ? taskId : undefined} />
       </fieldset>
       <div className="flex flex-wrap gap-2">
-        <button type="submit" disabled={busy || locked || !value} className="rounded-lg bg-zinc-900 px-4 py-2 text-white disabled:opacity-40">{busy?(isEn?'Saving…':'Đang lưu…'):(isEn?'Save connection':'Lưu kết nối')}</button>
+        <button type="submit" disabled={busy || locked || !value} className="rounded-lg bg-zinc-900 px-4 py-2 text-white disabled:opacity-40">{busy?(isEn?'Saving…':'Đang lưu…'):scope==='task'?(isEn?'Save for this article':'Lưu cho bài này'):(isEn?'Save default':'Lưu mặc định')}</button>
         {scope==='task' && <button type="button" disabled={busy || locked} onClick={applyDefault} className="rounded-lg border px-3 py-2 disabled:opacity-40">{isEn?'Use saved default':'Dùng cấu hình mặc định'}</button>}
         {scope==='task' && hasKey && <button type="button" disabled={busy} onClick={saveAsDefault} className="rounded-lg border px-3 py-2">{isEn?'Save as default':'Đặt làm mặc định'}</button>}
         {scope==='default' && hasKey && <button type="button" disabled={busy} onClick={remove} className="rounded-lg border px-3 py-2">{isEn?'Remove':'Xóa kết nối'}</button>}
