@@ -22,7 +22,7 @@ export function ResearchRecoveryNotice({task, isEn, busy, onContinue}: {
     <p className="mb-3 text-zinc-700">{blocked
       ? (isEn ? 'This article cannot continue within its remaining allowance. Saved sources and results are kept.' : 'Giới hạn còn lại không đủ để tiếp tục bài này. Nguồn và kết quả đã lưu vẫn được giữ.')
       : (isEn ? 'Continue from the failed step using the remaining allowance.' : 'Tiếp tục từ bước lỗi, sử dụng phần giới hạn còn lại của bài.')}</p>
-    {blocked ? <Link href="/dashboard" className="inline-block rounded-lg bg-zinc-900 px-4 py-2 font-medium text-white">
+    {blocked ? <Link href="/" className="inline-block rounded-lg bg-zinc-900 px-4 py-2 font-medium text-white">
       {isEn ? 'Create new research' : 'Tạo nghiên cứu mới'}</Link>
       : <button type="button" disabled={busy} onClick={onContinue} className="rounded-lg bg-emerald-700 px-4 py-2 font-medium text-white disabled:opacity-50">
         {busy ? (isEn ? 'Resuming…' : 'Đang tiếp tục…') : (isEn ? 'Continue from failed step' : 'Tiếp tục từ bước lỗi')}</button>}

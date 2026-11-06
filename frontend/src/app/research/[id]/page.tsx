@@ -812,7 +812,7 @@ export default function WorkspacePage() {
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2" aria-label={isEn ? 'Research controls' : 'Thao tác bài nghiên cứu'}>
-          {researchBudgetBlocked(task) && <Button onClick={() => router.push('/dashboard')}>
+          {researchBudgetBlocked(task) && <Button onClick={() => router.push('/')}>
             {isEn ? 'Create new research' : 'Tạo nghiên cứu mới'}
           </Button>}
           {!researchBudgetBlocked(task) && ['PENDING', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'].includes(task.status) && (
@@ -1731,7 +1731,9 @@ export default function WorkspacePage() {
                           </div>
 
                           <h2 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight">
-                            {task.status === 'QUEUED'
+                            {task.provider_wait && task.status === 'QUEUED'
+                              ? (isEn ? 'Waiting for the AI service' : 'Tạm chờ dịch vụ AI')
+                              : task.status === 'QUEUED'
                               ? (isEn ? "Research task is queued for agent worker allocation" : "Bài nghiên cứu đang trong hàng đợi chờ phân phối tác tử")
                               : task.status === 'PLANNING'
                               ? (isEn ? "Supervisor Agent is planning research strategy & queries" : "Supervisor Agent đang phân tích đề tài & thiết lập từ khóa")
@@ -1749,7 +1751,9 @@ export default function WorkspacePage() {
                           </h2>
 
                           <p className="text-sm text-zinc-600 leading-relaxed max-w-2xl">
-                            {task.status === 'QUEUED'
+                            {task.provider_wait && task.status === 'QUEUED'
+                              ? (isEn ? 'Saved progress will resume automatically after the provider cooldown.' : 'Tiến độ đã lưu sẽ tự tiếp tục khi hết thời gian chờ dịch vụ.')
+                              : task.status === 'QUEUED'
                               ? (isEn
                                   ? "Your research question has been registered. An autonomous agent worker is being scheduled to initiate literature discovery. Polling updates automatically."
                                   : "Đề tài nghiên cứu đã được ghi nhận vào hệ thống. Máy chủ đang xếp lịch tác tử để bắt đầu tìm kiếm tài liệu. Giao diện tự động cập nhật.")
