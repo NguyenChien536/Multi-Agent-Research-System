@@ -513,19 +513,28 @@ class AnalystExtraction(BaseModel):
     claims: List[ExtractedClaim] = Field(max_length=6, description="At most six distinct, relevant claim/quote pairs; return none if supplied passages do not support the question")
 
 
-class MethodologistPlan(BaseModel):
+class StudyPlanFields(BaseModel):
     research_questions: List[str] = Field(description="Các câu hỏi nghiên cứu cụ thể cần giải quyết")
     hypotheses: List[str] = Field(description="Testable hypotheses when appropriate; return an empty list for descriptive or exploratory research")
-    variables: Dict[str, List[str]] = Field(description="Các nhóm biến số nghiên cứu (independent, dependent, control)")
     study_design: str = Field(description="Thiết kế nghiên cứu, đối tượng khảo sát/thực nghiệm, cỡ mẫu dự kiến")
     data_collection_procedure: str = Field(description="Quy trình thu thập dữ liệu chi tiết")
     analysis_plan: str = Field(description="Kế hoạch phân tích thống kê và kiểm định giả thuyết")
     ethical_considerations: str = Field(description="Các lưu ý về đạo đức nghiên cứu và bảo mật dữ liệu")
 
 
-class MethodologistProtocol(MethodologistPlan):
+class ProtocolVariableGroup(BaseModel):
+    role: str = Field(min_length=1, max_length=80, description='Variable-group role, e.g. independent, dependent, control, or another relevant role')
+    names: List[str] = Field(description='Variables explicitly relevant to this research question')
+
+
+class MethodologistPlan(StudyPlanFields):
+    variables: List[ProtocolVariableGroup] = Field(description='Named variable groups; use a list of role/names objects, not a free-form dictionary')
+
+
+class MethodologistProtocol(StudyPlanFields):
     """Persisted protocol shape; Markdown is rendered from the validated plan."""
     protocol_markdown: str = Field(description="Bản đề cương nghiên cứu hoàn chỉnh định dạng Markdown")
+    variables: Dict[str, List[str]] = Field(description='Persisted role-to-variable mapping')
 
 # ---------------------------------------------------------------------------
 # 3. NODE FUNCTIONS (100% Async, Không Placeholder)
@@ -1193,7 +1202,7 @@ async def methodologist_node(state: ResearchState) -> Dict[str, Any]:
             "status": status,
         }
 
-    from app.services.study_protocol import protocol_constraints, render_protocol
+    from app.services.study_protocol import protocol_constraints, render_protocol, protocol_fields
     claims = state.get("claims", [])
     prompt = render_prompt('methodologist',
         research_question=state.get('research_question'),
@@ -1208,7 +1217,7 @@ async def methodologist_node(state: ResearchState) -> Dict[str, Any]:
         proto_result: MethodologistPlan = await invoke_llm_with_budget(
             state, llm, [HumanMessage(content=prompt)], model_name=model_name, output_tokens=4096
         )
-        protocol_dict = proto_result.model_dump(exclude={'protocol_markdown'})
+        protocol_dict = protocol_fields(proto_result.model_dump(exclude={'protocol_markdown'}))
         markdown_content = render_protocol(protocol_dict, state.get('language', 'en'))
         protocol_dict["protocol_markdown"] = markdown_content
 

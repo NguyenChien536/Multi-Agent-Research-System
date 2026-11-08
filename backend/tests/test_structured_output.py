@@ -148,3 +148,20 @@ async def test_dynamic_protocol_variables_keep_json_compatibility_without_droppi
     value=await compatible_structured_output('byok:fixture',Model(),Protocol).ainvoke([])
     assert seen['extra_body']['response_format']['type']=='json_object'
     assert value.variables=={'temperature':'measured exposure'}
+
+
+@pytest.mark.asyncio
+async def test_validation_diagnostics_log_only_field_names_and_codes(caplog):
+    from langchain_core.messages import AIMessage
+    from pydantic import BaseModel
+    from app.services.structured_output import StructuredOutputFailure
+    class Output(BaseModel):
+        required_items: list[str]
+    secret='private-response-must-never-be-logged'
+    class Model:
+        extra_body={}
+        def bind(self,**kwargs):
+            return RunnableLambda(lambda _:AIMessage(content=json.dumps({'required_items':secret})))
+    with pytest.raises(StructuredOutputFailure):
+        await compatible_structured_output('byok:fixture',Model(),Output).ainvoke([])
+    assert 'required_items:list_type' in caplog.text and secret not in caplog.text

@@ -89,12 +89,12 @@ async def discover_models(base_url: str, api_key: str, free_only: bool = True):
         pricing = item.get('pricing') if isinstance(item.get('pricing'), dict) else {}
         free = bool(pricing) and all(str(pricing.get(key, '')) in ('0', '0.0') for key in ('prompt', 'completion'))
         if root == 'https://openrouter.ai/api/v1' and free_only:
-            if not (free and name.endswith(':free')):
+            if not (free and (name.endswith(':free') or name == 'openrouter/free')):
                 continue
         models[name] = {'id': name, 'free': free if pricing else None,
                         'supports_json_schema': 'structured_outputs' in (item.get('supported_parameters') or [])}
     if root == 'https://openrouter.ai/api/v1' and free_only:
-        models['openrouter/free'] = {'id': 'openrouter/free', 'free': True}
+        models.setdefault('openrouter/free', {'id': 'openrouter/free', 'free': True})
     if not models:
         raise HTTPException(400, 'MODEL_CATALOG_UNAVAILABLE: No matching text models were found. Check the API service and account permissions.')
     return {'models': [models[key] for key in sorted(models)[:500]],

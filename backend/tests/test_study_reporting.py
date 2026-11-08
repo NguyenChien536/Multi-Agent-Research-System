@@ -77,7 +77,7 @@ def test_rendered_protocol_has_exact_fields_and_never_fabricates_hypotheses(lang
 
 @pytest.mark.asyncio
 async def test_methodologist_generates_fields_once_and_renders_the_same_proposed_plan(monkeypatch):
-    plan=nodes.MethodologistPlan(research_questions=['A descriptive question?'],hypotheses=[],variables={'outcomes':['usefulness']},study_design='Synthetic example.',
+    plan=nodes.MethodologistPlan(research_questions=['A descriptive question?'],hypotheses=[],variables=[{'role':'outcomes','names':['usefulness']}],study_design='Synthetic example.',
       data_collection_procedure='Await researcher data.',analysis_plan='Descriptive arithmetic.',ethical_considerations='No actual participants.')
     calls=[]
     class LLM:
@@ -91,4 +91,16 @@ async def test_methodologist_generates_fields_once_and_renders_the_same_proposed
     result=await nodes.methodologist_node({'research_type':'EMPIRICAL_HUMAN','language':'en','research_question':'Question?'})
     assert len(calls)==1 and result['status']=='WAITING_USER_DATA'
     assert result['protocol']['hypotheses']==[]
-    assert result['protocol']['protocol_markdown']==render_protocol(plan.model_dump(),'en')
+    from app.services.study_protocol import protocol_fields
+    from app.services.structured_output import supports_strict_schema
+    assert supports_strict_schema(nodes.MethodologistPlan.model_json_schema())
+    assert result['protocol']['variables']=={'outcomes':['usefulness']}
+    assert result['protocol']['protocol_markdown']==render_protocol(protocol_fields(plan.model_dump()),'en')
+
+
+def test_protocol_transport_preserves_custom_groups_and_legacy_dicts():
+    from app.services.study_protocol import protocol_fields
+    value={'variables':[{'role':'moderators','names':['context']},{'role':'moderators','names':['context','duration']}]}
+    assert protocol_fields(value)['variables']=={'moderators':['context','duration']}
+    legacy={'variables':{'custom group':['recorded variable']}}
+    assert protocol_fields(legacy)==legacy

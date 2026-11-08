@@ -12,6 +12,8 @@
     1. Xác định các câu hỏi nghiên cứu cụ thể.
     2. Chỉ nêu giả thuyết khi phù hợp thiết kế; nghiên cứu mô tả có thể không có giả thuyết.
     3. Phân loại rõ biến độc lập (independent), biến phụ thuộc (dependent), biến kiểm soát (control).
+       Trường variables là danh sách các object {role, names}; ví dụ role="dependent",
+       names=["tên biến đã được yêu cầu"]. Không trả dictionary role-to-list trực tiếp.
     4. Thiết kế nghiên cứu; cỡ mẫu đề xuất cần lý do và phải tách khỏi số quan sát thực tế.
     5. Hướng dẫn quy trình thu thập dữ liệu chi tiết (bảng câu hỏi hoặc thao tác thực nghiệm).
     6. Kế hoạch phân tích phù hợp câu hỏi, dữ liệu và khả năng thực thi được nêu dưới đây.

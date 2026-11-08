@@ -2,6 +2,20 @@
 import re
 
 
+def protocol_fields(value: dict) -> dict:
+    """Convert the closed transport schema to the stable stored domain shape."""
+    result = dict(value)
+    groups = result.get('variables')
+    if isinstance(groups, list):
+        variables = {}
+        for group in groups:
+            role = group['role']
+            variables.setdefault(role, [])
+            variables[role] = list(dict.fromkeys([*variables[role], *group['names']]))
+        result['variables'] = variables
+    return result
+
+
 def render_protocol(plan: dict, language: str = 'en') -> str:
     """Present validated method fields once, without a second generated narrative.
 

@@ -65,6 +65,15 @@ async def test_free_catalog_filters_paid_models_and_keeps_router(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_free_router_keeps_advertised_schema_capability(monkeypatch):
+    catalog_transport(monkeypatch,lambda _:httpx.Response(200,json={'data':[
+        {'id':'openrouter/free','pricing':{'prompt':'0','completion':'0'},'supported_parameters':['response_format','structured_outputs']}
+    ]}))
+    result=await model_catalog.discover_models('https://openrouter.ai/api/v1',KEY)
+    assert result['models']==[{'id':'openrouter/free','free':True,'supports_json_schema':True}]
+
+
+@pytest.mark.asyncio
 async def test_google_resource_names_become_completion_model_ids(monkeypatch):
     def handler(_):
         return httpx.Response(200,json={'data':[{'id':'models/gemini-test-flash'}, {'id':'models/lyria-test'}, {'id':'models/gemini-test-image'}]})

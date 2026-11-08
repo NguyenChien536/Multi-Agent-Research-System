@@ -6,6 +6,9 @@ from langchain_core.runnables import RunnableLambda
 from pydantic import BaseModel
 from app.prompts import render_prompt
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class StructuredOutputFailure(ValueError):
@@ -81,7 +84,15 @@ def compatible_structured_output(model_name: str, model: Any, schema: Any):
                 text = fence[1].strip()
             try:
                 validated = schema.model_validate(json.loads(text))
-            except ValueError:
+            except ValueError as exc:
+                fields = {'root:json_syntax'}
+                if callable(getattr(exc, 'errors', None)):
+                    fields = set()
+                    for error in exc.errors(include_input=False, include_context=False, include_url=False)[:8]:
+                        first = (error.get('loc') or ('root',))[0]
+                        name = first if first in schema.model_fields else 'root'
+                        fields.add(str(name) + ':' + str(error.get('type', 'invalid')))
+                logger.warning('Structured validation rejected schema=%s fields=%s', schema.__name__, sorted(fields))
                 raise StructuredOutputFailure('MODEL_INVALID_JSON: Model returned invalid structured data.', response) from None
             # Pydantic serialization stays unchanged, while budget accounting
             # retains provider-reported usage (including reasoning tokens).
