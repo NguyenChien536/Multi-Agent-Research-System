@@ -747,19 +747,23 @@ export default function WorkspacePage() {
   );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-zinc-50 print:h-auto print:overflow-visible print:bg-white print:block">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-zinc-50 print:h-auto print:overflow-visible print:bg-white print:block">
       {/* Top Header Bar */}
       <div id="research-header-bar" className="min-h-16 px-6 py-3 border-b border-zinc-200 bg-white flex flex-wrap items-center justify-between gap-3 shrink-0 print:hidden">
-        <div className="flex items-center gap-3 flex-1 min-w-[280px]">
+        <div className="flex items-center gap-3 flex-1 basis-80 min-w-0">
           <button
             type="button"
             onClick={() => setIsLeftSidebarCollapsed(prev => !prev)}
-            className="hidden lg:flex items-center justify-center p-1.5 rounded-lg text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 transition-colors shrink-0"
+            aria-controls="toc-sidebar"
+            aria-expanded={!isLeftSidebarCollapsed}
+            aria-label={isEn ? 'Toggle contents' : 'Bật/tắt mục lục'}
+            className="flex items-center justify-center gap-1.5 px-2 py-2 border border-zinc-200 rounded-lg text-xs font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 transition-colors shrink-0"
             title={isLeftSidebarCollapsed ? (isEn ? "Show table of contents" : "Hiện mục lục bài báo") : (isEn ? "Collapse table of contents" : "Thu gọn mục lục")}
           >
             {isLeftSidebarCollapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
+            <span>{isEn ? 'Contents' : 'Mục lục'}</span>
           </button>
-          <div>
+          <div className="min-w-0">
             <h1 className="font-semibold text-lg line-clamp-1 text-zinc-900">{task.title}</h1>
             <div className="flex flex-wrap items-center gap-2 mt-0.5 text-xs font-medium">
               {/* Status pill — colored by state */}
@@ -831,13 +835,9 @@ export default function WorkspacePage() {
             </Button>
           )}
           <Button variant="outline" onClick={() => setShowModelSettings(true)}>{isEn ? 'API & model' : 'API & model'}</Button>
-          <Button variant="outline" aria-controls="toc-sidebar" aria-expanded={!isLeftSidebarCollapsed}
-            onClick={() => setIsLeftSidebarCollapsed(v => !v)} aria-label={isEn ? 'Toggle contents' : 'Bật/tắt mục lục'}>
-            <PanelLeft size={15} />
-          </Button>
           <Button variant="outline" aria-controls="stages-sidebar" aria-expanded={!isRightSidebarCollapsed}
             onClick={() => setIsRightSidebarCollapsed(v => !v)}>
-            <PanelRight size={15} className="mr-1.5" />{isEn ? 'Pipeline' : 'Tiến trình'}
+            <PanelRight size={15} className="mr-1.5" />{isRightSidebarCollapsed ? (isEn ? 'Show pipeline' : 'Mở tiến trình') : (isEn ? 'Hide pipeline' : 'Ẩn tiến trình')}
           </Button>
           <Button variant="outline" onClick={() => setReloadKey(v => v + 1)} aria-label={isEn ? "Refresh" : "Làm mới"}>
             <RefreshCw size={15} />
@@ -870,6 +870,7 @@ export default function WorkspacePage() {
               onClick={() => setIsLeftSidebarCollapsed(true)}
               className="hidden lg:block text-zinc-400 hover:text-zinc-700 transition-colors p-1.5 rounded-lg hover:bg-zinc-200/60"
               title={isEn ? "Collapse table of contents" : "Thu gọn mục lục"}
+              aria-label={isEn ? "Collapse table of contents" : "Thu gọn mục lục"}
             >
               <PanelLeftClose size={16} />
             </button>
@@ -2828,6 +2829,7 @@ export default function WorkspacePage() {
               onClick={() => setIsRightSidebarCollapsed(true)}
               className="hidden lg:block text-zinc-400 hover:text-zinc-700 transition-colors p-1.5 rounded-lg hover:bg-zinc-200/60"
               title={isEn ? "Collapse pipeline stages" : "Thu gọn cột giai đoạn"}
+              aria-label={isEn ? "Collapse pipeline stages" : "Thu gọn cột giai đoạn"}
             >
               <PanelRightClose size={16} />
             </button>
@@ -2909,6 +2911,17 @@ export default function WorkspacePage() {
             </div>
           </div>
         </aside>
+        {isRightSidebarCollapsed && (
+          <div className="hidden lg:flex w-12 shrink-0 flex-col items-center border-l border-zinc-200 bg-white py-3 print:hidden">
+            <button type="button" aria-controls="stages-sidebar" aria-expanded={false}
+              aria-label={isEn ? 'Open research pipeline' : 'Mở cột tiến trình nghiên cứu'}
+              onClick={() => setIsRightSidebarCollapsed(false)}
+              className="flex items-center gap-3 rounded-lg px-2 py-3 text-xs font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-900 [writing-mode:vertical-rl]"
+              title={isEn ? 'Open research pipeline' : 'Mở cột tiến trình nghiên cứu'}>
+              <PanelRight size={17} />{isEn ? 'Pipeline' : 'Tiến trình'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

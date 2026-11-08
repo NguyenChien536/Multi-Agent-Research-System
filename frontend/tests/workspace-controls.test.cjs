@@ -91,6 +91,26 @@ test('collapsed pipeline can be reopened from the persistent header',async()=>{
   toggle().props.onClick();
   assert.equal(toggle().props['aria-expanded'],true);
 });
+
+test('pipeline collapse leaves an edge reopen control and never changes contents',async()=>{
+  const h=await workspace();
+  const controls=id=>elements(h.render()).filter(node=>node.props?.['aria-controls']===id);
+  const left=()=>controls('toc-sidebar')[0];
+  assert.ok(text(left()).includes('Contents'));
+  assert.equal(left().props['aria-expanded'],true);
+  elements(h.render()).find(node=>node.props?.['aria-label']==='Collapse pipeline stages').props.onClick();
+  assert.equal(left().props['aria-expanded'],true);
+  const reopen=elements(h.render()).find(node=>node.props?.['aria-label']==='Open research pipeline');
+  assert.ok(reopen);
+  assert.ok(text(h.render()).includes('Show pipeline'));
+  assert.equal(controls('stages-sidebar')[0].props['aria-expanded'],false);
+  reopen.props.onClick();
+  assert.equal(controls('stages-sidebar')[0].props['aria-expanded'],true);
+  assert.ok(!elements(h.render()).some(node=>node.props?.['aria-label']==='Open research pipeline'));
+  left().props.onClick();
+  assert.equal(left().props['aria-expanded'],false);
+  assert.equal(controls('stages-sidebar')[0].props['aria-expanded'],true);
+});
 test('waiting computational research accepts CSV directly on the default workspace',async()=>{
   const h=await workspace('WAITING_USER_DATA','EMPIRICAL_COMPUTATIONAL');
   const input=elements(h.render()).find(node=>node.props?.['aria-label']==='Upload computational CSV');
