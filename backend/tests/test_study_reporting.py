@@ -55,6 +55,14 @@ def test_new_reporting_policy_does_not_reassess_historical_contracts():
     assert not any(r['code'].startswith('UNRECORDED_') for r in rows)
 
 
+def test_unresolved_internal_citations_are_flagged_only_under_the_new_rendering_policy():
+    contract=manuscript_contract('EMPIRICAL_COMPUTATIONAL','en')
+    text='## Results\nRecorded result [[metrics:model]] is not an actual citation.'
+    assert 'UNRESOLVED_INTERNAL_MARKER' in {r['code'] for r in validate_scientific_reporting(text,contract,{},[])}
+    contract.pop('rendering_policy')
+    assert 'UNRESOLVED_INTERNAL_MARKER' not in {r['code'] for r in validate_scientific_reporting(text,contract,{},[])}
+
+
 @pytest.mark.parametrize('language',['en','vi','fr','de','es','ja','zh','ko'])
 def test_rendered_protocol_has_exact_fields_and_never_fabricates_hypotheses(language):
     plan=dict(research_questions=['Recorded RQ'],hypotheses=[],variables={'control':['Recorded variable']},

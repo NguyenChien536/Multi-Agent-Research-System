@@ -224,8 +224,13 @@ async def test_writer_node_uses_real_json_validation_and_renders_headings_for_pe
     instruction=next(m.content for m in messages if 'order and spelling:' in m.content)
     headings=json.loads(re.search(r'order and spelling: (.+)\.',instruction.splitlines()[0])[1])
     calls.append(headings)
-    return AIMessage(content=json.dumps({'title':'A measured study','sections':[
-     {'heading':h,'body':'### Scope\nOnly the recorded evidence supports this bounded interpretation.'} for h in reversed(headings)]}),
+    def section(h):
+     compact=h in {'Abstract','Keywords'}
+     return {'heading':h,'body':'A compact summary of the recorded evidence and its limits.' if compact else '',
+             'subsections':[] if compact else [
+              {'heading':'Recorded scope','body':'Only the recorded evidence supports this bounded interpretation of the supplied research question.'},
+              {'heading':'Interpretation and limits','body':'The available results permit a limited comparison and do not establish unrecorded generalization.'}]}
+    return AIMessage(content=json.dumps({'title':'A measured study','sections':[section(h) for h in reversed(headings)]}),
      usage_metadata={'input_tokens':80,'output_tokens':40,'total_tokens':120},response_metadata={'finish_reason':'STOP'})
    return RunnableLambda(send)
  connection=SimpleNamespace(output_token_limit=8192,model_tag='byok:fixture',structured_output_mode='json_schema',estimate=lambda *_:0)
@@ -240,3 +245,21 @@ async def test_writer_node_uses_real_json_validation_and_renders_headings_for_pe
  assert re.findall(r'^## (.+)',result['draft_report_markdown'],re.M)==[s['heading'] for s in state['plan']['manuscript_contract']['sections']]
  assert len(calls)==len(section_groups(state['plan']['manuscript_contract']))
  assert all('[[@claim:' not in h for group in calls for h in group)
+
+
+def test_structured_subsections_render_titles_and_paragraphs_on_separate_lines():
+ from app.services.manuscript_structure import validate_hierarchy
+ contract=manuscript_contract('EMPIRICAL_COMPUTATIONAL','en')
+ schema=group_schema(['Methods'],layout={'Methods':{'minimum_subsections':2,'expand_after':100}})
+ value=schema(title='',sections=[{'heading':'Methods','body':'','subsections':[
+  {'heading':'Recorded method','body':'The recorded routine uses the supplied variables and preserves its documented assumptions and limits.'},
+  {'heading':'Evaluation design','body':'The same recorded split is used for the measured model and baseline, without unexecuted procedures.'}]}])
+ text=group_message(value,['Methods']).content
+ assert '### Recorded method\n\nThe recorded' in text
+ assert not any(f['code'] in {'EMPTY_SUBSECTION','UNDEVELOPED_SUBSECTION','SUBSECTION_STRUCTURE'} for f in validate_hierarchy(text,contract))
+
+
+@pytest.mark.parametrize('bad',['### Scope All prose is incorrectly appended to this title.','Recorded values [[metrics:model]] establish the outcome.', 'Provenance [[manifest:input_checksum]] is supplied.'])
+def test_structured_prose_rejects_inline_headings_and_invented_internal_citations(bad):
+ from pydantic import ValidationError
+ with pytest.raises(ValidationError):group_schema(['Methods'],layout={'Methods':{}})(title='',sections=[{'heading':'Methods','body':bad}])

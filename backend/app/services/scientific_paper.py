@@ -164,6 +164,10 @@ def validate_scientific_reporting(markdown: str, contract: dict | None, context:
     if contract.get('study_provenance_policy'):
         from app.services.study_reporting import study_reporting_findings
         findings.extend(study_reporting_findings(markdown, contract, context))
+    if contract.get('rendering_policy'):
+        without_markers = re.sub(r'\[\[(?:@claim:[0-9a-fA-F-]{36}|figure:[a-zA-Z0-9_-]+)\]\]', '', markdown)
+        if '[[' in without_markers:
+            findings.append({'code':'UNRESOLVED_INTERNAL_MARKER','message':'Remove invented internal references such as manifest/metrics markers. Use supplied claim/figure markers and report recorded study results directly.'})
     def add(code, message):
         findings.append({"code": code, "message": message})
     prose = re.sub(r"(?m)^!\[.*\]\(figures/[^)]+\)\s*$|\[\[figure:[^\]]+\]\]", "", markdown)

@@ -13,23 +13,51 @@ class ManuscriptSectionIncomplete(ValueError):
         super().__init__('MANUSCRIPT_INCOMPLETE: A required writing group is incomplete; saved groups are retained.')
 
 
-def group_schema(headings, short_headings=()):
+def group_schema(headings, short_headings=(), layout=None):
     """The transport owns section identities; the model supplies prose only."""
     def validate_body(body):
-        if len(body.strip()) < 8 or re.search(r'(?m)^#{1,2}\s', body):
-            raise ValueError('Section body must contain substantive prose without H1/H2 headings')
+        if re.search(r'(?m)^#{1,2}\s', body) or (layout is not None and re.search(r'(?:^|\s)#{1,6}\s', body)):
+            raise ValueError('Use the heading/subsections fields instead of inline Markdown headings')
+        leftover = re.sub(r'\[\[(?:@claim:[0-9a-fA-F-]{36}|figure:[a-zA-Z0-9_-]+)\]\]', '', body)
+        if layout is not None and '[[' in leftover:
+            raise ValueError('Use only supplied claim/figure markers; do not invent manifest or metrics citations')
         return body
+
+    def validate_heading(heading):
+        if '\n' in heading or '#' in heading or not heading.strip():
+            raise ValueError('A subsection title must be a short standalone line, not Markdown or prose')
+        return heading
+
+    def validate_subsection_body(body):
+        if len(body.strip()) < 50:
+            raise ValueError('A subsection requires developed prose, not whitespace or a title alone')
+        return body
+
+    subsection = create_model('ManuscriptSubsection',
+        heading=(Annotated[str, AfterValidator(validate_heading)], Field(min_length=3,max_length=140)),
+        body=(Annotated[str, AfterValidator(validate_body), AfterValidator(validate_subsection_body)], Field(min_length=50,description='Developed academic paragraphs, separate from the subsection title. No heading markup or invented internal citations.')))
 
     def validate_sections(value):
         if len(value.sections) != len(headings) or {s.heading for s in value.sections} != set(headings):
             raise ValueError('Each requested heading must occur exactly once')
-        if any(len(s.body.strip()) < (8 if s.heading in short_headings else 20) for s in value.sections):
-            raise ValueError('Section content is too short; only keyword sections may use eight characters')
+        for section in value.sections:
+            rule=(layout or {}).get(section.heading,{})
+            if rule.get('compact') and section.subsections:
+                raise ValueError('Abstract and Keywords must use body text without subsections')
+            if not section.subsections and len(section.body.strip()) < (8 if section.heading in short_headings else 20):
+                raise ValueError('Provide substantive body text or developed subsections')
+            names=[s.heading.strip().casefold() for s in section.subsections]
+            if len(names)!=len(set(names)):
+                raise ValueError('Subsection titles must be distinct within their section')
+            prose=section.body+' '.join(s.body for s in section.subsections)
+            if len(prose)>=rule.get('expand_after',600) and len(section.subsections)<rule.get('minimum_subsections',0):
+                raise ValueError('Develop the required distinct analytical subsections')
         return value
 
     section = create_model('ManuscriptSection',
         heading=(Literal[tuple(headings)], Field(description='Exact requested section heading')),
-        body=(Annotated[str, AfterValidator(validate_body)], Field(min_length=8, description='Academic Markdown prose, at least 20 characters (8 for Keywords). Use ### subsections; do not repeat H1/H2 headings.')))
+        body=(Annotated[str, AfterValidator(validate_body)], Field(default='',description='Introductory prose or complete Abstract/Keywords text. May be empty when developed subsections are supplied. No heading markup.')),
+        subsections=(list[subsection],Field(default_factory=list,max_length=6,description='Separate topic-specific headings and developed paragraphs. Usually 2-4 for substantial analytical/method sections; empty for Abstract and Keywords.')))
     return create_model('ManuscriptGroup',
         __validators__={'validate_sections': model_validator(mode='after')(validate_sections)},
         title=(str, Field(default='', max_length=300, description='Article title, or empty when not needed')),
@@ -42,7 +70,8 @@ def group_message(value, headings):
         raise ManuscriptSectionIncomplete()
     if any(re.search(r'(?m)^#{1,2}\s', section.body) for section in sections):
         raise ManuscriptSectionIncomplete()
-    by_heading = {section.heading: section.body.strip() for section in sections}
+    by_heading = {section.heading: '\n\n'.join(part for part in [section.body.strip(),
+        *('### '+s.heading.strip()+'\n\n'+s.body.strip() for s in section.subsections)] if part) for section in sections}
     title = value.title.strip().splitlines()[0] if value.title.strip() else ''
     markdown = (('# ' + title.lstrip('# ').strip() + '\n\n') if title else '') + '\n\n'.join(
         '## ' + heading + '\n' + by_heading[heading] for heading in headings)
@@ -97,7 +126,7 @@ async def write_section_groups(state, original_prompt, contract, store, invoke, 
         instruction = render_prompt('writer_sections', headings_json=json.dumps(headings, ensure_ascii=False),
                                     word_budget=front_budget if set(headings).issubset(front_names) else
                                     max(100, round((target-front_budget)*len(headings)/body_count)),
-                                    output_format=('Return one JSON object matching the supplied schema. Each section has its exact heading and a body containing academic Markdown with ### subheadings. Do not include H1/H2 headings inside body. Do not wrap JSON in a code fence.' if structured_invoke else
+                                    output_format=('Return one JSON object matching the supplied schema. Put subsection titles in subsections[].heading and academic paragraphs in subsections[].body. Use section.body only for introductory prose or compact Abstract/Keywords. No heading markup in prose fields. Do not wrap JSON in a code fence.' if structured_invoke else
                                                    "Each requested heading must be written as '## Heading'. Return Markdown without a wrapping code fence."))
         # Only fixed instructions enter the system message. Earlier generated
         # prose remains untrusted data in a separate human message.
