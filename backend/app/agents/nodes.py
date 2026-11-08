@@ -21,7 +21,7 @@ from app.services.manuscript import (
 )
 from app.services.scientific_paper import (
     scientific_context, build_scientific_figures, figure_instructions,
-    materialize_figures, validate_scientific_reporting,
+    materialize_figures, validate_scientific_reporting, measured_comparison_table, insert_measured_comparison_table,
 )
 from app.services.academic_writing import writing_guidance, writing_limits, manuscript_skeleton
 from app.services.research_quality import unique_quote_claims, canonicalize_quote_markers, inject_search_ledger, query_coverage, bounded_quality_batches, LEDGER_HEADINGS
@@ -1751,7 +1751,10 @@ Requested edits: {state.get('revision_instructions')}
         writing_guidance=writing_guidance(contract),
         empirical_context=empirical_section,
         paper_context=paper_context,
-        figure_instructions=figure_instructions(figures),
+        figure_instructions=figure_instructions(figures) + (
+            "\nReserve Table 1 for the following recorded results. The renderer inserts it in Results; do not duplicate its caption or table. Explain Table 1 in Results. Other tables start at 2.\n"
+            + measured_comparison_table(paper_context, contract)
+            if measured_comparison_table(paper_context, contract) else ""),
         revision_context=revision_context,
     )
 
@@ -1803,6 +1806,7 @@ Requested edits: {state.get('revision_instructions')}
         else:
             draft_markdown = str(content)
         draft_markdown = normalize_claim_markers(draft_markdown)
+        draft_markdown = insert_measured_comparison_table(draft_markdown, paper_context, contract)
         if (contract or {}).get("research_quality_policy"):
             draft_markdown = canonicalize_quote_markers(draft_markdown, state.get("claims", []))
             draft_markdown = inject_search_ledger(draft_markdown, state)

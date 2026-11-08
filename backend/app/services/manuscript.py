@@ -93,7 +93,7 @@ def manuscript_contract(research_type: str, language: str) -> dict[str, Any]:
         "revision_policy": {"version": 2, "scope": "bounded_repairs_preserving_unresolved_evidence_gates"},
         "research_quality_policy": {"version": 2, "source_balance": "provisional_need_hints_with_discovery_query_fallback"},
         "study_provenance_policy": {"version": 1, "scope": "own_method_records_and_corpus_bounded_gaps"},
-        "rendering_policy": {"version": 1, "scope": "structured_headings_and_supplied_citation_markers"},
+        "rendering_policy": {"version": 2, "scope": "structured_headings_supplied_markers_and_measured_tables"},
     }
 
 

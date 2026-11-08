@@ -154,7 +154,7 @@ def test_figure_policy_and_legacy_bundle_preserve_frozen_appearance_and_measurem
     figures = build_scientific_figures(legacy)
     assert "style_version" not in figures[0]
     assert scientific_context({"plan": {"manuscript_contract": {"version": 2}}})["figure_style_version"] == 1
-    assert scientific_context({"plan": attach_manuscript_contract({}, "REVIEW", "en")})["figure_style_version"] == 3
+    assert scientific_context({"plan": attach_manuscript_contract({}, "REVIEW", "en")})["figure_style_version"] == 4
     data, _ = build_publication_bundle("Historical article", "![Figure 1](figures/evaluation.svg)", {"scientific_context": legacy, "scientific_figures": figures}, [], "ACM_SIGCONF", version_id="old", version_number=1)
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         assert archive.read("figures/evaluation.svg").decode() == figures[0]["svg"]
