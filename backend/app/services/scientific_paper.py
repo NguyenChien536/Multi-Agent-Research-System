@@ -25,6 +25,8 @@ def scientific_context(state: dict) -> dict:
             ) if key in analysis},
             "statistical_significance_tested": False,
             "fieldwork_csv_statistics": deepcopy(frozen_csv_statistics((state.get('user_data_submission') or {}).get('artifact_evidence'))),
+            "study_method_provenance": {key: str((state.get('user_data_submission') or {}).get(key) or '')
+                                        for key in ('method_notes', 'data_provenance')},
             "independent_datasets_evaluated": 1 if analysis else 0}
 
 
@@ -159,6 +161,9 @@ def validate_scientific_reporting(markdown: str, contract: dict | None, context:
     if not contract or contract.get("version", 1) < 2:
         return []
     findings = []
+    if contract.get('study_provenance_policy'):
+        from app.services.study_reporting import study_reporting_findings
+        findings.extend(study_reporting_findings(markdown, contract, context))
     def add(code, message):
         findings.append({"code": code, "message": message})
     prose = re.sub(r"(?m)^!\[.*\]\(figures/[^)]+\)\s*$|\[\[figure:[^\]]+\]\]", "", markdown)

@@ -513,7 +513,7 @@ class AnalystExtraction(BaseModel):
     claims: List[ExtractedClaim] = Field(max_length=6, description="At most six distinct, relevant claim/quote pairs; return none if supplied passages do not support the question")
 
 
-class MethodologistProtocol(BaseModel):
+class MethodologistPlan(BaseModel):
     research_questions: List[str] = Field(description="Các câu hỏi nghiên cứu cụ thể cần giải quyết")
     hypotheses: List[str] = Field(description="Testable hypotheses when appropriate; return an empty list for descriptive or exploratory research")
     variables: Dict[str, List[str]] = Field(description="Các nhóm biến số nghiên cứu (independent, dependent, control)")
@@ -521,6 +521,10 @@ class MethodologistProtocol(BaseModel):
     data_collection_procedure: str = Field(description="Quy trình thu thập dữ liệu chi tiết")
     analysis_plan: str = Field(description="Kế hoạch phân tích thống kê và kiểm định giả thuyết")
     ethical_considerations: str = Field(description="Các lưu ý về đạo đức nghiên cứu và bảo mật dữ liệu")
+
+
+class MethodologistProtocol(MethodologistPlan):
+    """Persisted protocol shape; Markdown is rendered from the validated plan."""
     protocol_markdown: str = Field(description="Bản đề cương nghiên cứu hoàn chỉnh định dạng Markdown")
 
 # ---------------------------------------------------------------------------
@@ -1189,7 +1193,7 @@ async def methodologist_node(state: ResearchState) -> Dict[str, Any]:
             "status": status,
         }
 
-    from app.services.study_protocol import protocol_constraints, normalize_protocol_markdown
+    from app.services.study_protocol import protocol_constraints, render_protocol
     claims = state.get("claims", [])
     prompt = render_prompt('methodologist',
         research_question=state.get('research_question'),
@@ -1200,12 +1204,12 @@ async def methodologist_node(state: ResearchState) -> Dict[str, Any]:
     )
 
     try:
-        llm = get_smart_llm().with_structured_output(MethodologistProtocol)
-        proto_result: MethodologistProtocol = await invoke_llm_with_budget(
+        llm = get_smart_llm().with_structured_output(MethodologistPlan)
+        proto_result: MethodologistPlan = await invoke_llm_with_budget(
             state, llm, [HumanMessage(content=prompt)], model_name=model_name, output_tokens=4096
         )
-        protocol_dict = proto_result.model_dump()
-        markdown_content = normalize_protocol_markdown(proto_result.protocol_markdown or "")
+        protocol_dict = proto_result.model_dump(exclude={'protocol_markdown'})
+        markdown_content = render_protocol(protocol_dict, state.get('language', 'en'))
         protocol_dict["protocol_markdown"] = markdown_content
 
         duration_ms = int((time.monotonic() - start_ts) * 1000)
@@ -1750,7 +1754,13 @@ Requested edits: {state.get('revision_instructions')}
         strategy_key = saved_work.fingerprint({'writer_strategy': 1, 'prompt': prompt, 'capacity': output_limit}) if saved_work else None
         async def invoke_writer(messages):
             return await invoke_llm_with_budget(state, llm, messages, model_name=model_name, output_tokens=output_limit)
-        if saved_work and await saved_work.load('writer-strategy', strategy_key):
+        from app.services.model_connection import current_connection
+        # Personal connections have varied timeout/output capacity. Save long
+        # drafts incrementally instead of spending a full-paper attempt first.
+        sectional_first = saved_work and current_connection() is not None and length != 'SHORT'
+        if sectional_first or (saved_work and await saved_work.load('writer-strategy', strategy_key)):
+            if sectional_first:
+                await saved_work.save('writer-strategy', strategy_key, {'mode': 'sections'})
             response = await write_section_groups(state, prompt, contract, saved_work, invoke_writer)
         else:
             try:

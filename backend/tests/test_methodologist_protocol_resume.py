@@ -85,7 +85,7 @@ async def test_empirical_human_protocol_pause_and_resume(monkeypatch):
         async def ainvoke(self, _messages):
             if self.schema is nodes_module.SupervisorPlan:
                 return plan_mock
-            if self.schema is nodes_module.MethodologistProtocol:
+            if self.schema is nodes_module.MethodologistPlan:
                 return proto_mock
             if self.schema is nodes_module.AnalystExtraction:
                 return nodes_module.AnalystExtraction(claims=[
@@ -215,7 +215,9 @@ async def test_empirical_human_protocol_pause_and_resume(monkeypatch):
         assert proto_data["research_type"] == "EMPIRICAL_HUMAN"
         assert proto_data["status"] == "WAITING_USER_DATA"
         assert proto_data["protocol_artifact_id"] is not None
-        assert "Nghiên cứu thực nghiệm" in (proto_data["content_markdown"] or "")
+        assert "Đề cương nghiên cứu đề xuất" in (proto_data["content_markdown"] or "")
+        assert proto_mock.research_questions[0] in proto_data["content_markdown"]
+        assert proto_mock.study_design in proto_data["content_markdown"]
 
         # 5. Người dùng nạp kết quả thực nghiệm và bấm tiếp tục (POST /data/resume)
         upload_res = await client.post(

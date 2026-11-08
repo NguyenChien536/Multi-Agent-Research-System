@@ -7,7 +7,7 @@ import unicodedata
 from typing import Any
 from app.services.academic_writing import writing_brief, structure_policy
 
-CONTRACT_VERSION = 5
+CONTRACT_VERSION = 6
 REVIEW_OUTPUT_CONTRACT = f"REVIEW-v{CONTRACT_VERSION}"
 
 
@@ -92,6 +92,7 @@ def manuscript_contract(research_type: str, language: str) -> dict[str, Any]:
         "evidence_review_policy": {"version": 4, "scope": "source_quote_anchors_and_bounded_execution_procedure_facts"},
         "revision_policy": {"version": 2, "scope": "bounded_repairs_preserving_unresolved_evidence_gates"},
         "research_quality_policy": {"version": 2, "source_balance": "provisional_need_hints_with_discovery_query_fallback"},
+        "study_provenance_policy": {"version": 1, "scope": "own_method_records_and_corpus_bounded_gaps"},
     }
 
 

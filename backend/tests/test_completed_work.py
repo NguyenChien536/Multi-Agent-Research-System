@@ -128,3 +128,29 @@ async def test_writer_node_persists_sectional_strategy_and_resumes_after_another
  assert '## Conclusion' in result['draft_report_markdown'] and not result['draft_truncated']
  assert record.await_args.kwargs['output_summary']['writer_strategy']=='sectional_resume_v1'
  assert record.await_args.kwargs['output_summary']['reused_groups']==1
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('kind',['REVIEW','EMPIRICAL_COMPUTATIONAL','EMPIRICAL_HUMAN'])
+async def test_personal_long_papers_start_with_saved_sections_without_a_wasted_full_attempt(monkeypatch,kind):
+ from types import SimpleNamespace
+ from app.services import model_connection
+ from app.services.manuscript import attach_manuscript_contract
+ store=MemoryStore();calls=[]
+ monkeypatch.setattr(CompletedWork,'for_state',lambda state:store)
+ monkeypatch.setattr(model_connection,'current_connection',lambda:SimpleNamespace(output_token_limit=8192,model_tag='fixture',estimate=lambda *_:0))
+ monkeypatch.setattr(nodes,'_record_progress',AsyncMock())
+ monkeypatch.setattr(nodes,'record_agent_run',AsyncMock())
+ monkeypatch.setattr(nodes,'get_smart_llm',lambda:object())
+ monkeypatch.setattr(nodes,'get_active_model_name',lambda **kwargs:'fixture')
+ async def invoke(state,llm,messages,**kwargs):
+  assert len(messages)>1, 'The full-paper attempt must not precede incremental writing'
+  calls.append(messages)
+  return chunk_response(messages)
+ monkeypatch.setattr(nodes,'invoke_llm_with_budget',invoke)
+ state={'plan':attach_manuscript_contract({},kind,'en'),'research_question':'Fixture question','research_type':kind,'language':'en','report_length':'MEDIUM'}
+ result=await nodes.writer_node(state)
+ count=len(section_groups(state['plan']['manuscript_contract']))
+ assert len(calls)==count and store.progress[-1]==(count,count)
+ assert '## Conclusion' in result['draft_report_markdown'] and not result['draft_truncated']
+ await nodes.writer_node(state)
+ assert len(calls)==count

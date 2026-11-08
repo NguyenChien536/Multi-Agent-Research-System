@@ -2,6 +2,39 @@
 import re
 
 
+def render_protocol(plan: dict, language: str = 'en') -> str:
+    """Present validated method fields once, without a second generated narrative.
+
+    The protocol is proposed work. Historical saved Markdown is not regenerated.
+    """
+    labels = {
+        'en': ('Proposed Study Protocol', 'Research questions', 'Hypotheses', 'Variables', 'Study design', 'Data collection procedure', 'Analysis plan', 'Ethics and data protection', 'Not specified; researcher review required.'),
+        'vi': ('Đề cương nghiên cứu đề xuất', 'Câu hỏi nghiên cứu', 'Giả thuyết', 'Biến nghiên cứu', 'Thiết kế nghiên cứu', 'Quy trình thu thập dữ liệu', 'Kế hoạch phân tích', 'Đạo đức và bảo vệ dữ liệu', 'Chưa xác định; cần người nghiên cứu rà soát.'),
+        'ja': ('研究計画案', '研究課題', '仮説', '変数', '研究デザイン', 'データ収集手順', '分析計画', '倫理とデータ保護', '未指定。研究者による確認が必要です。'),
+        'zh': ('拟议研究方案', '研究问题', '假设', '变量', '研究设计', '数据收集流程', '分析计划', '伦理与数据保护', '尚未指定，需研究者审核。'),
+        'ko': ('제안된 연구 계획', '연구 질문', '가설', '변수', '연구 설계', '데이터 수집 절차', '분석 계획', '윤리 및 데이터 보호', '지정되지 않음. 연구자 검토가 필요합니다.'),
+        'fr': ('Protocole de recherche proposé', 'Questions de recherche', 'Hypothèses', 'Variables', 'Plan de recherche', 'Collecte des données', "Plan d’analyse", 'Éthique et protection des données', 'Non précisé ; vérification par le chercheur requise.'),
+        'de': ('Vorgeschlagenes Studienprotokoll', 'Forschungsfragen', 'Hypothesen', 'Variablen', 'Studiendesign', 'Datenerhebung', 'Analyseplan', 'Ethik und Datenschutz', 'Nicht angegeben; Prüfung durch Forschende erforderlich.'),
+        'es': ('Protocolo de estudio propuesto', 'Preguntas de investigación', 'Hipótesis', 'Variables', 'Diseño del estudio', 'Recopilación de datos', 'Plan de análisis', 'Ética y protección de datos', 'No especificado; requiere revisión del investigador.'),
+    }.get(language or 'en')
+    if labels is None:
+        return render_protocol(plan, 'en')
+    keys = ('research_questions', 'hypotheses', 'variables', 'study_design',
+            'data_collection_procedure', 'analysis_plan', 'ethical_considerations')
+    parts = ['# ' + labels[0]]
+    for key, heading in zip(keys, labels[1:8]):
+        value = plan.get(key)
+        if isinstance(value, dict):
+            body = '\n'.join('- ' + str(name) + ': ' + '; '.join(str(v) for v in items)
+                             for name, items in value.items())
+        elif isinstance(value, list):
+            body = '\n'.join('- ' + str(item) for item in value)
+        else:
+            body = str(value or '').strip()
+        parts.append('## ' + heading + '\n' + (body or labels[8]))
+    return '\n\n'.join(parts)
+
+
 def protocol_constraints(research_type: str) -> str:
     common = """A protocol is proposed work, not an account of completed research.
 Use questions appropriate to the requested design. For descriptive/exploratory work,

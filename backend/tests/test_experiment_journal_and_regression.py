@@ -579,7 +579,7 @@ async def test_e2e_empirical_computational_workflow(monkeypatch):
         async def ainvoke(self, _messages):
             if self.schema is nodes_module.SupervisorPlan:
                 return plan_mock
-            if self.schema is nodes_module.MethodologistProtocol:
+            if self.schema is nodes_module.MethodologistPlan:
                 return proto_mock
             if self.schema is nodes_module.AnalystExtraction:
                 return nodes_module.AnalystExtraction(claims=[

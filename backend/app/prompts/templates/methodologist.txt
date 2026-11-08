@@ -16,6 +16,9 @@
     5. Hướng dẫn quy trình thu thập dữ liệu chi tiết (bảng câu hỏi hoặc thao tác thực nghiệm).
     6. Kế hoạch phân tích phù hợp câu hỏi, dữ liệu và khả năng thực thi được nêu dưới đây.
     7. Lưu ý về đạo đức nghiên cứu và bảo mật dữ liệu.
-    8. Viết toàn bộ văn bản đề cương hoàn chỉnh dưới dạng Markdown đầy đủ, chuẩn mực.
+    8. Chỉ trả các trường có cấu trúc theo schema; ứng dụng sẽ trình bày đề cương từ
+       chính các trường đó. Không viết thêm một bản Markdown lặp lại cùng nội dung.
+       Mỗi trường văn bản chỉ cần 2–4 câu chính xác, đủ để người dùng thực hiện;
+       tối đa bốn câu hỏi và bốn giả thuyết, không kéo dài để lấp đầy schema.
     {{ protocol_constraints }}
     
