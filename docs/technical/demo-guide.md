@@ -44,15 +44,17 @@ Lệnh `start` chỉ bật image đã chốt, không build source đang sửa. �
 
 Kết nối riêng được ưu tiên hơn provider máy chủ. Nếu kết nối riêng lỗi, hệ thống không tự chuyển sang dùng tín dụng máy chủ. Đổi mặc định chỉ áp dụng cho bài mới; bài cũ phải chọn **Dùng cấu hình mặc định** trong **Bài hiện tại**. Đổi model không đặt lại lượng sử dụng. API miễn phí vẫn có giới hạn tốc độ/hạn mức.
 
-**Thao tác khi chạy:** thanh đầu workspace có **Dừng nghiên cứu** khi đang chạy/chờ. Bài lỗi có **Tiếp tục từ bước lỗi / Continue from failed step**, ở cả thanh đầu và vùng báo lỗi: tiếp tục checkpoint, giữ kết quả đã lưu và lượng sử dụng. Nút **Kiểm tra bản thảo đã lưu / Check for saved draft** chỉ tải lại bản thảo, không chạy workflow. Nếu đã hết allowance hoặc phần còn lại không đủ cho bước tiếp theo (`BUDGET_LIMIT`), nút chính chuyển sang **Tạo nghiên cứu mới**; đổi model hay bấm tiếp không đặt lại ngân sách.
+**Thao tác khi chạy:** thanh đầu workspace có **Dừng nghiên cứu** khi đang chạy/chờ. Bài lỗi có **Tiếp tục từ bước lỗi / Continue from failed step**: tiếp tục checkpoint, giữ kết quả đã lưu và lượng sử dụng. Nút **Kiểm tra bản thảo đã lưu / Check for saved draft** chỉ tải lại bản thảo, không chạy workflow. Đổi model không đặt lại ngân sách.
+
+**Khi thiếu token:** chọn **Xem hạn mức để tiếp tục / Review token allowance** ở thanh trên. Đọc số input/output token mới trong vùng khôi phục rồi chọn **Tăng hạn mức token và tiếp tục / Increase token allowance and continue**. Đây là quyết định rõ ràng của người dùng, không tự tăng. Lượt tiếp tục dùng cùng workflow/checkpoint và giữ mọi lượng sử dụng; không tìm nguồn lại từ đầu. Mặc định vẫn 100.000 input / 50.000 output; có thể tăng dần trong trần 300.000 input / 200.000 output. Trần tiền, lượt gọi và thời gian không đổi. Nếu một trong các trần đó đã hết, hoặc đã tới trần token tối đa, tùy chọn tăng không xuất hiện; có thể giữ bài cũ và tạo bài mới với phạm vi phù hợp. Token của API miễn phí vẫn chịu giới hạn tài nguyên, không phải hóa đơn.
 
 Lỗi và bước lỗi hiện ngay trong khung đỏ. Lỗi 503 là provider quá tải, khác với key bị từ chối (401/403), model không khả dụng (404) và giới hạn dịch vụ (429). Retry tự động cho lỗi 502/503/504 có giới hạn và vẫn chịu ngân sách. Với 429 tạm thời có tín hiệu phù hợp, hệ thống lưu thời điểm thử lại, đưa bài về hàng đợi và giải phóng worker; giao diện báo **Đang chờ dịch vụ AI**. Tối đa hai lần hoãn tự động trong cùng workflow, mỗi lần không quá 300 giây; hết hạn mức ngày hoặc không xác định được thời gian chờ thì cần người dùng xử lý. Nếu Writer đã lưu bản thảo trước khi Critic gặp lỗi provider, bản thảo có thể được giao dưới trạng thái **Cần rà soát**, không được ghi là kiểm tra thành công.
 
 **Chọn model:** danh sách đánh dấu **JSON Schema** khi dịch vụ quảng bá khả năng này. Khi chọn, ứng dụng ưu tiên định dạng đó; schema có trường từ điển động vẫn dùng JSON object và kiểm tra bằng code để giữ đầy đủ dữ liệu. Đây là kiểm tra khả năng kết nối, không bảo đảm model sẽ viết đúng hoặc còn quota. Khi trả JSON lỗi, có tối đa một lượt yêu cầu sửa định dạng, vẫn tính trong ngân sách. Phản hồi bị cắt không được ghép đoán thành kết quả hợp lệ.
 
-**Giữ phần đã làm:** các đầu ra có cấu trúc đã kiểm tra được lưu riêng cho đúng bài, workflow, input và cấu hình model. Tiếp tục cùng điều kiện có thể dùng lại chúng; đổi cấu hình/input không tái dùng kết quả không còn khớp. Khi một lần viết dài bị timeout hoặc cắt, hệ thống có thể viết theo nhóm phần và lưu từng nhóm hoàn chỉnh. Giao diện hiển thị số nhóm đã lưu; chỉ lắp bản thảo khi đủ nhóm hợp lệ, không trình bày bài đang viết dở như đã hoàn tất.
+**Giữ phần đã làm:** các đầu ra có cấu trúc đã kiểm tra được lưu riêng cho đúng bài, workflow, input và cấu hình model. Tiếp tục cùng điều kiện có thể dùng lại chúng; đổi cấu hình/input không tái dùng kết quả không còn khớp. Với kết nối cá nhân và bài MEDIUM/LONG, Writer viết theo nhóm phần ngay từ đầu để tránh mất một lượt toàn bài do timeout. Các trường hợp khác vẫn có thể chuyển sang nhóm khi timeout/cắt. Giao diện hiển thị số nhóm đã lưu; chỉ lắp bản thảo khi đủ nhóm hợp lệ, không trình bày bài đang viết dở như đã hoàn tất.
 
-Nút **Tiến trình / Pipeline** ở đầu trang bật lại cột bên phải sau khi thu gọn. **Inspect Error** trong Monitor chuyển tới lịch sử lỗi trên chính trang Monitor. Khi bài tính toán chờ dữ liệu, ô chọn CSV xuất hiện ngay trong workspace; upload hợp lệ tự tiếp tục, không cần bấm chạy lại. Bài khảo sát vẫn cần file và thông tin nguồn gốc rồi bấm **Tiếp tục**.
+Nút **Mục lục / Contents** nằm bên trái tiêu đề và chỉ điều khiển cột trái. **Ẩn tiến trình / Hide pipeline** ở thanh trên điều khiển cột phải; khi thu gọn, nút đổi thành **Mở tiến trình / Show pipeline**, đồng thời có nút **Pipeline** ngay mép phải trên desktop. Hai cột hoạt động độc lập. **Inspect Error** trong Monitor chuyển tới lịch sử lỗi trên chính trang Monitor. Khi bài tính toán chờ dữ liệu, ô chọn CSV xuất hiện ngay trong workspace; upload hợp lệ tự tiếp tục, không cần bấm chạy lại. Bài khảo sát vẫn cần file và thông tin nguồn gốc rồi bấm **Tiếp tục**.
 
 **Sửa hồ sơ:** Settings → **Thông tin cá nhân → Chỉnh sửa**. Bấm **Lưu thay đổi** mới cập nhật; **Hủy** bỏ các thay đổi chưa lưu. Đổi email cần mật khẩu hiện tại; lần đăng nhập sau dùng email mới. Thanh bên cập nhật ngay sau khi lưu. **Xóa tài khoản** cần mật khẩu và nhập `DELETE`; chỉ thử bằng tài khoản demo riêng vì xác nhận sẽ khóa tài khoản ngay và xóa bài/file ở nền.
 
@@ -136,7 +138,7 @@ Nếu còn thời gian, thử [CSV negative control](../../examples/demo/computa
 | `FAILED` | Đọc khung đỏ; sửa nguyên nhân/cấu hình nếu cần rồi bấm **Continue from failed step** |
 | 429 | Provider giới hạn tốc độ/hạn mức. Chờ hoặc cấu hình dịch vụ/model còn quota; không retry liên tục |
 | Thiếu bằng chứng | Bổ sung nguồn/kết quả, không yêu cầu Writer tự lấp chỗ trống |
-| Hết budget/token | Nút **Tạo nghiên cứu mới** mở form; chọn đúng loại và cấu hình phù hợp. Kết quả bài cũ vẫn được giữ |
+| Thiếu token | **Xem hạn mức để tiếp tục** → đọc hạn mức mới → chủ động tăng và tiếp tục cùng bài. Nếu hết tiền/lượt/thời gian hoặc tới trần token, giữ bài cũ và tạo bài mới với phạm vi phù hợp |
 
 ## 6. Hiểu code để trả lời thầy
 
@@ -161,11 +163,28 @@ Kiến trúc là **modular monolith**, API/worker chạy thành các tiến trì
 
 Dùng VS Code để đọc/debug code; Antigravity khi muốn AI hỗ trợ sửa. Cùng một thư mục dự án, không cần tạo bản sao. Tránh để hai công cụ cùng sửa một file.
 
-## 7. Trạng thái kiểm chứng — 06/11/2026
+## 7. Trạng thái kiểm chứng — 08/11/2026
 
-Mã nguồn `49a15a0` trên branch `feature/89-demo-workflow`, draft PR #109 vào develop: backend **883 test passed** trên database test riêng; frontend **67 test passed** và build production thành công. GitHub CI **6/6 thành công**, gồm release runtime. Không lấy số test này làm bằng chứng rằng mọi bài mới với provider miễn phí đều hoàn tất. Bản demo vẫn dùng **http://127.0.0.1:3082**; chưa merge vào main.
+Mã nguồn `52beacc` trên branch `feature/89-demo-workflow`, draft PR #109 vào develop: bộ backend đầy đủ tại local **954 test passed** trên database thử nghiệm riêng. Bản giao diện không đổi từ mốc **70 frontend test passed** và production build thành công. CI chạy lại mỗi lần cập nhật PR; kiểm tra các jobs đạt trước khi merge. Không lấy số test này làm bằng chứng rằng mọi bài mới với provider miễn phí đều hoàn tất. Bản demo vẫn dùng **http://127.0.0.1:3082**; chưa merge vào main.
 
-Docker demo đã triển khai revision **`49a15a0ef145`**; sáu dịch vụ healthy sau migration. Các lượt kiểm tra provider dưới đây chạy trên `1c34ad0`, trước bản sửa dừng Analyst sớm ở `49a15a0`.
+Docker demo đã triển khai revision **`52beacc7bcdb`**; sáu dịch vụ healthy sau migration. Các lượt kiểm tra provider ngày 06/11 dưới đây chạy trên `1c34ad0`, trước bản sửa dừng Analyst sớm ở `49a15a0`.
+
+**Bổ sung 08/11:** Methodologist sinh một bộ trường có cấu trúc; ứng dụng trình bày đề cương từ chính các trường đó. Các nhóm Writer dùng trường tiêu đề/mục con riêng, renderer trình bày H2/H3 để tránh ghép tiêu đề với cả đoạn văn. Contract v7 kế thừa kiểm tra nguồn gốc phương pháp và research gap vượt corpus, đồng thời phát hiện marker nội bộ tự tạo. Những kiểm tra này hỗ trợ phát hiện lỗi, không thay xác minh học thuật. Contract và bản thảo lịch sử không được tự nâng cấp.
+
+**Hai cột độc lập:** nút **Contents / Mục lục** ở bên trái tiêu đề chỉ đóng/mở mục lục. Nút **Hide pipeline / Show pipeline** ở bên phải chỉ đóng/mở tiến trình. Khi đóng từ bên trong Pipeline, cạnh phải vẫn có nút **Pipeline** để mở lại. Đã kiểm tra các thao tác này trên trình duyệt bằng tài khoản QA riêng, không gọi AI cho bài kiểm tra giao diện.
+
+**Hết token:** bấm **Review token allowance / Xem hạn mức để tiếp tục**, đọc hạn mức đề xuất, rồi chọn **Increase token allowance and continue / Tăng hạn mức token và tiếp tục**. Nguồn, dữ liệu, run, checkpoint và lượng đã dùng được giữ nguyên. Không tự tăng trần tiền, lượt gọi hoặc thời gian; hết các trần này thì tăng token không giải quyết được. Mặc định 100.000 input / 50.000 output; trần tuyệt đối 300.000 / 200.000.
+
+### Kiểm tra tiếp tục và bài mới — 08/11
+
+Hai lượt kiểm tra COMPUTATIONAL dùng CSV giả lập 120 dòng, kết nối cá nhân giới hạn upstream miễn phí, không chuyển sang tiền máy chủ. Không thay mặc định model của người dùng. Sau lỗi router, riêng bài kiểm tra dùng model cố định `nvidia/nemotron-3.5-super-vl:free`, reasoning tắt, output cap 16.384 và JSON Schema; model miễn phí có thể thay đổi khả dụng.
+
+| Lượt kiểm tra | Kết quả thực tế | Giới hạn |
+|---|---|---|
+| `0f12228d-2d2d-4f8c-bfef-c6050b8460ca` | Nâng hạn mức rồi retry giữ cùng run/thread. Có bản thảo 2.095 từ, 9 mục con, 4 nguồn. | Phát hiện tiêu đề mục con dính đoạn văn và marker metrics/manifest tự tạo. Đây là đầu vào để sửa schema H3 và kiểm tra marker, không phải bản thảo đã nghiệm thu học thuật. |
+| http://127.0.0.1:3082/research/de47040a-4a40-4cd3-890e-ee86cbb37825 | Protocol → chờ/upload → chạy routine và kiểm tra lặp lại → lưu 3/4 nhóm → thiếu input token → người kiểm tra tăng hạn mức → tiếp tục cùng run/thread → lưu đủ 4/4 nhóm. Bản thảo 3.399 từ, 19 mục con, 6 nguồn; ledger giữ 20 calls và 17.531 output token. | Vẫn **NEEDS_REVIEW**: research gap chưa rõ; vượt mục tiêu độ dài MEDIUM. Đọc thủ công còn thấy thiếu Table 1 và diễn giải hình hai cột MAE thành lỗi từng quan sát. Không sửa ngược bản lịch sử để che các vấn đề này. |
+
+Từ hai lỗi nội dung trên, rendering policy v2 cho kế hoạch mới bổ sung bảng baseline/Ridge trực tiếp từ metrics của routine đã COMPLETED và kiểm tra tham chiếu bảng/hình. Hình MAE được chú thích rõ là hai giá trị tổng hợp. Đã chạy lại validator trên chính văn bản cũ: phát hiện cả hai vấn đề; dựng bảng từ metrics loại lỗi thiếu bảng, còn diễn giải hình vẫn được giữ thành finding cần sửa. Thao tác kiểm tra này không ghi lại database hay thay phiên bản bài cũ. Đây là sửa hệ thống và regression tests; chưa có chiến dịch mới chứng minh mọi loại bài đều đạt sau thay đổi. Ba luồng demo bên dưới là các bản đã chạy trước, không phải ba lượt mới cùng PASS.
 
 ### Ba bản thảo có thể mở để demo
 
@@ -189,7 +208,7 @@ Một nguồn có thể hỗ trợ nhiều claim/citation records. Không lấy 
 |---|---|
 | Không rõ vì sao bài dừng | Khung đỏ hiển thị nhóm lỗi và bước lỗi; phân biệt xác thực, model, hạn mức, quá tải, timeout, JSON và ngân sách. Không đưa key hay phản hồi thô của provider ra màn hình. |
 | Chạy lại làm lại từ đầu hoặc xung đột checkpoint | Retry tiếp tục bước lỗi của workflow hiện tại; giữ kết quả đã lưu, lịch sử và ngân sách. Có kiểm thử nhiều lần lỗi liên tiếp với checkpoint PostgreSQL. |
-| Bấm tiếp dù allowance không đủ | API chặn tạo job mới, giao diện giải thích và có nút tạo nghiên cứu mới. Không reset usage khi đổi model. |
+| Bấm tiếp dù allowance không đủ | API chặn retry vô ích. Có thể chủ động tăng token trong trần rồi tiếp tục cùng checkpoint; cập nhật hạn mức và outbox nằm trong cùng giao dịch, không reset usage hay tăng trần tiền/lượt/thời gian. |
 | Không biết đang chờ worker hay dịch vụ AI | Chờ 429 tạm thời có thông báo và thời điểm thử lại; worker được giải phóng. Giới hạn ngày không bị retry vô hạn. |
 | Lặp lại đầu ra đã làm khi retry | Tái dùng JSON hợp lệ theo đúng workflow/input/config; Writer dài có thể lưu từng nhóm phần và tiếp tục nhóm còn thiếu. Không dùng output bị cắt như bản hoàn chỉnh. |
 | JSON lỗi bị biến thành “không có bằng chứng”, rồi hết budget | Analyst dừng và giữ nguyên lỗi provider. Chỉ extraction hợp lệ rỗng mới có nghĩa là chưa tìm được claim hỗ trợ. |
