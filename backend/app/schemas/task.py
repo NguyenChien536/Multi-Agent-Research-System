@@ -78,6 +78,8 @@ class ResearchTaskResponse(BaseModel):
     @model_validator(mode='wrap')
     @classmethod
     def canonical_usage_totals(cls, value, handler):
+        if isinstance(value, cls):
+            return handler(value)  # FastAPI may serialize an already enriched response again.
         result = handler(value)
         from app.services.provider_budget import retry_block_reason
         result.retry_blocked_reason = retry_block_reason(value)

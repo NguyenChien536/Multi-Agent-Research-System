@@ -105,6 +105,24 @@ async def test_extension_enforces_owner_and_rejects_hidden_ledger_or_money_chang
 
 
 @pytest.mark.asyncio
+async def test_failed_step_keeps_ledger_offer_when_response_is_serialized_twice():
+    from app.schemas.task import ResearchTaskResponse
+    tid,uid,rid=await stopped_task()
+    try:
+        async with AsyncSessionLocal() as db:
+            task=await db.get(ResearchTask,tid);task.status='FAILED';task.current_step='WRITER'
+            run=await db.get(WorkflowRun,rid);run.status='FAILED';await db.commit();await db.refresh(task)
+            response=ResearchTaskResponse.model_validate(task)
+            assert response.token_allowance['output_used']==49000
+            assert ResearchTaskResponse.model_validate(response).token_allowance==response.token_allowance
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),base_url='http://test',headers={'Authorization':'Bearer '+create_access_token(uid)}) as c:
+            response=(await c.get(f'/api/v1/research/{tid}')).json()
+            assert response['token_allowance']['can_extend']
+            assert response['token_allowance']['output_used']==49000
+    finally:await delete_test_user(uid)
+
+
+@pytest.mark.asyncio
 async def test_budget_extension_resumes_postgres_checkpoint_without_repeating_research(monkeypatch):
     tid,uid=await create_running_task(_provider_usage=usage());counts={'research':0,'writer':0}
     async def research(state):counts['research']+=1;return {'current_agent':'researcher'}
