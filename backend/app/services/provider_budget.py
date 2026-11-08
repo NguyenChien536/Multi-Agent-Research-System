@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 HARD_MAX_LLM_CALLS = 40
 HARD_MAX_COST_USD = 2.0
 HARD_MAX_ACTIVE_SECONDS = 900
+HARD_MAX_INPUT_TOKENS = 300_000
+HARD_MAX_OUTPUT_TOKENS = 200_000
 DEFAULT_CALL_OUTPUT_TOKENS = 4096
 
 
@@ -29,9 +31,9 @@ class ResearchTaskStopped(RuntimeError):
     """The worker no longer owns a running task (cancelled or superseded)."""
 
 
-def retry_block_reason(task) -> str | None:
+def retry_block_reason(task, *, ignore_stop_marker: bool = False) -> str | None:
     """Expose a safe action decision, never credentials or raw reservation data."""
-    if getattr(task, 'current_step', None) == 'BUDGET_LIMIT':
+    if not ignore_stop_marker and getattr(task, 'current_step', None) == 'BUDGET_LIMIT':
         return 'TASK_BUDGET_LIMIT'
     config = getattr(task, 'budget_config', None) or {}
     usage = _usage(config)
@@ -41,6 +43,45 @@ def retry_block_reason(task) -> str | None:
         ('cost_usd', cost), ('active_seconds', seconds))):
         return 'TASK_BUDGET_LIMIT'
     return None
+
+
+def token_allowance_summary(task) -> dict:
+    """Public counters and an explicit, bounded continuation offer; never keys."""
+    config = pause_budget_config(getattr(task, 'budget_config', None), now=getattr(task, 'completed_at', None))
+    usage = _usage(config)
+    calls, inputs, outputs, cost, seconds = _limits(config)
+    reserved_in = sum(int(v.get('input_tokens', 0)) for v in usage['reservations'].values())
+    reserved_out = sum(int(v.get('output_tokens', 0)) for v in usage['reservations'].values())
+    remaining_in = max(0, inputs - int(usage.get('input_tokens', 0)) - reserved_in)
+    remaining_out = max(0, outputs - int(usage.get('output_tokens', 0)) - reserved_out)
+    call_output = (((config.get('_llm_connection') or {}).get('profile') or {}).get('output_token_limit') or 8192)
+    eligible = getattr(task, 'status', '') == 'FAILED' or (
+        getattr(task, 'status', '') == 'NEEDS_REVIEW' and getattr(task, 'current_step', None) == 'BUDGET_LIMIT')
+    other_limits_ok = (usage.get('llm_calls', 0) < calls and usage.get('cost_usd', 0) < cost
+                       and usage.get('active_seconds', 0) < seconds)
+    next_in = min(inputs + 100_000, HARD_MAX_INPUT_TOKENS)
+    next_out = min(outputs + 50_000, HARD_MAX_OUTPUT_TOKENS)
+    return {'input_used': int(usage.get('input_tokens', 0)), 'output_used': int(usage.get('output_tokens', 0)),
+            'max_input_tokens': inputs, 'max_output_tokens': outputs,
+            'next_input_tokens': next_in, 'next_output_tokens': next_out,
+            'can_extend': bool(eligible and other_limits_ok and (next_in > inputs or next_out > outputs)
+                               and (getattr(task, 'current_step', None) == 'BUDGET_LIMIT'
+                                    or remaining_out < int(call_output) or remaining_in < 1000))}
+
+
+def increase_token_allowance(config: dict, max_input_tokens: int, max_output_tokens: int) -> dict:
+    """Explicitly raise token ceilings; retain all usage and non-token limits."""
+    _, old_in, old_out, _, _ = _limits(config)
+    if not (old_in <= max_input_tokens <= HARD_MAX_INPUT_TOKENS
+            and old_out <= max_output_tokens <= HARD_MAX_OUTPUT_TOKENS
+            and (max_input_tokens > old_in or max_output_tokens > old_out)):
+        raise ValueError('Increase at least one token limit without lowering another limit or exceeding the maximum.')
+    result = deepcopy(config)
+    changes = list(result.get('_allowance_changes') or [])
+    changes.append({'at': datetime.now(timezone.utc).isoformat(), 'input_before': old_in, 'output_before': old_out,
+                    'input_after': max_input_tokens, 'output_after': max_output_tokens})
+    return {**result, 'max_input_tokens': max_input_tokens, 'max_output_tokens': max_output_tokens,
+            '_allowance_changes': changes[-10:]}
 
 
 def _usage(config: dict[str, Any]) -> dict[str, Any]:
@@ -78,8 +119,8 @@ def _limits(config: dict[str, Any]) -> tuple[int, int, int, float, int]:
     """Apply product hard caps even to old tasks or stale client-supplied values."""
     return (
         min(int(config.get("max_llm_calls", HARD_MAX_LLM_CALLS)), HARD_MAX_LLM_CALLS),
-        min(int(config.get("max_input_tokens", 100_000)), 100_000),
-        min(int(config.get("max_output_tokens", 50_000)), 50_000),
+        min(int(config.get("max_input_tokens", 100_000)), HARD_MAX_INPUT_TOKENS),
+        min(int(config.get("max_output_tokens", 50_000)), HARD_MAX_OUTPUT_TOKENS),
         min(float(config.get("max_cost_usd", HARD_MAX_COST_USD)), HARD_MAX_COST_USD),
         min(int(config.get("timeout_seconds", HARD_MAX_ACTIVE_SECONDS)), HARD_MAX_ACTIVE_SECONDS),
     )

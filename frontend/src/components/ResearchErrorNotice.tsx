@@ -11,7 +11,7 @@ export function researchErrorText(raw: string | null | undefined, isEn: boolean)
     [/503|502|504|provider_unavailable|unavailable|overloaded|high demand/, 'Dịch vụ AI đang quá tải hoặc tạm ngừng (503). Key không nhất thiết bị sai. Chờ một lúc rồi bấm Chạy lại; nguồn và kết quả đã lưu vẫn được giữ.', 'The AI service is temporarily overloaded or unavailable (503). This does not mean your key is invalid. Wait briefly, then retry; saved sources and results are retained.'],
     [/429|quota|rate.limit|request queue|provider_rate_limit/, 'Dịch vụ chạm hạn mức hoặc giới hạn lượt gọi. Hãy chờ và kiểm tra hạn mức miễn phí trước khi thử lại.', 'Provider rate limit or quota reached. Wait and check your free allowance.'],
     [/timeout|timed out/, 'Dịch vụ phản hồi quá lâu. Hãy thử lại sau.', 'Provider response timed out. Retry later.'],
-    [/budget/, 'Bài chạm giới hạn token, lượt gọi, thời gian hoặc chi phí ước tính. Đổi model không đặt lại ngân sách; hãy tạo bài mới nếu cần một lượt nghiên cứu mới.', 'Research allowance reached. Changing the model does not reset usage; create a new article for a fresh research run.'],
+    [/budget/, 'Bài chạm giới hạn token, lượt gọi, thời gian hoặc chi phí ước tính. Xem tùy chọn tăng token và tiếp tục nếu còn lượt gọi, thời gian và chi phí. Đổi model không đặt lại lượng đã dùng.', 'Research allowance reached. Review token extension if cost, call and time allowance remains. Changing the model does not reset usage.'],
     [/json|outputparser/, 'Model trả dữ liệu sai cấu trúc. Hãy dùng model hỗ trợ JSON.', 'Model returned invalid structured data. Try a JSON-compatible model.'],
   ];
   const match = cases.find(([pattern]) => pattern.test(value));

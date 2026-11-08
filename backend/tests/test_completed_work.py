@@ -11,6 +11,7 @@ from app.agents import nodes
 from app.services.completed_work import CompletedWork
 from app.services.provider_budget import ResearchTaskStopped
 from app.services.sectional_writer import write_section_groups,section_groups,ManuscriptSectionIncomplete
+from app.services.sectional_writer import group_schema, group_message
 from app.services.manuscript import manuscript_contract
 from app.services.public_errors import ProviderResponseTimeout
 from tests.test_provider_budget import create_running_task,delete_test_user
@@ -154,3 +155,88 @@ async def test_personal_long_papers_start_with_saved_sections_without_a_wasted_f
  assert '## Conclusion' in result['draft_report_markdown'] and not result['draft_truncated']
  await nodes.writer_node(state)
  assert len(calls)==count
+
+
+def test_typed_group_assembles_requested_headings_in_order_without_inventing_content():
+ schema=group_schema(['Introduction','Methods'])
+ response=schema(title='Measured study',sections=[
+  {'heading':'Methods','body':'### Recorded method\nOnly recorded inputs and executed actions are described.'},
+  {'heading':'Introduction','body':'### Background\nThe supplied sources support this bounded research question.'}])
+ message=group_message(response,['Introduction','Methods'])
+ assert message.content.index('## Introduction') < message.content.index('## Methods')
+ assert 'Only recorded inputs' in message.content
+ object.__setattr__(response,'_reused_provider_result',True)
+ assert nodes.extract_tokens(group_message(response,['Introduction','Methods']),'prompt','text')==(0,0)
+
+
+@pytest.mark.parametrize('failure',['missing','unknown','duplicate','extra_heading'])
+def test_typed_group_refuses_missing_unknown_duplicate_or_extra_sections(failure):
+ from pydantic import ValidationError
+ schema=group_schema(['Introduction','Methods'])
+ sections=[{'heading':h,'body':'A substantive section with recorded and bounded evidence.'} for h in ['Introduction','Methods']]
+ if failure=='missing':sections.pop()
+ if failure=='unknown':sections[1]['heading']='Invented results'
+ if failure=='duplicate':sections[1]['heading']='Introduction'
+ if failure=='extra_heading':sections[1]['body']+='\n## Unexpected results\nUnrecorded results do not belong here.'
+ with pytest.raises((ValidationError,ManuscriptSectionIncomplete)):
+  group_message(schema(title='',sections=sections),['Introduction','Methods'])
+
+
+@pytest.mark.asyncio
+async def test_structured_section_transport_never_uses_the_freeform_heading_call():
+ store=MemoryStore();contract=manuscript_contract('REVIEW','en');calls=[]
+ async def unused(messages):raise AssertionError('Freeform transport must not be used')
+ async def structured(headings,messages):
+  assert 'Return one JSON object' in messages[0].content
+  calls.append(headings)
+  schema=group_schema(headings)
+  return group_message(schema(title='',sections=[{'heading':h,'body':'### Scope\nOnly the provided evidence supports this limited interpretation.'} for h in headings]),headings)
+ result=await write_section_groups({'research_question':'Question','report_length':'MEDIUM'},'Verified brief',contract,store,unused,structured_invoke=structured)
+ assert len(calls)==len(section_groups(contract))
+ assert '## Conclusion' in result.content
+
+
+def test_short_keyword_sections_are_valid_without_allowing_outline_only_methods():
+ from pydantic import ValidationError
+ from app.services.sectional_writer import parse_group
+ schema=group_schema(['Abstract','Keywords'],short_headings={'Keywords'})
+ response=schema(title='',sections=[{'heading':'Abstract','body':'A substantive account of actual evidence and its limits.'},
+                                  {'heading':'Keywords','body':'AI; ML; data'}])
+ message=group_message(response,['Abstract','Keywords'])
+ assert parse_group(message.content,['Abstract','Keywords'],{'Keywords'})['sections']['Keywords']=='AI; ML; data'
+ with pytest.raises(ValidationError):group_schema(['Methods'])(title='',sections=[{'heading':'Methods','body':'Not known.'}])
+
+
+@pytest.mark.asyncio
+async def test_writer_node_uses_real_json_validation_and_renders_headings_for_personal_groups(monkeypatch):
+ from types import SimpleNamespace
+ from langchain_core.runnables import RunnableLambda
+ from app.services import model_connection
+ from app.services.manuscript import attach_manuscript_contract
+ store=MemoryStore();calls=[]
+ class Transport:
+  max_tokens=8192
+  extra_body={'provider':{'max_price':{'prompt':0,'completion':0,'request':0}}}
+  def bind(self,**kwargs):
+   assert kwargs['extra_body']['provider']['max_price']['completion']==0
+   assert kwargs['extra_body']['response_format']['type']=='json_schema'
+   async def send(messages):
+    instruction=next(m.content for m in messages if 'order and spelling:' in m.content)
+    headings=json.loads(re.search(r'order and spelling: (.+)\.',instruction.splitlines()[0])[1])
+    calls.append(headings)
+    return AIMessage(content=json.dumps({'title':'A measured study','sections':[
+     {'heading':h,'body':'### Scope\nOnly the recorded evidence supports this bounded interpretation.'} for h in reversed(headings)]}),
+     usage_metadata={'input_tokens':80,'output_tokens':40,'total_tokens':120},response_metadata={'finish_reason':'STOP'})
+   return RunnableLambda(send)
+ connection=SimpleNamespace(output_token_limit=8192,model_tag='byok:fixture',structured_output_mode='json_schema',estimate=lambda *_:0)
+ monkeypatch.setattr(model_connection,'current_connection',lambda:connection)
+ monkeypatch.setattr(CompletedWork,'for_state',lambda state:store)
+ monkeypatch.setattr(nodes,'get_smart_llm',lambda:nodes.BudgetedFallbackLLM([('byok:fixture',Transport())]))
+ monkeypatch.setattr(nodes,'get_active_model_name',lambda **kwargs:'byok:fixture')
+ monkeypatch.setattr(nodes,'_record_progress',AsyncMock())
+ monkeypatch.setattr(nodes,'record_agent_run',AsyncMock())
+ state={'plan':attach_manuscript_contract({},'REVIEW','en'),'research_question':'Question','research_type':'REVIEW','report_length':'MEDIUM','language':'en'}
+ result=await nodes.writer_node(state)
+ assert re.findall(r'^## (.+)',result['draft_report_markdown'],re.M)==[s['heading'] for s in state['plan']['manuscript_contract']['sections']]
+ assert len(calls)==len(section_groups(state['plan']['manuscript_contract']))
+ assert all('[[@claim:' not in h for group in calls for h in group)

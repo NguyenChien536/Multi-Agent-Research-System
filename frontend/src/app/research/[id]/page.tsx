@@ -445,6 +445,21 @@ export default function WorkspacePage() {
     }
   };
 
+  const handleExtendAllowance = async () => {
+    if (!task?.token_allowance?.can_extend || isStarting || isCancelling) return;
+    setIsStarting(true);
+    setActionError('');
+    try {
+      await api.tasks.retry(task.id, {max_input_tokens:task.token_allowance.next_input_tokens,
+        max_output_tokens:task.token_allowance.next_output_tokens});
+      setReloadKey(v => v + 1);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : (isEn ? 'Unable to extend token allowance.' : 'Không thể tăng hạn mức token.'));
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
   const handleDeleteTask = async () => {
     if (!task) return;
     if (!confirm(isEn ? 'Are you sure you want to permanently delete this research project?' : 'Bạn có chắc chắn muốn xóa bài nghiên cứu này vĩnh viễn?')) return;
@@ -816,10 +831,14 @@ export default function WorkspacePage() {
 
         {/* Action Controls */}
         <div className="flex flex-wrap items-center gap-2" aria-label={isEn ? 'Research controls' : 'Thao tác bài nghiên cứu'}>
-          {researchBudgetBlocked(task) && <Button onClick={() => router.push('/')}>
+          {task.token_allowance?.can_extend && <Button variant="success" onClick={() => {
+            setActiveTab('report');
+            setTimeout(() => document.querySelector('#research-recovery-controls')?.scrollIntoView({behavior:'smooth',block:'center'}), 0);
+          }}>{isEn ? 'Review token allowance' : 'Xem hạn mức để tiếp tục'}</Button>}
+          {researchBudgetBlocked(task) && !task.token_allowance?.can_extend && <Button onClick={() => router.push('/')}>
             {isEn ? 'Create new research' : 'Tạo nghiên cứu mới'}
           </Button>}
-          {!researchBudgetBlocked(task) && ['PENDING', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'].includes(task.status) && (
+          {!researchBudgetBlocked(task) && !task.token_allowance?.can_extend && ['PENDING', 'FAILED', 'CANCELLED', 'NEEDS_REVIEW'].includes(task.status) && (
             <Button
               variant={task.status === 'CANCELLED' ? 'primary' : 'success'}
               onClick={() => void handleStartTask()}
@@ -1446,7 +1465,7 @@ export default function WorkspacePage() {
 
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-zinc-50/60 print:overflow-visible print:h-auto print:p-0 print:m-0 print:bg-white print:block">
             {/* TAB 1: SCIENTIFIC PAPER */}
-            <ResearchRecoveryNotice task={task} isEn={isEn} busy={isStarting} onContinue={() => void handleStartTask()} />
+            <ResearchRecoveryNotice task={task} isEn={isEn} busy={isStarting} onContinue={() => void handleStartTask()} onExtend={() => void handleExtendAllowance()} />
             {task.writing_progress && !report && <p role="status" className="mb-4 text-sm text-zinc-700">
               {isEn ? 'Writing groups saved: ' : 'Nhóm phần đã lưu: '}{task.writing_progress.completed}/{task.writing_progress.total}
             </p>}

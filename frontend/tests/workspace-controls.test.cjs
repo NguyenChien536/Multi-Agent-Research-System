@@ -21,14 +21,14 @@ function text(node) {
   if (Array.isArray(node)) return node.map(text).join('');
   return text(node.props?.children);
 }
-async function workspace(status='FAILED',kind='REVIEW',retryError=false) {
+async function workspace(status='FAILED',kind='REVIEW',retryError=false,tokenAllowance=null) {
   const states=[],effects=[],calls=[];
   let cursor=0;
   const task={id:'fixture',title:'UI fixture research',research_question:'UI fixture question',status,research_type:kind,
     research_depth:'STANDARD',language:'en',attempt_number:2,max_iterations:2,current_iteration:0,
     max_sources:12,plan_version:1,total_tokens_used:20,total_cost_usd:0,
     created_at:new Date().toISOString(),updated_at:new Date().toISOString(),
-    latest_error:'PROVIDER_UNAVAILABLE: 503',failed_agent:'Methodologist'};
+    latest_error:'PROVIDER_UNAVAILABLE: 503',failed_agent:'Methodologist',token_allowance:tokenAllowance};
   const hooks={
     useState:initial=>{const i=cursor++;if(!(i in states)) states[i]=initial;return [states[i],value=>{states[i]=typeof value==='function'?value(states[i]):value;}];},
     useRef:initial=>{const i=cursor++;if(!(i in states)) states[i]={current:initial};return states[i];},
@@ -36,7 +36,7 @@ async function workspace(status='FAILED',kind='REVIEW',retryError=false) {
     useCallback:callback=>{cursor++;return callback;},
   };
   const tasks=new Proxy({get:async()=>task,getReport:async()=>{throw {status:404};},getProtocol:async()=>({}),
-    retry:async id=>{calls.push(['retry',id]);if(retryError)throw new Error('Network failure, please retry');},
+    retry:async(id,allowance)=>{calls.push(allowance?['retry',id,allowance]:['retry',id]);if(retryError)throw new Error('Network failure, please retry');},
     start:async id=>{calls.push(['start',id]);},cancel:async id=>{calls.push(['cancel',id]);},
     uploadDataset:async(id,file)=>{calls.push(['dataset',id,file.name]);return {file_name:file.name,rows_count:120,columns_count:3};},
   },{get:(target,key)=>target[key]|| (async()=>[])});
@@ -125,4 +125,14 @@ test('retry errors stay visible inside the workspace',async()=>{
   await elements(h.render()).find(node=>node.type==='button' && text(node).includes('Continue from failed step')).props.onClick();
   await new Promise(resolve=>setImmediate(resolve));
   assert.ok(elements(h.render()).some(node=>node.props?.role==='alert' && text(node).includes('Network failure')));
+});
+
+test('increasing tokens is an explicit action and uses the same checkpoint retry endpoint',async()=>{
+  const h=await workspace('FAILED','REVIEW',false,{can_extend:true,next_input_tokens:200000,next_output_tokens:100000});
+  assert.deepEqual(h.calls,[]);
+  assert.ok(text(h.render()).includes('Review token allowance'));
+  const notice=elements(h.render()).find(node=>node.type===recovery.ResearchRecoveryNotice);
+  assert.ok(notice);
+  await notice.props.onExtend();
+  assert.deepEqual(JSON.parse(JSON.stringify(h.calls)),[['retry','fixture',{max_input_tokens:200000,max_output_tokens:100000}]]);
 });

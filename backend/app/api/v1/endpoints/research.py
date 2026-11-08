@@ -19,6 +19,7 @@ from app.models.agent_run import AgentRun
 from app.schemas.task import (
     ResearchTaskCreate,
     ResearchTaskResponse,
+    TokenAllowanceIncrease,
     PlanReviewResponse,
     PlanApprovalRequest,
     PlanRejectRequest,
@@ -283,26 +284,33 @@ async def start_research_task(
 
 
 @router.post('/{task_id}/retry', status_code=status.HTTP_202_ACCEPTED)
-async def retry_failed_research(task_id: uuid.UUID, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def retry_failed_research(task_id: uuid.UUID, allowance: TokenAllowanceIncrease | None = Body(default=None), db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Resume the owning failed run's durable checkpoint without repeating completed nodes."""
     from app.models.task import WorkflowRun
     task = await db.scalar(select(ResearchTask).where(ResearchTask.id == task_id,
         ResearchTask.user_id == current_user.id).with_for_update())
     if task is None or task.status == 'DELETING':
         raise HTTPException(404, 'Research task not found')
-    if task.status != 'FAILED':
+    budget_stopped = task.status == 'NEEDS_REVIEW' and task.current_step == 'BUDGET_LIMIT'
+    if task.status != 'FAILED' and not (budget_stopped and allowance is not None):
         raise HTTPException(409, 'Only failed research can be retried from its saved step')
-    from app.services.provider_budget import retry_block_reason
-    if retry_block_reason(task):
-        raise HTTPException(409, 'TASK_BUDGET_LIMIT: This article cannot continue within its remaining allowance. Saved results are retained; create a new research article.')
-    run = await db.scalar(select(WorkflowRun).where(WorkflowRun.research_task_id == task.id,
-        WorkflowRun.status == 'FAILED').order_by(WorkflowRun.run_number.desc()).limit(1).with_for_update())
-    if run is None:
+    from app.services.provider_budget import retry_block_reason, pause_budget_config, increase_token_allowance
+    config = pause_budget_config(task.budget_config, now=task.completed_at)
+    if allowance is not None:
+        try:
+            config = increase_token_allowance(config, allowance.max_input_tokens, allowance.max_output_tokens)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+    task.budget_config = config
+    if retry_block_reason(task, ignore_stop_marker=allowance is not None):
+        raise HTTPException(409, 'TASK_BUDGET_LIMIT: Remaining allowance is insufficient. Review token limits; cost, call and time limits still apply.')
+    run = await db.scalar(select(WorkflowRun).where(WorkflowRun.research_task_id == task.id
+        ).order_by(WorkflowRun.run_number.desc()).limit(1).with_for_update())
+    if run is None or run.status != ('NEEDS_REVIEW' if budget_stopped else 'FAILED'):
         raise HTTPException(409, 'No saved failed workflow is available; start a new research run instead')
-    from app.services.provider_budget import pause_budget_config
-    task.budget_config = pause_budget_config(task.budget_config, now=task.completed_at)
     run.status, run.completed_at = 'RUNNING', None
     task.status, task.completed_at = 'QUEUED', None
+    task.current_step = None
     task.worker_lease_until = None
     task.queued_at = datetime.now(timezone.utc)
     event = await db.scalar(select(TaskDispatchOutbox).where(TaskDispatchOutbox.research_task_id == task.id,

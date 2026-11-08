@@ -1748,20 +1748,27 @@ Requested edits: {state.get('revision_instructions')}
 
     try:
         from app.services.completed_work import CompletedWork
-        from app.services.sectional_writer import write_section_groups
+        from app.services.sectional_writer import write_section_groups, group_schema, group_message
         from app.services.public_errors import ProviderResponseTimeout
         saved_work = CompletedWork.for_state(state) if contract else None
         strategy_key = saved_work.fingerprint({'writer_strategy': 1, 'prompt': prompt, 'capacity': output_limit}) if saved_work else None
         async def invoke_writer(messages):
             return await invoke_llm_with_budget(state, llm, messages, model_name=model_name, output_tokens=output_limit)
-        from app.services.model_connection import current_connection
+        async def invoke_group(headings, messages):
+            group_llm = llm.with_structured_output(group_schema(headings,
+                short_headings={s['heading'] for s in contract['sections'] if s['id'] == 'keywords'}))
+            value = await invoke_llm_with_budget(state, group_llm, messages, model_name=model_name, output_tokens=output_limit)
+            return group_message(value, headings)
+        async def write_groups():
+            return await write_section_groups(state, prompt, contract, saved_work, invoke_writer,
+                structured_invoke=invoke_group if isinstance(llm, BudgetedFallbackLLM) else None)
         # Personal connections have varied timeout/output capacity. Save long
         # drafts incrementally instead of spending a full-paper attempt first.
         sectional_first = saved_work and current_connection() is not None and length != 'SHORT'
         if sectional_first or (saved_work and await saved_work.load('writer-strategy', strategy_key)):
             if sectional_first:
                 await saved_work.save('writer-strategy', strategy_key, {'mode': 'sections'})
-            response = await write_section_groups(state, prompt, contract, saved_work, invoke_writer)
+            response = await write_groups()
         else:
             try:
                 response = await invoke_writer([HumanMessage(content=prompt)])
@@ -1769,11 +1776,11 @@ Requested edits: {state.get('revision_instructions')}
                 if not saved_work:
                     raise
                 await saved_work.save('writer-strategy', strategy_key, {'mode': 'sections'})
-                response = await write_section_groups(state, prompt, contract, saved_work, invoke_writer)
+                response = await write_groups()
             reason = str((getattr(response, 'response_metadata', None) or {}).get('finish_reason', '')).upper()
             if saved_work and reason in {'LENGTH', 'MAX_TOKENS'}:
                 await saved_work.save('writer-strategy', strategy_key, {'mode': 'sections'})
-                response = await write_section_groups(state, prompt, contract, saved_work, invoke_writer)
+                response = await write_groups()
         content = response.content
         if isinstance(content, list):
             draft_markdown = "".join(

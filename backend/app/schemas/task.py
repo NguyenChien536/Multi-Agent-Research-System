@@ -8,8 +8,8 @@ from app.services.model_connection import ModelConnectionInput
 class BudgetConfigSchema(BaseModel):
     max_cost_usd: float = Field(default=2.00, ge=0.1, le=2.0)
     max_llm_calls: int = Field(default=40, ge=5, le=40)
-    max_input_tokens: int = Field(default=100000, ge=10000, le=100000)
-    max_output_tokens: int = Field(default=50000, ge=5000, le=50000)
+    max_input_tokens: int = Field(default=100000, ge=10000, le=300000)
+    max_output_tokens: int = Field(default=50000, ge=5000, le=200000)
     timeout_seconds: int = Field(default=900, ge=60, le=900)
 
 
@@ -30,6 +30,12 @@ class ResearchTaskCreate(BaseModel):
     use_saved_connection: bool = True
 
 
+class TokenAllowanceIncrease(BaseModel):
+    max_input_tokens: int = Field(ge=10000, le=300000)
+    max_output_tokens: int = Field(ge=5000, le=200000)
+    model_config = ConfigDict(extra='forbid')
+
+
 class ResearchTaskResponse(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
@@ -44,6 +50,7 @@ class ResearchTaskResponse(BaseModel):
     latest_error: Optional[str] = None
     failed_agent: Optional[str] = None
     retry_blocked_reason: Optional[str] = None
+    token_allowance: Optional[Dict[str, Any]] = None
     provider_wait: Optional[Dict[str, Any]] = None
     writing_progress: Optional[Dict[str, int]] = None
     require_plan_approval: bool
@@ -74,6 +81,8 @@ class ResearchTaskResponse(BaseModel):
         result = handler(value)
         from app.services.provider_budget import retry_block_reason
         result.retry_blocked_reason = retry_block_reason(value)
+        from app.services.provider_budget import token_allowance_summary
+        result.token_allowance = token_allowance_summary(value)
         waiting = (getattr(value, 'budget_config', None) or {}).get('_provider_wait')
         if result.status == 'QUEUED' and isinstance(waiting, dict):
             result.provider_wait = {key: waiting.get(key) for key in ('reason', 'retry_at', 'retry_count')}

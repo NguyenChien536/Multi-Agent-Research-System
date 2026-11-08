@@ -50,6 +50,7 @@ export interface ResearchTaskResponse {
   latest_error?: string | null;
   failed_agent?: string | null;
   retry_blocked_reason?: string | null;
+  token_allowance?: {input_used:number;output_used:number;max_input_tokens:number;max_output_tokens:number;next_input_tokens:number;next_output_tokens:number;can_extend:boolean} | null;
   provider_wait?: { reason: string; retry_at: string; retry_count: number } | null;
   writing_progress?: {completed: number; total: number} | null;
   require_plan_approval: boolean;

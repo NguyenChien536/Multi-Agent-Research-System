@@ -5,8 +5,8 @@ export function researchBudgetBlocked(task: Pick<ResearchTaskResponse, 'current_
   return task.current_step === 'BUDGET_LIMIT' || task.retry_blocked_reason === 'TASK_BUDGET_LIMIT';
 }
 
-export function ResearchRecoveryNotice({task, isEn, busy, onContinue}: {
-  task: ResearchTaskResponse; isEn: boolean; busy: boolean; onContinue: () => void;
+export function ResearchRecoveryNotice({task, isEn, busy, onContinue, onExtend}: {
+  task: ResearchTaskResponse; isEn: boolean; busy: boolean; onContinue: () => void; onExtend?: () => void;
 }) {
   const blocked = researchBudgetBlocked(task);
   if (task.provider_wait && task.status === 'QUEUED') {
@@ -18,11 +18,21 @@ export function ResearchRecoveryNotice({task, isEn, busy, onContinue}: {
     </div>;
   }
   if (!blocked && task.status !== 'FAILED') return null;
-  return <section aria-label={isEn ? 'Continue research' : 'Tiếp tục nghiên cứu'} className="mb-4 rounded-xl border border-zinc-200 bg-white p-4 text-sm">
+  const allowance = task.token_allowance;
+  return <section id="research-recovery-controls" aria-label={isEn ? 'Continue research' : 'Tiếp tục nghiên cứu'} className="mb-4 rounded-xl border border-zinc-200 bg-white p-4 text-sm">
     <p className="mb-3 text-zinc-700">{blocked
       ? (isEn ? 'This article cannot continue within its remaining allowance. Saved sources and results are kept.' : 'Giới hạn còn lại không đủ để tiếp tục bài này. Nguồn và kết quả đã lưu vẫn được giữ.')
       : (isEn ? 'Continue from the failed step using the remaining allowance.' : 'Tiếp tục từ bước lỗi, sử dụng phần giới hạn còn lại của bài.')}</p>
-    {blocked ? <Link href="/" className="inline-block rounded-lg bg-zinc-900 px-4 py-2 font-medium text-white">
+    {allowance?.can_extend && onExtend && <div className="mb-3 rounded-lg bg-zinc-50 p-3">
+      <p>{isEn ? 'New token limits: ' : 'Hạn mức token mới: '}
+        {allowance.next_input_tokens.toLocaleString()} input / {allowance.next_output_tokens.toLocaleString()} output.</p>
+      <p className="mb-2 text-xs text-zinc-500">{isEn ? 'Recorded usage is kept. Cost, call and time ceilings stay unchanged.' : 'Giữ lượng đã dùng và trần chi phí, lượt gọi, thời gian.'}</p>
+      <button type="button" disabled={busy} onClick={onExtend}
+        className="rounded-lg bg-emerald-700 px-4 py-2 font-medium text-white disabled:opacity-50">
+        {busy ? (isEn ? 'Resuming…' : 'Đang tiếp tục…') : (isEn ? 'Increase token allowance and continue' : 'Tăng hạn mức token và tiếp tục')}
+      </button>
+    </div>}
+    {blocked ? <Link href="/" className="inline-block rounded-lg border border-zinc-200 px-4 py-2 font-medium text-zinc-700">
       {isEn ? 'Create new research' : 'Tạo nghiên cứu mới'}</Link>
       : <button type="button" disabled={busy} onClick={onContinue} className="rounded-lg bg-emerald-700 px-4 py-2 font-medium text-white disabled:opacity-50">
         {busy ? (isEn ? 'Resuming…' : 'Đang tiếp tục…') : (isEn ? 'Continue from failed step' : 'Tiếp tục từ bước lỗi')}</button>}
