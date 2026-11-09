@@ -338,7 +338,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-zinc-900/40 backdrop-blur-xs">
           <div ref={settingsDialog} role="dialog" aria-modal="true" aria-labelledby="app-settings-title" tabIndex={-1} className="w-full max-w-2xl max-h-[90dvh] overflow-y-auto bg-white rounded-2xl border border-zinc-200 shadow-xl outline-none">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 bg-zinc-50/70">
+            <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-4 border-b border-zinc-200 bg-zinc-50">
               <div className="flex items-center gap-2">
                 <Settings size={18} className="text-zinc-700" />
                 <h3 id="app-settings-title" className="font-semibold text-base text-zinc-900">

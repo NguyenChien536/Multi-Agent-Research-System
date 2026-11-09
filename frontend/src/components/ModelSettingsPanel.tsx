@@ -137,7 +137,7 @@ export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: stri
         <p>{connectionStatusMessage(check.status,isEn)}</p>
         {check.quota && <p className="mt-1">{isEn?'Daily requests':'Lượt gọi trong ngày'}: {check.quota.used}/{check.quota.limit} · {isEn?'Remaining':'Còn lại'}: {check.quota.remaining}</p>}
       </div>}
-      <div className="flex flex-wrap gap-2">
+      <div className="sticky bottom-0 z-10 flex flex-wrap gap-2 border-t border-zinc-200 bg-white/95 py-3 backdrop-blur-sm">
         {editing ? <><button type="submit" disabled={busy || locked || !value} className="rounded-lg bg-zinc-900 px-4 py-2 text-white disabled:opacity-40">{busy?(isEn?'Please wait…':'Đang xử lý…'):scope==='task'?(isEn?'Save for this article':'Lưu cho bài này'):(isEn?'Save default':'Lưu mặc định')}</button>
           {hasKey && <button type="button" disabled={busy} onClick={()=>setRefresh(v=>v+1)} className="rounded-lg border px-3 py-2">{isEn?'Cancel':'Hủy'}</button>}</>
           : <button type="button" disabled={busy || locked} onClick={()=>{setEditing(true);setCheck(null);setNotice('');}} className="rounded-lg bg-zinc-900 px-4 py-2 text-white disabled:opacity-40">{isEn?'Edit connection':'Chỉnh sửa kết nối'}</button>}
