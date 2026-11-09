@@ -12,7 +12,7 @@ export function researchErrorText(raw: string | null | undefined, isEn: boolean)
     [/429|quota|rate.limit|request queue|provider_rate_limit/, 'Dịch vụ chạm hạn mức hoặc giới hạn lượt gọi. Hãy chờ và kiểm tra hạn mức miễn phí trước khi thử lại.', 'Provider rate limit or quota reached. Wait and check your free allowance.'],
     [/timeout|timed out/, 'Dịch vụ phản hồi quá lâu. Hãy thử lại sau.', 'Provider response timed out. Retry later.'],
     [/budget/, 'Bài chạm giới hạn token, lượt gọi, thời gian hoặc chi phí ước tính. Xem tùy chọn tăng token và tiếp tục nếu còn lượt gọi, thời gian và chi phí. Đổi model không đặt lại lượng đã dùng.', 'Research allowance reached. Review token extension if cost, call and time allowance remains. Changing the model does not reset usage.'],
-    [/json|outputparser/, 'Model trả dữ liệu sai cấu trúc. Hãy dùng model hỗ trợ JSON.', 'Model returned invalid structured data. Try a JSON-compatible model.'],
+    [/json|outputparser/, 'AI trả kết quả chưa đúng mẫu dữ liệu hệ thống yêu cầu (JSON). Lỗi này không đồng nghĩa API key sai hoặc model không hỗ trợ JSON. Bấm Tiếp tục từ bước lỗi; nếu lặp lại, kiểm tra JSON Schema trong API & model hoặc chọn model khác.', 'The AI response did not match the required data structure (JSON). This does not by itself mean the API key is invalid or the model lacks JSON support. Continue from the failed step; if it repeats, check JSON Schema in API & model or choose another model.'],
   ];
   const match = cases.find(([pattern]) => pattern.test(value));
   return match ? match[isEn ? 2 : 1] : (isEn ? 'Research could not finish. Open Agent Monitor to identify the failed step.' : 'Nghiên cứu chưa hoàn tất. Mở Giám sát Agent để xem bước gặp lỗi.');

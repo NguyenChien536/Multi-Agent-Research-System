@@ -36,3 +36,15 @@ test('unknown and known errors never echo a credential from the provider body', 
     assert.ok(!researchErrorText(raw, true).includes(secret));
   }
 });
+
+test('invalid structured output does not assume an incompatible model or invalid key', () => {
+  const en = researchErrorText('MODEL_INVALID_JSON: schema validation failed', true);
+  const vi = researchErrorText('MODEL_INVALID_JSON: schema validation failed', false);
+  assert.match(en, /did not match the required data structure/);
+  assert.match(en, /does not by itself mean/);
+  assert.match(en, /Continue from the failed step/);
+  assert.match(vi, /không đồng nghĩa API key sai/);
+  assert.match(vi, /JSON Schema/);
+  assert.doesNotMatch(en, /Try a JSON-compatible model/);
+  assert.match(researchErrorText('MODEL_OUTPUT_TRUNCATED: JSON response was cut off',true), /output token limit/);
+});

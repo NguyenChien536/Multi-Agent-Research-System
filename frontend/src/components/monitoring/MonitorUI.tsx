@@ -1,6 +1,7 @@
 'use client';
 
 import { Activity, AlertTriangle, RefreshCw } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { statusLabel } from '@/lib/monitoring';
 import { useLanguage } from '@/lib/i18n';
 
@@ -27,17 +28,22 @@ export function StatusPill({ status }: { status: string }) {
   );
 }
 
-export function PollStatus({ error, lastSuccess, refresh }: {
+export function PollStatus({ error, lastSuccess, refresh, compact = false, details }: {
   error: string;
   lastSuccess: Date | null;
   refresh: () => void;
+  compact?: boolean;
+  details?: ReactNode;
 }) {
   const { language } = useLanguage();
   const isEn = language === 'en';
 
   return (
     <div className="space-y-2.5">
-      <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-700 bg-white px-4 py-2 rounded-xl border border-zinc-200 shadow-2xs font-normal">
+      <div className={compact
+        ? 'flex flex-wrap items-center gap-x-4 gap-y-2 text-xs font-normal text-zinc-600'
+        : 'flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-700 bg-white px-4 py-2 rounded-xl border border-zinc-200 shadow-2xs font-normal'}>
+        {details}
         <span className="flex items-center gap-2">
           <Activity size={14} className={error ? 'text-amber-600' : 'text-emerald-600'} />
           {lastSuccess ? (
@@ -46,9 +52,9 @@ export function PollStatus({ error, lastSuccess, refresh }: {
               <strong className="font-mono text-zinc-800 font-medium">
                 {lastSuccess.toLocaleTimeString(isEn ? 'en-US' : 'vi-VN')}
               </strong>
-              <span className="text-zinc-500 font-normal">
+              {!compact && <span className="text-zinc-500 font-normal">
                 {isEn ? ' (Auto-refreshes periodically)' : ' (Tự động cập nhật)'}
-              </span>
+              </span>}
             </span>
           ) : error ? (
             <span className="text-amber-700 font-medium">

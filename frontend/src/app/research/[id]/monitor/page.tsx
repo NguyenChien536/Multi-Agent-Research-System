@@ -268,7 +268,7 @@ export default function ResearchMonitorPage() {
           <>
             {/* Top Header Card */}
             <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-2xl border border-zinc-200 shadow-xs">
-              <div className="min-w-0 space-y-1.5">
+              <div className="min-w-0 flex-1 space-y-1.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-zinc-100 text-zinc-700 uppercase tracking-wider">
                     {snapshot.research_type === 'REVIEW'
@@ -296,8 +296,8 @@ export default function ResearchMonitorPage() {
                   {snapshot.title}
                 </h1>
 
-                {snapshot.workflow && (
-                  <p className="text-xs text-zinc-600 flex flex-wrap items-center gap-x-2 gap-y-1">
+                <PollStatus compact error={error} lastSuccess={lastSuccess} refresh={refresh} details={<>
+                  {snapshot.workflow && <>
                     <span>{t('mon_detail_started')}: <strong className="font-normal text-zinc-800">{formatTime(snapshot.workflow.started_at, language)}</strong></span>
                     {snapshot.workflow.completed_at && (
                       <>
@@ -305,10 +305,9 @@ export default function ResearchMonitorPage() {
                         <span>{t('mon_detail_completed')}: <strong className="font-normal text-zinc-800">{formatTime(snapshot.workflow.completed_at, language)}</strong></span>
                       </>
                     )}
-                    <span className="text-zinc-300">•</span>
+                  </>}
                     <span>{t('mon_detail_sample')}: <strong className="font-normal text-zinc-800">{formatTime(snapshot.observed_at, language)}</strong></span>
-                  </p>
-                )}
+                </>} />
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5 shrink-0">
@@ -323,9 +322,6 @@ export default function ResearchMonitorPage() {
                 </Link>
               </div>
             </header>
-
-            {/* Polling & Sync Status Banner */}
-            <PollStatus error={error} lastSuccess={lastSuccess} refresh={refresh} />
 
             {/* Worker Lease Expired Alert Box */}
             {snapshot.worker_lease_expired && (
