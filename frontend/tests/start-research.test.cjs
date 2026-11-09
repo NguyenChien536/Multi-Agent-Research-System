@@ -11,7 +11,7 @@ const compiled = ts.transpileModule(source, { compilerOptions: {
 } }).outputText;
 const saved = { connection: { model: 'test/free-model', has_key: true } };
 
-async function home({ initial = 'pending', connection = saved, signedIn = true, serverMode = false } = {}) {
+async function home({ initial = 'pending', connection = saved, signedIn = true, serverMode = false, startError = false, uploadError = false } = {}) {
   const states = [], effects = [], dependencies = [], routes = [], created = [], started = [];
   const storage = new Map();
   let cursor = 0, calls = 0;
@@ -41,10 +41,11 @@ async function home({ initial = 'pending', connection = saved, signedIn = true, 
       return connection;
     } },
     tasks: { modelConnectionOptions: async () => ({ use_server_providers: serverMode, server_provider_ready: true, server_provider: 'gemini' }), create: async value => { created.push(value); return { id: 'new-research' }; },
-      start: async id => { started.push(id); }, uploadPdf: async () => {} },
+      start: async id => { started.push(id); if(startError)throw new Error('Start temporarily unavailable'); }, uploadPdf: async () => {if(uploadError)throw new Error('PDF upload interrupted');} },
   };
   const context = { exports: {}, window, sessionStorage, require: name => {
     if (name === 'react') return hooks;
+    if(name==='@/lib/use-dialog-focus')return{useDialogFocus:()=>({current:null})};
     if (name === 'react/jsx-runtime') return require(name);
     if (name === 'next/navigation') return { useRouter: () => ({ push: route => routes.push(route) }) };
     if (name === '@/lib/api') return { api };
@@ -97,6 +98,7 @@ for (const connection of [{ connection: null }, { connection: { model: 'revoked'
     assert.equal(h.routes.length, 0);
     assert.equal(elements(h.render()).find(node => node.type === 'textarea').props.value, h.question);
     assert.ok(text(h.render()).includes('No default API/model is saved'));
+    assert.equal(elements(h.render()).find(node=>node.type==='button'&&node.props.type==='submit').props.disabled,false);
     const open = elements(h.render()).find(node => node.type === 'button' && text(node) === 'API & model');
     open.props.onClick();
     assert.ok(elements(h.render()).some(node => node.props?.role === 'dialog'));
@@ -110,6 +112,29 @@ test('a settings network error is not treated as missing credentials or redirect
   assert.equal(h.routes.length, 0);
   assert.equal(h.created.length, 0);
   assert.ok(text(h.render()).includes('Unable to check your saved API connection'));
+  assert.equal(elements(h.render()).find(node=>node.type==='button'&&node.props.type==='submit').props.disabled,false);
+});
+
+for(const failure of ['start','upload']) {
+  test(`${failure} failure preserves the created workspace and prevents duplicate creation on retry`,async()=>{
+    const h=await home({startError:failure==='start',uploadError:failure==='upload'});
+    if(failure==='upload') {
+      elements(h.render()).find(node=>node.type==='button'&&text(node).includes('Configuration')).props.onClick();
+      elements(h.render()).find(node=>node.type==='input'&&node.props.type==='file').props.onChange({target:{files:[{name:'source.pdf',size:50,type:'application/pdf'}],value:'file'}});
+    }
+    await submit(h);
+    assert.equal(h.created.length,1);assert.ok(text(h.render()).includes('Your workspace is saved'));
+    assert.ok(text(h.render()).includes('Open workspace'));
+    await submit(h);assert.equal(h.created.length,1);
+    assert.deepEqual(h.routes,['/research/new-research']);
+  });
+}
+
+test('selected depth sends the displayed maximum research rounds to the API',async()=>{
+  const h=await home();
+  elements(h.render()).find(node=>node.type==='button'&&text(node).includes('Configuration')).props.onClick();
+  elements(h.render()).find(node=>node.type==='button'&&text(node).includes('Comprehensive (DEEP)')).props.onClick();
+  await submit(h);assert.equal(h.created[0].max_iterations,3);
 });
 
 test('a signed-out visitor is sent only to login and keeps the research draft', async () => {

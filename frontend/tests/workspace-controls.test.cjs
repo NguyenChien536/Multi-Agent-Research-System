@@ -44,6 +44,7 @@ async function workspace(status='FAILED',kind='REVIEW',retryError=false,tokenAll
     window:{location:{search:'',hash:''},confirm:()=>true},confirm:()=>true,document:{querySelector:()=>null},
     require:name=>{
       if(name==='react')return hooks;
+    if(name==='@/lib/use-dialog-focus')return{useDialogFocus:()=>({current:null})};
       if(name==='react/jsx-runtime')return require(name);
       if(name==='next/link')return {default:'a'};
       if(name==='next/navigation')return {useParams:()=>({id:'fixture'}),useRouter:()=>({push(){}})};

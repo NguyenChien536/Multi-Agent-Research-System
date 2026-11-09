@@ -21,6 +21,7 @@ import { MarkdownViewer, extractHeadings } from '@/components/ui/MarkdownViewer'
 import { PublicationArticle, PublicationExport } from '@/components/research/PublicationPaper';
 import { ManuscriptReadiness } from '@/components/research/ManuscriptReadiness';
 import { useLanguage } from '@/lib/i18n';
+import { useDialogFocus } from '@/lib/use-dialog-focus';
 import { exportPaperToDocx } from '@/lib/docxExport';
 import { stageState } from '@/lib/monitoring';
 import { withoutRepeatedTitle } from '@/lib/paperPresentation';
@@ -155,6 +156,7 @@ export default function WorkspacePage() {
   const [isStarting, setIsStarting] = useState(false);
   const [actionError, setActionError] = useState('');
   const [showModelSettings, setShowModelSettings] = useState(false);
+  const settingsDialog = useDialogFocus(showModelSettings, () => { setShowModelSettings(false); setReloadKey(v => v + 1); });
   const [isCancelling, setIsCancelling] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
@@ -464,11 +466,12 @@ export default function WorkspacePage() {
     if (!task) return;
     if (!confirm(isEn ? 'Are you sure you want to permanently delete this research project?' : 'Bạn có chắc chắn muốn xóa bài nghiên cứu này vĩnh viễn?')) return;
     setIsDeleting(true);
+    setActionError('');
     try {
       await api.tasks.delete(task.id);
       router.push('/dashboard');
     } catch (err) {
-      alert(err instanceof Error ? err.message : (isEn ? 'Unable to delete research project.' : 'Không thể xóa bài nghiên cứu.'));
+      setActionError(err instanceof Error ? err.message : (isEn ? 'Unable to delete research project.' : 'Không thể xóa bài nghiên cứu.'));
       setIsDeleting(false);
     }
   };
@@ -502,11 +505,12 @@ export default function WorkspacePage() {
   const handleRetrySource = async (sourceId: string) => {
     if (!task) return;
     setRetryingSourceId(sourceId);
+    setActionError('');
     try {
       await api.tasks.retrySource(task.id, sourceId);
       await loadSources();
     } catch (err) {
-      alert(err instanceof Error ? err.message : (isEn ? 'Failed to retry ingestion' : 'Không thể thử lại trích xuất'));
+      setActionError(err instanceof Error ? err.message : (isEn ? 'Failed to retry ingestion' : 'Không thể thử lại trích xuất'));
     } finally {
       setRetryingSourceId(null);
     }
@@ -514,6 +518,7 @@ export default function WorkspacePage() {
 
   const handleDownloadArtifact = async (artifactId: string, filename: string) => {
     if (!task) return;
+    setActionError('');
     try {
       const blob = await api.tasks.downloadArtifact(task.id, artifactId);
       const url = URL.createObjectURL(blob);
@@ -525,16 +530,17 @@ export default function WorkspacePage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch (err) {
-      alert(err instanceof Error ? err.message : (isEn ? 'Download error' : 'Lỗi tải xuống'));
+      setActionError(err instanceof Error ? err.message : (isEn ? 'Download error' : 'Lỗi tải xuống'));
     }
   };
 
   const handleCopyMarkdown = () => {
     if (!report?.content_markdown) return;
+    setActionError('');
     void navigator.clipboard.writeText(report.content_markdown).then(() => {
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
-    });
+    }).catch(() => setActionError(isEn ? 'Clipboard unavailable. Download Markdown instead.' : 'Không sao chép được. Hãy tải bản Markdown.'));
   };
 
   const handleDownloadMarkdown = () => {
@@ -602,6 +608,7 @@ export default function WorkspacePage() {
     if (!report?.content_markdown || !task) return;
     try {
       setIsExportingDocx(true);
+    setActionError('');
       await exportPaperToDocx({
         title: report.title,
         markdownContent: report.content_markdown,
@@ -611,7 +618,7 @@ export default function WorkspacePage() {
       });
     } catch (err) {
       console.error('Docx export error:', err);
-      alert(isEn ? 'Unable to generate Word file (.docx). Please try again or download Markdown.' : 'Không thể tạo file Word (.docx). Vui lòng thử lại hoặc tải tệp Markdown.');
+      setActionError(isEn ? 'Unable to generate Word file (.docx). Please try again or download Markdown.' : 'Không thể tạo file Word (.docx). Vui lòng thử lại hoặc tải tệp Markdown.');
     } finally {
       setIsExportingDocx(false);
     }
@@ -636,6 +643,7 @@ export default function WorkspacePage() {
   const handleApprovePlan = async () => {
     if (!task) return;
     setIsApprovingPlan(true);
+    setActionError('');
     try {
       await api.tasks.approvePlan(task.id, {
         plan_version: task.plan_version,
@@ -644,7 +652,7 @@ export default function WorkspacePage() {
       });
       setReloadKey(v => v + 1);
     } catch (err) {
-      alert(err instanceof Error ? err.message : (isEn ? 'Unable to approve research plan.' : 'Không thể duyệt kế hoạch.'));
+      setActionError(err instanceof Error ? err.message : (isEn ? 'Unable to approve research plan.' : 'Không thể duyệt kế hoạch.'));
     } finally {
       setIsApprovingPlan(false);
     }
@@ -655,11 +663,12 @@ export default function WorkspacePage() {
     const reason = prompt(isEn ? 'Enter revision instructions or feedback for the Supervisor Agent:' : 'Nhập lý do từ chối hoặc hướng dẫn điều chỉnh cho Supervisor:') || '';
     if (!reason.trim()) return;
     setIsRejectingPlan(true);
+    setActionError('');
     try {
       await api.tasks.rejectPlan(task.id, { plan_version: task.plan_version, reason: reason.trim() });
       setReloadKey(v => v + 1);
     } catch (err) {
-      alert(err instanceof Error ? err.message : (isEn ? 'Unable to reject research plan.' : 'Không thể từ chối kế hoạch.'));
+      setActionError(err instanceof Error ? err.message : (isEn ? 'Unable to reject research plan.' : 'Không thể từ chối kế hoạch.'));
     } finally {
       setIsRejectingPlan(false);
     }
@@ -668,17 +677,18 @@ export default function WorkspacePage() {
   const handleResumeWithData = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!task) return;
+    setActionError('');
     const parsedSize = Number(sampleSize.trim());
     if (!Number.isSafeInteger(parsedSize) || parsedSize < 1) {
-      alert(isEn ? 'Please enter a valid sample size (integer >= 1).' : 'Vui lòng nhập cỡ mẫu thực tế hợp lệ (số nguyên lớn hơn hoặc bằng 1).');
+      setActionError(isEn ? 'Please enter a valid sample size (integer >= 1).' : 'Vui lòng nhập cỡ mẫu thực tế hợp lệ (số nguyên lớn hơn hoặc bằng 1).');
       return;
     }
     if (methodNotes.trim().length < 10) {
-      alert(isEn ? 'Please describe data collection methodology and procedures (at least 10 characters).' : 'Vui lòng mô tả phương pháp và quy trình thu thập dữ liệu (tối thiểu 10 ký tự).');
+      setActionError(isEn ? 'Please describe data collection methodology and procedures (at least 10 characters).' : 'Vui lòng mô tả phương pháp và quy trình thu thập dữ liệu (tối thiểu 10 ký tự).');
       return;
     }
     if (resultsSummary.trim().length < 10) {
-      alert(isEn ? 'Please summarize empirical findings / collected data (at least 10 characters).' : 'Vui lòng nhập tóm tắt kết quả thực nghiệm / thực địa (tối thiểu 10 ký tự).');
+      setActionError(isEn ? 'Please summarize empirical findings / collected data (at least 10 characters).' : 'Vui lòng nhập tóm tắt kết quả thực nghiệm / thực địa (tối thiểu 10 ký tự).');
       return;
     }
     if (!resultArtifactId || dataProvenance.trim().length < 10 || isUploadingResult) {
@@ -686,6 +696,7 @@ export default function WorkspacePage() {
       return;
     }
     setIsResumingData(true);
+    setActionError('');
     try {
       await api.tasks.resumeWithData(task.id, {
         plan_version: task.plan_version,
@@ -697,7 +708,7 @@ export default function WorkspacePage() {
       });
       setReloadKey(v => v + 1);
     } catch (err) {
-      alert(err instanceof Error ? err.message : (isEn ? 'Unable to resume research.' : 'Không thể tiếp tục bài nghiên cứu.'));
+      setActionError(err instanceof Error ? err.message : (isEn ? 'Unable to resume research.' : 'Không thể tiếp tục bài nghiên cứu.'));
     } finally {
       setIsResumingData(false);
     }
@@ -863,9 +874,9 @@ export default function WorkspacePage() {
           </Button>
         </div>
       </div>
-      {actionError && <div role="alert" className="border-b border-red-200 bg-red-50 px-6 py-3 text-sm text-red-800">{actionError}</div>}
+      {actionError && <div role="alert" className="flex items-center justify-between gap-3 border-b border-red-200 bg-red-50 px-6 py-3 text-sm text-red-800"><span>{actionError}</span><button type="button" onClick={()=>setActionError('')} aria-label={isEn?'Dismiss error':'Đóng thông báo lỗi'}><XCircle size={18} /></button></div>}
       {showModelSettings && <div role="dialog" aria-modal="true" aria-label="API & model" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-        <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
+        <div ref={settingsDialog} tabIndex={-1} className="max-h-[90dvh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl outline-none">
           <div className="mb-4 flex items-center justify-between"><h2 className="font-semibold">API & model</h2>
             <Button variant="outline" onClick={() => { setShowModelSettings(false); setReloadKey(v => v + 1); }}>{isEn ? 'Close' : 'Đóng'}</Button></div>
           <ModelSettingsPanel isEn={isEn} taskId={task.id} />

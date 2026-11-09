@@ -12,6 +12,7 @@ import { useLanguage } from '@/lib/i18n';
 import type { ResearchTaskResponse, UserResponse } from '@/types';
 import { ModelSettingsPanel } from '@/components/ModelSettingsPanel';
 import { ProfileSettingsPanel } from '@/components/ProfileSettingsPanel';
+import { useDialogFocus } from '@/lib/use-dialog-focus';
 
 const DEFAULT_SIDEBAR_WIDTH = 260;
 const MIN_SIDEBAR_WIDTH = 220;
@@ -24,6 +25,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'ai' | 'profile' | 'language'>('ai');
+  const settingsDialog = useDialogFocus(isSettingsOpen, () => setIsSettingsOpen(false));
   const [recentTasks, setRecentTasks] = useState<ResearchTaskResponse[]>([]);
   const [user, setUser] = useState<UserResponse | null>(null);
   useEffect(() => {
@@ -152,7 +155,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           >
             {language === 'en' ? 'EN' : 'VI'}
           </button>
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-zinc-700">
+          <button type="button" aria-label={isMobileMenuOpen ? (language==='en'?'Close navigation':'Đóng điều hướng') : (language==='en'?'Open navigation':'Mở điều hướng')} aria-expanded={isMobileMenuOpen} aria-controls="app-sidebar" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-zinc-700">
             {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
@@ -162,10 +165,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <aside
         id="app-sidebar"
         style={{ width: `${sidebarWidth}px` }}
-        className={`fixed inset-y-0 left-0 z-40 bg-white border-r border-stone-200/80 md:static md:flex md:flex-col print:hidden relative shrink-0 ${
+        className={`fixed inset-y-0 left-0 z-40 bg-white border-r border-stone-200/80 md:relative flex flex-col print:hidden shrink-0 ${
           isResizing ? '' : 'transition-[width] duration-75'
         } ${
-          isMobileMenuOpen ? 'translate-x-0 w-72' : '-translate-x-full md:translate-x-0'
+          isMobileMenuOpen ? 'visible translate-x-0 w-72' : 'invisible -translate-x-full md:visible md:translate-x-0'
         }`}
       >
         {/* Resize Handle on Desktop */}
@@ -332,18 +335,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Settings Modal (Cài đặt hệ thống & Chuyển ngôn ngữ sang Tiếng Anh / Tiếng Việt) */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/40 backdrop-blur-xs">
-          <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl border border-zinc-200 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-zinc-900/40 backdrop-blur-xs">
+          <div ref={settingsDialog} role="dialog" aria-modal="true" aria-labelledby="app-settings-title" tabIndex={-1} className="w-full max-w-2xl max-h-[90dvh] overflow-y-auto bg-white rounded-2xl border border-zinc-200 shadow-xl outline-none">
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 bg-zinc-50/70">
               <div className="flex items-center gap-2">
                 <Settings size={18} className="text-zinc-700" />
-                <h3 className="font-semibold text-base text-zinc-900">
+                <h3 id="app-settings-title" className="font-semibold text-base text-zinc-900">
                   {t('settings_title')}
                 </h3>
               </div>
               <button
                 type="button"
+                aria-label={language==='en'?'Close settings':'Đóng cài đặt'}
                 onClick={() => setIsSettingsOpen(false)}
                 className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors"
               >
@@ -353,12 +357,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
             {/* Modal Body */}
             <div className="p-6 space-y-5 text-sm">
-              <ProfileSettingsPanel isEn={language === 'en'} />
-              <div className="border-t border-zinc-200" />
-              <ModelSettingsPanel isEn={language === 'en'} taskId={pathname.match(/^\/research\/([0-9a-f-]{36})(?:\/|$)/i)?.[1]} />
+              <div className="flex flex-wrap gap-2" aria-label={language==='en'?'Settings sections':'Các mục cài đặt'}>
+                {(['ai','profile','language'] as const).map(tab=><button key={tab} type="button" aria-pressed={settingsTab===tab} onClick={()=>setSettingsTab(tab)} className={`rounded-lg px-3 py-2 font-medium ${settingsTab===tab?'bg-stone-900 text-white':'bg-stone-100 text-stone-700'}`}>
+                  {tab==='ai'?(language==='en'?'AI connection':'Kết nối AI'):tab==='profile'?(language==='en'?'Profile':'Tài khoản'):(language==='en'?'Language':'Ngôn ngữ')}
+                </button>)}
+              </div>
+              {settingsTab==='profile' && <ProfileSettingsPanel isEn={language === 'en'} />}
+              {settingsTab==='ai' && <ModelSettingsPanel isEn={language === 'en'} taskId={pathname.match(/^\/research\/([0-9a-f-]{36})(?:\/|$)/i)?.[1]} />}
 
               {/* Language Selection Setting */}
-              <div className="space-y-2.5">
+              <div className={settingsTab==='language'?'space-y-2.5':'hidden'}>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-700">
                   {t('settings_lang_label')}
                 </label>

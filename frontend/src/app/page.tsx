@@ -12,6 +12,7 @@ import { api } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
 import { ModelSettingsPanel } from '@/components/ModelSettingsPanel';
 import type { ResearchType, UserResponse } from '@/types';
+import { useDialogFocus } from '@/lib/use-dialog-focus';
 
 const OUTPUT_LANGUAGES = [
   { code: 'en', name: 'English', native: 'English (Default)', desc_en: 'Standard international scientific draft', desc_vi: 'Văn bản báo cáo chuẩn học thuật quốc tế' },
@@ -44,6 +45,8 @@ export default function Home() {
   const [savedModel, setSavedModel] = useState<string | null>(null);
   const [modelStatus, setModelStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
   const [showModelSettings, setShowModelSettings] = useState(false);
+  const settingsDialog = useDialogFocus<HTMLElement>(showModelSettings, () => setShowModelSettings(false));
+  const [createdWorkspace, setCreatedWorkspace] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
     const refresh = () => {
@@ -84,6 +87,7 @@ export default function Home() {
         if (parsed.citationStyle) setCitationStyle(parsed.citationStyle);
         if (parsed.taskLanguage) setTaskLanguage(parsed.taskLanguage);
         if (typeof parsed.requirePlanApproval === 'boolean') setRequirePlanApproval(parsed.requirePlanApproval);
+        if (Number.isInteger(parsed.maxSources) && parsed.maxSources>=3 && parsed.maxSources<=30) setMaxSources(parsed.maxSources);
       }
     } catch {}
   }, []);
@@ -111,11 +115,12 @@ export default function Home() {
             citationStyle,
             taskLanguage,
             requirePlanApproval,
+            maxSources,
           })
         );
       }
     } catch {}
-  }, [topic, researchType, researchDepth, reportLength, citationStyle, taskLanguage, requirePlanApproval, showAdvanced]);
+  }, [topic, researchType, researchDepth, reportLength, citationStyle, taskLanguage, requirePlanApproval, maxSources, showAdvanced]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -155,6 +160,7 @@ export default function Home() {
   const handleStartResearch = async (e: FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
+    if (createdWorkspace) { router.push(`/research/${createdWorkspace}`); return; }
     const question = topic.trim();
     if (question.length < 10) {
       setError(isEn ? 'Please enter a research question with at least 10 characters.' : 'Vui lòng nhập câu hỏi nghiên cứu dài ít nhất 10 ký tự.');
@@ -219,8 +225,10 @@ export default function Home() {
         citation_style: citationStyle,
         language: taskLanguage || 'en', // Default to English
         require_plan_approval: requirePlanApproval,
+        max_iterations: researchDepth === 'SHALLOW' ? 1 : researchDepth === 'DEEP' ? 3 : 2,
         max_sources: maxSources,
       });
+      setCreatedWorkspace(task.id);
 
 
       // Tải lên các file PDF riêng tư nếu có trước khi bắt đầu workflow
@@ -246,6 +254,7 @@ export default function Home() {
       router.push(`/research/${task.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : (isEn ? 'Unable to start research. Please try again.' : 'Không thể bắt đầu nghiên cứu. Vui lòng thử lại.'));
+    } finally {
       setIsLoading(false);
       setUploadStatus('');
     }
@@ -389,7 +398,7 @@ export default function Home() {
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
                     <>
-                      <span>{isEn ? 'Start Research' : 'Bắt đầu nghiên cứu'}</span>
+                      <span>{createdWorkspace ? (isEn?'Open workspace':'Mở bài đã tạo') : (isEn ? 'Start Research' : 'Bắt đầu nghiên cứu')}</span>
                       <ArrowRight size={14} />
                     </>
                   )}
@@ -526,7 +535,7 @@ export default function Home() {
                         {researchDepth === 'SHALLOW' && <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />}
                       </div>
                       <div className={`text-xs mt-0.5 ${researchDepth === 'SHALLOW' ? 'text-zinc-300' : 'text-zinc-500'}`}>
-                        {isEn ? '1 iteration, ~5 sources' : '1 vòng nghiên cứu, ~5 nguồn'}
+                        {isEn ? 'Up to 1 research round' : 'Tối đa 1 vòng nghiên cứu'}
                       </div>
                     </button>
 
@@ -542,7 +551,7 @@ export default function Home() {
                         {researchDepth === 'STANDARD' && <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />}
                       </div>
                       <div className={`text-xs mt-0.5 ${researchDepth === 'STANDARD' ? 'text-zinc-300' : 'text-zinc-500'}`}>
-                        {isEn ? '2 iterations, ~10 sources' : '2 vòng nghiên cứu, ~10 nguồn'}
+                        {isEn ? 'Up to 2 research rounds' : 'Tối đa 2 vòng nghiên cứu'}
                       </div>
                     </button>
 
@@ -558,7 +567,7 @@ export default function Home() {
                         {researchDepth === 'DEEP' && <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />}
                       </div>
                       <div className={`text-xs mt-0.5 ${researchDepth === 'DEEP' ? 'text-zinc-300' : 'text-zinc-500'}`}>
-                        {isEn ? '3 iterations, ~20 sources' : '3 vòng nghiên cứu, ~20 nguồn'}
+                        {isEn ? 'Up to 3 research rounds' : 'Tối đa 3 vòng nghiên cứu'}
                       </div>
                     </button>
                   </div>
@@ -761,7 +770,7 @@ export default function Home() {
           </div>}
 
           {showModelSettings && <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/40 p-4">
-            <section role="dialog" aria-modal="true" aria-labelledby="research-api-settings-title" className="max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl">
+            <section ref={settingsDialog} tabIndex={-1} role="dialog" aria-modal="true" aria-labelledby="research-api-settings-title" className="max-h-[85dvh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-xl outline-none">
               <div className="mb-5 flex items-center justify-between gap-3">
                 <h2 id="research-api-settings-title" className="font-semibold">API & model</h2>
                 <button type="button" onClick={() => setShowModelSettings(false)} aria-label={isEn ? 'Close API settings' : 'Đóng cài đặt API'} className="rounded-lg p-2 hover:bg-zinc-100"><X size={18} /></button>
@@ -775,6 +784,10 @@ export default function Home() {
               {error}
             </p>
           )}
+          {createdWorkspace && error && <div role="status" className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p>{isEn?'Your workspace is saved. Open it to check uploaded files and continue; a duplicate article will not be created.':'Bài đã được lưu. Mở bài để kiểm tra file đã tải lên và tiếp tục; hệ thống sẽ không tạo thêm bài trùng.'}</p>
+            <button type="button" className="mt-2 font-semibold underline" onClick={()=>{setCreatedWorkspace(null);setError('');}}>{isEn?'Create another article instead':'Tạo một bài khác'}</button>
+          </div>}
 
           {/* Clean Scientific Features Badges (No decorative buzzwords) */}
           <div className="flex flex-wrap justify-center gap-2 text-xs text-zinc-600 mt-1">

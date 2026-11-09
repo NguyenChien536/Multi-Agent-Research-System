@@ -120,6 +120,7 @@ export default function DashboardPage() {
   const [showResourceTable, setShowResourceTable] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [actionError, setActionError] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   const loadTasks = useCallback(async () => {
@@ -143,11 +144,12 @@ export default function DashboardPage() {
     e.preventDefault();
     e.stopPropagation();
     setActionLoadingId(id);
+    setActionError('');
     try {
       await api.tasks.start(id);
       await loadTasks();
     } catch (err) {
-      alert(err instanceof Error ? err.message : t('start_error'));
+      setActionError(err instanceof Error ? err.message : t('start_error'));
     } finally {
       setActionLoadingId(null);
     }
@@ -158,11 +160,12 @@ export default function DashboardPage() {
     e.stopPropagation();
     if (!confirm(t('confirm_stop'))) return;
     setActionLoadingId(id);
+    setActionError('');
     try {
       await api.tasks.cancel(id);
       await loadTasks();
     } catch (err) {
-      alert(err instanceof Error ? err.message : t('stop_error'));
+      setActionError(err instanceof Error ? err.message : t('stop_error'));
     } finally {
       setActionLoadingId(null);
     }
@@ -173,11 +176,12 @@ export default function DashboardPage() {
     e.stopPropagation();
     if (!confirm(t('confirm_delete'))) return;
     setActionLoadingId(id);
+    setActionError('');
     try {
       await api.tasks.delete(id);
       await loadTasks();
     } catch (err) {
-      alert(err instanceof Error ? err.message : t('delete_error'));
+      setActionError(err instanceof Error ? err.message : t('delete_error'));
     } finally {
       setActionLoadingId(null);
     }
@@ -410,6 +414,9 @@ export default function DashboardPage() {
         </div>
 
         {/* Main Research Tasks List & Controls */}
+        {actionError && <div role="alert" className="sticky top-0 z-20 flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <span>{actionError}</span><button type="button" onClick={()=>setActionError('')} aria-label={language==='en'?'Dismiss error':'Đóng thông báo lỗi'}><XCircle size={18} /></button>
+        </div>}
         <section className="bg-white rounded-2xl border border-stone-200/90 shadow-xs overflow-hidden" aria-label="Tasks List">
 
           {/* Filter Bar & Controls */}
