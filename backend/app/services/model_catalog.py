@@ -14,6 +14,17 @@ _cache = None
 _expires = 0.0
 
 
+def output_capacity(item):
+    """Only expose finite positive integer metadata, never infer it from context."""
+    provider = item.get('top_provider')
+    value = provider.get('max_completion_tokens') if isinstance(provider, dict) else None
+    return value if isinstance(value, int) and not isinstance(value, bool) and 1024 <= value <= 1_000_000 else None
+
+
+def capacity_order(item):
+    return (-(item.get('max_output_tokens') or 0), -bool(item.get('supports_json_schema')), item['id'])
+
+
 async def free_models():
     """Public OpenRouter metadata; never use personal credentials for this cache."""
     global _cache, _expires
@@ -32,8 +43,8 @@ async def free_models():
             continue
         if zero and model.get('id', '').endswith(':free') and 'response_format' in model.get('supported_parameters', []):
             result.append({'id': model['id'], 'context_length': model.get('context_length'),
-                           'max_output_tokens': (model.get('top_provider') or {}).get('max_completion_tokens')})
-    _cache, _expires = result[:100], time.monotonic() + 300
+                           'max_output_tokens': output_capacity(model)})
+    _cache, _expires = sorted(result, key=capacity_order)[:100], time.monotonic() + 300
     return _cache
 
 
@@ -93,9 +104,12 @@ async def discover_models(base_url: str, api_key: str, free_only: bool = True):
                 continue
         models[name] = {'id': name, 'free': free if pricing else None,
                         'supports_json_schema': 'structured_outputs' in (item.get('supported_parameters') or [])}
+        if capacity := output_capacity(item):
+            models[name]['max_output_tokens'] = capacity
     if root == 'https://openrouter.ai/api/v1' and free_only:
         models.setdefault('openrouter/free', {'id': 'openrouter/free', 'free': True})
     if not models:
         raise HTTPException(400, 'MODEL_CATALOG_UNAVAILABLE: No matching text models were found. Check the API service and account permissions.')
-    return {'models': [models[key] for key in sorted(models)[:500]],
+    ordered = sorted(models.values(), key=capacity_order) if root == 'https://openrouter.ai/api/v1' and free_only else [models[key] for key in sorted(models)]
+    return {'models': ordered[:500],
             'check': 'catalog_only_not_generation_or_quota', 'generation_calls': 0}

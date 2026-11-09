@@ -186,6 +186,14 @@ Hai lượt kiểm tra COMPUTATIONAL dùng CSV giả lập 120 dòng, kết nố
 
 Từ hai lỗi nội dung trên, rendering policy v2 cho kế hoạch mới bổ sung bảng baseline/Ridge trực tiếp từ metrics của routine đã COMPLETED và kiểm tra tham chiếu bảng/hình. Hình MAE được chú thích rõ là hai giá trị tổng hợp. Đã chạy lại validator trên chính văn bản cũ: phát hiện cả hai vấn đề; dựng bảng từ metrics loại lỗi thiếu bảng, còn diễn giải hình vẫn được giữ thành finding cần sửa. Thao tác kiểm tra này không ghi lại database hay thay phiên bản bài cũ. Đây là sửa hệ thống và regression tests; chưa có chiến dịch mới chứng minh mọi loại bài đều đạt sau thay đổi. Ba luồng demo bên dưới là các bản đã chạy trước, không phải ba lượt mới cùng PASS.
 
+### Cấu hình đầu ra và xóa bài
+
+**Cập nhật cấu hình 09/11:** theo [catalog OpenRouter](https://openrouter.ai/api/v1/models), model miễn phí hỗ trợ output có cấu trúc với mức đầu ra công bố lớn nhất khi kiểm tra là `dots-studio/dots-3-note-preview:free`: 460.800 token, context 512.000. Đây là giới hạn công bố, không phải độ dài bắt buộc hoặc cam kết chất lượng. Một probe JSON nhỏ bằng kết nối đang lưu đã trả đúng, provider ghi nhận 0 USD. Tải danh sách model sẽ dùng mức tối đa được công bố khi chọn model; có nút **Dùng mức tối đa của model** trong tùy chọn.
+
+Giới hạn phản hồi và hạn mức **cả bài** là hai thứ khác nhau: request chỉ dùng tối đa phần output allowance còn lại. Không tự tăng token tổng/tiền/lượt/thời gian hoặc reset usage. Bài cũ giữ snapshot riêng; muốn dùng cấu hình mới, mở **API & model → bài hiện tại → áp dụng mặc định** khi bài đã dừng.
+
+**Xóa bài:** mở **Thông tin & Cấu hình / Metadata**, kéo xuống **Vùng nguy hiểm**, chọn **Xóa bài nghiên cứu** và xác nhận. Bài bị ẩn ngay, dữ liệu riêng được đưa vào hàng đợi dọn bền vững; đây là xóa vĩnh viễn, không phải lưu trữ tạm.
+
 ### Ba bản thảo có thể mở để demo
 
 Các bản này là **kết quả đã chạy trước**, không giới thiệu như vừa sinh tức thì. Cả ba có đủ phần chính, các mục con, Conclusion và References; không còn marker claim nội bộ chưa được chuyển đổi. Cả ba vẫn là **NEEDS_REVIEW**, không phải bài đã qua peer review hoặc được xác nhận đạt Q1.

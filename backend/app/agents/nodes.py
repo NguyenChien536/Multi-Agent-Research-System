@@ -93,11 +93,12 @@ _BUDGET_CALL_CONTEXT: contextvars.ContextVar[dict[str, Any] | None] = contextvar
 class BudgetedFallbackLLM:
     """Try configured providers in order, reserving budget for every attempt."""
 
-    def __init__(self, models: list[tuple[str, Any]], *, pace_requests: bool = False, structured_schema: Any = None, output_limits=None):
+    def __init__(self, models: list[tuple[str, Any]], *, pace_requests: bool = False, structured_schema: Any = None, output_limits=None, request_clients=None):
         self.models = models
         self.pace_requests = pace_requests
         self.structured_schema = structured_schema
         self.output_limits = output_limits or {}
+        self.request_clients = request_clients if request_clients is not None else dict(models)
 
     def with_structured_output(self, schema: Any):
         return BudgetedFallbackLLM(
@@ -106,6 +107,7 @@ class BudgetedFallbackLLM:
             structured_schema=schema,
             output_limits={name: getattr(model, 'max_tokens', None) or getattr(model, 'max_output_tokens', None)
                            for name, model in self.models},
+            request_clients=self.request_clients,
         )
 
     async def ainvoke(self, messages: Any, **kwargs: Any):
@@ -146,13 +148,25 @@ class BudgetedFallbackLLM:
                 except Exception:
                     pass
             if context:
+                call_output = context["output_tokens"]
+                if model_name.startswith('byok:'):
+                    from app.services.provider_budget import personal_output_capacity
+                    call_output = await personal_output_capacity(context['task_id'], call_output)
+                    # Structured pipelines bind this same task-scoped client.
+                    # Change the real request as well as its reservation; a
+                    # reservation-only clamp would leave an unbounded request.
+                    client = self.request_clients[model_name]
+                    if isinstance(getattr(client, 'max_tokens', None), int):
+                        client.max_tokens = call_output
+                    elif isinstance(getattr(client, 'max_output_tokens', None), int):
+                        client.max_output_tokens = call_output
                 reservation_id = await reserve_provider_call(
                     task_id=context["task_id"],
                     attempt_number=context["attempt_number"],
                     kind="llm",
                     model=model_name,
                     input_tokens=context["input_tokens"] + extra_tokens + (estimate_tokens(retry_hint) if retry_hint else 0),
-                    output_tokens=context["output_tokens"],
+                    output_tokens=call_output,
                 )
             try:
                 if context:
@@ -1640,7 +1654,7 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     word_target, output_limit = writing_limits(contract, length)
     from app.services.model_connection import current_connection
     if connection := current_connection():
-        output_limit = min(output_limit, connection.output_token_limit)
+        output_limit = connection.output_token_limit
     if isinstance(llm, BudgetedFallbackLLM):
         for _, model in llm.models:
             if hasattr(model, "max_output_tokens"):
@@ -1881,7 +1895,7 @@ async def critic_node(state: ResearchState) -> Dict[str, Any]:
     critic_output_tokens = 2048 if critic_contract.get("evidence_review_policy") else 768
     from app.services.model_connection import current_connection
     if connection := current_connection():
-        critic_output_tokens = min(connection.output_token_limit, 8192)
+        critic_output_tokens = connection.output_token_limit
     base_llm = get_fast_llm()
     if isinstance(base_llm, BudgetedFallbackLLM):
         for _, client in base_llm.models:

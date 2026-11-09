@@ -37,7 +37,7 @@ class ModelConnectionInput(BaseModel):
     # Account-specific prices are estimates declared by the owner, not an invoice.
     input_price_per_million: float = Field(default=0, ge=0, le=1000, allow_inf_nan=False)
     output_price_per_million: float = Field(default=0, ge=0, le=1000, allow_inf_nan=False)
-    output_token_limit: int = Field(default=8192, ge=1024, le=32768)
+    output_token_limit: int = Field(default=32768, ge=1024, le=1_000_000)
     reasoning_effort: Literal['none', 'low', 'medium', 'high'] = 'low'
     structured_output_mode: Literal['json_object', 'json_schema'] = 'json_object'
 
@@ -81,7 +81,7 @@ class ModelConnection:
     input_price_per_million: float
     output_price_per_million: float
     api_key: str = field(repr=False)
-    output_token_limit: int = 8192
+    output_token_limit: int = 32768
     reasoning_effort: str = 'low'
     structured_output_mode: str = 'json_object'
     _clients: list = field(default_factory=list, repr=False)
@@ -161,8 +161,13 @@ def open_connection(config: dict | None, task_id, user_id) -> ModelConnection | 
         payload = json.loads(_cipher().decrypt(stored["secret"].encode()))
         if payload.pop("task_id") != str(task_id) or payload.pop("user_id") != str(user_id):
             raise ValueError("owner mismatch")
+        # Older encrypted snapshots omitted this field and used 8192. Keep
+        # historical tasks reproducible rather than upgrading them on read.
+        payload.setdefault('output_token_limit', 8192)
         validated = ModelConnectionInput.model_validate(payload)
-        profile = ModelConnectionInput(api_key=validated.api_key, **stored['profile'])
+        profile_values = {**stored['profile']}
+        profile_values.setdefault('output_token_limit', 8192)
+        profile = ModelConnectionInput(api_key=validated.api_key, **profile_values)
         if validated.model_dump(exclude={"api_key"}) != profile.model_dump(exclude={'api_key'}):
             raise ValueError("profile mismatch")
         return ModelConnection(**validated.model_dump(exclude={"api_key"}), api_key=validated.api_key.get_secret_value())

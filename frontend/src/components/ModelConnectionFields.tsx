@@ -58,6 +58,7 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState<string[]>([]);
   const [schemaModels, setSchemaModels] = useState<Record<string, boolean>>({});
+  const [outputLimits, setOutputLimits] = useState<Record<string, number>>({});
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [catalogError, setCatalogError] = useState('');
   const [catalogChecked, setCatalogChecked] = useState(false);
@@ -67,7 +68,7 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
   useEffect(() => {
     const tracker = catalogRequest.current;
     tracker.sequence++;
-    setModels([]); setSchemaModels({}); setCatalogChecked(false); setCatalogError(''); setCatalogBusy(false);
+    setModels([]); setSchemaModels({}); setOutputLimits({}); setCatalogChecked(false); setCatalogError(''); setCatalogBusy(false);
     return () => { tracker.sequence++; };
   }, [value?.base_url, value?.api_key, taskId, freeOnly]);
   useEffect(() => {
@@ -92,9 +93,15 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
       if (request !== catalogRequest.current.sequence) return;
       const names = result.models.map(model => model.id);
       setSchemaModels(Object.fromEntries(result.models.map(model => [model.id, !!model.supports_json_schema])));
+      setOutputLimits(Object.fromEntries(result.models.filter(model => model.max_output_tokens).map(model => [model.id, model.max_output_tokens!])));
       setModels(names); setCatalogChecked(true); setManualModel(false);
       // Keep an explicit user choice. Never silently pick a paid model.
-      if (!value.model && value.base_url === 'https://openrouter.ai/api/v1' && freeOnly) update({model:'openrouter/free'});
+      const bestFree = result.models.filter(model => model.free && model.id.endsWith(':free') && model.max_output_tokens)
+        .sort((a,b) => (b.max_output_tokens || 0) - (a.max_output_tokens || 0))[0];
+      const selected = value.base_url === 'https://openrouter.ai/api/v1' && freeOnly && (!value.model || value.model === 'openrouter/free')
+        ? bestFree : result.models.find(model => model.id === value.model);
+      if (selected) update({model:selected.id, structured_output_mode:selected.supports_json_schema ? 'json_schema' : 'json_object',
+        ...(selected.max_output_tokens ? {output_token_limit:selected.max_output_tokens} : {})});
     } catch (err) {
       if (request === catalogRequest.current.sequence) setCatalogError(err instanceof Error ? err.message : (isEn ? 'Unable to load models.' : 'Không tải được model.'));
     } finally { if (request === catalogRequest.current.sequence) setCatalogBusy(false); }
@@ -108,6 +115,7 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
       model: newUrl === 'https://openrouter.ai/api/v1' ? 'openrouter/free' : '',
       input_price_per_million: 0,
       output_price_per_million: 0,
+      output_token_limit: 32768,
     });
   };
 
@@ -117,7 +125,7 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
   return <section className="space-y-3 border-t border-zinc-100 pt-4">
     {!hideToggle && <label className="flex items-center gap-2 text-sm font-semibold">
       <input type="checkbox" checked={!!value} onChange={event => onChange(event.target.checked ? {
-        api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0,
+        api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0, output_token_limit:32768,
       } : null)} />
       {isEn ? 'Use my API connection' : 'Dùng API key của tôi'}
     </label>}
@@ -143,7 +151,8 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
             spellCheck={false} value={value.api_key} onChange={event => update({ api_key: event.target.value })} />
         </label>
         <label className="block text-xs font-medium">{isEn ? 'Model' : 'Model'}
-          {!manualModel ? <select className={inputClass} required value={value.model} onChange={event => update({model:event.target.value, structured_output_mode:schemaModels[event.target.value] ? 'json_schema' : 'json_object'})}>
+          {!manualModel ? <select className={inputClass} required value={value.model} onChange={event => update({model:event.target.value, structured_output_mode:schemaModels[event.target.value] ? 'json_schema' : 'json_object',
+            ...(outputLimits[event.target.value] ? {output_token_limit:outputLimits[event.target.value]} : {})})}>
             <option value="">{isEn ? 'Load models, then choose' : 'Tải danh sách rồi chọn model'}</option>
             {value.model && !models.includes(value.model) && <option value={value.model}>{value.model}</option>}
             {models.map(model => <option key={model} value={model}>{model}{schemaModels[model] ? ' · JSON Schema' : ''}</option>)}
@@ -169,8 +178,11 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
             </select>
           </label>
           <label>{isEn?'Output token limit':'Giới hạn token đầu ra'}
-            <input type="number" min={1024} max={32768} step={1024} required className={inputClass}
-              value={value.output_token_limit || 8192} onChange={event=>update({output_token_limit:Number(event.target.value)})} />
+            <input type="number" min={1024} max={outputLimits[value.model] || 1000000} step={1} required className={inputClass}
+              value={value.output_token_limit || 32768} onChange={event=>update({output_token_limit:Number(event.target.value)})} />
+            {outputLimits[value.model] && <button type="button" className="mt-1 text-xs underline" onClick={()=>update({output_token_limit:outputLimits[value.model]})}>
+              {isEn ? 'Use model maximum' : 'Dùng mức tối đa của model'} ({outputLimits[value.model].toLocaleString()})
+            </button>}
           </label>
           <label>{isEn?'Reasoning effort':'Mức suy luận'}
             <select className={inputClass} disabled={value.base_url !== 'https://openrouter.ai/api/v1'} title="OpenRouter" value={value.reasoning_effort || 'low'} onChange={event=>update({reasoning_effort:event.target.value as ModelConnectionInput['reasoning_effort']})}>

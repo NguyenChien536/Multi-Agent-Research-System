@@ -189,6 +189,24 @@ def _check_active(task: ResearchTask, usage: dict[str, Any], limits: tuple[int, 
         raise ProviderBudgetExceeded("Active research time budget exhausted")
 
 
+async def personal_output_capacity(task_id: str | uuid.UUID, requested: int) -> int:
+    """Fit a personal model's ceiling to the remaining article allowance.
+
+    This is a preview, not admission. The subsequent atomic reservation still
+    checks concurrent reservations, ownership, attempt, cost, calls and time.
+    """
+    async with AsyncSessionLocal() as session:
+        task = await session.get(ResearchTask, uuid.UUID(str(task_id)))
+        if task is None:
+            raise ResearchTaskStopped("Research task no longer exists")
+        usage = _usage(task.budget_config or {})
+        reserved = sum(int(v.get('output_tokens', 0)) for v in usage['reservations'].values())
+        available = _limits(task.budget_config or {})[2] - int(usage.get('output_tokens', 0)) - reserved
+        if available < 1024:
+            raise ProviderBudgetExceeded("Insufficient output token allowance for another model response")
+        return min(int(requested), available)
+
+
 async def reserve_provider_call(
     *,
     task_id: str | uuid.UUID,

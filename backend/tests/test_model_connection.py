@@ -73,6 +73,7 @@ async def test_byok_budget_reserves_the_larger_output_limit(monkeypatch):
     model.ainvoke.return_value = AIMessage(content='ok')
     reserve = AsyncMock(return_value='reservation')
     monkeypatch.setattr(nodes, 'reserve_provider_call', reserve)
+    monkeypatch.setattr('app.services.provider_budget.personal_output_capacity', AsyncMock(side_effect=lambda _, limit: limit))
     monkeypatch.setattr(nodes, 'settle_provider_call', AsyncMock())
     monkeypatch.setattr('app.services.provider_budget.assert_task_active', AsyncMock())
     await nodes.invoke_llm_with_budget({'enforce_provider_budget': True, 'task_id': str(uuid.uuid4()), 'attempt_number': 1},
@@ -425,6 +426,7 @@ async def test_invalid_json_charges_reported_usage_without_claiming_success(monk
     model.ainvoke.side_effect = StructuredOutputFailure('MODEL_INVALID_JSON', response)
     reserve, settle = AsyncMock(return_value='reservation'), AsyncMock()
     monkeypatch.setattr(nodes, 'reserve_provider_call', reserve)
+    monkeypatch.setattr('app.services.provider_budget.personal_output_capacity', AsyncMock(side_effect=lambda _, limit: limit))
     monkeypatch.setattr(nodes, 'settle_provider_call', settle)
     monkeypatch.setattr('app.services.provider_budget.assert_task_active', AsyncMock())
     with pytest.raises(StructuredOutputFailure):
@@ -444,6 +446,7 @@ async def test_json_node_reserves_its_actual_cap_instead_of_manuscript_limit(mon
     model.ainvoke.return_value = AIMessage(content='ok')
     reserve = AsyncMock(return_value='reservation')
     monkeypatch.setattr(nodes, 'reserve_provider_call', reserve)
+    monkeypatch.setattr('app.services.provider_budget.personal_output_capacity', AsyncMock(side_effect=lambda _, limit: limit))
     monkeypatch.setattr(nodes, 'settle_provider_call', AsyncMock())
     monkeypatch.setattr('app.services.provider_budget.assert_task_active', AsyncMock())
     await nodes.invoke_llm_with_budget({'enforce_provider_budget': True, 'task_id': str(uuid.uuid4()), 'attempt_number': 1},

@@ -10,7 +10,8 @@ def decode_input(stored, owner_id, binding_id):
     connection = open_connection({'_llm_connection': stored}, binding_id, owner_id)
     if connection is None:
         return None
-    return ModelConnectionInput(api_key=connection.api_key, **stored['profile'])
+    return ModelConnectionInput(api_key=connection.api_key,
+        **{'output_token_limit': connection.output_token_limit, **stored['profile']})
 
 def public_profile(stored):
     if not stored:

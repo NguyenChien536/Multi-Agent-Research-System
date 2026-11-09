@@ -4,7 +4,7 @@ import { api } from '@/lib/api';
 import type { ModelConnectionInput } from '@/types';
 import { ModelConnectionFields } from './ModelConnectionFields';
 
-const empty: ModelConnectionInput = {api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0};
+const empty: ModelConnectionInput = {api_key: '', base_url: '', model: '', input_price_per_million: 0, output_price_per_million: 0, output_token_limit:32768};
 
 export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: string}) {
   const [serverMode, setServerMode] = useState(false);
