@@ -163,6 +163,16 @@ export default function WorkspacePage() {
   const [isWidePaper, setIsWidePaper] = useState(false);
   const [isLeftSidebarCollapsed, setIsLeftSidebarCollapsed] = useState(false);
   const [isRightSidebarCollapsed, setIsRightSidebarCollapsed] = useState(false);
+  useEffect(() => {
+    const narrow = window.matchMedia?.('(max-width: 1023px)');
+    if (!narrow) return;
+    const collapseOnSmallScreen = () => {
+      if (narrow.matches) { setIsLeftSidebarCollapsed(true); setIsRightSidebarCollapsed(true); }
+    };
+    collapseOnSmallScreen();
+    narrow.addEventListener('change', collapseOnSmallScreen);
+    return () => narrow.removeEventListener('change', collapseOnSmallScreen);
+  }, []);
 
   const handleToggleWidePaper = useCallback(() => {
     setIsWidePaper(prev => {
@@ -884,10 +894,10 @@ export default function WorkspacePage() {
       </div>}
 
       {/* Main Workspace Body */}
-      <div className="flex flex-1 overflow-hidden flex-col lg:flex-row print:overflow-visible print:h-auto print:block">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden flex-col lg:flex-row print:overflow-visible print:h-auto print:block">
         {/* Stages Sidebar */}
         {/* Left Sidebar: Table of Contents & Manuscript Details */}
-        <aside id="toc-sidebar" className={`${isLeftSidebarCollapsed ? 'hidden' : 'w-full lg:w-72 xl:w-80'} border-r border-stone-200/80 bg-white flex flex-col shrink-0 overflow-y-auto max-h-72 lg:max-h-none transition-all duration-200 print:hidden`}>
+        <aside id="toc-sidebar" className={`${isLeftSidebarCollapsed ? 'hidden' : 'w-80 max-w-full lg:w-72 xl:w-80'} absolute inset-y-0 left-0 z-30 lg:relative lg:inset-auto lg:z-auto border-r border-stone-200/80 bg-white flex flex-col shrink-0 overflow-y-auto shadow-lg lg:shadow-none transition-all duration-200 print:hidden`}>
           <div className="p-4 border-b border-stone-200/80 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10">
             <div className="flex items-center gap-2">
               <ListFilter size={17} className="text-zinc-700" />
@@ -1034,7 +1044,7 @@ export default function WorkspacePage() {
         {/* Content Tabs Area */}
 
         {/* Content Tabs Area */}
-        <main className="flex-1 flex flex-col bg-white overflow-hidden print:overflow-visible print:h-auto print:block">
+        <main className="flex min-h-0 flex-1 flex-col bg-white overflow-hidden print:overflow-visible print:h-auto print:block">
           {task.status === 'WAITING_APPROVAL' && (
             <div id="plan-review-section" className="p-4 bg-amber-50/80 border-b border-amber-200 overflow-y-auto max-h-96 shrink-0 print:hidden">
               <div className="w-full max-w-7xl mx-auto space-y-3.5">
@@ -2846,7 +2856,7 @@ export default function WorkspacePage() {
         </main>
 
         {/* Right Sidebar: Research Pipeline Stages */}
-        <aside id="stages-sidebar" className={`${isRightSidebarCollapsed ? 'hidden' : 'w-full lg:w-72 xl:w-80'} border-l border-stone-200/80 bg-white flex flex-col shrink-0 overflow-y-auto max-h-72 lg:max-h-none transition-all duration-200 print:hidden`}>
+        <aside id="stages-sidebar" className={`${isRightSidebarCollapsed ? 'hidden' : 'w-80 max-w-full lg:w-72 xl:w-80'} absolute inset-y-0 right-0 z-30 lg:relative lg:inset-auto lg:z-auto border-l border-stone-200/80 bg-white flex flex-col shrink-0 overflow-y-auto shadow-lg lg:shadow-none transition-all duration-200 print:hidden`}>
           <div className="p-4 border-b border-stone-200/80 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10">
             <div className="flex items-center gap-2">
               <Activity size={17} className="text-zinc-700" />

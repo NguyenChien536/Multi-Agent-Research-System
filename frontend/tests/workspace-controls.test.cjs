@@ -21,7 +21,7 @@ function text(node) {
   if (Array.isArray(node)) return node.map(text).join('');
   return text(node.props?.children);
 }
-async function workspace(status='FAILED',kind='REVIEW',retryError=false,tokenAllowance=null) {
+async function workspace(status='FAILED',kind='REVIEW',retryError=false,tokenAllowance=null,narrow=false) {
   const states=[],effects=[],calls=[];
   let cursor=0;
   const task={id:'fixture',title:'UI fixture research',research_question:'UI fixture question',status,research_type:kind,
@@ -41,7 +41,7 @@ async function workspace(status='FAILED',kind='REVIEW',retryError=false,tokenAll
     uploadDataset:async(id,file)=>{calls.push(['dataset',id,file.name]);return {file_name:file.name,rows_count:120,columns_count:3};},
   },{get:(target,key)=>target[key]|| (async()=>[])});
   const context={exports:{},Error,URLSearchParams,setInterval:()=>1,clearInterval(){},setTimeout(){},
-    window:{location:{search:'',hash:''},confirm:()=>true},confirm:()=>true,document:{querySelector:()=>null},
+    window:{location:{search:'',hash:''},confirm:()=>true,matchMedia:()=>({matches:narrow,addEventListener(){},removeEventListener(){}})},confirm:()=>true,document:{querySelector:()=>null},
     require:name=>{
       if(name==='react')return hooks;
     if(name==='@/lib/use-dialog-focus')return{useDialogFocus:()=>({current:null})};
@@ -91,6 +91,15 @@ test('collapsed pipeline can be reopened from the persistent header',async()=>{
   assert.equal(toggle().props['aria-expanded'],false);
   toggle().props.onClick();
   assert.equal(toggle().props['aria-expanded'],true);
+});
+
+test('small screens start with the reading area clear and can reopen pipeline independently',async()=>{
+  const h=await workspace('PENDING','REVIEW',false,null,true);
+  const pipeline=()=>elements(h.render()).find(node=>node.props?.['aria-controls']==='stages-sidebar');
+  const contents=()=>elements(h.render()).find(node=>node.props?.['aria-controls']==='toc-sidebar');
+  assert.equal(pipeline().props['aria-expanded'],false);assert.equal(contents().props['aria-expanded'],false);
+  pipeline().props.onClick();assert.equal(pipeline().props['aria-expanded'],true);
+  assert.equal(contents().props['aria-expanded'],false);
 });
 
 test('pipeline collapse leaves an edge reopen control and never changes contents',async()=>{
