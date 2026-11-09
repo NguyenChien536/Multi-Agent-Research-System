@@ -8,10 +8,25 @@ from app.core.database import get_db
 from app.models.user import User
 from app.models.task import ResearchTask
 
-from app.schemas.model_settings import ConnectionUpdate, ModelCatalogRequest
+from app.schemas.model_settings import ConnectionUpdate, ModelCatalogRequest, ConnectionCheck
 from app.services.user_model_settings import settings_id, decode_input, public_profile, updated_input, protect
 
 router = APIRouter()
+
+
+@router.post('/model-connection/check')
+async def check_saved_or_draft_connection(payload: ConnectionCheck, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    from app.services.model_connection_check import check_connection
+    stored,binding = user.model_connection,settings_id(user.id)
+    if payload.task_id:
+        task = await db.scalar(select(ResearchTask).where(ResearchTask.id==payload.task_id,
+            ResearchTask.user_id==user.id,ResearchTask.status!='DELETING'))
+        if task is None:
+            raise HTTPException(404,'Research task not found')
+        stored,binding = (task.budget_config or {}).get('_llm_connection'),task.id
+    update = ConnectionUpdate.model_validate(payload.model_dump(exclude={'task_id','generate','free_tier_confirmed'}))
+    value = updated_input(update,stored,user.id,binding)
+    return await check_connection(value,generate=payload.generate,free_tier_confirmed=payload.free_tier_confirmed)
 
 
 @router.post('/model-connection/models')

@@ -16,7 +16,16 @@ export interface ModelConnectionInput {
   output_price_per_million: number;
   output_token_limit?: number;
   reasoning_effort?: 'none' | 'low' | 'medium' | 'high';
-  structured_output_mode?: 'json_object' | 'json_schema';
+  structured_output_mode?: 'json_object' | 'json_schema' | 'prompt_json';
+}
+
+export interface ModelConnectionCheck {
+  model: string;
+  status: string;
+  generation_calls: number;
+  checked_at: string;
+  quota?: {used: number; limit: number; remaining: number};
+  scope?: string;
 }
 
 export interface ResearchTaskCreate {

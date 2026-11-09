@@ -11,16 +11,16 @@ interface ProviderMeta {
 
 const KNOWN_PROVIDERS: Record<string, ProviderMeta> = {
   'https://openrouter.ai/api/v1': {
-    label: 'OpenRouter (openrouter.ai)',
+    label: 'OpenRouter',
     placeholder: 'openrouter/free',
   },
   'https://api.groq.com/openai/v1': {
-    label: 'Groq Cloud (api.groq.com)',
+    label: 'Groq',
     placeholder: 'llama-3.3-70b-versatile',
   },
   'https://generativelanguage.googleapis.com/v1beta/openai': {
-    label: 'Google Gemini (OpenAI-compatible)',
-    placeholder: 'gemini-2.5-flash',
+    label: 'Google Gemini',
+    placeholder: 'Select from the model list',
   },
   'https://api.deepseek.com/v1': {
     label: 'DeepSeek (api.deepseek.com)',
@@ -58,6 +58,8 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
   const [loading, setLoading] = useState(true);
   const [models, setModels] = useState<string[]>([]);
   const [schemaModels, setSchemaModels] = useState<Record<string, boolean>>({});
+  const [modelNames, setModelNames] = useState<Record<string, string>>({});
+  const [outputModes, setOutputModes] = useState<Record<string, ModelConnectionInput['structured_output_mode']>>({});
   const [outputLimits, setOutputLimits] = useState<Record<string, number>>({});
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [catalogError, setCatalogError] = useState('');
@@ -68,7 +70,7 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
   useEffect(() => {
     const tracker = catalogRequest.current;
     tracker.sequence++;
-    setModels([]); setSchemaModels({}); setOutputLimits({}); setCatalogChecked(false); setCatalogError(''); setCatalogBusy(false);
+    setModels([]); setModelNames({}); setOutputModes({}); setSchemaModels({}); setOutputLimits({}); setCatalogChecked(false); setCatalogError(''); setCatalogBusy(false);
     return () => { tracker.sequence++; };
   }, [value?.base_url, value?.api_key, taskId, freeOnly]);
   useEffect(() => {
@@ -93,6 +95,8 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
       if (request !== catalogRequest.current.sequence) return;
       const names = result.models.map(model => model.id);
       setSchemaModels(Object.fromEntries(result.models.map(model => [model.id, !!model.supports_json_schema])));
+      setModelNames(Object.fromEntries(result.models.map(model => [model.id, model.display_name || model.id])));
+      setOutputModes(Object.fromEntries(result.models.map(model => [model.id, model.recommended_output_mode || (model.supports_json_schema ? 'json_schema' : 'json_object')])));
       setOutputLimits(Object.fromEntries(result.models.filter(model => model.max_output_tokens).map(model => [model.id, model.max_output_tokens!])));
       setModels(names); setCatalogChecked(true); setManualModel(false);
       // Keep an explicit user choice. Never silently pick a paid model.
@@ -100,7 +104,7 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
         .sort((a,b) => (b.max_output_tokens || 0) - (a.max_output_tokens || 0))[0];
       const selected = value.base_url === 'https://openrouter.ai/api/v1' && freeOnly && (!value.model || value.model === 'openrouter/free')
         ? bestFree : result.models.find(model => model.id === value.model);
-      if (selected) update({model:selected.id, structured_output_mode:selected.supports_json_schema ? 'json_schema' : 'json_object',
+      if (selected) update({model:selected.id, structured_output_mode:selected.recommended_output_mode || (selected.supports_json_schema ? 'json_schema' : 'json_object'),
         ...(selected.max_output_tokens ? {output_token_limit:selected.max_output_tokens} : {})});
     } catch (err) {
       if (request === catalogRequest.current.sequence) setCatalogError(err instanceof Error ? err.message : (isEn ? 'Unable to load models.' : 'Không tải được model.'));
@@ -134,7 +138,7 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
         <span>{isEn ? 'Could not load API services.' : 'Không tải được danh sách dịch vụ API.'}</span>
         <button type="button" onClick={() => setReload(value => value + 1)} className="underline">{isEn ? 'Retry' : 'Thử lại'}</button>
       </div>}
-      <label className="block text-xs font-medium">{isEn ? 'API base URL' : 'Địa chỉ API (base URL)'}
+      <label className="block text-sm font-medium">{isEn ? '1. Service' : '1. Dịch vụ'}
         <select className={inputClass} required disabled={loading} value={value.base_url} onChange={event => handleBaseUrlChange(event.target.value)}>
           <option value="">{loading ? (isEn ? 'Loading services…' : 'Đang tải dịch vụ…') : (isEn ? 'Select API service' : 'Chọn dịch vụ API')}</option>
           {roots.map(root => (
@@ -144,37 +148,42 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
           ))}
         </select>
       </label>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block text-xs font-medium">API key
+      <div className="space-y-3">
+        <label className="block text-sm font-medium">2. API key
           <input className={inputClass} type="password" required={keyRequired} minLength={8} maxLength={4096} autoComplete="off"
             placeholder={keyRequired ? '' : (isEn ? 'Saved securely · leave blank to keep' : 'Đã lưu an toàn · để trống để giữ key')}
             spellCheck={false} value={value.api_key} onChange={event => update({ api_key: event.target.value })} />
         </label>
-        <label className="block text-xs font-medium">{isEn ? 'Model' : 'Model'}
-          {!manualModel ? <select className={inputClass} required value={value.model} onChange={event => update({model:event.target.value, structured_output_mode:schemaModels[event.target.value] ? 'json_schema' : 'json_object',
+        <div className="flex items-center gap-3">
+          <button type="button" disabled={catalogBusy || !value.base_url || (keyRequired && !value.api_key)} onClick={loadModels}
+            className="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-40">{catalogBusy ? (isEn ? 'Loading…' : 'Đang tải…') : (isEn ? 'Load available models' : 'Tải danh sách model')}</button>
+        </div>
+        <label className="block text-sm font-medium">{isEn ? '3. Model' : '3. Model'}
+          {!manualModel ? <select className={inputClass} required value={value.model} onChange={event => update({model:event.target.value, structured_output_mode:outputModes[event.target.value] || (schemaModels[event.target.value] ? 'json_schema' : 'json_object'),
             ...(outputLimits[event.target.value] ? {output_token_limit:outputLimits[event.target.value]} : {})})}>
             <option value="">{isEn ? 'Load models, then choose' : 'Tải danh sách rồi chọn model'}</option>
             {value.model && !models.includes(value.model) && <option value={value.model}>{value.model}</option>}
-            {models.map(model => <option key={model} value={model}>{model}{schemaModels[model] ? ' · JSON Schema' : ''}</option>)}
+            {models.map(model => <option key={model} value={model}>{modelNames[model] || model}</option>)}
           </select> : <input className={inputClass} required maxLength={200} autoComplete="off" spellCheck={false}
             placeholder={activePlaceholder} value={value.model} onChange={event => update({model:event.target.value.trim(), structured_output_mode:'json_object'})} />}
         </label>
       </div>
       <div className="flex flex-wrap items-center gap-3 text-xs">
-        <button type="button" disabled={catalogBusy || !value.base_url || (keyRequired && !value.api_key)} onClick={loadModels}
-          className="rounded-lg border px-3 py-2 font-medium disabled:opacity-40">{catalogBusy ? (isEn ? 'Loading…' : 'Đang tải…') : (isEn ? 'Load available models' : 'Tải danh sách model')}</button>
-        <button type="button" className="underline" onClick={()=>setManualModel(v=>!v)}>{manualModel ? (isEn ? 'Choose from list' : 'Chọn từ danh sách') : (isEn ? 'Enter model ID manually' : 'Nhập tên model thủ công')}</button>
-        {value.base_url === 'https://openrouter.ai/api/v1' && <label className="flex items-center gap-1"><input type="checkbox" checked={freeOnly} onChange={event=>setFreeOnly(event.target.checked)} />{isEn ? 'Free models only' : 'Chỉ model miễn phí'}</label>}
+        {['https://openrouter.ai/api/v1','https://generativelanguage.googleapis.com/v1beta/openai'].includes(value.base_url) && <label className="flex items-center gap-1"><input type="checkbox" checked={freeOnly} onChange={event=>setFreeOnly(event.target.checked)} />{isEn ? 'Models with a free tier' : 'Model có gói miễn phí'}</label>}
       </div>
       {catalogError && <p role="alert" className="text-sm text-red-700">{catalogError}</p>}
-      {catalogChecked && <p role="status" className="text-xs text-emerald-700">{isEn ? 'Model list loaded. No text was generated. Quota and generation access may differ by model.' : 'Đã tải danh sách; chưa sinh văn bản. Quota và quyền tạo nội dung phụ thuộc model.'}</p>}
+      {catalogChecked && <p role="status" className="text-xs text-zinc-600">{isEn ? 'List loaded. Use Check response to test the selected model.' : 'Đã tải danh sách. Bấm Thử phản hồi để kiểm tra model đã chọn.'}</p>}
+      {catalogChecked && value.model && !models.includes(value.model) && <p role="alert" className="text-sm text-amber-700">{isEn ? 'This model was not found. Choose a model from the list or check its exact ID in Advanced.' : 'Không tìm thấy model này. Chọn từ danh sách hoặc kiểm tra tên chính xác trong phần Nâng cao.'}</p>}
       <details className="text-sm text-zinc-700">
-        <summary className="cursor-pointer">{isEn ? 'Model options' : 'Tùy chọn model'}</summary>
+        <summary className="cursor-pointer">{isEn ? 'Advanced' : 'Nâng cao'}</summary>
+        <p className="mt-2 break-all text-xs text-zinc-500">API: {value.base_url}</p>
+        <button type="button" className="mt-2 text-xs underline" onClick={()=>setManualModel(v=>!v)}>{manualModel ? (isEn ? 'Choose from list' : 'Chọn từ danh sách') : (isEn ? 'Enter model ID manually' : 'Nhập tên model thủ công')}</button>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           <label>{isEn ? 'Structured data compatibility' : 'Tương thích dữ liệu có cấu trúc'}
             <select className={inputClass} value={value.structured_output_mode || 'json_object'} onChange={event=>update({structured_output_mode:event.target.value as ModelConnectionInput['structured_output_mode']})}>
               <option value="json_object">{isEn ? 'JSON · broad compatibility' : 'JSON · tương thích rộng'}</option>
               <option value="json_schema">{isEn ? 'JSON Schema · supported endpoints' : 'JSON Schema · endpoint có hỗ trợ'}</option>
+              <option value="prompt_json">{isEn ? 'Prompt JSON · local validation' : 'JSON bằng chỉ dẫn · kiểm tra tại hệ thống'}</option>
             </select>
           </label>
           <label>{isEn?'Output token limit':'Giới hạn token đầu ra'}
@@ -185,7 +194,7 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
             </button>}
           </label>
           <label>{isEn?'Reasoning effort':'Mức suy luận'}
-            <select className={inputClass} disabled={value.base_url !== 'https://openrouter.ai/api/v1'} title="OpenRouter" value={value.reasoning_effort || 'low'} onChange={event=>update({reasoning_effort:event.target.value as ModelConnectionInput['reasoning_effort']})}>
+            <select className={inputClass} disabled={!['https://openrouter.ai/api/v1','https://generativelanguage.googleapis.com/v1beta/openai'].includes(value.base_url)} value={value.reasoning_effort || 'low'} onChange={event=>update({reasoning_effort:event.target.value as ModelConnectionInput['reasoning_effort']})}>
               <option value="none">{isEn?'Off (if supported)':'Tắt (nếu model hỗ trợ)'}</option>
               <option value="low">{isEn?'Low':'Thấp'}</option><option value="medium">{isEn?'Medium':'Vừa'}</option><option value="high">{isEn?'High':'Cao'}</option>
             </select>

@@ -11,8 +11,8 @@ const catalog=[
   {id:'fixture/small:free',free:true,max_output_tokens:8192,supports_json_schema:false},
   {id:'fixture/large:free',free:true,max_output_tokens:460800,supports_json_schema:true},
 ];
-async function panel(model='openrouter/free') {
-  let value={api_key:'fake-not-real',base_url:root,model,input_price_per_million:0,output_price_per_million:0,output_token_limit:8192};
+async function panel(model='openrouter/free',selectedRoot=root,rows=catalog) {
+  let value={api_key:'fake-not-real',base_url:selectedRoot,model,input_price_per_million:0,output_price_per_million:0,output_token_limit:8192};
   let cursor=0; const states=[],deps=[],effects=[];
   const hooks={
     useState(initial){const i=cursor++; if(!(i in states)) states[i]=initial;return[states[i],v=>{states[i]=typeof v==='function'?v(states[i]):v;}];},
@@ -22,7 +22,7 @@ async function panel(model='openrouter/free') {
   const context={exports:{},require(name){
     if(name==='react')return hooks;
     if(name==='react/jsx-runtime')return require(name);
-    if(name==='@/lib/api')return{api:{tasks:{modelConnectionOptions:async()=>({base_urls:[root]})},settings:{discoverModels:async()=>({models:catalog})}}};
+    if(name==='@/lib/api')return{api:{tasks:{modelConnectionOptions:async()=>({base_urls:[selectedRoot]})},settings:{discoverModels:async()=>({models:rows})}}};
     throw Error(name);
   }};
   vm.runInNewContext(code,context);
@@ -51,4 +51,15 @@ test('model maximum button restores advertised maximum after manual editing',asy
   const input=nodes(p.render()).find(n=>n.type==='input'&&n.props.type==='number'&&n.props.value===460800);
   input.props.onChange({target:{value:'16384'}});assert.equal(p.value().output_token_limit,16384);
   button(p.render(),'Use model maximum').props.onClick();assert.equal(p.value().output_token_limit,460800);
+});
+
+test('invalid Google model names are flagged; selecting a catalog model sets its compatible output mode',async()=>{
+  const google='https://generativelanguage.googleapis.com/v1beta/openai';
+  const rows=[{id:'gemma-fixture',display_name:'Gemma fixture',free:null,max_output_tokens:32768,recommended_output_mode:'prompt_json'}];
+  const p=await panel('geminiTypo',google,rows);await button(p.render(),'Load available models').props.onClick();
+  assert.ok(text(p.render()).includes('This model was not found'));
+  const select=nodes(p.render()).find(n=>n.type==='select'&&n.props.value==='geminiTypo');
+  assert.ok(text(select).includes('Gemma fixture'));
+  select.props.onChange({target:{value:'gemma-fixture'}});
+  assert.equal(p.value().structured_output_mode,'prompt_json');assert.equal(p.value().output_token_limit,32768);
 });

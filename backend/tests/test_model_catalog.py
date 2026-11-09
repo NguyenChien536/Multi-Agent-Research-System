@@ -75,11 +75,18 @@ async def test_free_router_keeps_advertised_schema_capability(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_google_resource_names_become_completion_model_ids(monkeypatch):
-    def handler(_):
-        return httpx.Response(200,json={'data':[{'id':'models/gemini-test-flash'}, {'id':'models/lyria-test'}, {'id':'models/gemini-test-image'}]})
+    def handler(request):
+        assert str(request.url)=='https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000'
+        assert request.headers['x-goog-api-key']==KEY
+        assert KEY not in str(request.url)
+        return httpx.Response(200,json={'models':[
+            {'name':'models/'+name,'supportedGenerationMethods':['generateContent'],'outputTokenLimit':65536}
+            for name in ['gemini-test-flash','lyria-test','gemini-test-image','gemini-test-pro','gemini-test-omni']
+        ]})
     catalog_transport(monkeypatch,handler)
     result=await model_catalog.discover_models('https://generativelanguage.googleapis.com/v1beta/openai',KEY)
-    assert result['models']==[{'id':'gemini-test-flash','free':None,'supports_json_schema':False}]
+    assert result['models']==[{'id':'gemini-test-flash','free':None,'supports_json_schema':True,
+        'max_output_tokens':65536,'recommended_output_mode':'json_schema'}]
 
 
 @pytest.mark.asyncio

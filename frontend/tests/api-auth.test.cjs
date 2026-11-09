@@ -64,6 +64,17 @@ test('dataset upload shares session expiry handling', async()=>{
   assert.equal(c.redirects.length,1);
 });
 
+test('response checks send owner credentials in an authenticated POST body, never in the URL',async()=>{
+  const c=client();
+  const payload={base_url:'https://api.groq.com/openai/v1',model:'fixture',api_key:'fake-check-key',generate:true,free_tier_confirmed:true};
+  await c.api.settings.checkConnection(payload);
+  assert.ok(c.requests[0].url.endsWith('/settings/model-connection/check'));
+  assert.ok(!c.requests[0].url.includes(payload.api_key));
+  assert.equal(c.requests[0].method,'POST');
+  assert.equal(c.requests[0].headers.get('Authorization'),'Bearer test-token');
+  assert.deepEqual(JSON.parse(c.requests[0].body),payload);
+});
+
 test('profile edits use the authenticated current-user route and preserve the session', async () => {
   const updated = { id: 'owner-id', username: 'new-name', email: 'new@example.com', full_name: 'New Name' };
   const c = client({ response: updated });

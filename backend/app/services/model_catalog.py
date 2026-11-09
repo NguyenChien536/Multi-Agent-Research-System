@@ -50,9 +50,12 @@ async def free_models():
 
 async def discover_models(base_url: str, api_key: str, free_only: bool = True):
     root = validate_api_root(base_url)
+    google = root == 'https://generativelanguage.googleapis.com/v1beta/openai'
+    url = 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000' if google else root + '/models'
+    headers = {'x-goog-api-key': api_key} if google else {'Authorization': 'Bearer ' + api_key}
     try:
         async with httpx.AsyncClient(timeout=15, follow_redirects=False, trust_env=False) as client:
-            async with client.stream('GET', root + '/models', headers={'Authorization': 'Bearer ' + api_key}) as response:
+            async with client.stream('GET', url, headers=headers) as response:
                 if response.status_code != 200:
                     # Never forward provider bodies, request headers or secret-bearing URLs.
                     code = response.status_code
@@ -74,20 +77,27 @@ async def discover_models(base_url: str, api_key: str, free_only: bool = True):
         raise HTTPException(502, 'PROVIDER_UNAVAILABLE: Could not connect to the selected API service.') from None
     except (ValueError, TypeError):
         raise HTTPException(502, 'MODEL_CATALOG_UNAVAILABLE: The service returned an invalid model list.') from None
-    if not isinstance(payload, dict) or not isinstance(payload.get('data'), list):
+    entries = payload.get('models' if google else 'data') if isinstance(payload, dict) else None
+    if not isinstance(entries, list):
         raise HTTPException(502, 'MODEL_CATALOG_UNAVAILABLE: The service returned an unsupported model list.')
     models = {}
-    for item in payload['data']:
+    for item in entries:
         if not isinstance(item, dict):
             continue
-        name = item.get('id')
-        if isinstance(name, str) and root == 'https://generativelanguage.googleapis.com/v1beta/openai':
+        name = item.get('name') if google else item.get('id')
+        if isinstance(name, str) and google:
             # Google's compatibility catalog returns resource names; completion
             # requests and Settings use the model ID, without the models/ prefix.
             name = name.removeprefix('models/')
             if not name.startswith(('gemini-', 'gemma-')):
                 continue
-            if any(word in name for word in ('-live', 'computer-use', 'robotics', 'nano-banana', 'customtools')):
+            if 'generateContent' not in (item.get('supportedGenerationMethods') or []):
+                continue
+            if any(word in name for word in ('-live', 'computer-use', 'robotics', 'nano-banana', 'customtools', 'omni')):
+                continue
+            # These are models with a free-tier offering, not a guarantee about
+            # the account's billing tier or remaining project quota.
+            if free_only and not (name.startswith('gemma-') or 'flash' in name):
                 continue
         if not isinstance(name, str) or not MODEL_ID.fullmatch(name) or api_key in name:
             continue
@@ -103,9 +113,15 @@ async def discover_models(base_url: str, api_key: str, free_only: bool = True):
             if not (free and (name.endswith(':free') or name == 'openrouter/free')):
                 continue
         models[name] = {'id': name, 'free': free if pricing else None,
-                        'supports_json_schema': 'structured_outputs' in (item.get('supported_parameters') or [])}
-        if capacity := output_capacity(item):
+                        'supports_json_schema': name.startswith('gemini-') if google else 'structured_outputs' in (item.get('supported_parameters') or [])}
+        capacity = item.get('outputTokenLimit') if google else output_capacity(item)
+        if isinstance(capacity, int) and not isinstance(capacity, bool) and 1024 <= capacity <= 1_000_000:
             models[name]['max_output_tokens'] = capacity
+        if google:
+            models[name]['recommended_output_mode'] = 'json_schema' if name.startswith('gemini-') else 'prompt_json'
+        title = item.get('displayName') if google else item.get('name')
+        if isinstance(title, str) and title.strip() and api_key not in title:
+            models[name]['display_name'] = title.strip()[:200]
     if root == 'https://openrouter.ai/api/v1' and free_only:
         models.setdefault('openrouter/free', {'id': 'openrouter/free', 'free': True})
     if not models:

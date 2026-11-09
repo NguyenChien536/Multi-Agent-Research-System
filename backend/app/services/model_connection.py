@@ -8,7 +8,7 @@ import contextvars
 import hashlib
 import json
 import asyncio
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
 from typing import Literal
@@ -39,7 +39,7 @@ class ModelConnectionInput(BaseModel):
     output_price_per_million: float = Field(default=0, ge=0, le=1000, allow_inf_nan=False)
     output_token_limit: int = Field(default=32768, ge=1024, le=1_000_000)
     reasoning_effort: Literal['none', 'low', 'medium', 'high'] = 'low'
-    structured_output_mode: Literal['json_object', 'json_schema'] = 'json_object'
+    structured_output_mode: Literal['json_object', 'json_schema', 'prompt_json'] = 'json_object'
 
     @field_validator("base_url")
     @classmethod
@@ -135,6 +135,19 @@ def current_connection():
     return _connection.get()
 
 
+@asynccontextmanager
+async def temporary_connection_scope(connection):
+    """Use an owner-authorized Settings probe without persisting credentials."""
+    token = _connection.set(connection)
+    try:
+        yield connection
+    finally:
+        try:
+            await connection.aclose()
+        finally:
+            _connection.reset(token)
+
+
 def _cipher():
     key = hashlib.sha256(("synthia/task-model/v1\0" + settings.APP_SECRET_KEY).encode()).digest()
     return Fernet(base64.urlsafe_b64encode(key))
@@ -199,9 +212,6 @@ async def reset_connection_async(token):
         _connection.reset(token)
 
 
-from contextlib import asynccontextmanager
-
-
 @asynccontextmanager
 async def async_connection_scope(config, task_id, user_id):
     token = activate_connection(config, task_id, user_id)
@@ -236,6 +246,10 @@ def build_connection_client(connection: ModelConnection):
         extra["reasoning"] = ({"enabled": False} if connection.reasoning_effort == 'none' else {"effort": connection.reasoning_effort, "exclude": True})
     if connection.base_url == "https://openrouter.ai/api/v1" and connection.input_price_per_million == 0 and connection.output_price_per_million == 0:
         extra["provider"] = {"max_price": {"prompt": 0, "completion": 0, "request": 0}, "require_parameters": True}
+    if connection.base_url == 'https://generativelanguage.googleapis.com/v1beta/openai' and connection.model.startswith('gemini-'):
+        # Gemini 3 reasoning cannot be disabled. Its compatibility API accepts
+        # low/medium/high; an omitted setting can use expensive default thinking.
+        extra['reasoning_effort'] = 'low' if connection.reasoning_effort == 'none' else connection.reasoning_effort
     # No environment key, global cache, redirect or provider fallback is used.
     client = ChatOpenAI(model=connection.model, api_key=connection.api_key, base_url=connection.base_url,
         max_retries=0, timeout=settings.PROVIDER_CALL_TIMEOUT_SECONDS, cache=False,

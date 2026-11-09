@@ -67,8 +67,10 @@ async function fetcher<T>(endpoint: string, options?: RequestInit, responseKind:
 
 export const api = {
   settings: {
+    checkConnection: (value: Omit<import('../types').ModelConnectionInput, 'api_key'> & {api_key?: string; task_id?: string; generate?: boolean; free_tier_confirmed?: boolean}) =>
+      fetcher<import('../types').ModelConnectionCheck>('/settings/model-connection/check', {method: 'POST', body: JSON.stringify(value)}),
     discoverModels: (value: {base_url: string; api_key?: string; task_id?: string; free_only?: boolean}) =>
-      fetcher<{models: Array<{id: string; free: boolean | null; supports_json_schema?: boolean; max_output_tokens?: number}>; check: string; generation_calls: number}>('/settings/model-connection/models', {method: 'POST', body: JSON.stringify(value)}),
+      fetcher<{models: Array<{id: string; display_name?: string; free: boolean | null; supports_json_schema?: boolean; recommended_output_mode?: import('../types').ModelConnectionInput['structured_output_mode']; max_output_tokens?: number}>; check: string; generation_calls: number}>('/settings/model-connection/models', {method: 'POST', body: JSON.stringify(value)}),
     getModelConnection: () => fetcher<{connection: (Omit<import('../types').ModelConnectionInput, 'api_key'> & {has_key: boolean}) | null}>('/settings/model-connection', { cache: 'no-store' }),
     saveModelConnection: (value: Omit<import('../types').ModelConnectionInput, 'api_key'> & {api_key?: string}) =>
       fetcher<{connection: Omit<import('../types').ModelConnectionInput, 'api_key'> & {has_key: boolean}}>('/settings/model-connection', {method: 'PUT', body: JSON.stringify(value)}),

@@ -105,6 +105,8 @@ def compatible_structured_output(model_name: str, model: Any, schema: Any):
         body = {**(getattr(model, 'extra_body', None) or {}), 'response_format': {'type': 'json_object'}}
         from app.services.model_connection import current_connection
         connection = current_connection()
+        if connection and connection.structured_output_mode == 'prompt_json':
+            body.pop('response_format', None)
         if connection and connection.structured_output_mode == 'json_schema' and supports_strict_schema(schema.model_json_schema()):
             body['response_format'] = {'type': 'json_schema', 'json_schema': {
                 'name': schema.__name__[:64], 'strict': True,

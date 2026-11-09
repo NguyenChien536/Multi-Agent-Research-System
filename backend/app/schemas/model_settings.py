@@ -12,7 +12,13 @@ class ConnectionUpdate(BaseModel):
     output_price_per_million: float = Field(default=0, ge=0, le=1000, allow_inf_nan=False)
     output_token_limit: int = Field(default=32768, ge=1024, le=1_000_000)
     reasoning_effort: Literal['none', 'low', 'medium', 'high'] = 'low'
-    structured_output_mode: Literal['json_object', 'json_schema'] = 'json_object'
+    structured_output_mode: Literal['json_object', 'json_schema', 'prompt_json'] = 'json_object'
+
+
+class ConnectionCheck(ConnectionUpdate):
+    task_id: uuid.UUID | None = None
+    generate: bool = False
+    free_tier_confirmed: bool = False
 
 
 class ModelCatalogRequest(BaseModel):
