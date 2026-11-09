@@ -194,22 +194,8 @@ async def get_research_task(
     if not task:
         raise HTTPException(status_code=404, detail="Research task not found")
     response = ResearchTaskResponse.model_validate(task)
-    if task.status == 'FAILED':
-        from app.models.agent_run import AgentRun
-        from app.services.public_errors import public_error
-        failure = await db.scalar(select(AgentRun).where(
-            AgentRun.research_task_id == task.id,
-            AgentRun.attempt_number == task.attempt_number,
-            AgentRun.status == 'FAILED',
-        ).order_by(AgentRun.started_at.desc()).limit(1))
-        if failure:
-            response.latest_error = public_error(failure.error_message)
-            response.failed_agent = failure.agent_name
-        else:
-            saved_failure = (task.budget_config or {}).get('_last_failure') or {}
-            if saved_failure.get('attempt_number') == task.attempt_number:
-                response.latest_error = public_error(saved_failure.get('message'))
-                response.failed_agent = task.current_step
+    from app.services.public_errors import task_error_summary
+    response.latest_error, response.failed_agent = await task_error_summary(db, task)
     return response
 
 

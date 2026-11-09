@@ -48,3 +48,9 @@ test('invalid structured output does not assume an incompatible model or invalid
   assert.doesNotMatch(en, /Try a JSON-compatible model/);
   assert.match(researchErrorText('MODEL_OUTPUT_TRUNCATED: JSON response was cut off',true), /output token limit/);
 });
+
+test('active workflow time limit is distinct from provider timeout and output token limits', () => {
+  assert.match(researchErrorText('TASK_TIME_LIMIT: active processing exhausted', true), /adding tokens does not add time/);
+  assert.match(researchErrorText('TASK_TIME_LIMIT: active processing exhausted', false), /tăng token không tăng thời gian/);
+  assert.match(researchErrorText('PROVIDER_TIMEOUT', true), /Provider response timed out/);
+});

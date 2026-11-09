@@ -118,13 +118,19 @@ class BudgetedFallbackLLM:
         # Authentication/quota/invalid-output errors never trigger this pass.
         for index, (model_name, model) in enumerate(self.models * 2):
             retry_hint = ''
+            expanded_output = None
             if index >= len(self.models):
                 from app.services.public_errors import is_transient_provider_error
                 from app.services.structured_output import StructuredOutputFailure
                 repairable = self.structured_schema is not None and isinstance(last_error, StructuredOutputFailure) and str(last_error).startswith('MODEL_INVALID_JSON:')
-                if not is_transient_provider_error(last_error) and not repairable:
+                if context and model_name.startswith('byok:') and self.structured_schema is not None and isinstance(last_error, StructuredOutputFailure) and str(last_error).startswith('MODEL_OUTPUT_TRUNCATED:'):
+                    from app.services.model_connection import current_connection
+                    connection = current_connection()
+                    if connection and connection.output_token_limit > context['output_tokens']:
+                        expanded_output = min(connection.output_token_limit, context['output_tokens'] * 2)
+                if not is_transient_provider_error(last_error) and not repairable and expanded_output is None:
                     break
-                if repairable:
+                if repairable or expanded_output is not None:
                     retry_hint = render_prompt('structured_output_retry')
                 else:
                     await asyncio.sleep(2)
@@ -148,7 +154,7 @@ class BudgetedFallbackLLM:
                 except Exception:
                     pass
             if context:
-                call_output = context["output_tokens"]
+                call_output = expanded_output or context["output_tokens"]
                 if model_name.startswith('byok:'):
                     from app.services.provider_budget import personal_output_capacity
                     call_output = await personal_output_capacity(context['task_id'], call_output)
@@ -381,8 +387,12 @@ async def invoke_llm_with_budget(
             limits = [llm.output_limits.get(name) or getattr(model, 'max_tokens', None)
                       for name, model in llm.models]
             numeric_limits = [limit for limit in limits if isinstance(limit, int) and not isinstance(limit, bool)]
-            context["output_tokens"] = max(numeric_limits) if numeric_limits else max(
-                output_tokens, connection.output_token_limit if connection else 8192)
+            selected_ceiling = max(numeric_limits) if numeric_limits else (
+                connection.output_token_limit if connection else 8192)
+            # A model maximum is a ceiling, not the size to allocate to every
+            # short JSON/group request. Preserve capacity for the rest of the
+            # paper, including conservative accounting after a timeout.
+            context["output_tokens"] = min(selected_ceiling, max(output_tokens, 16384))
         token = _BUDGET_CALL_CONTEXT.set(context)
         try:
             response = await llm.ainvoke(messages)
@@ -1654,7 +1664,7 @@ async def writer_node(state: ResearchState) -> Dict[str, Any]:
     word_target, output_limit = writing_limits(contract, length)
     from app.services.model_connection import current_connection
     if connection := current_connection():
-        output_limit = connection.output_token_limit
+        output_limit = min(connection.output_token_limit, max(output_limit, 16384))
     if isinstance(llm, BudgetedFallbackLLM):
         for _, model in llm.models:
             if hasattr(model, "max_output_tokens"):
@@ -1895,7 +1905,7 @@ async def critic_node(state: ResearchState) -> Dict[str, Any]:
     critic_output_tokens = 2048 if critic_contract.get("evidence_review_policy") else 768
     from app.services.model_connection import current_connection
     if connection := current_connection():
-        critic_output_tokens = connection.output_token_limit
+        critic_output_tokens = min(connection.output_token_limit, 16384)
     base_llm = get_fast_llm()
     if isinstance(base_llm, BudgetedFallbackLLM):
         for _, client in base_llm.models:

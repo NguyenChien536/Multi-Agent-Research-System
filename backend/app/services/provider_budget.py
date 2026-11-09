@@ -54,7 +54,7 @@ def token_allowance_summary(task) -> dict:
     reserved_out = sum(int(v.get('output_tokens', 0)) for v in usage['reservations'].values())
     remaining_in = max(0, inputs - int(usage.get('input_tokens', 0)) - reserved_in)
     remaining_out = max(0, outputs - int(usage.get('output_tokens', 0)) - reserved_out)
-    call_output = (((config.get('_llm_connection') or {}).get('profile') or {}).get('output_token_limit') or 8192)
+    call_output = min(16384, (((config.get('_llm_connection') or {}).get('profile') or {}).get('output_token_limit') or 8192))
     eligible = getattr(task, 'status', '') == 'FAILED' or (
         getattr(task, 'status', '') == 'NEEDS_REVIEW' and getattr(task, 'current_step', None) == 'BUDGET_LIMIT')
     other_limits_ok = (usage.get('llm_calls', 0) < calls and usage.get('cost_usd', 0) < cost

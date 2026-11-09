@@ -17,6 +17,8 @@ export interface ResearchMonitor {
   research_type: string;
   status: string;
   current_step: string | null;
+  latest_error?: string | null;
+  failed_agent?: string | null;
   current_iteration: number;
   attempt_number: number;
   created_at: string;

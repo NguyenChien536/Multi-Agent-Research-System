@@ -12,7 +12,7 @@ from app.models.task import ResearchTask
 from app.schemas.model_settings import ConnectionUpdate
 from app.services import model_catalog
 from app.services.model_connection import ModelConnectionInput, build_connection_client, async_connection_scope, current_connection, seal_connection
-from app.services.provider_budget import ProviderBudgetExceeded, personal_output_capacity, reserve_provider_call
+from app.services.provider_budget import ProviderBudgetExceeded, personal_output_capacity, reserve_provider_call, token_allowance_summary
 from tests.test_model_catalog import catalog_transport
 from tests.test_provider_budget import create_running_task, delete_test_user
 
@@ -62,8 +62,8 @@ async def test_output_preview_subtracts_usage_and_in_flight_reservations_without
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('structured', [False,True])
-async def test_large_limit_is_clamped_on_real_wire_and_reservation_for_each_attempt(structured):
+@pytest.mark.parametrize('structured,truncated_first', [(False,False),(True,False),(True,True)])
+async def test_large_limit_is_clamped_on_real_wire_and_reservation_for_each_attempt(structured,truncated_first):
     tid,uid=await create_running_task()
     class Answer(BaseModel):
         answer: str
@@ -73,12 +73,13 @@ async def test_large_limit_is_clamped_on_real_wire_and_reservation_for_each_atte
     seen=[]
     def handler(request):
         body=json.loads(request.content); seen.append(body)
-        assert body.get('max_completion_tokens',body.get('max_tokens')) == 50000
+        cut_off = truncated_first and len(seen)==1
+        assert body.get('max_completion_tokens',body.get('max_tokens')) == (32768 if len(seen)==2 else 16384)
         assert body['provider']['max_price']['completion'] == 0
         if structured: assert body['response_format']['type']=='json_schema'
         return httpx.Response(200,json={'id':'capacity-fixture','object':'chat.completion','created':1,'model':'fixture/max:free',
-            'choices':[{'index':0,'message':{'role':'assistant','content':'{"answer":"ok"}'},'finish_reason':'stop'}],
-            'usage':{'prompt_tokens':100,'completion_tokens':12,'total_tokens':112}})
+            'choices':[{'index':0,'message':{'role':'assistant','content':'{"answer":"ok"}'},'finish_reason':'length' if cut_off else 'stop'}],
+            'usage':{'prompt_tokens':100,'completion_tokens':16384 if cut_off else 12,'total_tokens':16484 if cut_off else 112}})
     try:
         async with AsyncSessionLocal() as db:
             task=await db.get(ResearchTask,tid); task.budget_config={**task.budget_config,**config}; await db.commit()
@@ -94,10 +95,20 @@ async def test_large_limit_is_clamped_on_real_wire_and_reservation_for_each_atte
             result=await invoke_llm_with_budget({'task_id':str(tid),'attempt_number':1,'enforce_provider_budget':True},llm,
                 [HumanMessage(content='Reply with answer ok')],model_name=connection.model_tag)
             if structured: assert result.answer=='ok'
-        assert len(seen)==1
+        assert len(seen)==(2 if truncated_first else 1)
         async with AsyncSessionLocal() as db:
             task=await db.get(ResearchTask,tid); usage=task.budget_config['_provider_usage']
-            assert usage['output_tokens']==12 and usage['llm_calls']==1 and not usage['reservations']
+            assert usage['output_tokens']==(16396 if truncated_first else 12)
+            assert usage['llm_calls']==len(seen) and not usage['reservations']
             assert task.budget_config['max_output_tokens']==50000
     finally:
         await delete_test_user(uid)
+
+
+def test_maximum_model_ceiling_does_not_offer_token_extension_when_a_normal_group_fits():
+    from types import SimpleNamespace
+    task=SimpleNamespace(status='FAILED',current_step='WRITER',completed_at=None,budget_config={
+        '_llm_connection':{'profile':{'output_token_limit':460800}},'max_output_tokens':50000})
+    assert token_allowance_summary(task)['can_extend'] is False
+    task.budget_config['_provider_usage']={'output_tokens':40000,'reservations':{}}
+    assert token_allowance_summary(task)['can_extend'] is True

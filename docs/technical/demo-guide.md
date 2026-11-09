@@ -192,6 +192,10 @@ Từ hai lỗi nội dung trên, rendering policy v2 cho kế hoạch mới bổ
 
 Giới hạn phản hồi và hạn mức **cả bài** là hai thứ khác nhau: request chỉ dùng tối đa phần output allowance còn lại. Không tự tăng token tổng/tiền/lượt/thời gian hoặc reset usage. Bài cũ giữ snapshot riêng; muốn dùng cấu hình mới, mở **API & model → bài hiện tại → áp dụng mặc định** khi bài đã dừng.
 
+Mức tối đa của model là **trần cấu hình**. Hệ thống cấp dung lượng theo phần việc, thông thường tối đa 16.384 token cho một nhóm Writer/JSON; JSON bị cắt có tối đa một lần thử lại với trần gấp đôi nếu còn ngân sách. Không dành toàn bộ hạn mức bài cho một phản hồi. Một thử nghiệm request quá lớn đã gặp timeout và bị ghi nhận toàn reservation do không có usage; đó là lỗi kiểm tra được giữ lại, không phải bài đã hoàn tất.
+
+`TASK_TIME_LIMIT` nghĩa là hết thời gian hoạt động cả bài (mặc định tối đa 900 giây); thêm output token không giải quyết được. `PROVIDER_TIMEOUT` là một lần gọi dịch vụ phản hồi quá lâu và có thể tiếp tục nếu các hạn mức khác còn đủ. `MODEL_INVALID_JSON` nghĩa là kết quả không đúng cấu trúc yêu cầu, chưa đủ để kết luận key sai hay model không hỗ trợ JSON. Không tự động retry vô hạn để che các lỗi này.
+
 **Xóa bài:** mở **Thông tin & Cấu hình / Metadata**, kéo xuống **Vùng nguy hiểm**, chọn **Xóa bài nghiên cứu** và xác nhận. Bài bị ẩn ngay, dữ liệu riêng được đưa vào hàng đợi dọn bền vững; đây là xóa vĩnh viễn, không phải lưu trữ tạm.
 
 ### Ba bản thảo có thể mở để demo

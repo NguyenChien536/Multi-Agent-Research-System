@@ -406,8 +406,8 @@ export default function ResearchMonitorPage() {
                         </h3>
                       </div>
                       <p className="text-xs sm:text-sm text-zinc-700 leading-relaxed font-normal">
-                        {snapshot.status === 'FAILED'
-                          ? researchErrorText(snapshot.activities.find(activity => activity.has_error)?.error_summary, isEn)
+                        {snapshot.latest_error || snapshot.status === 'FAILED'
+                          ? researchErrorText(snapshot.latest_error || snapshot.activities.find(activity => activity.has_error)?.error_summary, isEn)
                           : action.text}
                       </p>
                     </div>

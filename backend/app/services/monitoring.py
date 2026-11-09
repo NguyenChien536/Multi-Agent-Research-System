@@ -99,9 +99,12 @@ async def research_snapshot(db: AsyncSession, task_id: uuid.UUID, user_id: uuid.
                                          func.coalesce(func.sum(AgentRun.input_tokens + AgentRun.output_tokens), 0))
                                   .where(AgentRun.research_task_id == task_id))).one()
         cost, tokens, reserved, accounting = float(totals[0]), int(totals[1]), 0.0, "AGENT_HISTORY"
+    from app.services.public_errors import task_error_summary
+    latest_error, failed_agent = await task_error_summary(db, task)
     return ResearchMonitorResponse(
         task_id=task.id, title=task.title, research_type=task.research_type, status=task.status,
         current_step=task.current_step, current_iteration=task.current_iteration,
+        latest_error=latest_error, failed_agent=failed_agent,
         attempt_number=task.attempt_number, created_at=task.created_at, updated_at=task.updated_at,
         completed_at=task.completed_at, observed_at=now,
         worker_lease_expired=(task.worker_lease_until <= now if task.worker_lease_until else None)

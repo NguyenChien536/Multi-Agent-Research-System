@@ -490,10 +490,17 @@ async def run_langgraph_workflow(task_id: str) -> dict:
             # 3. Kích hoạt (Invoke) Graph
             try:
                 async with _graph_for_worker() as graph:
-                    async with asyncio.timeout(await remaining_active_seconds(task.id)):
-                        final_state, _graph_config = await _invoke_checkpointed_graph(
-                            graph, initial_state, task, workflow_run, preloaded_dataset_csv
-                        )
+                    deadline = asyncio.timeout(await remaining_active_seconds(task.id))
+                    try:
+                        async with deadline:
+                            final_state, _graph_config = await _invoke_checkpointed_graph(
+                                graph, initial_state, task, workflow_run, preloaded_dataset_csv
+                            )
+                    except TimeoutError:
+                        if deadline.expired():
+                            from app.services.provider_budget import ProviderBudgetExceeded
+                            raise ProviderBudgetExceeded('TASK_TIME_LIMIT: Research active-time allowance is exhausted.') from None
+                        raise  # A provider timeout is a distinct recoverable failure.
 
                 pending_interrupts = (final_state or {}).get("__interrupt__", ())
                 interrupt_info = None
@@ -881,7 +888,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                 task.budget_config = pause_budget_config(task.budget_config, now=task.completed_at)
                 from app.services.public_errors import public_error
                 task.budget_config = {**(task.budget_config or {}), '_last_failure': {
-                    'attempt_number': claim_attempt, 'message': public_error(str(e)), 'step': task.current_step,
+                    'attempt_number': claim_attempt, 'message': public_error(str(e) or type(e).__name__), 'step': task.current_step,
                 }}
                 task.worker_lease_until = None
                 if isinstance(e, ProviderBudgetExceeded):
@@ -946,7 +953,7 @@ async def run_langgraph_workflow(task_id: str) -> dict:
                         failed_task.budget_config = pause_budget_config(failed_task.budget_config, now=failed_task.completed_at)
                         from app.services.public_errors import public_error
                         failed_task.budget_config = {**(failed_task.budget_config or {}), '_last_failure': {
-                            'attempt_number': claim_attempt, 'message': public_error(str(exc)), 'step': failed_task.current_step,
+                            'attempt_number': claim_attempt, 'message': public_error(str(exc) or type(exc).__name__), 'step': failed_task.current_step,
                         }}
                         failed_task.resume_action = None
                         failed_task.resume_payload = None
