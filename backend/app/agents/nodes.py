@@ -1794,9 +1794,12 @@ Requested edits: {state.get('revision_instructions')}
             structure=contract.get('structure_policy') or {}
             layout={s['heading']:{'compact':s['id'] in {'abstract','keywords'},
                 'minimum_subsections':(structure.get('sections',{}).get(s['id']) or {}).get('minimum_subsections',0),
+                'citation_required':bool(claims and (contract.get('rendering_policy') or {}).get('version',0)>=2
+                    and s['id'] in {'introduction','related_work','synthesis'}),
                 'expand_after':structure.get('expand_after_characters',600)} for s in contract['sections']}
             group_llm = llm.with_structured_output(group_schema(headings,
-                short_headings={s['heading'] for s in contract['sections'] if s['id'] == 'keywords'},layout=layout))
+                short_headings={s['heading'] for s in contract['sections'] if s['id'] == 'keywords'},layout=layout,
+                allowed_claim_ids={c['claim_id'] for c in claims}))
             value = await invoke_llm_with_budget(state, group_llm, messages, model_name=model_name, output_tokens=output_limit)
             return group_message(value, headings)
         async def write_groups():

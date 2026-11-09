@@ -13,7 +13,7 @@ class ManuscriptSectionIncomplete(ValueError):
         super().__init__('MANUSCRIPT_INCOMPLETE: A required writing group is incomplete; saved groups are retained.')
 
 
-def group_schema(headings, short_headings=(), layout=None):
+def group_schema(headings, short_headings=(), layout=None, allowed_claim_ids=None):
     """The transport owns section identities; the model supplies prose only."""
     def validate_body(body):
         if re.search(r'(?m)^#{1,2}\s', body) or (layout is not None and re.search(r'(?:^|\s)#{1,6}\s', body)):
@@ -21,6 +21,10 @@ def group_schema(headings, short_headings=(), layout=None):
         leftover = re.sub(r'\[\[(?:@claim:[0-9a-fA-F-]{36}|figure:[a-zA-Z0-9_-]+)\]\]', '', body)
         if layout is not None and '[[' in leftover:
             raise ValueError('Use only supplied claim/figure markers; do not invent manifest or metrics citations')
+        if allowed_claim_ids is not None:
+            cited = {m.lower() for m in re.findall(r'\[\[@claim:([0-9a-fA-F-]{36})\]\]', body)}
+            if cited - {str(value).lower() for value in allowed_claim_ids}:
+                raise ValueError('Copy only citation_marker identifiers supplied with the evidence')
         return body
 
     def validate_heading(heading):
@@ -35,7 +39,7 @@ def group_schema(headings, short_headings=(), layout=None):
 
     subsection = create_model('ManuscriptSubsection',
         heading=(Annotated[str, AfterValidator(validate_heading)], Field(min_length=3,max_length=140)),
-        body=(Annotated[str, AfterValidator(validate_body), AfterValidator(validate_subsection_body)], Field(min_length=50,description='Developed academic paragraphs, separate from the subsection title. No heading markup or invented internal citations.')))
+        body=(Annotated[str, AfterValidator(validate_body), AfterValidator(validate_subsection_body)], Field(min_length=50,description='Developed academic paragraphs with exact supplied citation_marker strings after source-backed assertions. Separate from the subsection title; no heading markup or invented citations.')))
 
     def validate_sections(value):
         if len(value.sections) != len(headings) or {s.heading for s in value.sections} != set(headings):
@@ -50,6 +54,8 @@ def group_schema(headings, short_headings=(), layout=None):
             if len(names)!=len(set(names)):
                 raise ValueError('Subsection titles must be distinct within their section')
             prose=section.body+' '.join(s.body for s in section.subsections)
+            if rule.get('citation_required') and not re.search(r'\[\[@claim:[0-9a-fA-F-]{36}\]\]', prose):
+                raise ValueError('This evidence-bearing section must retain exact supplied citation_marker strings in its prose')
             if len(prose)>=rule.get('expand_after',600) and len(section.subsections)<rule.get('minimum_subsections',0):
                 raise ValueError('Develop the required distinct analytical subsections')
         return value
