@@ -762,9 +762,9 @@ export default function WorkspacePage() {
   );
 
   return (
-    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-zinc-50 print:h-auto print:overflow-visible print:bg-white print:block">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-white print:h-auto print:overflow-visible print:bg-white print:block">
       {/* Top Header Bar */}
-      <div id="research-header-bar" className="min-h-16 px-6 py-3 border-b border-zinc-200 bg-white flex flex-wrap items-center justify-between gap-3 shrink-0 print:hidden">
+      <div id="research-header-bar" className="min-h-16 px-6 py-3 border-b border-stone-200/80 bg-white/90 backdrop-blur-md flex flex-wrap items-center justify-between gap-3 shrink-0 print:hidden">
         <div className="flex items-center gap-3 flex-1 basis-80 min-w-0">
           <button
             type="button"
@@ -772,7 +772,7 @@ export default function WorkspacePage() {
             aria-controls="toc-sidebar"
             aria-expanded={!isLeftSidebarCollapsed}
             aria-label={isEn ? 'Toggle contents' : 'Bật/tắt mục lục'}
-            className="flex items-center justify-center gap-1.5 px-2 py-2 border border-zinc-200 rounded-lg text-xs font-medium text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 transition-colors shrink-0"
+            className="flex items-center justify-center gap-1.5 px-2.5 py-1.5 border border-stone-200/90 rounded-full text-xs font-medium text-stone-700 hover:text-stone-950 hover:bg-stone-100 transition-colors shrink-0 shadow-2xs"
             title={isLeftSidebarCollapsed ? (isEn ? "Show table of contents" : "Hiện mục lục bài báo") : (isEn ? "Collapse table of contents" : "Thu gọn mục lục")}
           >
             {isLeftSidebarCollapsed ? <PanelLeft size={18} /> : <PanelLeftClose size={18} />}
@@ -876,8 +876,8 @@ export default function WorkspacePage() {
       <div className="flex flex-1 overflow-hidden flex-col lg:flex-row print:overflow-visible print:h-auto print:block">
         {/* Stages Sidebar */}
         {/* Left Sidebar: Table of Contents & Manuscript Details */}
-        <aside id="toc-sidebar" className={`${isLeftSidebarCollapsed ? 'hidden' : 'w-full lg:w-72 xl:w-80'} border-r border-zinc-200 bg-zinc-50/70 flex flex-col shrink-0 overflow-y-auto max-h-72 lg:max-h-none transition-all duration-200 print:hidden`}>
-          <div className="p-4 border-b border-zinc-200 flex items-center justify-between sticky top-0 bg-zinc-50/95 backdrop-blur z-10">
+        <aside id="toc-sidebar" className={`${isLeftSidebarCollapsed ? 'hidden' : 'w-full lg:w-72 xl:w-80'} border-r border-stone-200/80 bg-white flex flex-col shrink-0 overflow-y-auto max-h-72 lg:max-h-none transition-all duration-200 print:hidden`}>
+          <div className="p-4 border-b border-stone-200/80 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10">
             <div className="flex items-center gap-2">
               <ListFilter size={17} className="text-zinc-700" />
               <h2 className="font-bold text-sm sm:text-base uppercase tracking-wider text-zinc-900">
@@ -930,7 +930,7 @@ export default function WorkspacePage() {
                             h.level === 1 ? 'font-bold text-zinc-900 text-xs' :
                             h.level === 2 ? 'pl-4 font-semibold text-zinc-700 text-xs' :
                             'pl-6 text-zinc-500 text-[11px]'
-                          } hover:bg-zinc-200/70 hover:text-zinc-950 ${activeTocSlug === h.slug ? 'bg-white shadow-xs text-zinc-950 font-bold border-l-2 border-zinc-900' : ''}`}
+                          } hover:bg-zinc-200/70 hover:text-zinc-950 ${activeTocSlug === h.slug ? 'bg-stone-100 shadow-xs text-stone-950 font-bold border-l-2 border-stone-900' : ''}`}
                           title={h.title}
                         >
                           {h.title}
@@ -1338,13 +1338,13 @@ export default function WorkspacePage() {
             </div>
           )}
 
-                    <div id="research-tab-bar" className="flex border-b-2 border-zinc-200 px-4 sm:px-6 bg-zinc-50 shrink-0 gap-2 overflow-x-auto no-scrollbar print:hidden">
+                    <div id="research-tab-bar" className="flex border-b border-stone-200 px-4 sm:px-6 bg-white shrink-0 gap-2 overflow-x-auto no-scrollbar print:hidden">
             <button
               onClick={() => setActiveTab('report')}
               className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
                 activeTab === 'report'
                   ? 'border-zinc-950 text-zinc-950 bg-white font-extrabold shadow-xs'
-                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100/70 font-bold'
+                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-stone-100/60 font-bold'
               }`}
             >
               <FileText size={18} className={activeTab === 'report' ? 'text-zinc-950' : 'text-zinc-500'} />
@@ -1364,7 +1364,7 @@ export default function WorkspacePage() {
                 className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
                   activeTab === 'protocol'
                     ? 'border-zinc-950 text-zinc-950 bg-white font-extrabold shadow-xs'
-                    : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100/70 font-bold'
+                    : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-stone-100/60 font-bold'
                 }`}
               >
                 <FlaskConical size={18} className={activeTab === 'protocol' ? 'text-zinc-950' : 'text-zinc-500'} />
@@ -1378,7 +1378,7 @@ export default function WorkspacePage() {
                 className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
                   activeTab === 'experiments'
                     ? 'border-zinc-950 text-zinc-950 bg-white font-extrabold shadow-xs'
-                    : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100/70 font-bold'
+                    : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-stone-100/60 font-bold'
                 }`}
               >
                 <Cpu size={18} className={activeTab === 'experiments' ? 'text-zinc-950' : 'text-zinc-500'} />
@@ -1398,7 +1398,7 @@ export default function WorkspacePage() {
               className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
                 activeTab === 'sources'
                   ? 'border-zinc-950 text-zinc-950 bg-white font-extrabold shadow-xs'
-                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100/70 font-bold'
+                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-stone-100/60 font-bold'
               }`}
             >
               <Globe size={18} className={activeTab === 'sources' ? 'text-zinc-950' : 'text-zinc-500'} />
@@ -1417,7 +1417,7 @@ export default function WorkspacePage() {
               className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
                 activeTab === 'citations'
                   ? 'border-zinc-950 text-zinc-950 bg-white font-extrabold shadow-xs'
-                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100/70 font-bold'
+                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-stone-100/60 font-bold'
               }`}
             >
               <Layers size={18} className={activeTab === 'citations' ? 'text-zinc-950' : 'text-zinc-500'} />
@@ -1436,7 +1436,7 @@ export default function WorkspacePage() {
               className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
                 activeTab === 'runs'
                   ? 'border-zinc-950 text-zinc-950 bg-white font-extrabold shadow-xs'
-                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100/70 font-bold'
+                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-stone-100/60 font-bold'
               }`}
             >
               <Activity size={18} className={activeTab === 'runs' ? 'text-zinc-950' : 'text-zinc-500'} />
@@ -1455,7 +1455,7 @@ export default function WorkspacePage() {
               className={`px-5 py-3.5 text-base sm:text-[17px] border-b-2 -mb-[2px] whitespace-nowrap transition-all duration-150 flex items-center gap-2 ${
                 activeTab === 'details'
                   ? 'border-zinc-950 text-zinc-950 bg-white font-extrabold shadow-xs'
-                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-zinc-100/70 font-bold'
+                  : 'border-transparent text-zinc-600 hover:text-zinc-950 hover:bg-stone-100/60 font-bold'
               }`}
             >
               <Info size={18} className={activeTab === 'details' ? 'text-zinc-950' : 'text-zinc-500'} />
@@ -1463,7 +1463,7 @@ export default function WorkspacePage() {
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-zinc-50/60 print:overflow-visible print:h-auto print:p-0 print:m-0 print:bg-white print:block">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 bg-white print:overflow-visible print:h-auto print:p-0 print:m-0 print:bg-white print:block">
             {/* TAB 1: SCIENTIFIC PAPER */}
             <ResearchRecoveryNotice task={task} isEn={isEn} busy={isStarting} onContinue={() => void handleStartTask()} onExtend={() => void handleExtendAllowance()} />
             {task.writing_progress && !report && <p role="status" className="mb-4 text-sm text-zinc-700">
@@ -1685,7 +1685,7 @@ export default function WorkspacePage() {
                         </div>
 
                         {/* Publication Footer */}
-                        <div className="border-t border-zinc-200 bg-zinc-50/70 px-6 sm:px-10 py-5 text-xs text-zinc-500 flex flex-wrap items-center justify-between gap-4 print:bg-white print:px-0">
+                        <div className="border-t border-stone-200/60 bg-white px-6 sm:px-10 py-5 text-xs text-zinc-500 flex flex-wrap items-center justify-between gap-4 print:bg-white print:px-0">
                           <div>
                             <div className="font-medium text-zinc-700">Synthia Multi-Agent Research Platform</div>
                             <div>{isEn ? "AI-assisted draft linked to source passages; claims still require scientific review." : "Bản thảo có AI hỗ trợ, gắn với trích đoạn nguồn; luận điểm vẫn cần kiểm chứng khoa học."}</div>
@@ -2835,8 +2835,8 @@ export default function WorkspacePage() {
         </main>
 
         {/* Right Sidebar: Research Pipeline Stages */}
-        <aside id="stages-sidebar" className={`${isRightSidebarCollapsed ? 'hidden' : 'w-full lg:w-72 xl:w-80'} border-l border-zinc-200 bg-zinc-50/70 flex flex-col shrink-0 overflow-y-auto max-h-72 lg:max-h-none transition-all duration-200 print:hidden`}>
-          <div className="p-4 border-b border-zinc-200 flex items-center justify-between sticky top-0 bg-zinc-50/95 backdrop-blur z-10">
+        <aside id="stages-sidebar" className={`${isRightSidebarCollapsed ? 'hidden' : 'w-full lg:w-72 xl:w-80'} border-l border-stone-200/80 bg-white flex flex-col shrink-0 overflow-y-auto max-h-72 lg:max-h-none transition-all duration-200 print:hidden`}>
+          <div className="p-4 border-b border-stone-200/80 flex items-center justify-between sticky top-0 bg-white/95 backdrop-blur z-10">
             <div className="flex items-center gap-2">
               <Activity size={17} className="text-zinc-700" />
               <h2 className="font-bold text-sm sm:text-base uppercase tracking-wider text-zinc-900">
@@ -2931,7 +2931,7 @@ export default function WorkspacePage() {
           </div>
         </aside>
         {isRightSidebarCollapsed && (
-          <div className="hidden lg:flex w-12 shrink-0 flex-col items-center border-l border-zinc-200 bg-white py-3 print:hidden">
+          <div className="hidden lg:flex w-12 shrink-0 flex-col items-center border-l border-stone-200/80 bg-white py-3 print:hidden">
             <button type="button" aria-controls="stages-sidebar" aria-expanded={false}
               aria-label={isEn ? 'Open research pipeline' : 'Mở cột tiến trình nghiên cứu'}
               onClick={() => setIsRightSidebarCollapsed(false)}

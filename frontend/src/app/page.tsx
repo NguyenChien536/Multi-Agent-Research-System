@@ -258,23 +258,23 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fcfcfc] flex flex-col text-zinc-900 relative">
+    <div className="min-h-screen tavily-scenic-bg flex flex-col text-stone-900 relative">
       {/* Header */}
-      <header className="w-full px-6 py-4 flex justify-between items-center z-20 border-b border-zinc-200/80 bg-white/80 backdrop-blur-md">
+      <header className="w-full px-6 py-4 flex justify-between items-center z-20 border-b border-stone-200/80 bg-[#FAF8F5]/85 backdrop-blur-md">
         <div className="flex items-center gap-2.5 font-semibold text-lg tracking-tight">
-          <div className="w-7 h-7 rounded-lg bg-zinc-900 text-white flex items-center justify-center text-xs font-semibold">S</div>
-          <span className="text-zinc-900">Synthia</span>
+          <div className="w-8 h-8 rounded-xl bg-stone-900 text-white flex items-center justify-center text-sm font-bold shadow-2xs">S</div>
+          <span className="text-stone-950 font-bold text-lg tracking-tight">Synthia</span>
         </div>
 
         {/* Clean, Non-redundant Navbar */}
         <div className="flex items-center gap-2 sm:gap-3">
           {/* Quick Lang Switch */}
-          <div className="flex items-center border border-zinc-200 rounded-lg p-0.5 bg-zinc-50 text-xs">
+          <div className="flex items-center border border-stone-200 rounded-full p-0.5 bg-stone-100 text-xs font-semibold">
             <button
               type="button"
               onClick={() => setLanguage('en')}
               className={`px-2 py-0.5 rounded text-xs transition-colors ${
-                language === 'en' ? 'bg-white text-zinc-900 font-semibold shadow-2xs' : 'text-zinc-500 hover:text-zinc-800'
+                language === 'en' ? 'bg-white text-stone-900 font-semibold shadow-2xs rounded-full' : 'text-stone-600 hover:text-stone-900 rounded-full'
               }`}
               title="English (Default)"
             >
@@ -284,7 +284,7 @@ export default function Home() {
               type="button"
               onClick={() => setLanguage('vi')}
               className={`px-2 py-0.5 rounded text-xs transition-colors ${
-                language === 'vi' ? 'bg-white text-zinc-900 font-semibold shadow-2xs' : 'text-zinc-500 hover:text-zinc-800'
+                language === 'vi' ? 'bg-white text-stone-900 font-semibold shadow-2xs rounded-full' : 'text-stone-600 hover:text-stone-900 rounded-full'
               }`}
               title="Tiếng Việt"
             >
@@ -295,11 +295,11 @@ export default function Home() {
           {hasSession ? (
             <>
               {currentUser && (
-                <div className="hidden sm:flex items-center gap-2 px-2.5 py-1 rounded-full bg-zinc-100 border border-zinc-200 text-xs">
-                  <div className="w-5 h-5 rounded-full bg-zinc-800 text-white flex items-center justify-center font-medium text-[10px]">
+                <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-white/90 border border-stone-200/90 shadow-2xs text-xs">
+                  <div className="w-5 h-5 rounded-full bg-stone-900 text-white flex items-center justify-center font-bold text-[10px]">
                     {(currentUser.full_name || currentUser.username || 'U')[0].toUpperCase()}
                   </div>
-                  <span className="font-normal text-zinc-700 truncate max-w-[140px]">{currentUser.full_name || currentUser.username}</span>
+                  <span className="font-medium text-stone-800 truncate max-w-[140px]">{currentUser.full_name || currentUser.username}</span>
                 </div>
               )}
               <Button variant="outline" onClick={() => router.push('/settings')} className="text-xs h-8">Settings</Button>
@@ -322,10 +322,10 @@ export default function Home() {
       <main className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 z-10 max-w-4xl mx-auto w-full">
         <div className="w-full flex flex-col items-center gap-6 text-center animate-in fade-in slide-in-from-bottom-8 duration-700">
           <div className="flex flex-col items-center gap-2">
-            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-zinc-900">
+            <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-stone-950 max-w-3xl leading-[1.15]">
               {isEn ? 'What would you like to research today?' : 'Bạn muốn nghiên cứu gì hôm nay?'}
             </h1>
-            <p className="text-zinc-600 max-w-xl text-xs sm:text-sm leading-relaxed font-normal">
+            <p className="text-stone-600 max-w-2xl text-sm sm:text-base leading-relaxed font-normal">
               {isEn
                 ? 'Automated scientific research platform for literature review, empirical analysis, and evidence-backed writing.'
                 : 'Hệ thống nghiên cứu khoa học tự động hỗ trợ tổng quan tài liệu, phân tích thực nghiệm và soạn thảo bài báo có trích dẫn.'}
@@ -336,9 +336,9 @@ export default function Home() {
             <div className={`absolute inset-0 bg-zinc-900/5 rounded-3xl blur-xl transition-opacity duration-500 pointer-events-none -z-10 ${isFocused ? 'opacity-100' : 'opacity-0'}`} />
 
             {/* Main Prompt Input Box */}
-            <div className="relative bg-white rounded-2xl shadow-xs border border-zinc-200 p-3 transition-all duration-200 focus-within:border-zinc-400 flex flex-col gap-2 z-10">
+            <div className="relative bg-white/95 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-stone-200/90 p-4 transition-all duration-200 focus-within:border-stone-400 flex flex-col gap-3 z-10">
               <div className="flex items-start px-3 pt-2">
-                <Search className="text-zinc-400 shrink-0 mr-3 mt-3" size={20} />
+                <Search className="text-stone-400 shrink-0 mr-3 mt-3" size={20} />
                 <textarea
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
@@ -347,14 +347,14 @@ export default function Home() {
                   placeholder={isEn
                     ? "Enter research question or topic (e.g., Evaluating quantum key distribution resilience against side-channel attacks...)"
                     : "Nhập câu hỏi hoặc chủ đề nghiên cứu (VD: Phân tích ảnh hưởng của trí tuệ nhân tạo đối với an ninh phần mềm...)"}
-                  className="w-full resize-none border-0 bg-transparent py-2.5 text-sm sm:text-base text-zinc-800 placeholder:text-zinc-400 focus:outline-none focus:ring-0 min-h-[85px]"
+                  className="w-full resize-none border-0 bg-transparent py-2.5 text-base sm:text-lg text-stone-900 placeholder:text-stone-400 focus:outline-none focus:ring-0 min-h-[90px]"
                   disabled={isLoading}
                   rows={2}
                 />
               </div>
 
               {/* Bottom bar of prompt box */}
-              <div className="flex flex-wrap items-center justify-between border-t border-zinc-100 px-3 py-2 bg-zinc-50/70 -mx-3 -mb-3 rounded-b-2xl gap-2">
+              <div className="flex flex-wrap items-center justify-between border-t border-stone-100 px-4 py-2.5 bg-stone-50/70 -mx-4 -mb-4 rounded-b-3xl gap-2.5">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white border border-zinc-200 text-xs font-normal text-zinc-700 shadow-2xs">
                     {researchType === 'REVIEW' && <FileText size={13} className="text-zinc-500" />}
@@ -383,7 +383,7 @@ export default function Home() {
                 <button
                   type="submit"
                   disabled={isLoading || topic.trim().length < 10}
-                  className="flex items-center gap-2 bg-zinc-900 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-medium hover:bg-zinc-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-2xs ml-auto cursor-pointer"
+                  className="flex items-center gap-2 bg-stone-900 text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-medium hover:bg-stone-800 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-xs ml-auto cursor-pointer"
                 >
                   {isLoading ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -405,8 +405,8 @@ export default function Home() {
                 onClick={() => setResearchType('REVIEW')}
                 className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                   researchType === 'REVIEW'
-                    ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
-                    : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/70 text-zinc-900'
+                    ? 'border-stone-900 bg-white text-stone-950 shadow-md ring-2 ring-stone-900/10'
+                    : 'border-stone-200/90 bg-white/70 hover:bg-white hover:border-stone-300 text-stone-800 shadow-2xs'
                 }`}
               >
                 <div>
@@ -415,9 +415,9 @@ export default function Home() {
                       <FileText size={15} className={researchType === 'REVIEW' ? 'text-zinc-200' : 'text-zinc-500'} />
                       <span>{isEn ? 'Literature Review' : 'Tổng quan tài liệu'}</span>
                     </span>
-                    {researchType === 'REVIEW' && <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />}
+                    {researchType === 'REVIEW' && <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />}
                   </div>
-                  <p className={`text-xs leading-relaxed ${researchType === 'REVIEW' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                  <p className={`text-xs leading-relaxed ${'text-stone-600'}`}>
                     {isEn
                       ? 'Synthesizes published literature, compares findings, and structures a review manuscript.'
                       : 'Tổng quan tài liệu học thuật, đối chiếu chứng cứ và soạn thảo bài báo tổng quan lý thuyết.'}
@@ -431,8 +431,8 @@ export default function Home() {
                 onClick={() => setResearchType('EMPIRICAL_COMPUTATIONAL')}
                 className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                   researchType === 'EMPIRICAL_COMPUTATIONAL'
-                    ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
-                    : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/70 text-zinc-900'
+                    ? 'border-stone-900 bg-white text-stone-950 shadow-md ring-2 ring-stone-900/10'
+                    : 'border-stone-200/90 bg-white/70 hover:bg-white hover:border-stone-300 text-stone-800 shadow-2xs'
                 }`}
               >
                 <div>
@@ -441,9 +441,9 @@ export default function Home() {
                       <Cpu size={15} className={researchType === 'EMPIRICAL_COMPUTATIONAL' ? 'text-purple-300' : 'text-purple-600'} />
                       <span>{isEn ? 'Computational Empirical' : 'Thực nghiệm tính toán'}</span>
                     </span>
-                    {researchType === 'EMPIRICAL_COMPUTATIONAL' && <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />}
+                    {researchType === 'EMPIRICAL_COMPUTATIONAL' && <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />}
                   </div>
-                  <p className={`text-xs leading-relaxed ${researchType === 'EMPIRICAL_COMPUTATIONAL' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                  <p className={`text-xs leading-relaxed ${'text-stone-600'}`}>
                     {isEn
                       ? 'Executes automated baseline algorithms, statistical benchmarking, and reproducible routines.'
                       : 'Chạy quy trình tính toán tự động, mô hình baseline và đối sánh thực nghiệm kiểm chứng.'}
@@ -457,8 +457,8 @@ export default function Home() {
                 onClick={() => setResearchType('EMPIRICAL_HUMAN')}
                 className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                   researchType === 'EMPIRICAL_HUMAN'
-                    ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
-                    : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50/70 text-zinc-900'
+                    ? 'border-stone-900 bg-white text-stone-950 shadow-md ring-2 ring-stone-900/10'
+                    : 'border-stone-200/90 bg-white/70 hover:bg-white hover:border-stone-300 text-stone-800 shadow-2xs'
                 }`}
               >
                 <div>
@@ -467,9 +467,9 @@ export default function Home() {
                       <FlaskConical size={15} className={researchType === 'EMPIRICAL_HUMAN' ? 'text-emerald-300' : 'text-emerald-600'} />
                       <span>{isEn ? 'Fieldwork / User Data' : 'Thực nghiệm thực địa'}</span>
                     </span>
-                    {researchType === 'EMPIRICAL_HUMAN' && <CheckCircle2 size={15} className="text-emerald-400 shrink-0" />}
+                    {researchType === 'EMPIRICAL_HUMAN' && <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />}
                   </div>
-                  <p className={`text-xs leading-relaxed ${researchType === 'EMPIRICAL_HUMAN' ? 'text-zinc-300' : 'text-zinc-500'}`}>
+                  <p className={`text-xs leading-relaxed ${'text-stone-600'}`}>
                     {isEn
                       ? 'Formulates experimental protocol, then pauses for your real-world survey or sample dataset.'
                       : 'Thiết lập đề cương phương pháp, sau đó tạm dừng chờ nạp tập số liệu thực địa thực tế.'}
@@ -523,7 +523,7 @@ export default function Home() {
                         <div className="font-semibold text-xs sm:text-sm">
                           {isEn ? 'Fast (SHALLOW)' : 'Nhanh (SHALLOW)'}
                         </div>
-                        {researchDepth === 'SHALLOW' && <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />}
+                        {researchDepth === 'SHALLOW' && <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />}
                       </div>
                       <div className={`text-xs mt-0.5 ${researchDepth === 'SHALLOW' ? 'text-zinc-300' : 'text-zinc-500'}`}>
                         {isEn ? '1 iteration, ~5 sources' : '1 vòng nghiên cứu, ~5 nguồn'}
@@ -539,7 +539,7 @@ export default function Home() {
                         <div className="font-semibold text-xs sm:text-sm">
                           {isEn ? 'Standard (STANDARD)' : 'Tiêu chuẩn (STANDARD)'}
                         </div>
-                        {researchDepth === 'STANDARD' && <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />}
+                        {researchDepth === 'STANDARD' && <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />}
                       </div>
                       <div className={`text-xs mt-0.5 ${researchDepth === 'STANDARD' ? 'text-zinc-300' : 'text-zinc-500'}`}>
                         {isEn ? '2 iterations, ~10 sources' : '2 vòng nghiên cứu, ~10 nguồn'}
@@ -555,7 +555,7 @@ export default function Home() {
                         <div className="font-semibold text-xs sm:text-sm">
                           {isEn ? 'Comprehensive (DEEP)' : 'Chuyên sâu (DEEP)'}
                         </div>
-                        {researchDepth === 'DEEP' && <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />}
+                        {researchDepth === 'DEEP' && <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />}
                       </div>
                       <div className={`text-xs mt-0.5 ${researchDepth === 'DEEP' ? 'text-zinc-300' : 'text-zinc-500'}`}>
                         {isEn ? '3 iterations, ~20 sources' : '3 vòng nghiên cứu, ~20 nguồn'}
@@ -771,14 +771,14 @@ export default function Home() {
           </div>}
 
           {error && (
-            <p role="alert" className="text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-lg px-3.5 py-2 text-center">
+            <p role="alert" className="text-xs font-medium text-rose-800 bg-rose-50/90 border border-rose-200 rounded-xl px-4 py-2.5 text-center shadow-2xs">
               {error}
             </p>
           )}
 
           {/* Clean Scientific Features Badges (No decorative buzzwords) */}
           <div className="flex flex-wrap justify-center gap-2 text-xs text-zinc-600 mt-1">
-            <span className="px-2.5 py-1 rounded-full bg-zinc-100 border border-zinc-200 font-normal">
+            <span className="px-3.5 py-1.5 rounded-full bg-white/80 border border-stone-200/80 font-medium shadow-2xs text-stone-700">
               {isEn ? 'Academic literature synthesis' : 'Tổng hợp tài liệu học thuật'}
             </span>
             <span className="px-2.5 py-1 rounded-full bg-zinc-100 border border-zinc-200 font-normal">
@@ -790,6 +790,8 @@ export default function Home() {
           </div>
         </div>
       </main>
+      {/* Tavily-style scenic pastoral gradient artwork at bottom of viewport */}
+      <div className="tavily-bottom-scenic-accent absolute bottom-0 left-0 right-0 h-48 sm:h-64 pointer-events-none opacity-40 bg-gradient-to-t from-emerald-200/40 via-amber-100/20 to-transparent -z-10" />
     </div>
   );
 }

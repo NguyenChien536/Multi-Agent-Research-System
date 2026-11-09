@@ -275,7 +275,7 @@ export default function DashboardPage() {
   }, [tasks, totalTasks, totalTokensUsed, totalCostUSD, t]);
 
   return (
-    <main className="flex-1 h-full w-full overflow-y-auto bg-zinc-50/60 p-4 sm:p-6 lg:p-8">
+    <main className="flex-1 h-full w-full overflow-y-auto bg-white p-4 sm:p-6 lg:p-8">
       <div className="w-full max-w-[1720px] mx-auto space-y-6">
 
         {/* Main Dashboard Header */}
@@ -332,7 +332,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
 
           {/* Card 1: Total Tasks */}
-          <div className="p-4 sm:p-5 rounded-xl bg-white border border-zinc-200 shadow-2xs">
+          <div className="p-5 rounded-2xl bg-white border border-stone-200/90 shadow-xs">
             <div className="flex items-center justify-between text-zinc-600 mb-1.5">
               <span className="text-xs font-medium text-zinc-600 uppercase tracking-wider">
                 {t('kpi_total_tasks')}
@@ -342,7 +342,7 @@ export default function DashboardPage() {
             <div className="text-2xl sm:text-3xl font-bold font-mono text-zinc-900">
               {totalTasks}
             </div>
-            <div className="mt-2.5 pt-2.5 border-t border-zinc-100 flex items-center justify-between text-xs text-zinc-600">
+            <div className="mt-2.5 pt-2.5 border-t border-stone-100 flex items-center justify-between text-xs text-zinc-600">
               <span>{t('kpi_completion_rate')}:</span>
               <strong className="font-semibold text-emerald-700">
                 {completionRate}% ({completedCount}/{totalTasks})
@@ -351,7 +351,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Card 2: Active Pipeline */}
-          <div className="p-4 sm:p-5 rounded-xl bg-white border border-zinc-200 shadow-2xs">
+          <div className="p-5 rounded-2xl bg-white border border-stone-200/90 shadow-xs">
             <div className="flex items-center justify-between text-zinc-600 mb-1.5">
               <span className="text-xs font-medium text-blue-700 uppercase tracking-wider">
                 {t('kpi_in_progress')}
@@ -361,7 +361,7 @@ export default function DashboardPage() {
             <div className="text-2xl sm:text-3xl font-bold font-mono text-blue-700">
               {activeCount}
             </div>
-            <div className="mt-2.5 pt-2.5 border-t border-zinc-100 flex items-center justify-between text-xs text-zinc-600">
+            <div className="mt-2.5 pt-2.5 border-t border-stone-100 flex items-center justify-between text-xs text-zinc-600">
               <span>{t('kpi_needs_attention')}:</span>
               <strong className="font-semibold text-amber-700">
                 {attentionCount}
@@ -370,7 +370,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Card 3: Total Tokens */}
-          <div className="p-4 sm:p-5 rounded-xl bg-white border border-zinc-200 shadow-2xs">
+          <div className="p-5 rounded-2xl bg-white border border-stone-200/90 shadow-xs">
             <div className="flex items-center justify-between text-zinc-600 mb-1.5">
               <span className="text-xs font-medium text-zinc-600 uppercase tracking-wider">
                 {t('kpi_tokens_used')}
@@ -380,7 +380,7 @@ export default function DashboardPage() {
             <div className="text-2xl sm:text-3xl font-bold font-mono text-zinc-900">
               {formatNumber(totalTokensUsed, language)}
             </div>
-            <div className="mt-2.5 pt-2.5 border-t border-zinc-100 flex items-center justify-between text-xs text-zinc-600">
+            <div className="mt-2.5 pt-2.5 border-t border-stone-100 flex items-center justify-between text-xs text-zinc-600">
               <span>{t('kpi_avg_tokens')}:</span>
               <span className="font-mono text-zinc-800 font-medium">
                 ~{formatNumber(avgTokensPerTask, language)}
@@ -389,7 +389,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Card 4: Total Cost (USD) */}
-          <div className="p-4 sm:p-5 rounded-xl bg-white border border-zinc-200 shadow-2xs">
+          <div className="p-5 rounded-2xl bg-white border border-stone-200/90 shadow-xs">
             <div className="flex items-center justify-between text-zinc-600 mb-1.5">
               <span className="text-xs font-medium text-zinc-600 uppercase tracking-wider">
                 {t('kpi_total_cost')}
@@ -399,7 +399,7 @@ export default function DashboardPage() {
             <div className="text-2xl sm:text-3xl font-bold font-mono text-emerald-700">
               ${totalCostUSD.toFixed(4)}
             </div>
-            <div className="mt-2.5 pt-2.5 border-t border-zinc-100 flex items-center justify-between text-xs text-zinc-600">
+            <div className="mt-2.5 pt-2.5 border-t border-stone-100 flex items-center justify-between text-xs text-zinc-600">
               <span>{t('kpi_avg_cost')}:</span>
               <span className="font-mono text-zinc-800 font-medium">
                 ${avgCostPerTask.toFixed(4)}
@@ -410,10 +410,10 @@ export default function DashboardPage() {
         </div>
 
         {/* Main Research Tasks List & Controls */}
-        <section className="bg-white rounded-xl border border-zinc-200 shadow-2xs overflow-hidden" aria-label="Tasks List">
+        <section className="bg-white rounded-2xl border border-stone-200/90 shadow-xs overflow-hidden" aria-label="Tasks List">
 
           {/* Filter Bar & Controls */}
-          <div className="p-4 sm:p-5 border-b border-zinc-200 bg-zinc-50/50 space-y-3">
+          <div className="p-5 border-b border-stone-200/80 bg-white space-y-4">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
               <div>
                 <h2 className="font-semibold text-base text-zinc-900 flex items-center gap-2">
@@ -932,7 +932,7 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Status & Filter Toggle Action Bar */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs border-t border-zinc-100 pt-3 mt-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs border-t border-stone-100 pt-3 mt-1">
                       <div className="flex items-center gap-2.5">
                         <span className="inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-600" />
