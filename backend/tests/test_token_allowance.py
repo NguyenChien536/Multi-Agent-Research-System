@@ -38,9 +38,9 @@ def test_token_changes_cannot_lower_limits_repeat_or_exceed_caps(inputs,outputs)
     with pytest.raises(ValueError):increase_token_allowance({},inputs,outputs)
 
 
-@pytest.mark.parametrize('guard',[{'llm_calls':40},{'cost_usd':2.0},{'active_seconds':900}])
-def test_exhausted_non_token_guards_cannot_offer_token_extension(guard):
-    task=SimpleNamespace(status='NEEDS_REVIEW',current_step='BUDGET_LIMIT',completed_at=None,budget_config={'_provider_usage':usage(**guard)})
+@pytest.mark.parametrize('guard',[{'llm_calls':60},{'cost_usd':2.0},{'active_seconds':3600}])
+def test_absolute_non_token_guards_cannot_offer_further_extension(guard):
+    task=SimpleNamespace(status='NEEDS_REVIEW',current_step='BUDGET_LIMIT',completed_at=None,budget_config={'max_llm_calls':60,'timeout_seconds':3600,'_provider_usage':usage(**guard)})
     assert not token_allowance_summary(task)['can_extend']
 
 

@@ -65,7 +65,7 @@ def test_public_errors_explain_truncation_without_exposing_secrets():
 
 
 @pytest.mark.asyncio
-async def test_byok_budget_reserves_the_larger_output_limit(monkeypatch):
+async def test_byok_budget_reserves_the_requested_step_output_limit(monkeypatch):
     from unittest.mock import AsyncMock
     from app.agents import nodes
     from langchain_core.messages import AIMessage
@@ -78,7 +78,7 @@ async def test_byok_budget_reserves_the_larger_output_limit(monkeypatch):
     monkeypatch.setattr('app.services.provider_budget.assert_task_active', AsyncMock())
     await nodes.invoke_llm_with_budget({'enforce_provider_budget': True, 'task_id': str(uuid.uuid4()), 'attempt_number': 1},
         nodes.BudgetedFallbackLLM([('byok:test', model)]), [], model_name='byok:test', output_tokens=4096)
-    assert reserve.await_args.kwargs['output_tokens'] == 8192
+    assert reserve.await_args.kwargs['output_tokens'] == 4096
 
 
 @pytest.mark.asyncio

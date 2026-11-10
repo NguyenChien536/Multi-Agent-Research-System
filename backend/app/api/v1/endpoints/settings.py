@@ -24,9 +24,10 @@ async def check_saved_or_draft_connection(payload: ConnectionCheck, db: AsyncSes
         if task is None:
             raise HTTPException(404,'Research task not found')
         stored,binding = (task.budget_config or {}).get('_llm_connection'),task.id
-    update = ConnectionUpdate.model_validate(payload.model_dump(exclude={'task_id','generate','free_tier_confirmed'}))
+    update = ConnectionUpdate.model_validate(payload.model_dump(exclude={'task_id','generate','free_tier_confirmed','paid_probe_confirmed'}))
     value = updated_input(update,stored,user.id,binding)
-    return await check_connection(value,generate=payload.generate,free_tier_confirmed=payload.free_tier_confirmed)
+    return await check_connection(value,generate=payload.generate,free_tier_confirmed=payload.free_tier_confirmed,
+        paid_probe_confirmed=payload.paid_probe_confirmed)
 
 
 @router.post('/model-connection/models')

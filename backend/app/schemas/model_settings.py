@@ -19,6 +19,7 @@ class ConnectionCheck(ConnectionUpdate):
     task_id: uuid.UUID | None = None
     generate: bool = False
     free_tier_confirmed: bool = False
+    paid_probe_confirmed: bool = False
 
 
 class ModelCatalogRequest(BaseModel):

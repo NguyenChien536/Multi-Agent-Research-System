@@ -74,12 +74,12 @@ async def test_large_limit_is_clamped_on_real_wire_and_reservation_for_each_atte
     def handler(request):
         body=json.loads(request.content); seen.append(body)
         cut_off = truncated_first and len(seen)==1
-        assert body.get('max_completion_tokens',body.get('max_tokens')) == (32768 if len(seen)==2 else 16384)
+        assert body.get('max_completion_tokens',body.get('max_tokens')) == (8192 if len(seen)==2 else 4096)
         assert body['provider']['max_price']['completion'] == 0
         if structured: assert body['response_format']['type']=='json_schema'
         return httpx.Response(200,json={'id':'capacity-fixture','object':'chat.completion','created':1,'model':'fixture/max:free',
             'choices':[{'index':0,'message':{'role':'assistant','content':'{"answer":"ok"}'},'finish_reason':'length' if cut_off else 'stop'}],
-            'usage':{'prompt_tokens':100,'completion_tokens':16384 if cut_off else 12,'total_tokens':16484 if cut_off else 112}})
+            'usage':{'prompt_tokens':100,'completion_tokens':4096 if cut_off else 12,'total_tokens':4196 if cut_off else 112}})
     try:
         async with AsyncSessionLocal() as db:
             task=await db.get(ResearchTask,tid); task.budget_config={**task.budget_config,**config}; await db.commit()
@@ -98,7 +98,7 @@ async def test_large_limit_is_clamped_on_real_wire_and_reservation_for_each_atte
         assert len(seen)==(2 if truncated_first else 1)
         async with AsyncSessionLocal() as db:
             task=await db.get(ResearchTask,tid); usage=task.budget_config['_provider_usage']
-            assert usage['output_tokens']==(16396 if truncated_first else 12)
+            assert usage['output_tokens']==(4108 if truncated_first else 12)
             assert usage['llm_calls']==len(seen) and not usage['reservations']
             assert task.budget_config['max_output_tokens']==50000
     finally:

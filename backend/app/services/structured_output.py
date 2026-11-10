@@ -11,6 +11,17 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def compact_prompt_schema(value):
+    """Remove display-only metadata; never remove domain keys or constraints."""
+    if isinstance(value, list):
+        return [compact_prompt_schema(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+    return {key: ({name: compact_prompt_schema(child) for name, child in item.items()}
+                  if key in {'properties', '$defs', 'definitions'} else compact_prompt_schema(item))
+            for key, item in value.items() if key not in {'title', 'examples'}}
+
+
 class StructuredOutputFailure(ValueError):
     """A completed provider response failed local validation; never expose its body."""
 
@@ -68,7 +79,7 @@ def compatible_structured_output(model_name: str, model: Any, schema: Any):
     if model_name.startswith("byok:") and isinstance(schema, type) and issubclass(schema, BaseModel):
         import json
         from langchain_core.messages import SystemMessage
-        schema_text = json.dumps(schema.model_json_schema(), ensure_ascii=False)
+        schema_text = json.dumps(compact_prompt_schema(schema.model_json_schema()), ensure_ascii=False, separators=(',', ':'))
         def add_schema(messages):
             instruction = render_prompt('structured_output', json_schema=schema_text)
             return [SystemMessage(content=instruction), *messages]
@@ -108,9 +119,12 @@ def compatible_structured_output(model_name: str, model: Any, schema: Any):
         if connection and connection.structured_output_mode == 'prompt_json':
             body.pop('response_format', None)
         if connection and connection.structured_output_mode == 'json_schema' and supports_strict_schema(schema.model_json_schema()):
+            wire = strict_wire_schema(schema.model_json_schema())
+            if getattr(connection, 'base_url', '') == 'https://generativelanguage.googleapis.com/v1beta/openai':
+                wire = _gemini_wire_schema(wire)
             body['response_format'] = {'type': 'json_schema', 'json_schema': {
                 'name': schema.__name__[:64], 'strict': True,
-                'schema': strict_wire_schema(schema.model_json_schema()),
+                'schema': wire,
             }}
         return RunnableLambda(add_schema) | model.bind(extra_body=body) | RunnableLambda(validate_json)
     if model_name.startswith("gemini-") and isinstance(schema, type) and issubclass(schema, BaseModel):

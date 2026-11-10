@@ -41,6 +41,8 @@ export default function Home() {
   const [requirePlanApproval, setRequirePlanApproval] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [maxSources, setMaxSources] = useState(12);
+  const [costLimit, setCostLimit] = useState(0.5);
+  const [activeMinutes, setActiveMinutes] = useState(30);
   const [useServerProviders, setUseServerProviders] = useState(false);
   const [savedModel, setSavedModel] = useState<string | null>(null);
   const [modelStatus, setModelStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
@@ -88,6 +90,8 @@ export default function Home() {
         if (parsed.taskLanguage) setTaskLanguage(parsed.taskLanguage);
         if (typeof parsed.requirePlanApproval === 'boolean') setRequirePlanApproval(parsed.requirePlanApproval);
         if (Number.isInteger(parsed.maxSources) && parsed.maxSources>=3 && parsed.maxSources<=30) setMaxSources(parsed.maxSources);
+        if (typeof parsed.costLimit === 'number' && parsed.costLimit>=0.1 && parsed.costLimit<=2) setCostLimit(parsed.costLimit);
+        if ([15,30,45,60].includes(parsed.activeMinutes)) setActiveMinutes(parsed.activeMinutes);
       }
     } catch {}
   }, []);
@@ -116,11 +120,13 @@ export default function Home() {
             taskLanguage,
             requirePlanApproval,
             maxSources,
+            costLimit,
+            activeMinutes,
           })
         );
       }
     } catch {}
-  }, [topic, researchType, researchDepth, reportLength, citationStyle, taskLanguage, requirePlanApproval, maxSources, showAdvanced]);
+  }, [topic, researchType, researchDepth, reportLength, citationStyle, taskLanguage, requirePlanApproval, maxSources, costLimit, activeMinutes, showAdvanced]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -227,6 +233,8 @@ export default function Home() {
         require_plan_approval: requirePlanApproval,
         max_iterations: researchDepth === 'SHALLOW' ? 1 : researchDepth === 'DEEP' ? 3 : 2,
         max_sources: maxSources,
+        budget: {max_cost_usd:costLimit, max_llm_calls:40, max_input_tokens:150000,
+          max_output_tokens:60000, timeout_seconds:activeMinutes*60},
       });
       setCreatedWorkspace(task.id);
 
@@ -505,6 +513,20 @@ export default function Home() {
                 </div>
 
                 {/* 1. Research Depth (Cards) */}
+                <fieldset className="rounded-xl border border-zinc-200 p-3">
+                  <legend className="px-1 text-sm font-medium">{isEn ? 'Research allowance' : 'Hạn mức cho bài này'}</legend>
+                  <div className="flex flex-wrap gap-4 text-sm">
+                    <label>{isEn ? 'Estimated cost ceiling (USD)' : 'Trần chi phí ước tính (USD)'}
+                      <input type="number" required min={0.1} max={2} step={0.1} value={costLimit} onChange={event=>setCostLimit(Number(event.target.value))} className="mt-1 block w-28 rounded-lg border p-2" />
+                    </label>
+                    <label>{isEn ? 'Active processing time' : 'Thời gian xử lý'}
+                      <select value={activeMinutes} onChange={event=>setActiveMinutes(Number(event.target.value))} className="mt-1 block rounded-lg border p-2">
+                        {[15,30,45,60].map(minutes=><option key={minutes} value={minutes}>{minutes} {isEn ? 'minutes' : 'phút'}</option>)}
+                      </select>
+                    </label>
+                  </div>
+                  <p className="mt-2 text-xs text-zinc-500">{isEn ? '40 calls · 150,000 input / 60,000 output tokens. Provider billing depends on actual usage and the prices saved in Settings. Waiting for uploaded data does not consume processing time.' : '40 lượt gọi · 150.000 input / 60.000 output token. Phí thực tế phụ thuộc lượng sử dụng và giá đã lưu trong Settings. Chờ bạn tải dữ liệu không tính vào thời gian xử lý.'}</p>
+                </fieldset>
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-200 p-3 text-sm">
                   <span>{savedModel || (isEn ? 'Choose an API connection in Settings' : 'Chọn kết nối API trong Settings')}</span>
                   {!useServerProviders && <button type="button" className="font-medium underline" onClick={()=>setShowModelSettings(true)}>API & model</button>}

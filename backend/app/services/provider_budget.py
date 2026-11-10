@@ -15,9 +15,9 @@ from app.services.agent_run import MODEL_PRICING, estimate_cost
 
 logger = logging.getLogger(__name__)
 
-HARD_MAX_LLM_CALLS = 40
+HARD_MAX_LLM_CALLS = 60
 HARD_MAX_COST_USD = 2.0
-HARD_MAX_ACTIVE_SECONDS = 900
+HARD_MAX_ACTIVE_SECONDS = 3600
 HARD_MAX_INPUT_TOKENS = 300_000
 HARD_MAX_OUTPUT_TOKENS = 200_000
 DEFAULT_CALL_OUTPUT_TOKENS = 4096
@@ -57,30 +57,45 @@ def token_allowance_summary(task) -> dict:
     call_output = min(16384, (((config.get('_llm_connection') or {}).get('profile') or {}).get('output_token_limit') or 8192))
     eligible = getattr(task, 'status', '') == 'FAILED' or (
         getattr(task, 'status', '') == 'NEEDS_REVIEW' and getattr(task, 'current_step', None) == 'BUDGET_LIMIT')
-    other_limits_ok = (usage.get('llm_calls', 0) < calls and usage.get('cost_usd', 0) < cost
-                       and usage.get('active_seconds', 0) < seconds)
+    next_calls = min(calls + 10, HARD_MAX_LLM_CALLS) if usage.get('llm_calls', 0) >= calls else calls
+    next_seconds = min(seconds + 900, HARD_MAX_ACTIVE_SECONDS) if usage.get('active_seconds', 0) >= seconds else seconds
+    other_limits_ok = (usage.get('cost_usd', 0) < cost
+                       and (usage.get('llm_calls', 0) < calls or next_calls > calls)
+                       and (usage.get('active_seconds', 0) < seconds or next_seconds > seconds))
     next_in = min(inputs + 100_000, HARD_MAX_INPUT_TOKENS)
     next_out = min(outputs + 50_000, HARD_MAX_OUTPUT_TOKENS)
     return {'input_used': int(usage.get('input_tokens', 0)), 'output_used': int(usage.get('output_tokens', 0)),
             'max_input_tokens': inputs, 'max_output_tokens': outputs,
             'next_input_tokens': next_in, 'next_output_tokens': next_out,
-            'can_extend': bool(eligible and other_limits_ok and (next_in > inputs or next_out > outputs)
+            'calls_used': int(usage.get('llm_calls', 0)), 'active_seconds_used': float(usage.get('active_seconds', 0)),
+            'next_max_llm_calls': next_calls, 'next_timeout_seconds': next_seconds,
+            'max_cost_usd': cost,
+            'can_extend': bool(eligible and other_limits_ok and (next_in > inputs or next_out > outputs or next_calls > calls or next_seconds > seconds)
                                and (getattr(task, 'current_step', None) == 'BUDGET_LIMIT'
-                                    or remaining_out < int(call_output) or remaining_in < 1000))}
+                                    or remaining_out < int(call_output) or remaining_in < 1000
+                                    or next_calls > calls or next_seconds > seconds))}
 
 
-def increase_token_allowance(config: dict, max_input_tokens: int, max_output_tokens: int) -> dict:
-    """Explicitly raise token ceilings; retain all usage and non-token limits."""
-    _, old_in, old_out, _, _ = _limits(config)
+def increase_token_allowance(config: dict, max_input_tokens: int, max_output_tokens: int,
+                             *, max_llm_calls: int | None = None, timeout_seconds: int | None = None) -> dict:
+    """Explicitly raise resource ceilings; retain all usage and the money limit."""
+    old_calls, old_in, old_out, _, old_seconds = _limits(config)
+    new_calls = old_calls if max_llm_calls is None else max_llm_calls
+    new_seconds = old_seconds if timeout_seconds is None else timeout_seconds
     if not (old_in <= max_input_tokens <= HARD_MAX_INPUT_TOKENS
             and old_out <= max_output_tokens <= HARD_MAX_OUTPUT_TOKENS
-            and (max_input_tokens > old_in or max_output_tokens > old_out)):
-        raise ValueError('Increase at least one token limit without lowering another limit or exceeding the maximum.')
+            and old_calls <= new_calls <= HARD_MAX_LLM_CALLS
+            and old_seconds <= new_seconds <= HARD_MAX_ACTIVE_SECONDS
+            and (max_input_tokens > old_in or max_output_tokens > old_out or new_calls > old_calls or new_seconds > old_seconds)):
+        raise ValueError('Increase at least one resource limit without lowering another limit or exceeding the maximum.')
     result = deepcopy(config)
     changes = list(result.get('_allowance_changes') or [])
     changes.append({'at': datetime.now(timezone.utc).isoformat(), 'input_before': old_in, 'output_before': old_out,
-                    'input_after': max_input_tokens, 'output_after': max_output_tokens})
+                    'input_after': max_input_tokens, 'output_after': max_output_tokens,
+                    'calls_before': old_calls, 'calls_after': new_calls,
+                    'seconds_before': old_seconds, 'seconds_after': new_seconds})
     return {**result, 'max_input_tokens': max_input_tokens, 'max_output_tokens': max_output_tokens,
+            'max_llm_calls': new_calls, 'timeout_seconds': new_seconds,
             '_allowance_changes': changes[-10:]}
 
 
@@ -118,11 +133,11 @@ def pause_budget_config(config: dict[str, Any] | None, *, now: datetime | None =
 def _limits(config: dict[str, Any]) -> tuple[int, int, int, float, int]:
     """Apply product hard caps even to old tasks or stale client-supplied values."""
     return (
-        min(int(config.get("max_llm_calls", HARD_MAX_LLM_CALLS)), HARD_MAX_LLM_CALLS),
+        min(int(config.get("max_llm_calls", 40)), HARD_MAX_LLM_CALLS),
         min(int(config.get("max_input_tokens", 100_000)), HARD_MAX_INPUT_TOKENS),
         min(int(config.get("max_output_tokens", 50_000)), HARD_MAX_OUTPUT_TOKENS),
         min(float(config.get("max_cost_usd", HARD_MAX_COST_USD)), HARD_MAX_COST_USD),
-        min(int(config.get("timeout_seconds", HARD_MAX_ACTIVE_SECONDS)), HARD_MAX_ACTIVE_SECONDS),
+        min(int(config.get("timeout_seconds", 900)), HARD_MAX_ACTIVE_SECONDS),
     )
 
 

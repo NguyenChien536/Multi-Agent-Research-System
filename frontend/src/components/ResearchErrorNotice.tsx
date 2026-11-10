@@ -1,7 +1,8 @@
 export function researchErrorText(raw: string | null | undefined, isEn: boolean): string {
   const value = (raw || '').toLowerCase();
   const cases: [RegExp, string, string][] = [
-    [/task_time_limit/, 'Bài đã hết thời gian xử lý cho phép. Nguồn và phần đã viết vẫn được lưu; tăng token không tăng thời gian. Hãy giữ kết quả hiện có và tạo lượt mới với cấu hình phù hợp.', 'This article has used its active processing time allowance. Sources and saved sections are retained; adding tokens does not add time. Keep the saved work and start a new run with a suitable configuration.'],
+    [/provider_request_invalid|openaiinvalidrequesterror|badrequesterror/, 'Dịch vụ từ chối định dạng hoặc tham số yêu cầu. Kiểm tra model và chế độ JSON trong API & model. Lỗi này chưa chứng minh key sai hoặc hết quota; thử lại cùng cấu hình thường không giải quyết được.', 'The provider rejected the request format or parameters. Check the model and JSON mode in API & model. This does not establish an invalid key or exhausted quota; retrying unchanged usually will not help.'],
+    [/task_time_limit/, 'Bài tạm dừng do hết thời gian xử lý đã chọn. Các phần đã làm vẫn được lưu. Xem tùy chọn duyệt thêm thời gian và tiếp tục bên trên; tăng token không tăng thời gian.', 'Research paused at its active-time allowance. Saved work is retained. Review the time-extension option above to continue; adding tokens does not add time.'],
     [/manuscript_incomplete/, 'Model chưa viết đủ một phần bắt buộc. Các phần đã lưu vẫn được giữ; bấm Tiếp tục từ bước lỗi để hoàn thiện.', 'A required writing section is incomplete. Saved sections are retained; continue from the failed step.'],
     [/provider_daily_limit/, 'Dịch vụ đã hết hạn mức lượt gọi trong ngày. Chờ dịch vụ đặt lại hạn mức hoặc chọn kết nối khác trong Settings.', 'The provider daily request allowance is exhausted. Wait for its reset or choose another service in Settings.'],
     [/workflow_resume_conflict|invalid_concurrent_graph_update/, 'Không thể tiếp tục bước đã lưu do xung đột trạng thái. Nguồn và kết quả trước đó vẫn được giữ. Làm mới trang và thử lại sau khi hệ thống được cập nhật.', 'The saved workflow could not resume safely. Existing sources and results are retained. Refresh and retry after the workflow fix is deployed.'],
@@ -21,7 +22,7 @@ export function researchErrorText(raw: string | null | undefined, isEn: boolean)
 
 export function ResearchErrorNotice({ error, isEn, step }: { error?: string | null; isEn: boolean; step?: string | null }) {
   return <div id="research-error" role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900 print:hidden">
-    <strong>{isEn ? 'Research stopped' : 'Nghiên cứu đã dừng'}{step ? ` · ${step}` : ''}</strong>
+    <strong>{/budget|task_time_limit/i.test(error || '') ? (isEn ? 'Research paused · allowance reached' : 'Bài tạm dừng · đã chạm hạn mức') : (isEn ? 'Research stopped' : 'Nghiên cứu đã dừng')}{step ? ` · ${step}` : ''}</strong>
     <p className="mt-1 leading-relaxed">{researchErrorText(error, isEn)}</p>
   </div>;
 }

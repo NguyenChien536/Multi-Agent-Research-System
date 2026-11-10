@@ -244,8 +244,9 @@ def build_connection_client(connection: ModelConnection):
         # The free router can select models with mandatory reasoning. Request
         # low effort rather than disabling it; exclusion only hides the trace.
         extra["reasoning"] = ({"enabled": False} if connection.reasoning_effort == 'none' else {"effort": connection.reasoning_effort, "exclude": True})
+        extra['provider'] = {'require_parameters': True}
     if connection.base_url == "https://openrouter.ai/api/v1" and connection.input_price_per_million == 0 and connection.output_price_per_million == 0:
-        extra["provider"] = {"max_price": {"prompt": 0, "completion": 0, "request": 0}, "require_parameters": True}
+        extra['provider']['max_price'] = {"prompt": 0, "completion": 0, "request": 0}
     if connection.base_url == 'https://generativelanguage.googleapis.com/v1beta/openai' and connection.model.startswith('gemini-'):
         # Gemini 3 reasoning cannot be disabled. Its compatibility API accepts
         # low/medium/high; an omitted setting can use expensive default thinking.

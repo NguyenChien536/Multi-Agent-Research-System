@@ -78,6 +78,23 @@ function text(node) {
 }
 function submit(h) { return elements(h.render()).find(node => node.type === 'form').props.onSubmit({ preventDefault() {} }); }
 
+test('new research sends an explicit bounded budget and selected processing time',async()=>{
+  const h=await home();
+  // The advanced form is controlled; changing limits must affect the API payload.
+  const expand=elements(h.render()).find(node=>node.type==='button' && text(node).includes('Configuration'));
+  if(expand)expand.props.onClick();
+  const controls=elements(h.render());
+  const cost=controls.find(node=>node.type==='input' && node.props.max===2);
+  const time=controls.find(node=>node.type==='select' && node.props.value===30);
+  assert.ok(cost && time);
+  cost.props.onChange({target:{value:'0.8'}}); time.props.onChange({target:{value:'45'}});
+  await submit(h);
+  assert.equal(h.created[0].budget.max_cost_usd,.8);
+  assert.equal(h.created[0].budget.timeout_seconds,2700);
+  assert.equal(h.created[0].budget.max_llm_calls,40);
+  assert.equal(h.created[0].budget.max_output_tokens,60000);
+});
+
 for (const initial of ['pending', 'failed']) {
   test(`start rechecks saved settings when the initial summary is ${initial}`, async () => {
     const h = await home({ initial });

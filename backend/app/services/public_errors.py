@@ -11,6 +11,37 @@ class ProviderResponseTimeout(TimeoutError):
     """A timeout at the provider boundary, distinct from unrelated workflow bugs."""
 
 
+def provider_http_status(error):
+    """Preserve transport status, including SDK wrappers, without reading bodies."""
+    seen = set()
+    for _ in range(4):
+        if error is None or id(error) in seen:
+            break
+        seen.add(id(error))
+        for value in (getattr(error, 'status_code', None), getattr(error, 'code', None),
+                      getattr(getattr(error, 'response', None), 'status_code', None)):
+            if str(value).isdigit() and 400 <= int(value) <= 599:
+                return int(value)
+        error = getattr(error, '__cause__', None) or getattr(error, '__context__', None)
+    return None
+
+
+def provider_failure_message(error):
+    """Classify the actual rejection before explanatory text can mask its cause."""
+    code = provider_http_status(error)
+    if code in (401, 403):
+        return public_error('PROVIDER_AUTH_FAILED:')
+    if code == 404:
+        return public_error('PROVIDER_MODEL_NOT_FOUND:')
+    if code == 429:
+        return public_error('PROVIDER_RATE_LIMIT:')
+    if code is not None and code not in (400, 422):
+        return None
+    if code in (400, 422) or type(error).__name__ in ('BadRequestError', 'OpenAIInvalidRequestError'):
+        return public_error('PROVIDER_REQUEST_INVALID:')
+    return None
+
+
 def provider_request_rejected(error):
     """Only explicit HTTP rejection statuses, never message substrings/timeouts.
 
@@ -18,10 +49,10 @@ def provider_request_rejected(error):
     the ledger, but do not charge a hypothetical full output-token reservation.
     Unknown failures and upstream 5xx remain conservatively reserved.
     """
-    status = getattr(error, 'status_code', getattr(error, 'code', None))
-    if status is None:
-        status = getattr(getattr(error, 'response', None), 'status_code', None)
-    return str(status) in ('401', '403', '404', '429') or type(error).__name__ in ('GoogleRateLimitError', 'RateLimitError')
+    code = provider_http_status(error)
+    if code is not None:
+        return code in (400, 401, 403, 404, 422, 429)
+    return type(error).__name__ in ('GoogleRateLimitError', 'RateLimitError', 'OpenAIInvalidRequestError', 'BadRequestError')
 
 
 def is_transient_provider_error(error):
@@ -39,6 +70,7 @@ def public_error(raw):
         return None
     value = raw.lower()
     cases = [
+        (('provider_request_invalid', 'openaiinvalidrequesterror', 'badrequesterror'), 'PROVIDER_REQUEST_INVALID: Provider rejected the request format or parameters. Check the selected model and structured-output settings; retrying unchanged will not help.'),
         (('manuscript_incomplete',), 'MANUSCRIPT_INCOMPLETE: A writing section is incomplete. Saved sections are retained; continue from the failed step.'),
         (('provider_daily_limit',), 'PROVIDER_DAILY_LIMIT: Provider daily request allowance reached. Wait for its reset or choose another configured service.'),
         (('workflow_resume_conflict', 'invalid_concurrent_graph_update', 'can receive only one value per step'), 'WORKFLOW_RESUME_CONFLICT: The saved workflow could not resume safely. Previous results are retained; refresh and retry after the workflow fix is deployed.'),

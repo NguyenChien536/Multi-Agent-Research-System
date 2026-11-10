@@ -1,6 +1,43 @@
 # Hướng dẫn demo Synthia
 
-Cập nhật **06/11/2026**. Đọc tài liệu này để hiểu sản phẩm và diễn tập. Khi trình bày, mở [Kịch bản thuyết trình](demo-presentation-script.md): có lời nói, ba câu hỏi và từng bước thao tác.
+Cập nhật **10/11/2026**. Đọc tài liệu này để hiểu sản phẩm và diễn tập. Khi trình bày, mở [Kịch bản thuyết trình](demo-presentation-script.md): có lời nói, ba câu hỏi và từng bước thao tác.
+
+## Phương án demo ngày 10/11: chuẩn bị trước, trình diễn kết quả đã lưu
+
+**Phần chính dùng kết quả đã chạy thật và được lưu trong ứng dụng.** Tạo bài ngay trước hội đồng chỉ là phần bổ sung: model miễn phí vẫn có thể quá tải, hết hạn mức hoặc trả kết quả sai định dạng. Sang ngày mới không có nghĩa mọi dịch vụ đã reset quota; thời điểm reset phụ thuộc provider. Hạn mức của từng bài trong Synthia cũng không tự reset theo ngày.
+
+### Trước buổi demo
+
+1. Bật bản demo ở cổng 3082, đăng nhập đúng tài khoản và kiểm tra database/worker hoạt động. Giữ bản release hiện tại; không build, nâng cấp Docker hoặc đổi model sát giờ trình bày.
+2. Chọn ba bài ứng với REVIEW, EMPIRICAL_COMPUTATIONAL và EMPIRICAL_HUMAN. Ưu tiên kiểm tra bài đã có trước khi dùng quota để tạo lại. Chạy mới thì chạy lần lượt, không chạy đồng thời cả ba; nếu lỗi, đọc nguyên nhân và tiếp tục checkpoint phù hợp thay vì tạo nhiều bản lặp.
+3. Nghiệm thu từng bài: có đủ nội dung và mục con phù hợp loại nghiên cứu; Abstract/Conclusion nhất quán; References khớp nguồn thực dùng; chọn ít nhất hai khẳng định để đối chiếu đoạn bằng chứng. Với bài tính toán, số liệu/bảng/hình phải khớp kết quả runner và baseline. Với khảo sát, số liệu phải khớp CSV, nêu rõ dữ liệu mô phỏng và không bịa người tham gia hay phê duyệt đạo đức. Không còn đoạn dang dở, hình/bảng bị nhắc nhưng không tồn tại hoặc kết luận vượt bằng chứng.
+4. Chọn một bài tốt nhất làm bài trình diễn chính và hai bài còn lại để chứng minh hai luồng khác. Trạng thái NEEDS_REVIEW không tự động có nghĩa là không có bản thảo; cũng không có nghĩa đã đạt kiểm định. Đọc finding còn lại và nói rõ giới hạn, không sửa trạng thái để che lỗi.
+5. Ghi URL từng bài; tải bản xuất thực tế, mở thử file và lưu ảnh màn hình kết quả. Với bài tính toán, giữ cả CSV, metrics, hình và nhật ký; với khảo sát, giữ protocol và thông tin nguồn gốc dữ liệu. Sao lưu database và artifacts bằng quy trình backup của bản release. Không đưa API key vào slide hoặc file chia sẻ.
+6. Diễn tập một lượt chỉ mở kết quả đã lưu: đăng nhập → dashboard → bài báo → nguồn/bằng chứng → thí nghiệm hoặc protocol → monitor → xuất file. Mở sẵn tab và file dự phòng trước khi chia sẻ màn hình.
+
+### Khi trình bày: khoảng 10–12 phút
+
+1. **1 phút:** vấn đề, mục tiêu và lý do có ba luồng lấy bằng chứng.
+2. **3 phút:** bài tổng quan đã lưu; chỉ ra cấu trúc, một luận điểm, nguồn và đoạn bằng chứng tương ứng.
+3. **3 phút:** bài tính toán đã lưu; chỉ ra CSV, baseline, kết quả chương trình đã chạy, hình và thông tin tái lập.
+4. **2 phút:** bài khảo sát đã lưu; chỉ ra protocol, dữ liệu mô phỏng, kết quả và lịch sử chờ/tiếp tục nếu có. Không cần chạy lại workflow chỉ để chứng minh bước chờ.
+5. **1–3 phút:** monitor/lịch sử xử lý, vai trò các agent, kiến trúc và giới hạn. Có thể mở form tạo bài hoặc duyệt một kế hoạch nếu provider đã kiểm tra còn hoạt động; không lấy việc sinh xong bài mới làm điều kiện hoàn thành phần demo.
+
+**Lời dẫn:** “Đây là các bài em đã chạy trước trên chính hệ thống và kiểm tra để trình bày đầy đủ kết quả trong thời gian demo. Em sẽ cho xem đầu vào, nguồn, nhật ký xử lý và đầu ra đã lưu.”
+
+**Dự phòng:** nếu API lỗi, tiếp tục mở dữ liệu đã lưu; nếu ứng dụng không truy cập được, dùng file đã xuất và ảnh/video diễn tập, nói rõ đó là bản ghi kết quả trước đó. Xem kết quả đã lưu không cần gọi lại LLM, nhưng giao diện vẫn cần ứng dụng và database hoạt động.
+
+**Kiểm tra ngày 10/11:** endpoint readiness báo database/broker sẵn sàng và sáu dịch vụ demo healthy. Database có bản thảo cho cả ba loại; các bản có nội dung hiện vẫn là NEEDS_REVIEW. Đây là kiểm tra khả năng vận hành và sự tồn tại của dữ liệu, chưa phải nghiệm thu chất lượng nội dung hoặc xác nhận ba lượt chạy mới đã thành công. Bản tổng quan mới nhất ghi nhận 3.873 từ và 18 nguồn thu thập; chưa được coi là bản tốt nhất chỉ dựa trên hai con số này.
+
+
+### Cấu hình API và tối ưu token — 10/11/2026
+
+- Khuyến nghị thử nghiệm trả phí: OpenRouter, base URL `https://openrouter.ai/api/v1`, model cố định `google/gemini-2.5-flash`. Tắt bộ lọc chỉ model miễn phí khi tải danh sách. Giá catalog kiểm tra ngày 10/11: 0,30 USD/triệu input và 2,50 USD/triệu output; nhập/kiểm tra hai mức này trong Settings để ước tính chi phí đúng. Nguồn: https://openrouter.ai/google/gemini-2.5-flash/pricing . Đây là lựa chọn cân bằng chi phí để diễn tập, chưa có lượt chạy trả phí chứng minh tốt hơn các model khác trong dự án.
+- Giới hạn mỗi phản hồi: 16.384 token; reasoning low; JSON Schema. Đây là trần khả năng, không phải yêu cầu model phải dùng hết. Mỗi bước JSON ngắn được cấp theo nhu cầu (thường 4.096); Critic tối đa 8.192; mỗi nhóm Writer theo mục tiêu số từ. JSON bị cắt có tối đa một lần thử lại với dung lượng tăng có kiểm soát.
+- Form tạo bài: trần ước tính 0,50 USD/bài, 30 phút, 40 lượt gọi, 150.000 input / 60.000 output token; 12 nguồn, STANDARD, MEDIUM. Hạn mức 150.000/60.000 theo giá model trên tương ứng khoảng 0,195 USD tiền model, không phải báo giá hoặc bảo đảm hóa đơn. Ba bài với trần 0,50 USD/bài có tổng trần ước tính 1,50 USD; phí nạp tiền, dịch vụ khác và sai lệch giá khai báo phải được xem riêng. Không tự chạy chiến dịch trả phí khi chưa chốt ngân sách thực hiện.
+- Kiểm tra key/model không sinh nội dung. **Thử phản hồi** kiểm tra một schema lồng nhau, tối đa một request và 2.048 output token. Với kết nối trả phí, cần tick cho phép một lượt thử có tính phí; tick được bỏ sau mỗi lượt và khi đổi model/cấu hình. Kết quả OK không bảo đảm toàn bài hoặc tất cả schema đều thành công.
+- Tối ưu tập trung vào dữ liệu trung gian: bỏ metadata hiển thị trong schema prompt, JSON gọn, bớt lặp toàn văn những nhóm đã viết. Các nhóm thân bài nhận trích đoạn để nhất quán; nhóm Abstract nhận toàn bộ thân bài đã lưu. Không cắt bài cuối, bỏ citation validator, bỏ nguồn hoặc biến phần chưa làm thành kết quả thành công.
+- Lỗi `PROVIDER_REQUEST_INVALID` là provider từ chối tham số/định dạng. Không suy ra 429 chỉ vì một thông báo chung có chữ quota. Luôn ưu tiên mã HTTP/loại lỗi đã xác định; không hiển thị raw provider body hay API key.
 
 ## 1. Vấn đề và mục tiêu
 
@@ -46,7 +83,7 @@ Kết nối riêng được ưu tiên hơn provider máy chủ. Nếu kết nố
 
 **Thao tác khi chạy:** thanh đầu workspace có **Dừng nghiên cứu** khi đang chạy/chờ. Bài lỗi có **Tiếp tục từ bước lỗi / Continue from failed step**: tiếp tục checkpoint, giữ kết quả đã lưu và lượng sử dụng. Nút **Kiểm tra bản thảo đã lưu / Check for saved draft** chỉ tải lại bản thảo, không chạy workflow. Đổi model không đặt lại ngân sách.
 
-**Khi thiếu token:** chọn **Xem hạn mức để tiếp tục / Review token allowance** ở thanh trên. Đọc số input/output token mới trong vùng khôi phục rồi chọn **Tăng hạn mức token và tiếp tục / Increase token allowance and continue**. Đây là quyết định rõ ràng của người dùng, không tự tăng. Lượt tiếp tục dùng cùng workflow/checkpoint và giữ mọi lượng sử dụng; không tìm nguồn lại từ đầu. Mặc định vẫn 100.000 input / 50.000 output; có thể tăng dần trong trần 300.000 input / 200.000 output. Trần tiền, lượt gọi và thời gian không đổi. Nếu một trong các trần đó đã hết, hoặc đã tới trần token tối đa, tùy chọn tăng không xuất hiện; có thể giữ bài cũ và tạo bài mới với phạm vi phù hợp. Token của API miễn phí vẫn chịu giới hạn tài nguyên, không phải hóa đơn.
+**Khi chạm hạn mức:** bài tạm dừng và giữ phần đã làm. Trong vùng khôi phục, đọc hạn mức mới rồi chọn **Duyệt hạn mức và tiếp tục / Approve limits and continue**. Giữ nguyên workflow/checkpoint, lượng đã dùng và trần chi phí. Có thể duyệt tăng token trong trần 300.000 input / 200.000 output; khi đã hết lượt gọi/thời gian, hệ thống đề xuất thêm 10 lượt hoặc 15 phút, tối đa 60 lượt và 60 phút hoạt động. Không tự tăng hạn mức và không đặt lại usage. Nếu trần tiền hoặc trần tài nguyên tuyệt đối đã hết, không tiếp tục tự động. Hạn mức API miễn phí là giới hạn riêng của provider, không phải hóa đơn.
 
 Lỗi và bước lỗi hiện ngay trong khung đỏ. Lỗi 503 là provider quá tải, khác với key bị từ chối (401/403), model không khả dụng (404) và giới hạn dịch vụ (429). Retry tự động cho lỗi 502/503/504 có giới hạn và vẫn chịu ngân sách. Với 429 tạm thời có tín hiệu phù hợp, hệ thống lưu thời điểm thử lại, đưa bài về hàng đợi và giải phóng worker; giao diện báo **Đang chờ dịch vụ AI**. Tối đa hai lần hoãn tự động trong cùng workflow, mỗi lần không quá 300 giây; hết hạn mức ngày hoặc không xác định được thời gian chờ thì cần người dùng xử lý. Nếu Writer đã lưu bản thảo trước khi Critic gặp lỗi provider, bản thảo có thể được giao dưới trạng thái **Cần rà soát**, không được ghi là kiểm tra thành công.
 
@@ -194,7 +231,7 @@ Giới hạn phản hồi và hạn mức **cả bài** là hai thứ khác nhau
 
 Mức tối đa của model là **trần cấu hình**. Hệ thống cấp dung lượng theo phần việc, thông thường tối đa 16.384 token cho một nhóm Writer/JSON; JSON bị cắt có tối đa một lần thử lại với trần gấp đôi nếu còn ngân sách. Không dành toàn bộ hạn mức bài cho một phản hồi. Một thử nghiệm request quá lớn đã gặp timeout và bị ghi nhận toàn reservation do không có usage; đó là lỗi kiểm tra được giữ lại, không phải bài đã hoàn tất.
 
-`TASK_TIME_LIMIT` nghĩa là hết thời gian hoạt động cả bài (mặc định tối đa 900 giây); thêm output token không giải quyết được. `PROVIDER_TIMEOUT` là một lần gọi dịch vụ phản hồi quá lâu và có thể tiếp tục nếu các hạn mức khác còn đủ. `MODEL_INVALID_JSON` nghĩa là kết quả không đúng cấu trúc yêu cầu, chưa đủ để kết luận key sai hay model không hỗ trợ JSON. Không tự động retry vô hạn để che các lỗi này.
+`TASK_TIME_LIMIT` nghĩa là hết thời gian hoạt động đã chọn cho bài; có thể duyệt thêm thời gian trong giới hạn 60 phút để tiếp tục cùng checkpoint. Chỉ thêm output token không giải quyết được. API không gửi budget vẫn giữ mặc định lịch sử 900 giây; form tạo bài hiện gửi 30 phút và cho chọn 15–60 phút. `PROVIDER_TIMEOUT` là một lần gọi dịch vụ phản hồi quá lâu và có thể tiếp tục nếu các hạn mức khác còn đủ. `MODEL_INVALID_JSON` nghĩa là kết quả không đúng cấu trúc yêu cầu, chưa đủ để kết luận key sai hay model không hỗ trợ JSON. Không tự động retry vô hạn để che các lỗi này.
 
 **Xóa bài:** mở **Thông tin & Cấu hình / Metadata**, kéo xuống **Vùng nguy hiểm**, chọn **Xóa bài nghiên cứu** và xác nhận. Bài bị ẩn ngay, dữ liệu riêng được đưa vào hàng đợi dọn bền vững; đây là xóa vĩnh viễn, không phải lưu trữ tạm.
 

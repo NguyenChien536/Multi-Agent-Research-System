@@ -463,7 +463,9 @@ export default function WorkspacePage() {
     setActionError('');
     try {
       await api.tasks.retry(task.id, {max_input_tokens:task.token_allowance.next_input_tokens,
-        max_output_tokens:task.token_allowance.next_output_tokens});
+        max_output_tokens:task.token_allowance.next_output_tokens,
+        max_llm_calls:task.token_allowance.next_max_llm_calls,
+        timeout_seconds:task.token_allowance.next_timeout_seconds});
       setReloadKey(v => v + 1);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : (isEn ? 'Unable to extend token allowance.' : 'Không thể tăng hạn mức token.'));

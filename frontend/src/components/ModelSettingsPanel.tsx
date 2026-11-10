@@ -22,11 +22,13 @@ export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: stri
   const [editing, setEditing] = useState(false);
   const [check, setCheck] = useState<ModelConnectionCheck | null>(null);
   const [freeTier, setFreeTier] = useState(false);
+  const [paidProbe, setPaidProbe] = useState(false);
   const signedIn = api.auth.hasSession();
+  useEffect(()=>{ setPaidProbe(false); setCheck(null); },[value?.base_url,value?.model,value?.api_key,value?.structured_output_mode,value?.input_price_per_million,value?.output_price_per_million]);
   useEffect(() => {
     if (!signedIn) { setLoading(false); return; }
     let active = true;
-    setLoading(true); setError(''); setNotice(''); setCheck(null); setFreeTier(false);
+    setLoading(true); setError(''); setNotice(''); setCheck(null); setFreeTier(false); setPaidProbe(false);
     const load = async () => {
       const options = await api.tasks.modelConnectionOptions();
       if (active) setServerMode(!!options.use_server_providers);
@@ -100,9 +102,10 @@ export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: stri
   async function checkConnection(generate: boolean) {
     if (!value) return;
     setBusy(true); setError(''); setCheck(null);
+    if (generate) setPaidProbe(false);
     try {
       setCheck(await api.settings.checkConnection({...value, api_key:value.api_key || undefined,
-        task_id:scope==='task' ? taskId : undefined, generate, free_tier_confirmed:freeTier}));
+        task_id:scope==='task' ? taskId : undefined, generate, free_tier_confirmed:freeTier, paid_probe_confirmed:paidProbe}));
     } catch (err) { setError(err instanceof Error ? err.message : (isEn ? 'Check failed.' : 'Chưa kiểm tra được kết nối.')); }
     finally { setBusy(false); }
   }
@@ -125,13 +128,17 @@ export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: stri
         <ModelConnectionFields value={value} onChange={next=>{if(next?.base_url!==value?.base_url)setFreeTier(false);setValue(next);setCheck(null);setNotice('');}} isEn={isEn} hideToggle
           keyRequired={!hasKey || value?.base_url !== savedRoot} taskId={scope === 'task' ? taskId : undefined} />
       </fieldset>}
-      {value?.base_url && value.base_url !== 'https://openrouter.ai/api/v1' && <label className="flex items-center gap-2 text-sm text-zinc-600">
+      {!!value && (value.input_price_per_million > 0 || value.output_price_per_million > 0) && <label className="flex items-center gap-2 text-sm text-zinc-600">
+        <input type="checkbox" disabled={busy} checked={paidProbe} onChange={event=>setPaidProbe(event.target.checked)} />
+        {isEn ? 'Allow one billable connection test (up to 2,048 output tokens)' : 'Cho phép một lượt thử có tính phí (tối đa 2.048 output token)'}
+      </label>}
+      {value?.base_url && value.input_price_per_million === 0 && value.output_price_per_million === 0 && value.base_url !== 'https://openrouter.ai/api/v1' && <label className="flex items-center gap-2 text-sm text-zinc-600">
         <input type="checkbox" disabled={busy} checked={freeTier} onChange={event=>setFreeTier(event.target.checked)} />
         {isEn?'This project uses a free tier':'Project này dùng gói miễn phí'}
       </label>}
       <div className="flex flex-wrap gap-2 text-sm">
         <button type="button" disabled={busy || !value?.model || (editing && (!hasKey || value.base_url!==savedRoot) && !value.api_key)} onClick={()=>checkConnection(false)} className="rounded-lg border px-3 py-2 disabled:opacity-40">{isEn?'Check key & quota':'Kiểm tra key & hạn mức'}</button>
-        <button type="button" disabled={busy || !value?.model || (value.base_url !== 'https://openrouter.ai/api/v1' && !freeTier) || (editing && (!hasKey || value.base_url!==savedRoot) && !value.api_key)} onClick={()=>checkConnection(true)} className="rounded-lg border px-3 py-2 disabled:opacity-40">{busy?(isEn?'Checking…':'Đang kiểm tra…'):(isEn?'Check response':'Thử phản hồi')}</button>
+        <button type="button" disabled={busy || !value?.model || ((value.input_price_per_million > 0 || value.output_price_per_million > 0) ? !paidProbe : (value.base_url !== 'https://openrouter.ai/api/v1' && !freeTier)) || (editing && (!hasKey || value.base_url!==savedRoot) && !value.api_key)} onClick={()=>checkConnection(true)} className="rounded-lg border px-3 py-2 disabled:opacity-40">{busy?(isEn?'Checking…':'Đang kiểm tra…'):(isEn?'Check response':'Thử phản hồi')}</button>
       </div>
       {check && <div role="status" className={`rounded-xl border p-3 text-sm ${check.status==='ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : check.status==='catalog_ok' ? 'border-zinc-200 bg-zinc-50 text-zinc-700' : 'border-amber-200 bg-amber-50 text-amber-900'}`}>
         <p>{connectionStatusMessage(check.status,isEn)}</p>

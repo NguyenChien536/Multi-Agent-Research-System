@@ -35,7 +35,8 @@ async def test_workspace_and_paginated_monitor_explain_current_empty_error_witho
                 assert response.json()['failed_agent']=='WRITER'
                 assert 'secret-value' not in response.text
             if expired:
-                assert detail.json()['token_allowance']['can_extend'] is False
+                assert detail.json()['token_allowance']['can_extend'] is True
+                assert detail.json()['token_allowance']['next_timeout_seconds'] == 1800
         async with AsyncSessionLocal() as db:
             assert (await db.get(ResearchTask,tid)).budget_config==original
     finally:

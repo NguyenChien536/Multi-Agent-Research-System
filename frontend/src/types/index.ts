@@ -59,7 +59,7 @@ export interface ResearchTaskResponse {
   latest_error?: string | null;
   failed_agent?: string | null;
   retry_blocked_reason?: string | null;
-  token_allowance?: {input_used:number;output_used:number;max_input_tokens:number;max_output_tokens:number;next_input_tokens:number;next_output_tokens:number;can_extend:boolean} | null;
+  token_allowance?: {input_used:number;output_used:number;max_input_tokens:number;max_output_tokens:number;next_input_tokens:number;next_output_tokens:number;can_extend:boolean;next_max_llm_calls?:number;next_timeout_seconds?:number;max_cost_usd?:number;calls_used?:number;active_seconds_used?:number} | null;
   provider_wait?: { reason: string; retry_at: string; retry_count: number } | null;
   writing_progress?: {completed: number; total: number} | null;
   require_plan_approval: boolean;

@@ -67,7 +67,7 @@ async function fetcher<T>(endpoint: string, options?: RequestInit, responseKind:
 
 export const api = {
   settings: {
-    checkConnection: (value: Omit<import('../types').ModelConnectionInput, 'api_key'> & {api_key?: string; task_id?: string; generate?: boolean; free_tier_confirmed?: boolean}) =>
+    checkConnection: (value: Omit<import('../types').ModelConnectionInput, 'api_key'> & {api_key?: string; task_id?: string; generate?: boolean; free_tier_confirmed?: boolean; paid_probe_confirmed?:boolean}) =>
       fetcher<import('../types').ModelConnectionCheck>('/settings/model-connection/check', {method: 'POST', body: JSON.stringify(value)}),
     discoverModels: (value: {base_url: string; api_key?: string; task_id?: string; free_only?: boolean}) =>
       fetcher<{models: Array<{id: string; display_name?: string; free: boolean | null; supports_json_schema?: boolean; recommended_output_mode?: import('../types').ModelConnectionInput['structured_output_mode']; max_output_tokens?: number}>; check: string; generation_calls: number}>('/settings/model-connection/models', {method: 'POST', body: JSON.stringify(value)}),
@@ -103,7 +103,7 @@ export const api = {
       fetcher<{ status: string }>('/auth/me', { method: 'DELETE', body: JSON.stringify(data) }),
   },
   tasks: {
-    retry: (id: string, allowance?: {max_input_tokens:number;max_output_tokens:number}) => fetcher<unknown>(`/research/${id}/retry`, {method:'POST',...(allowance?{body:JSON.stringify(allowance)}:{})}),
+    retry: (id: string, allowance?: {max_input_tokens:number;max_output_tokens:number;max_llm_calls?:number;timeout_seconds?:number}) => fetcher<unknown>(`/research/${id}/retry`, {method:'POST',...(allowance?{body:JSON.stringify(allowance)}:{})}),
     modelConnectionOptions: () => fetcher<{ protocol: string; base_urls: string[]; use_server_providers?: boolean; server_provider_ready?: boolean; server_provider?: string | null }>('/research/model-connections/options', {cache: 'no-store'}),
     freeModels: () => fetcher<{models: Array<{id:string;context_length:number;max_output_tokens:number | null}>}>('/research/model-connections/free-models'),
     revokeModelConnection: (id: string) => fetcher<void>(`/research/${id}/model-connection`, { method: 'DELETE' }),

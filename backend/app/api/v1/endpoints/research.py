@@ -284,7 +284,8 @@ async def retry_failed_research(task_id: uuid.UUID, allowance: TokenAllowanceInc
     config = pause_budget_config(task.budget_config, now=task.completed_at)
     if allowance is not None:
         try:
-            config = increase_token_allowance(config, allowance.max_input_tokens, allowance.max_output_tokens)
+            config = increase_token_allowance(config, allowance.max_input_tokens, allowance.max_output_tokens,
+                max_llm_calls=allowance.max_llm_calls, timeout_seconds=allowance.timeout_seconds)
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from None
     task.budget_config = config

@@ -6,13 +6,13 @@ const vm=require('node:vm');
 const ts=require('typescript');
 function compile(file){return ts.transpileModule(fs.readFileSync(path.join(__dirname,'../src',file),'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,jsx:ts.JsxEmit.ReactJSX}}).outputText;}
 const status={exports:{}};vm.runInNewContext(compile('lib/model-connection-status.ts'),status);
-async function panel(root='https://openrouter.ai/api/v1'){
+async function panel(root='https://openrouter.ai/api/v1',profile={}){
   const states=[],deps=[],effects=[],checks=[],saves=[];let cursor=0;
   const hooks={useState(initial){const i=cursor++;if(!(i in states))states[i]=initial;return[states[i],v=>states[i]=typeof v==='function'?v(states[i]):v];},
     useEffect(fn,next){const i=cursor++;if(!deps[i]||next.some((v,j)=>v!==deps[i][j])){deps[i]=next;effects.push(fn);}}};
   const Fields=()=>null;
   const api={auth:{hasSession:()=>true},tasks:{modelConnectionOptions:async()=>({})},settings:{
-    getModelConnection:async()=>({connection:{base_url:root,model:'fixture:free',has_key:true,input_price_per_million:0,output_price_per_million:0}}),
+    getModelConnection:async()=>({connection:{base_url:root,model:'fixture:free',has_key:true,input_price_per_million:0,output_price_per_million:0,...profile}}),
     checkConnection:async value=>{checks.push(value);return{status:'quota_exhausted',quota:{used:51,limit:50,remaining:0}};},
     saveModelConnection:async value=>saves.push(value),
   }};
@@ -54,4 +54,15 @@ test('Google response test requires free-tier confirmation; metadata check remai
   assert.equal(button(p.render(),'Check response').props.disabled,false);
   await button(p.render(),'Check response').props.onClick();
   assert.equal(p.checks[0].generate,true);assert.equal(p.checks[0].free_tier_confirmed,true);
+});
+
+test('paid response test requires explicit consent for each small call',async()=>{
+  const p=await panel('https://openrouter.ai/api/v1',{model:'google/gemini-2.5-flash',input_price_per_million:.3,output_price_per_million:2.5});
+  assert.equal(button(p.render(),'Check response').props.disabled,true);
+  assert.equal(p.checks.length,0);
+  nodes(p.render()).find(n=>n.type==='input'&&n.props.type==='checkbox').props.onChange({target:{checked:true}});
+  assert.equal(button(p.render(),'Check response').props.disabled,false);
+  await button(p.render(),'Check response').props.onClick();
+  assert.equal(p.checks[0].paid_probe_confirmed,true);
+  assert.equal(button(p.render(),'Check response').props.disabled,true);
 });

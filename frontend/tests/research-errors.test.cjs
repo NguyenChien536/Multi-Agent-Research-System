@@ -14,6 +14,12 @@ mod.paths = Module._nodeModulePaths(path.dirname(filename));
 mod._compile(compiled, filename);
 const { researchErrorText } = mod.exports;
 
+test('legacy invalid request is not mistaken for quota because of generic advice',()=>{
+  const message=researchErrorText('Your API connection failed (OpenAIInvalidRequestError). Check its key, model, quota and supported output format.',true);
+  assert.match(message,/rejected the request format/);
+  assert.doesNotMatch(message,/Provider rate limit or quota reached/);
+});
+
 test('truncated output explains token exhaustion rather than rejected authentication', () => {
   assert.match(researchErrorText('LengthFinishReasonError', false), /không phải do API key/);
   assert.match(researchErrorText('MODEL_OUTPUT_TRUNCATED', true), /not an API-key error/);

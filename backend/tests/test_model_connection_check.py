@@ -71,8 +71,8 @@ async def test_catalog_failures_keep_the_actual_category_without_exposing_detail
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('mode,content,status',[
-    ('json_schema','{"ok":true}','ok'),
-    ('prompt_json','{"ok":true}','ok'),
+    ('json_schema','{"ok":true,"findings":[{"step":"review","supported":true,"note":"fixture"}]}','ok'),
+    ('prompt_json','{"ok":true,"findings":[{"step":"review","supported":true,"note":"fixture"}]}','ok'),
     ('prompt_json','{"ok":false}','invalid_output'),
 ])
 async def test_probe_makes_one_bounded_call_validates_output_and_closes_scope(monkeypatch,mode,content,status):

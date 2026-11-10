@@ -314,7 +314,8 @@ def test_client_budget_schema_enforces_the_product_hard_caps():
     with pytest.raises(ValidationError):
         BudgetConfigSchema(max_llm_calls=200)
     with pytest.raises(ValidationError):
-        BudgetConfigSchema(timeout_seconds=1800)
+        BudgetConfigSchema(timeout_seconds=3601)
+    assert BudgetConfigSchema(timeout_seconds=1800).timeout_seconds == 1800
 
 
 @pytest.mark.asyncio

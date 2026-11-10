@@ -6,17 +6,26 @@ from typing import Literal
 
 import httpx
 from fastapi import HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.services.model_connection import ModelConnection, ModelConnectionInput, build_connection_client, temporary_connection_scope
 from app.services.model_catalog import discover_models
 
 
-class ConnectionProbe(BaseModel):
+class ProbeFinding(BaseModel):
+    step: Literal['evidence', 'writing', 'review']
+    supported: bool
+    note: str = Field(max_length=120)
+
+
+class WorkflowConnectionProbe(BaseModel):
+    """Exercise nested records, enums and arrays used by real agent schemas."""
     ok: Literal[True]
+    findings: list[ProbeFinding] = Field(min_length=1, max_length=2)
 
 
-async def check_connection(value: ModelConnectionInput, *, generate: bool = False, free_tier_confirmed: bool = False) -> dict:
+async def check_connection(value: ModelConnectionInput, *, generate: bool = False, free_tier_confirmed: bool = False,
+                           paid_probe_confirmed: bool = False) -> dict:
     result = {'model': value.model, 'generation_calls': 0,
               'checked_at': datetime.now(timezone.utc).isoformat()}
     root, key = value.base_url, value.api_key.get_secret_value()
@@ -38,7 +47,7 @@ async def check_connection(value: ModelConnectionInput, *, generate: bool = Fals
             quota = meta.get('free_model_daily_requests')
             if isinstance(quota, dict) and all(isinstance(quota.get(k), int) and not isinstance(quota[k], bool) for k in ('used','limit','remaining')):
                 result['quota'] = {k:max(0, quota[k]) for k in ('used','limit','remaining')}
-                if quota['remaining'] <= 0:
+                if value.is_zero_price and quota['remaining'] <= 0:
                     return {**result, 'status':'quota_exhausted'}
         try:
             catalog = await discover_models(root,key,free_only=value.is_zero_price)
@@ -56,7 +65,9 @@ async def check_connection(value: ModelConnectionInput, *, generate: bool = Fals
                 return {**result, 'status': status}
         if not generate:
             return {**result, 'status':'catalog_ok'}
-        if not value.is_zero_price or (root != 'https://openrouter.ai/api/v1' and not free_tier_confirmed):
+        if not value.is_zero_price and not paid_probe_confirmed:
+            return {**result, 'status':'paid_probe_confirmation_required'}
+        if value.is_zero_price and root != 'https://openrouter.ai/api/v1' and not free_tier_confirmed:
             return {**result, 'status':'free_tier_confirmation_required'}
         connection = ModelConnection(**value.model_dump(exclude={'api_key'}), api_key=key)
         connection.output_token_limit = min(connection.output_token_limit,2048)
@@ -64,11 +75,11 @@ async def check_connection(value: ModelConnectionInput, *, generate: bool = Fals
         from langsmith import tracing_context
         from app.services.structured_output import compatible_structured_output
         async with temporary_connection_scope(connection):
-            model = compatible_structured_output(connection.model_tag,build_connection_client(connection),ConnectionProbe)
+            model = compatible_structured_output(connection.model_tag,build_connection_client(connection),WorkflowConnectionProbe)
             result['generation_calls'] = 1
             async with asyncio.timeout(45):
                 with tracing_context(enabled=False):
-                    response = await model.ainvoke([HumanMessage(content='Return exactly {"ok":true}.')])
+                    response = await model.ainvoke([HumanMessage(content='Return exactly {"ok":true,"findings":[{"step":"review","supported":true,"note":"Connection test only; no research evaluated."}]} without extra commentary.')])
             return {**result, 'status':'ok' if response.ok else 'invalid_output',
                     'scope':'small_json_response_not_full_research'}
     except httpx.HTTPStatusError as exc:
@@ -81,8 +92,11 @@ async def check_connection(value: ModelConnectionInput, *, generate: bool = Fals
         from app.services.structured_output import StructuredOutputFailure
         if limited := rate_limit_error(exc):
             return {**result,'status':'quota_exhausted' if limited.scope=='daily' else 'rate_limited'}
-        code=getattr(exc,'status_code',None)
+        from app.services.public_errors import provider_http_status, provider_failure_message
+        code=provider_http_status(exc)
         status={400:'unsupported_format',401:'auth_failed',403:'access_denied',404:'model_unavailable',429:'rate_limited'}.get(code)
+        if not status and (provider_failure_message(exc) or '').startswith('PROVIDER_REQUEST_INVALID:'):
+            status='unsupported_format'
         if not status and isinstance(exc,StructuredOutputFailure):
             status='incomplete_output' if str(exc).startswith('MODEL_OUTPUT_TRUNCATED') else 'invalid_output'
         return {**result,'status':status or 'unavailable'}

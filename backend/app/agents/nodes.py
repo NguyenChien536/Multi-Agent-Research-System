@@ -229,6 +229,14 @@ class BudgetedFallbackLLM:
                 from app.services.public_errors import public_error
                 logger.warning("LLM provider attempt failed (%s): %s; trying the next configured provider", model_name, public_error(str(exc)))
         if last_error:
+            from app.services.public_errors import provider_failure_message, ProviderRequestRejected
+            # Keep typed transport failures before falling back to text matching.
+            # In particular, a generic SDK message mentioning "quota" is not 429.
+            if message := provider_failure_message(last_error):
+                from app.services.provider_recovery import rate_limit_error
+                if limited := rate_limit_error(last_error):
+                    raise limited from None
+                raise ProviderRequestRejected(message) from None
             from app.services.provider_recovery import rate_limit_error
             if limited := rate_limit_error(last_error):
                 raise limited from None
@@ -389,10 +397,14 @@ async def invoke_llm_with_budget(
             numeric_limits = [limit for limit in limits if isinstance(limit, int) and not isinstance(limit, bool)]
             selected_ceiling = max(numeric_limits) if numeric_limits else (
                 connection.output_token_limit if connection else 8192)
+            if connection:
+                # A previous group's request mutates the reusable HTTP client.
+                # Its last allocation is not the owner's model-capacity ceiling.
+                selected_ceiling = connection.output_token_limit
             # A model maximum is a ceiling, not the size to allocate to every
             # short JSON/group request. Preserve capacity for the rest of the
             # paper, including conservative accounting after a timeout.
-            context["output_tokens"] = min(selected_ceiling, max(output_tokens, 16384))
+            context["output_tokens"] = min(selected_ceiling, max(output_tokens, 1024))
         token = _BUDGET_CALL_CONTEXT.set(context)
         try:
             response = await llm.ainvoke(messages)
@@ -479,8 +491,8 @@ class SupervisorPlan(BaseModel):
 
 class CriticVerdict(BaseModel):
     verdict: str = Field(description="PASS, REVISE, NEED_MORE_DATA, or NEEDS_REVIEW")
-    feedback: List[str] = Field(default_factory=list, description="Bounded, actionable findings grounded in supplied evidence")
-    missing_areas: List[str] = Field(default_factory=list, description="Evidence gaps that another search may address")
+    feedback: List[str] = Field(default_factory=list, description="At most five concise, actionable findings grounded in supplied evidence; no rewritten manuscript")
+    missing_areas: List[str] = Field(default_factory=list, description="At most five short, concrete evidence gaps that another search may address")
     evidence_reviews: List[EvidenceReview] = Field(default_factory=list, max_length=32)
 
 
@@ -1784,7 +1796,7 @@ Requested edits: {state.get('revision_instructions')}
 
     try:
         from app.services.completed_work import CompletedWork
-        from app.services.sectional_writer import write_section_groups, group_schema, group_message
+        from app.services.sectional_writer import write_section_groups, group_schema, group_message, group_output_tokens
         from app.services.public_errors import ProviderResponseTimeout
         saved_work = CompletedWork.for_state(state) if contract else None
         strategy_key = saved_work.fingerprint({'writer_strategy': 1, 'prompt': prompt, 'capacity': output_limit}) if saved_work else None
@@ -1800,7 +1812,8 @@ Requested edits: {state.get('revision_instructions')}
             group_llm = llm.with_structured_output(group_schema(headings,
                 short_headings={s['heading'] for s in contract['sections'] if s['id'] == 'keywords'},layout=layout,
                 allowed_claim_ids={c['claim_id'] for c in claims}))
-            value = await invoke_llm_with_budget(state, group_llm, messages, model_name=model_name, output_tokens=output_limit)
+            value = await invoke_llm_with_budget(state, group_llm, messages, model_name=model_name,
+                output_tokens=group_output_tokens(messages, output_limit))
             return group_message(value, headings)
         async def write_groups():
             return await write_section_groups(state, prompt, contract, saved_work, invoke_writer,
@@ -1908,7 +1921,7 @@ async def critic_node(state: ResearchState) -> Dict[str, Any]:
     critic_output_tokens = 2048 if critic_contract.get("evidence_review_policy") else 768
     from app.services.model_connection import current_connection
     if connection := current_connection():
-        critic_output_tokens = min(connection.output_token_limit, 16384)
+        critic_output_tokens = min(connection.output_token_limit, 8192)
     base_llm = get_fast_llm()
     if isinstance(base_llm, BudgetedFallbackLLM):
         for _, client in base_llm.models:
