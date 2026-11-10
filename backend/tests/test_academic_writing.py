@@ -27,7 +27,7 @@ from tests.test_publication import measured_context
 def test_brief_matches_the_article_method_and_does_not_supply_research_evidence(kind, expected, absent):
     contract = manuscript_contract(kind, "vi")
     brief = contract["writing_brief"]
-    assert contract["version"] == 4
+    assert contract["version"] == 5
     assert expected in brief["section_goals"] and absent not in brief["section_goals"]
     assert "reference_identity" in " ".join(brief["review_criteria"])
     assert "http" not in json.dumps(brief) and "STORM" not in json.dumps(brief)
@@ -70,6 +70,16 @@ def test_ieee_preserves_known_author_and_year_without_inventing_venue_or_access_
     assert reference_metadata_notes([{"source_title": "Undated source"}])[0]["missing"] == ["author", "publication_year", "url"]
 
 
+def test_internal_source_tag_is_not_rendered_as_a_bibliographic_title():
+    source = {"source_id": "s1", "source_tag": "nested_cv", "source_title": "nested_cv",
+              "source_url": "https://example.org/nested-cv"}
+    _, reference = format_reference(source, 1, "IEEE")
+    assert "nested_cv" not in reference
+    assert "[Title unavailable]" in reference
+    notes = reference_metadata_notes([source])
+    assert "title_may_be_internal_source_label" in notes[0]["missing"]
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("style", ["APA", "HARVARD"])
 async def test_colliding_author_year_sources_keep_distinct_labels_lineage_and_export(style, monkeypatch):
@@ -86,6 +96,29 @@ async def test_colliding_author_year_sources_keep_distinct_labels_lineage_and_ex
         tex = archive.read("main.tex").decode()
         assert r"\cite{ref1}" in tex and r"\cite{ref2}" in tex
         assert len(json.loads(archive.read("references.json"))) == 2
+
+
+@pytest.mark.asyncio
+async def test_postprocessor_collapses_duplicate_citation_cluster_and_gates_single_source_review(monkeypatch):
+    monkeypatch.setattr(nodes, "_record_progress", AsyncMock())
+    monkeypatch.setattr(nodes, "record_agent_run", AsyncMock())
+    ids = [str(uuid.uuid4()), str(uuid.uuid4())]
+    claims = [{"claim_id": ids[i], "evidence_id": f"e{i}", "source_id": "source-1", "chunk_id": f"c{i}",
+               "source_tag": "nested_cv", "source_title": "nested_cv", "source_url": "https://example.org/nested-cv",
+               "claim": f"A sourced observation {i}.", "evidence_quote": f"An exact source passage {i}."}
+              for i in range(2)]
+    draft = f"# Bounded review\n\nA comparison [[@claim:{ids[0]}]], [[@claim:{ids[1]}]]."
+    result = await nodes.post_processor_node({
+        "plan": attach_manuscript_contract({}, "REVIEW", "en"),
+        "research_type": "REVIEW", "language": "en", "citation_style": "IEEE",
+        "draft_report_markdown": draft, "claims": claims, "scientific_context": {"distinct_claim_source_count": 1},
+    })
+    assert "[1], [1]" not in result["final_report_markdown"]
+    assert "[Title unavailable]" in result["final_report_markdown"]
+    assert result["critic_review_metadata"]["status"] == "NEEDS_REVIEW"
+    assert "SINGLE_SOURCE_SCOPE" in {item["code"] for item in result["critic_review_metadata"]["manuscript_findings"]}
+    assert "title_may_be_internal_source_label" in result["critic_review_metadata"]["reference_metadata_notes"][0]["missing"]
+    assert len(result["citations"]) == 2  # Preserve separate claim/evidence lineage.
 
 
 def test_disambiguation_handles_truncated_labels_and_many_sources_without_collision():
@@ -107,7 +140,7 @@ def test_ambiguous_historical_labels_are_not_silently_exported_to_the_wrong_sour
 def test_new_plot_has_zero_based_ticks_accessible_data_and_no_invented_uncertainty(values):
     context = measured_context(); context["figure_style_version"] = 2
     context["analysis"]["metrics"]["baseline"]["mae"], context["analysis"]["metrics"]["model"]["mae"] = values
-    figure = build_scientific_figures(context, {})[0]
+    figure = build_scientific_figures(context)[0]
     root = ElementTree.fromstring(figure["svg"])
     assert root.attrib["aria-labelledby"] == "evaluation-title evaluation-desc"
     assert "MAE (target units)" in figure["svg"] and "uncertainty not estimated" in figure["svg"]
@@ -118,10 +151,10 @@ def test_new_plot_has_zero_based_ticks_accessible_data_and_no_invented_uncertain
 
 def test_figure_policy_and_legacy_bundle_preserve_frozen_appearance_and_measurements():
     legacy = measured_context()
-    figures = build_scientific_figures(legacy, {})
+    figures = build_scientific_figures(legacy)
     assert "style_version" not in figures[0]
     assert scientific_context({"plan": {"manuscript_contract": {"version": 2}}})["figure_style_version"] == 1
-    assert scientific_context({"plan": attach_manuscript_contract({}, "REVIEW", "en")})["figure_style_version"] == 2
+    assert scientific_context({"plan": attach_manuscript_contract({}, "REVIEW", "en")})["figure_style_version"] == 3
     data, _ = build_publication_bundle("Historical article", "![Figure 1](figures/evaluation.svg)", {"scientific_context": legacy, "scientific_figures": figures}, [], "ACM_SIGCONF", version_id="old", version_number=1)
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         assert archive.read("figures/evaluation.svg").decode() == figures[0]["svg"]
@@ -129,9 +162,11 @@ def test_figure_policy_and_legacy_bundle_preserve_frozen_appearance_and_measurem
 
 
 def test_figure_number_order_and_duplicate_assets_are_checked_for_new_contracts():
-    figures = build_scientific_figures({**measured_context(), "figure_style_version": 2}, {"available_source_count": 3})
+    figures = build_scientific_figures({**measured_context(), "figure_style_version": 2})
+    second = {**figures[0], "id": "second", "number": 2}
+    figures = [figures[0], second]
     contract = manuscript_contract("EMPIRICAL_COMPUTATIONAL", "en")
-    text = "[[figure:evaluation]]\n\n[[figure:workflow]]\n\n[[figure:workflow]]"
+    text = "[[figure:second]]\n\n[[figure:evaluation]]\n\n[[figure:evaluation]]"
     assert {"FIGURE_ORDER", "DUPLICATE_FIGURE"} <= {f["code"] for f in validate_scientific_reporting(text, contract, measured_context(), figures)}
 
 

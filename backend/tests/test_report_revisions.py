@@ -157,11 +157,12 @@ async def test_worker_publishes_a_new_version_without_research_and_keeps_base(pa
         base=await db.get(ReportVersion,p.base_id)
         assert (base.title,base.content_markdown,base.review_metadata)==p.snapshot
         new=await db.scalar(select(ReportVersion).where(ReportVersion.report_id==base.report_id,ReportVersion.version_number==2))
-        assert new.review_status=='PASSED',new.review_metadata
+        assert new.review_status=='NEEDS_REVIEW',new.review_metadata
+        assert 'SINGLE_SOURCE_SCOPE' in {item['code'] for item in new.review_metadata['manuscript_findings']}
         assert new.review_metadata['revision']['base_version_id']==str(base.id)
         assert new.review_metadata['method_provenance']==p.snapshot[2]['method_provenance']
         request=await db.get(ReportRevision,uuid.UUID(response.json()['id']))
-        assert request.status=='COMPLETED' and request.result_version_id==new.id
+        assert request.status=='NEEDS_REVIEW' and request.result_version_id==new.id
         assert await db.scalar(select(func.count(Citation.id)).where(Citation.report_version_id==new.id))==1
     duplicate=await worker.run_langgraph_workflow(str(p.tid))
     assert duplicate['status']!='SUCCESS'
@@ -336,7 +337,7 @@ async def test_worker_crash_after_checkpoint_redelivers_without_repeating_provid
     assert calls==first_calls
     async with AsyncSessionLocal() as db:
         request=await db.get(ReportRevision,uuid.UUID(response.json()['id']))
-        assert request.status=='COMPLETED'
+        assert request.status=='NEEDS_REVIEW'
         result=await db.get(ReportVersion,request.result_version_id)
         assert result.workflow_run_id==request.workflow_run_id
         assert await db.scalar(select(func.count(ReportVersion.id)).where(ReportVersion.workflow_run_id==request.workflow_run_id))==1

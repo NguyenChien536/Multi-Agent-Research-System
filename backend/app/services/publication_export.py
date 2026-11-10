@@ -8,7 +8,7 @@ import re
 import zipfile
 from html import unescape
 from urllib.parse import quote, urlsplit
-from app.services.references import reference_metadata_notes
+from app.services.references import reference_metadata_notes, reference_title
 
 TEMPLATES = {
     "IEEE_CONFERENCE": {"class": "IEEEtran", "options": "conference", "source": "https://conferences.ieeeauthorcenter.ieee.org/write-your-paper/authoring-tools-and-templates/"},
@@ -73,7 +73,11 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
         if identity not in seen:
             key = f"ref{len(seen)+1}"
             seen[identity] = key
-            text = ". ".join(unescape(str(item[k])) for k in ("source_author", "source_title", "venue", "publication_date") if item.get(k))
+            text = ". ".join([
+                *[unescape(str(item[k])) for k in ("source_author",) if item.get(k)],
+                reference_title(item),
+                *[unescape(str(item[k])) for k in ("venue", "publication_date") if item.get(k)],
+            ])
             url = ("https://doi.org/" + str(item["doi"]).removeprefix("https://doi.org/")) if item.get("doi") else str(item.get("source_url") or "")
             parsed = urlsplit(url)
             # URL-aware line breaking avoids overflowing narrow publication columns.
@@ -201,7 +205,9 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
         # Figure TeX is reconstructed from validated server data, never executed
         # from arbitrary model/user-generated source.
         from app.services.scientific_paper import build_scientific_figures
-        approved = [f for f in build_scientific_figures(manifest["scientific_context"], manifest["method_provenance"]) if f["id"] in figures_by_id]
+        figure_context = dict(manifest["scientific_context"])
+        figure_context.setdefault("available_source_count", manifest["method_provenance"].get("available_source_count", 0))
+        approved = [f for f in build_scientific_figures(figure_context) if f["id"] in figures_by_id]
         if set(figures_by_id) != {f["id"] for f in approved}:
             raise ValueError("Figure snapshot does not match the version's measured/conceptual provenance")
         for figure in approved:
