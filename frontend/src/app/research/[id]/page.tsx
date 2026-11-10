@@ -150,6 +150,9 @@ export default function WorkspacePage() {
 
   const [activeTab, setActiveTab] = useState<'report' | 'sources' | 'citations' | 'runs' | 'details' | 'protocol' | 'experiments'>('report');
   const [sourceSearch, setSourceSearch] = useState('');
+  const [sourceTypeFilter, setSourceTypeFilter] = useState<string>('ALL');
+  const [citationFilter, setCitationFilter] = useState<'ALL' | 'WITH_SOURCE' | 'WITH_TEXT'>('ALL');
+  const [runStatusFilter, setRunStatusFilter] = useState<'ALL' | 'SUCCESS' | 'RUNNING' | 'FAILED'>('ALL');
   const [highlightedRef, setHighlightedRef] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -1777,7 +1780,7 @@ export default function WorkspacePage() {
                             {task.provider_wait && task.status === 'QUEUED'
                               ? (isEn ? 'Waiting for the AI service' : 'Tạm chờ dịch vụ AI')
                               : task.status === 'QUEUED'
-                              ? (isEn ? "Research task is queued for agent worker allocation" : "Bài nghiên cứu đang trong hàng đợi chờ phân phối tác tử")
+                              ? (isEn ? "Research task is queued for processing" : "Bài nghiên cứu đang trong hàng đợi chuẩn bị xử lý")
                               : task.status === 'PLANNING'
                               ? (isEn ? "Supervisor Agent is planning research strategy & queries" : "Supervisor Agent đang phân tích đề tài & thiết lập từ khóa")
                               : isWorking
@@ -1798,8 +1801,8 @@ export default function WorkspacePage() {
                               ? (isEn ? 'Saved progress will resume automatically after the provider cooldown.' : 'Tiến độ đã lưu sẽ tự tiếp tục khi hết thời gian chờ dịch vụ.')
                               : task.status === 'QUEUED'
                               ? (isEn
-                                  ? "Your research question has been registered. An autonomous agent worker is being scheduled to initiate literature discovery. Polling updates automatically."
-                                  : "Đề tài nghiên cứu đã được ghi nhận vào hệ thống. Máy chủ đang xếp lịch tác tử để bắt đầu tìm kiếm tài liệu. Giao diện tự động cập nhật.")
+                                  ? "Your research question has been registered. The system is preparing to initiate literature discovery. Updates automatically."
+                                  : "Đề tài nghiên cứu đã được ghi nhận. Hệ thống đang chuẩn bị bắt đầu tìm kiếm và tổng hợp tài liệu. Giao diện tự động cập nhật.")
                               : isWorking
                               ? null
                               : task.status === 'FAILED'
@@ -2014,7 +2017,7 @@ export default function WorkspacePage() {
                         <h3 className="font-bold text-base sm:text-lg text-zinc-900">{isEn ? "Upload Private Grounding PDF" : "Tải lên tài liệu PDF riêng tư (Private Grounding)"}</h3>
                       </div>
                       <p className="text-xs text-zinc-500 leading-relaxed">
-                        {isEn ? "Text is extracted, chunked, and embedded into pgvector as reliable grounding evidence for AI Agents (max 5 files, < 20MB, < 100 pages)." : "Hệ thống sẽ trích xuất văn bản, băm nhỏ chunk, lập chỉ mục pgvector và tích hợp làm bằng chứng tin cậy cho AI Agents (tối đa 5 file, < 20MB, < 100 trang)." }
+                        {isEn ? "Text is extracted and indexed as reliable grounding evidence for research agents (max 5 files, < 20MB, < 100 pages)." : "Hệ thống sẽ trích xuất và lập chỉ mục làm tài liệu tham khảo cho các tác tử nghiên cứu (tối đa 5 file, < 20MB, < 100 trang)." }
                       </p>
                     </div>
 
@@ -2213,7 +2216,11 @@ export default function WorkspacePage() {
                   </Card>
                 ) : (
                   <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    {citations.map((citation) => {
+                    {citations.filter(c => {
+                      if (citationFilter === 'WITH_SOURCE') return !!c.source_url;
+                      if (citationFilter === 'WITH_TEXT') return !!c.chunk_content;
+                      return true;
+                    }).map((citation) => {
                       const isHighlighted = highlightedRef && (citation.citation_label.includes(highlightedRef) || String(citation.citation_number) === highlightedRef);
                       return (
                         <Card
@@ -2314,7 +2321,7 @@ export default function WorkspacePage() {
                     </div>
 
                     <div className="relative border-l-2 border-zinc-200 ml-4 pl-6 space-y-6">
-                      {runs.map((run, index) => {
+                      {runs.filter(r => runStatusFilter === 'ALL' || r.status === runStatusFilter).map((run, index) => {
                         const isSuccess = run.status === 'SUCCESS';
                         const isRunning = run.status === 'RUNNING';
                         return (

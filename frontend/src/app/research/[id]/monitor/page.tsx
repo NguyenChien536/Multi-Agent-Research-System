@@ -259,7 +259,7 @@ export default function ResearchMonitorPage() {
         {loading && !snapshot && (
           <div role="status" className="flex items-center justify-center gap-2.5 rounded-2xl border border-zinc-200 bg-white p-16 text-center text-sm font-medium text-zinc-600 shadow-2xs">
             <RefreshCw size={20} className="animate-spin text-blue-600" />
-            <span>{isEn ? 'Loading monitoring status...' : 'Đang tải dữ liệu tiến độ từ máy chủ...'}</span>
+            <span>{isEn ? 'Loading monitoring status...' : 'Đang tải dữ liệu tiến độ...'}</span>
           </div>
         )}
 
@@ -745,7 +745,7 @@ export default function ResearchMonitorPage() {
                       <dd className="text-zinc-800 font-medium">{formatTime(snapshot.updated_at, language)}</dd>
                     </div>
                     <div className="border-b border-zinc-100 pb-1.5">
-                      <dt className="text-zinc-500">{isEn ? 'Backend sample time' : 'Thời điểm lấy mẫu'}</dt>
+                      <dt className="text-zinc-500">{isEn ? 'Sample time' : 'Thời điểm lấy mẫu'}</dt>
                       <dd className="text-zinc-800 font-medium">{formatTime(snapshot.observed_at, language)}</dd>
                     </div>
                     <div>

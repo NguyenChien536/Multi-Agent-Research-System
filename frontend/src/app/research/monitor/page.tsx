@@ -3,7 +3,7 @@
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import {
-  Activity, ArrowUpRight, Clock, FileText, Plus, Search,
+  Activity, ArrowUpRight, Filter, Clock, FileText, Plus, Search,
   CheckCircle2, AlertTriangle, ArrowLeft, RefreshCw, X
 } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -16,6 +16,8 @@ export default function MonitorOverview() {
   const { language, t } = useLanguage();
   const [page, setPage] = useState(0);
   const [query, setQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'RUNNING' | 'WAITING' | 'ATTENTION' | 'COMPLETED'>('ALL');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'REVIEW' | 'EMPIRICAL_COMPUTATIONAL' | 'EMPIRICAL_HUMAN'>('ALL');
 
   const load = useCallback((signal: AbortSignal) => api.tasks.list(page * 20, 21, signal), [page]);
   const { data, error, loading, lastSuccess, refresh } = useMonitorPoll(load, 5000);
@@ -78,7 +80,14 @@ export default function MonitorOverview() {
         {/* 4 Metric Status Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: Running */}
-          <div className="p-4 sm:p-5 rounded-xl border border-zinc-200 bg-white shadow-2xs">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setStatusFilter(statusFilter === 'RUNNING' ? 'ALL' : 'RUNNING')}
+            onKeyDown={e => e.key === 'Enter' && setStatusFilter(statusFilter === 'RUNNING' ? 'ALL' : 'RUNNING')}
+            className={`p-4 sm:p-5 rounded-xl border transition-all cursor-pointer shadow-2xs ${
+              statusFilter === 'RUNNING' ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/20' : 'border-zinc-200 bg-white hover:border-zinc-300'
+            }`}>
             <div className="flex items-center justify-between text-zinc-600 mb-1">
               <span className="text-xs font-medium text-blue-700 uppercase tracking-wider">{t('mon_card_running')}</span>
               <Activity size={16} className="text-blue-600 animate-pulse" />
@@ -88,7 +97,14 @@ export default function MonitorOverview() {
           </div>
 
           {/* Card 2: Waiting */}
-          <div className="p-4 sm:p-5 rounded-xl border border-zinc-200 bg-white shadow-2xs">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setStatusFilter(statusFilter === 'WAITING' ? 'ALL' : 'WAITING')}
+            onKeyDown={e => e.key === 'Enter' && setStatusFilter(statusFilter === 'WAITING' ? 'ALL' : 'WAITING')}
+            className={`p-4 sm:p-5 rounded-xl border transition-all cursor-pointer shadow-2xs ${
+              statusFilter === 'WAITING' ? 'border-amber-600 ring-2 ring-amber-500/20 bg-amber-50/20' : 'border-zinc-200 bg-white hover:border-zinc-300'
+            }`}>
             <div className="flex items-center justify-between text-zinc-600 mb-1">
               <span className="text-xs font-medium text-amber-700 uppercase tracking-wider">{t('mon_card_waiting')}</span>
               <Clock size={16} className="text-amber-600" />
@@ -98,7 +114,14 @@ export default function MonitorOverview() {
           </div>
 
           {/* Card 3: Attention */}
-          <div className="p-4 sm:p-5 rounded-xl border border-zinc-200 bg-white shadow-2xs">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setStatusFilter(statusFilter === 'ATTENTION' ? 'ALL' : 'ATTENTION')}
+            onKeyDown={e => e.key === 'Enter' && setStatusFilter(statusFilter === 'ATTENTION' ? 'ALL' : 'ATTENTION')}
+            className={`p-4 sm:p-5 rounded-xl border transition-all cursor-pointer shadow-2xs ${
+              statusFilter === 'ATTENTION' ? 'border-red-600 ring-2 ring-red-500/20 bg-red-50/20' : 'border-zinc-200 bg-white hover:border-zinc-300'
+            }`}>
             <div className="flex items-center justify-between text-zinc-600 mb-1">
               <span className="text-xs font-medium text-red-700 uppercase tracking-wider">{t('mon_card_attention')}</span>
               <AlertTriangle size={16} className="text-red-600" />
@@ -108,7 +131,14 @@ export default function MonitorOverview() {
           </div>
 
           {/* Card 4: Completed */}
-          <div className="p-4 sm:p-5 rounded-xl border border-zinc-200 bg-white shadow-2xs">
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => setStatusFilter(statusFilter === 'COMPLETED' ? 'ALL' : 'COMPLETED')}
+            onKeyDown={e => e.key === 'Enter' && setStatusFilter(statusFilter === 'COMPLETED' ? 'ALL' : 'COMPLETED')}
+            className={`p-4 sm:p-5 rounded-xl border transition-all cursor-pointer shadow-2xs ${
+              statusFilter === 'COMPLETED' ? 'border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/20' : 'border-zinc-200 bg-white hover:border-zinc-300'
+            }`}>
             <div className="flex items-center justify-between text-zinc-600 mb-1">
               <span className="text-xs font-medium text-emerald-700 uppercase tracking-wider">{t('mon_card_completed')}</span>
               <CheckCircle2 size={16} className="text-emerald-600" />
