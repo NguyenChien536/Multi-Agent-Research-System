@@ -114,6 +114,7 @@ export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: stri
     <h4 className="text-lg font-semibold">{isEn ? 'AI connection' : 'Kết nối AI'}</h4>
     {serverMode && <p className="text-sm text-zinc-600">{isEn ? 'Your saved connection takes priority. Articles without a personal connection use the server provider.' : 'Kết nối riêng được ưu tiên. Bài không có kết nối riêng dùng provider máy chủ.'}</p>}
     {!taskId && <p className="text-sm text-zinc-500">{isEn?'Default connection for new articles. Existing articles keep their own settings.':'Kết nối mặc định cho bài mới. Các bài đã tạo giữ cấu hình riêng.'}</p>}
+    {!editing && !!value?.fallback_models?.length && <p className="break-all text-sm text-zinc-600">{isEn ? 'Free backups: ' : 'Dự phòng miễn phí: '}{value.fallback_models.join(' → ')}</p>}
     {taskId && <div className="flex gap-2 text-sm">
       <button type="button" disabled={busy} aria-pressed={scope==='default'} onClick={()=>setScope('default')} className={`rounded-lg px-3 py-2 ${scope==='default'?'bg-zinc-900 text-white':'bg-zinc-100'}`}>{isEn?'Default for new articles':'Mặc định cho bài mới'}</button>
       <button type="button" disabled={busy} aria-pressed={scope==='task'} onClick={()=>setScope('task')} className={`rounded-lg px-3 py-2 ${scope==='task'?'bg-zinc-900 text-white':'bg-zinc-100'}`}>{isEn?'Current article':'Bài hiện tại'}</button>

@@ -1,7 +1,7 @@
 """Write-only credential update contracts."""
 import uuid
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
-from typing import Literal
+from typing import Literal, Annotated
 
 class ConnectionUpdate(BaseModel):
     model_config = ConfigDict(extra='forbid', hide_input_in_errors=True)
@@ -13,6 +13,7 @@ class ConnectionUpdate(BaseModel):
     output_token_limit: int = Field(default=32768, ge=1024, le=1_000_000)
     reasoning_effort: Literal['none', 'low', 'medium', 'high'] = 'low'
     structured_output_mode: Literal['json_object', 'json_schema', 'prompt_json'] = 'json_object'
+    fallback_models: list[Annotated[str, Field(min_length=1,max_length=200,pattern=r'^[a-zA-Z0-9][a-zA-Z0-9._:/@+\-]*$')]] = Field(default_factory=list,max_length=3)
 
 
 class ConnectionCheck(ConnectionUpdate):

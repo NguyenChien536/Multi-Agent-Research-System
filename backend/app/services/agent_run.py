@@ -161,6 +161,13 @@ async def record_agent_run(
             model = "local-lexical-indexer"
             input_tokens, output_tokens, estimated_cost = 0, 0, 0.0
             output_summary = {**(output_summary or {}), "retrieval_mode": "lexical_no_embedding_api"}
+    from app.services.model_connection import current_connection
+    connection = current_connection()
+    if not runtime and connection and getattr(connection, 'fallback_models', None) and agent_name != 'Curator':
+        output_summary = {**(output_summary or {}), 'llm_routing': {
+            'requested_model': connection.model, 'fallback_models': list(connection.fallback_models),
+            'last_response_model': connection.last_response_model,
+        }}
     run_record = AgentRun(
         research_task_id=parsed_task_id,
         agent_name=agent_name,

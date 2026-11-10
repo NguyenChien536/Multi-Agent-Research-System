@@ -51,8 +51,10 @@ async def check_connection(value: ModelConnectionInput, *, generate: bool = Fals
                     return {**result, 'status':'quota_exhausted'}
         try:
             catalog = await discover_models(root,key,free_only=value.is_zero_price)
-            if value.model not in {m['id'] for m in catalog['models']}:
+            available = {m['id'] for m in catalog['models']}
+            if not available.intersection([value.model, *value.fallback_models]):
                 return {**result, 'status':'model_unavailable'}
+            result['primary_model_available'] = value.model in available
         except HTTPException as exc:
             if not (generate and 'MODEL_CATALOG_UNAVAILABLE' in str(exc.detail)):
                 detail = str(exc.detail)

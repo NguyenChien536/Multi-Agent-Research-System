@@ -17,6 +17,14 @@ test('scheduled provider wait is automatic and has no duplicate continue action'
  assert.ok(html.includes('Automatic retry'));assert.ok(!html.includes('Continue from failed step'));
 });
 
+test('daily quota waits show a date, automatic continuation and permission to close the page',()=>{
+ const html=render({status:'QUEUED',provider_wait:{reason:'PROVIDER_DAILY_LIMIT',retry_at:'2026-11-11T00:00:05Z'}});
+ assert.ok(html.includes('Waiting for the daily allowance'));
+ assert.ok(html.includes('11/11/2026'));
+ assert.ok(html.includes('You can close this page'));
+ assert.ok(!html.includes('Continue from failed step'));
+});
+
 test('explicit recovery shows new resource limits while preserving the cost ceiling',()=>{
  const html=render({status:'NEEDS_REVIEW',current_step:'BUDGET_LIMIT',token_allowance:{can_extend:true,next_input_tokens:200000,next_output_tokens:100000,next_max_llm_calls:50,next_timeout_seconds:1800,max_cost_usd:.5}});
  assert.ok(html.includes('Approve limits and continue'));

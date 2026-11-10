@@ -11,7 +11,7 @@ import asyncio
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
-from typing import Literal
+from typing import Literal, Annotated
 
 from cryptography.fernet import Fernet, InvalidToken
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
@@ -40,6 +40,7 @@ class ModelConnectionInput(BaseModel):
     output_token_limit: int = Field(default=32768, ge=1024, le=1_000_000)
     reasoning_effort: Literal['none', 'low', 'medium', 'high'] = 'low'
     structured_output_mode: Literal['json_object', 'json_schema', 'prompt_json'] = 'json_object'
+    fallback_models: list[Annotated[str, Field(min_length=1, max_length=200, pattern=r'^[a-zA-Z0-9][a-zA-Z0-9._:/@+\-]*$')]] = Field(default_factory=list, max_length=3)
 
     @field_validator("base_url")
     @classmethod
@@ -56,6 +57,12 @@ class ModelConnectionInput(BaseModel):
 
     @model_validator(mode="after")
     def free_openrouter_model(self):
+        if self.fallback_models:
+            if self.base_url != 'https://openrouter.ai/api/v1' or not self.is_zero_price:
+                raise ValueError('Model fallbacks are available only for zero-price OpenRouter connections')
+            if any(not name.endswith(':free') for name in self.fallback_models):
+                raise ValueError('Choose only explicit :free fallback models')
+            self.fallback_models = list(dict.fromkeys(name for name in self.fallback_models if name != self.model))
         if self.base_url == "https://openrouter.ai/api/v1" and self.is_zero_price:
             if not (self.model.endswith(":free") or self.model == "openrouter/free"):
                 raise ValueError("For zero-price OpenRouter connections, select a :free model or openrouter/free")
@@ -84,6 +91,8 @@ class ModelConnection:
     output_token_limit: int = 32768
     reasoning_effort: str = 'low'
     structured_output_mode: str = 'json_object'
+    fallback_models: list[str] = field(default_factory=list)
+    last_response_model: str | None = field(default=None, init=False, repr=False)
     _clients: list = field(default_factory=list, repr=False)
 
     @property
@@ -245,6 +254,11 @@ def build_connection_client(connection: ModelConnection):
         # low effort rather than disabling it; exclusion only hides the trace.
         extra["reasoning"] = ({"enabled": False} if connection.reasoning_effort == 'none' else {"effort": connection.reasoning_effort, "exclude": True})
         extra['provider'] = {'require_parameters': True}
+        if getattr(connection, 'fallback_models', None):
+            # OpenRouter performs ordered failover inside the same owner-key
+            # request. The zero-price restriction below still applies to all.
+            extra['models'] = list(connection.fallback_models)
+            extra['route'] = 'fallback'
     if connection.base_url == "https://openrouter.ai/api/v1" and connection.input_price_per_million == 0 and connection.output_price_per_million == 0:
         extra['provider']['max_price'] = {"prompt": 0, "completion": 0, "request": 0}
     if connection.base_url == 'https://generativelanguage.googleapis.com/v1beta/openai' and connection.model.startswith('gemini-'):
@@ -260,3 +274,35 @@ def build_connection_client(connection: ModelConnection):
     if hasattr(connection, "register_client"):
         connection.register_client(client)
     return client
+
+
+def remember_response_model(response):
+    """Keep only bounded model metadata, never private generated content."""
+    import re
+    connection = current_connection()
+    if not connection or not getattr(connection, 'fallback_models', None):
+        return
+    metadata = getattr(response, 'response_metadata', None) or {}
+    model = metadata.get('model_name') or metadata.get('model')
+    allowed = {name.removesuffix(':free') for name in [connection.model, *connection.fallback_models]}
+    valid = isinstance(model, str) and re.fullmatch(r'[a-zA-Z0-9][a-zA-Z0-9._:/@+\-]{0,199}', model)
+    connection.last_response_model = model if valid and model.removesuffix(':free') in allowed else None
+
+
+def route_json_retry(client, response):
+    """One local format retry may use an explicitly selected free backup."""
+    connection = current_connection()
+    if not connection or not getattr(connection, 'fallback_models', None) or not hasattr(client, 'model_name'):
+        return
+    metadata = getattr(response, 'response_metadata', None) or {}
+    failed = metadata.get('model_name') or getattr(client, 'model_name', connection.model)
+    candidates = [name for name in connection.fallback_models
+                  if name.removesuffix(':free') != str(failed).removesuffix(':free')]
+    if not candidates:
+        return
+    selected = candidates[0]
+    client.model_name = selected
+    # Structured bindings share this list with the original transport body.
+    backups = client.extra_body.get('models')
+    if isinstance(backups, list):
+        backups[:] = [name for name in [connection.model, *connection.fallback_models] if name != selected]

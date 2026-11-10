@@ -12,6 +12,7 @@ export interface ModelConnectionInput {
   api_key: string;
   base_url: string;
   model: string;
+  fallback_models?: string[];
   input_price_per_million: number;
   output_price_per_million: number;
   output_token_limit?: number;

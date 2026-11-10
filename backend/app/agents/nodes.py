@@ -132,6 +132,9 @@ class BudgetedFallbackLLM:
                     break
                 if repairable or expanded_output is not None:
                     retry_hint = render_prompt('structured_output_retry')
+                    if repairable:
+                        from app.services.model_connection import route_json_retry
+                        route_json_retry(self.request_clients[model_name], getattr(last_error, 'response', None))
                 else:
                     await asyncio.sleep(2)
             reservation_id = None
@@ -183,6 +186,8 @@ class BudgetedFallbackLLM:
                     with tracing_context(enabled=False if model_name.startswith("byok:") else None):
                         attempt_messages = [*messages, HumanMessage(content=retry_hint)] if retry_hint and isinstance(messages, list) else messages
                         response = await model.ainvoke(attempt_messages, **kwargs)
+                from app.services.model_connection import remember_response_model
+                remember_response_model(response)
                 if reservation_id:
                     prompt_text = context["prompt_text"]
                     output_text = response.model_dump_json() if hasattr(response, "model_dump_json") else str(
@@ -384,6 +389,11 @@ async def invoke_llm_with_budget(
                 cached = await saved_work.load(operation, result_key)
                 if cached:
                     result = llm.structured_schema.model_validate(cached['value'])
+                    from app.services.model_connection import current_connection
+                    if cached.get('response_model') and (connection := current_connection()):
+                        from types import SimpleNamespace
+                        from app.services.model_connection import remember_response_model
+                        remember_response_model(SimpleNamespace(response_metadata={'model_name': cached['response_model']}))
                     object.__setattr__(result, '_reused_provider_result', True)
                     logger.info('Reused completed unit task=%s operation=%s', state['task_id'], operation)
                     return result
@@ -409,7 +419,10 @@ async def invoke_llm_with_budget(
         try:
             response = await llm.ainvoke(messages)
             if saved_work and result_key:
-                await saved_work.save(operation, result_key, {'value': response.model_dump()})
+                from app.services.model_connection import current_connection
+                connection = current_connection()
+                await saved_work.save(operation, result_key, {'value': response.model_dump(),
+                    'response_model': getattr(connection, 'last_response_model', None)})
             return response
         finally:
             _BUDGET_CALL_CONTEXT.reset(token)

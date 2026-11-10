@@ -202,6 +202,8 @@ Lượt kiểm tra metadata model ngày 02/11 trả input limit 1.048.576 và ou
 
 Writer mới ghi số nguồn/quote, kích thước prompt, token dự phòng, output limit, finish reason và model được provider báo khi có; không lưu raw prompt hay secrets vào log. Các số đo này hỗ trợ chẩn đoán thiếu nguồn, mất thông tin khi trích xuất, quota, output truncation và khả năng model riêng biệt. Cải thiện hierarchy chưa chứng minh chất lượng học thuật tốt hơn; cần chạy/chấm bài thật trên các thể loại/chủ đề theo Evaluation Plan. Không tự tăng cap hoặc đổi model để che lỗi pipeline.
 
+Với kết nối OpenRouter miễn phí, người dùng có thể chọn tối đa ba model `:free` dự phòng theo thứ tự. Danh sách được gửi cùng request; mọi lựa chọn chịu `max_price=0`, và không có chuyển âm thầm sang model trả phí. Lỗi provider/429 được OpenRouter xử lý qua chuỗi model; nếu cả chuỗi không nhận request, hệ thống lưu cùng run/checkpoint vào outbox, chuyển task sang `QUEUED`, nhả worker và hẹn lại theo `Retry-After` hoặc `X-RateLimit-Reset`; thiếu header thì dùng backoff. Số lần hẹn không tự làm task thất bại; người dùng vẫn có thể hủy. Quota miễn phí chung, hết tín dụng, lỗi xác thực hoặc request không hợp lệ không được chữa bằng model dự phòng; quota chung sẽ chờ reset. Cơ chế này tăng khả năng tự phục hồi nhưng không đảm bảo provider sẽ sẵn sàng hoặc các model tạo ra chất lượng tương đương. Model trả lời sai JSON có nhiều nhất một lượt sửa bằng model dự phòng đã chọn; Critic vẫn là bước đánh giá nội dung riêng.
+
 ### 9.3. Chọn và chuyển bằng chứng — cập nhật 03/11/2026 (#86)
 
 Policy `evidence_selection` v1 tách ba việc: phát hiện tài liệu, chọn đoạn liên quan, và đánh giá mức hỗ trợ của luận điểm. Điểm xếp hạng hay quote khớp không phải chứng nhận chất lượng nghiên cứu.

@@ -34,6 +34,18 @@ function nodes(n){if(!n||typeof n!=='object')return[];if(Array.isArray(n))return
 function text(n){if(n==null||typeof n==='boolean')return'';if(typeof n!=='object')return String(n);if(Array.isArray(n))return n.map(text).join('');return text(n.props?.children);}
 const button=(tree,label)=>nodes(tree).find(n=>n.type==='button'&&text(n).startsWith(label));
 
+test('free backups are explicit, ordered and removed when switching to another service',async()=>{
+  const p=await panel('fixture/primary:free');await button(p.render(),'Load available models').props.onClick();
+  const labels=nodes(p.render()).filter(n=>n.type==='label'&&text(n).includes('fixture/large:free'));
+  const label=labels.find(n=>nodes(n).some(child=>child.type==='input'&&child.props.type==='checkbox'));
+  const checkbox=label&&nodes(label).find(n=>n.type==='input'&&n.props.type==='checkbox');
+  assert.ok(checkbox, text(p.render()));checkbox.props.onChange();
+  assert.equal(p.value().fallback_models.join(','),'fixture/large:free');
+  const rootSelect=nodes(p.render()).find(n=>n.type==='select'&&n.props.value===root);
+  rootSelect.props.onChange({target:{value:'https://api.groq.com/openai/v1'}});
+  assert.equal(p.value().fallback_models.length,0);
+});
+
 test('loading free catalog replaces router placeholder with highest output model and its maximum',async()=>{
   const p=await panel();await button(p.render(),'Load available models').props.onClick();
   assert.equal(p.value().model,'fixture/large:free');assert.equal(p.value().output_token_limit,460800);

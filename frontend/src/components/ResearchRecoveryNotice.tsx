@@ -12,9 +12,10 @@ export function ResearchRecoveryNotice({task, isEn, busy, onContinue, onExtend}:
   if (task.provider_wait && task.status === 'QUEUED') {
     const date = new Date(task.provider_wait.retry_at);
     return <div role="status" className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-      <strong>{isEn ? 'Waiting for the AI service' : 'Tạm chờ dịch vụ AI'}</strong>
+      <strong>{task.provider_wait.reason === 'PROVIDER_DAILY_LIMIT' ? (isEn ? 'Waiting for the daily allowance' : 'Đang chờ cấp lại hạn mức ngày') : (isEn ? 'Waiting for the AI service' : 'Tạm chờ dịch vụ AI')}</strong>
       <p className="mt-1">{isEn ? 'Progress is saved. Automatic retry: ' : 'Tiến độ đã lưu. Tự tiếp tục lúc: '}
-        {Number.isNaN(date.getTime()) ? '—' : date.toLocaleTimeString(isEn ? 'en-GB' : 'vi-VN')}.</p>
+        {Number.isNaN(date.getTime()) ? '—' : date.toLocaleString(isEn ? 'en-GB' : 'vi-VN')}.</p>
+      <p className="mt-2 text-xs">{isEn ? 'You can close this page. With Docker running, research resumes automatically. Waiting does not consume active processing time. You can stop the article from its header.' : 'Bạn có thể đóng trang. Khi Docker còn chạy, bài tự tiếp tục. Thời gian chờ không trừ hạn mức xử lý. Bạn vẫn có thể dừng bài bằng nút ở đầu trang.'}</p>
     </div>;
   }
   if (!blocked && task.status !== 'FAILED') return null;

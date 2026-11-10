@@ -82,7 +82,13 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
     }).catch(() => { if (active) setLoadError(true); }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [reload]);
-  const update = (patch: Partial<ModelConnectionInput>) => { if (value) onChange({ ...value, ...patch }); };
+  const update = (patch: Partial<ModelConnectionInput>) => {
+    if (!value) return;
+    const next={...value,...patch};
+    next.fallback_models=next.base_url==='https://openrouter.ai/api/v1' && next.input_price_per_million===0 && next.output_price_per_million===0 && (next.model.endsWith(':free') || next.model==='openrouter/free')
+      ? (next.fallback_models || []).filter(name=>name!==next.model) : [];
+    onChange(next);
+  };
   const inputClass = 'mt-1 w-full rounded-lg border border-zinc-200 bg-white p-2 text-sm outline-none focus:ring-2 focus:ring-zinc-400';
 
   async function loadModels() {
@@ -115,6 +121,7 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
     update({
       structured_output_mode: 'json_object',
       base_url: newUrl,
+      fallback_models: [],
       api_key: '',
       model: newUrl === 'https://openrouter.ai/api/v1' ? 'openrouter/free' : '',
       input_price_per_million: 0,
@@ -173,6 +180,18 @@ export function ModelConnectionFields({ value, onChange, isEn, keyRequired = tru
       </div>
       {catalogError && <p role="alert" className="text-sm text-red-700">{catalogError}</p>}
       {catalogChecked && <p role="status" className="text-xs text-zinc-600">{isEn ? 'List loaded. Use Check response to test the selected model.' : 'Đã tải danh sách. Bấm Thử phản hồi để kiểm tra model đã chọn.'}</p>}
+      {value.base_url === 'https://openrouter.ai/api/v1' && value.input_price_per_million === 0 && value.output_price_per_million === 0 && <details className="rounded-lg border border-zinc-200 p-3 text-sm">
+        <summary className="cursor-pointer font-medium">{isEn ? 'Free fallback models' : 'Model miễn phí dự phòng'}{value.fallback_models?.length ? ` (${value.fallback_models.length}/3)` : ''}</summary>
+        <p className="mt-2 text-xs text-zinc-600">{isEn ? 'Choose up to 3 backups, in order. OpenRouter tries them if the primary is unavailable. A shared daily quota still requires waiting.' : 'Chọn tối đa 3 model theo thứ tự dự phòng. OpenRouter thử khi model chính không khả dụng. Hết quota chung vẫn phải chờ.'}</p>
+        {!catalogChecked && <p className="mt-2 text-xs">{isEn ? 'Load models to see compatible options.' : 'Tải danh sách để xem các lựa chọn tương thích.'}</p>}
+        {Array.from(new Set([...(value.fallback_models || []),...models.filter(name=>name.endsWith(':free') && schemaModels[name])])).filter(name=>name!==value.model).map(name=>{
+          const selected=(value.fallback_models || []).includes(name);
+          return <label key={name} className="mt-2 flex items-start gap-2 break-all text-xs">
+            <input type="checkbox" checked={selected} disabled={!selected && (value.fallback_models?.length || 0)>=3} onChange={()=>update({fallback_models:selected ? (value.fallback_models || []).filter(id=>id!==name) : [...(value.fallback_models || []),name]})} />
+            <span>{selected ? `${(value.fallback_models || []).indexOf(name)+1}. ` : ''}{modelNames[name] || name}</span>
+          </label>;
+        })}
+      </details>}
       {catalogChecked && value.model && !models.includes(value.model) && <p role="alert" className="text-sm text-amber-700">{isEn ? 'This model was not found. Choose a model from the list or check its exact ID in Advanced.' : 'Không tìm thấy model này. Chọn từ danh sách hoặc kiểm tra tên chính xác trong phần Nâng cao.'}</p>}
       <details className="text-sm text-zinc-700">
         <summary className="cursor-pointer">{isEn ? 'Advanced' : 'Nâng cao'}</summary>

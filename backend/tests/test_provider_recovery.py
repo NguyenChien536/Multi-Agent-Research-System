@@ -15,9 +15,9 @@ from tests.test_provider_budget import create_running_task, delete_test_user
 
 @pytest.mark.parametrize('metadata,message,header,scope,auto', [
  ({'limit_source':'upstream_provider_shared_pool'}, 'busy', None, 'upstream', True),
- ({}, 'Daily free request limit reached', '30', 'daily', False),
+ ({}, 'Daily free request limit reached', '30', 'daily', True),
  ({}, 'slow down', '12', 'rate', True),
- ({}, 'unknown limit', None, 'unknown', False),
+ ({}, 'unknown limit', None, 'unknown', True),
  ({}, 'temporarily rate limited', None, 'upstream', True),
 ])
 def test_safe_limit_classification(metadata,message,header,scope,auto):
@@ -28,12 +28,13 @@ def test_safe_limit_classification(metadata,message,header,scope,auto):
  assert 'busy' not in str(limited) and 'slow down' not in str(limited)
 
 
-def test_deferrals_are_bounded_and_daily_or_long_waits_are_not_retried():
+def test_deferrals_continue_after_many_attempts_but_respect_long_retry_after():
  rid=uuid.uuid4()
  assert can_defer(ProviderRateLimited('rate',5),{},rid)
- assert not can_defer(ProviderRateLimited('daily',5),{},rid)
- assert not can_defer(ProviderRateLimited('rate',999),{},rid)
- assert not can_defer(ProviderRateLimited('rate',5),{'_provider_recovery':{'run_id':str(rid),'count':2}},rid)
+ assert can_defer(ProviderRateLimited('daily',5),{},rid)
+ assert can_defer(ProviderRateLimited('rate',999),{},rid)
+ assert not can_defer(ProviderRateLimited('rate',604801),{},rid)
+ assert can_defer(ProviderRateLimited('rate',5),{'_provider_recovery':{'run_id':str(rid),'count':64000}},rid)
  assert rate_limit_error(RuntimeError('arbitrary 429 text')) is None
 
 @pytest.mark.asyncio
