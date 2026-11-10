@@ -1793,21 +1793,15 @@ export default function WorkspacePage() {
                               : (isEn ? "Research task is ready to begin" : "Bài nghiên cứu sẵn sàng bắt đầu")}
                           </h2>
 
-                          <p className="text-sm text-zinc-600 leading-relaxed max-w-2xl">
-                            {task.provider_wait && task.status === 'QUEUED'
+                          {(() => {
+                            const desc = task.provider_wait && task.status === 'QUEUED'
                               ? (isEn ? 'Saved progress will resume automatically after the provider cooldown.' : 'Tiến độ đã lưu sẽ tự tiếp tục khi hết thời gian chờ dịch vụ.')
                               : task.status === 'QUEUED'
                               ? (isEn
                                   ? "Your research question has been registered. An autonomous agent worker is being scheduled to initiate literature discovery. Polling updates automatically."
                                   : "Đề tài nghiên cứu đã được ghi nhận vào hệ thống. Máy chủ đang xếp lịch tác tử để bắt đầu tìm kiếm tài liệu. Giao diện tự động cập nhật.")
-                              : task.status === 'PLANNING'
-                              ? (isEn
-                                  ? "The Supervisor Agent is deconstructing your topic into core domain hypotheses, identifying academic databases, and generating targeted search queries."
-                                  : "Supervisor Agent đang phân rã câu hỏi nghiên cứu thành các luận điểm học thuật, xác định cơ sở dữ liệu và soạn thảo truy vấn tìm kiếm chuyên sâu.")
                               : isWorking
-                              ? (isEn
-                                  ? "Literature is being fetched, chunked, and embedded into the vector database. Analysts will cross-reference claims before drafting the final paper."
-                                  : "Tài liệu đang được thu thập, trích xuất đoạn và nhúng vào vector database. Agent phân tích sẽ đối soát chéo bằng chứng trước khi soạn thảo.")
+                              ? null
                               : task.status === 'FAILED'
                               ? (isEn
                                   ? researchErrorText(task.latest_error, true)
@@ -1822,8 +1816,13 @@ export default function WorkspacePage() {
                                   : "Tiến trình đã được dừng theo lệnh người dùng. Bạn có thể bấm khởi động lại bất cứ lúc nào.")
                               : (isEn
                                   ? "Click 'Start Research Now' to deploy the multi-agent pipeline."
-                                  : "Nhấn 'Bắt đầu nghiên cứu ngay' để khởi chạy chuỗi tác tử.")}
-                          </p>
+                                  : "Nhấn 'Bắt đầu nghiên cứu ngay' để khởi chạy chuỗi tác tử.");
+                            return desc ? (
+                              <p className="text-sm text-zinc-600 leading-relaxed max-w-2xl">
+                                {desc}
+                              </p>
+                            ) : null;
+                          })()}
                         </div>
 
                         {/* Real-time stats / action buttons */}
