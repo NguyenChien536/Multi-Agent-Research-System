@@ -52,12 +52,38 @@ export function PublicationExport({ taskId, version, isEn, showRevisionLink = tr
 export function PublicationArticle({ metadata, ...props }: ViewerProps & { metadata?: Record<string, unknown> }) {
   const raw = metadata?.scientific_figures;
   const figures = new Map((Array.isArray(raw) ? raw : []).filter((value): value is { id: string; caption: string; alt: string; svg: string; number: number } =>
-    value && typeof value.id === 'string' && typeof value.svg === 'string' && typeof value.caption === 'string'
+    value && typeof value.id === 'string' && /^[a-z0-9_-]+$/i.test(value.id) && typeof value.svg === 'string' && typeof value.caption === 'string'
     && value.svg.length < 200000 && !/<script|foreignObject|\bhref\s*=/i.test(value.svg)
   ).map(value => [value.id, value]));
-  const pieces = props.content.split(/(!\[[^\]]*\]\(figures\/[a-z_-]+\.svg\))/g);
+  // Older reports may have a saved SVG in metadata even when the writer omitted
+  // its Markdown marker. Keep the figure visible in the Results section instead
+  // of silently dropping an artifact that was generated from recorded data.
+  let displayContent = props.content;
+  for (const figure of figures.values()) {
+    if (displayContent.includes(`(figures/${figure.id}.svg)`)) continue;
+    const lines = displayContent.split('\n');
+    const headingAt = lines.findIndex(line => {
+      if (!/^#{1,3}\s+/.test(line)) return false;
+      const title = line.replace(/^#{1,3}\s+/, '').replace(/^\d+[.)]\s*/, '').trim().toLocaleLowerCase();
+      return ['results', 'results and analysis', 'findings', 'kết quả', 'kết quả nghiên cứu'].some(name => title === name || title.startsWith(`${name}:`) || title.startsWith(`${name} —`));
+    });
+    let insertionAt = lines.length;
+    if (headingAt >= 0) {
+      const level = (lines[headingAt].match(/^#+/) || ['##'])[0].length;
+      for (let i = headingAt + 1; i < lines.length; i += 1) {
+        const nextLevel = (lines[i].match(/^(#{1,3})\s+/) || [])[1]?.length;
+        if (nextLevel && nextLevel <= level) { insertionAt = i; break; }
+      }
+    } else {
+      const referencesAt = lines.findIndex(line => /^#{1,3}\s+(?:references|bibliography|works cited|tài liệu tham khảo)\b/i.test(line));
+      if (referencesAt >= 0) insertionAt = referencesAt;
+    }
+    lines.splice(insertionAt, 0, '', `![Figure ${figure.number}](figures/${figure.id}.svg)`, '');
+    displayContent = lines.join('\n');
+  }
+  const pieces = displayContent.split(/(!\[[^\]]*\]\(figures\/[a-z0-9_-]+\.svg\))/g);
   return <article className="font-serif leading-7">{pieces.map((piece, index) => {
-    const match = piece.match(/^!\[[^\]]*\]\(figures\/([a-z_-]+)\.svg\)$/);
+    const match = piece.match(/^!\[[^\]]*\]\(figures\/([a-z0-9_-]+)\.svg\)$/i);
     const figure = match && figures.get(match[1]);
     if (!figure) return <MarkdownViewer key={index} {...props} content={piece} />;
     return <figure key={index} id={`figure-${figure.id}`} className="my-7 break-inside-avoid">
