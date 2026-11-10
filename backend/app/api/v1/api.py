@@ -1,8 +1,10 @@
 from fastapi import APIRouter
+from app.api.v1.endpoints import settings as user_settings
 from app.api.v1.endpoints import experiment_export
 from app.api.v1.endpoints import health, research, auth, monitoring, report_questions, publication, report_revisions
 
 api_router = APIRouter()
+api_router.include_router(user_settings.router, prefix='/settings', tags=['User Settings'])
 
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
 api_router.include_router(health.router, tags=["System Health"])

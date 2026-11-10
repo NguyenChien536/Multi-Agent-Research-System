@@ -105,3 +105,31 @@ def writing_guidance(contract: dict | None, *, reviewer: bool = False) -> str:
     purpose = ("Review only the supplied sections against the relevant goals. Do not mark unseen sections as reviewed. For each material issue, name the section, the problematic claim or figure and a feasible correction. Do not equate a matching citation marker with semantic support."
                if reviewer else "Use these section goals to plan the argument before drafting; return the article only. Do not expose this brief as a checklist or repeat its wording as manuscript content.")
     return "ACADEMIC WRITING BRIEF (guidance, not research evidence):\n" + json.dumps(brief, ensure_ascii=False) + "\n" + purpose
+
+
+def manuscript_skeleton(contract: dict | None, outline: list | None = None) -> str:
+    """A visible hierarchy for drafting, never fabricated prose or results."""
+    if not contract:
+        return ''
+    vi = contract.get('language') == 'vi'
+    defaults = {
+        'introduction': ['Bối cảnh và vấn đề nghiên cứu', 'Câu hỏi, phạm vi và đóng góp'] if vi else ['Background and Research Problem', 'Research Questions, Scope and Contributions'],
+        'related_work': ['Các hướng nghiên cứu liên quan', 'So sánh và vấn đề còn mở'] if vi else ['Related Approaches', 'Comparisons and Open Questions'],
+        'review_methods': ['Chiến lược tìm kiếm và phạm vi', 'Lựa chọn nguồn và phương pháp tổng hợp'] if vi else ['Search Strategy and Scope', 'Source Selection and Synthesis Procedure'],
+        'synthesis': ['Tổng hợp bằng chứng theo câu hỏi', 'Điểm thống nhất, mâu thuẫn và giới hạn bằng chứng'] if vi else ['Evidence Synthesis by Research Question', 'Agreements, Disagreements and Evidence Gaps'],
+        'methods': ['Thiết kế nghiên cứu và biến số', 'Quy trình phân tích và giả định'] if vi else ['Study Design and Variables', 'Analysis Procedure and Assumptions'],
+        'setup': ['Dữ liệu và tiền xử lý', 'Baseline và quy trình đánh giá'] if vi else ['Data and Preprocessing', 'Baseline and Evaluation Protocol'],
+        'results': ['Kết quả quan sát được', 'So sánh và độ bất định'] if vi else ['Observed Outcomes', 'Comparisons and Uncertainty'],
+        'discussion': ['Diễn giải trong bối cảnh nghiên cứu', 'Hàm ý và cách giải thích thay thế'] if vi else ['Interpretation in Context', 'Implications and Alternative Explanations'],
+    }
+    titles = {item.get('section_id'): item.get('subsection_titles', []) for item in (outline or []) if isinstance(item, dict)}
+    lines = ['DRAFTING SKELETON: use H2 sections and informative H3 subsections. Adapt child titles to actual evidence; never invent findings to fill a heading.']
+    for section in contract.get('sections', []):
+        lines.append('## ' + section['heading'])
+        children = titles.get(section['id']) or defaults.get(section['id'], [])
+        for title in children[:4]:
+            title = ' '.join(str(title).replace('#','').split())[:140]
+            if title:
+                lines.append('### ' + title)
+    lines.append('References are produced from verified citation markers, not invented entries.')
+    return '\n'.join(lines)

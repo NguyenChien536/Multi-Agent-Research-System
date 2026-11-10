@@ -74,7 +74,9 @@ def extract_text_from_pdf(content: bytes) -> Dict[str, Any]:
     for idx, page in enumerate(reader.pages):
         try:
             page_text = page.extract_text() or ""
-            page_text = page_text.strip()
+            # PDF font extraction can emit NUL; PostgreSQL text rejects it.
+            # Preserve word separation and keep the original PDF as the artifact.
+            page_text = page_text.replace('\x00', ' ').strip()
             if page_text:
                 extracted_pages.append(f"--- [Trang {idx + 1}] ---\n{page_text}")
                 total_chars += len(page_text)
@@ -96,6 +98,8 @@ def extract_text_from_pdf(content: bytes) -> Dict[str, Any]:
     if reader.metadata:
         title = reader.metadata.title
         author = reader.metadata.author
+        title = title.replace('\x00', ' ') if isinstance(title, str) else title
+        author = author.replace('\x00', ' ') if isinstance(author, str) else author
 
     return {
         "text": full_text,

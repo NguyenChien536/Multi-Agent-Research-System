@@ -14,6 +14,7 @@ class MonitorActivity(BaseModel):
     duration_ms: int
     output: dict[str, int | str | bool] = Field(default_factory=dict)
     has_error: bool
+    error_summary: str | None = None
 
 
 class MonitorWorkflow(BaseModel):
@@ -31,6 +32,8 @@ class ResearchMonitorResponse(BaseModel):
     research_type: str
     status: str
     current_step: str | None
+    latest_error: str | None = None
+    failed_agent: str | None = None
     current_iteration: int
     attempt_number: int
     created_at: datetime

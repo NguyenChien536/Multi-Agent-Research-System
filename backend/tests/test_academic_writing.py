@@ -27,7 +27,7 @@ from tests.test_publication import measured_context
 def test_brief_matches_the_article_method_and_does_not_supply_research_evidence(kind, expected, absent):
     contract = manuscript_contract(kind, "vi")
     brief = contract["writing_brief"]
-    assert contract["version"] == 5
+    assert contract["version"] == 7
     assert expected in brief["section_goals"] and absent not in brief["section_goals"]
     assert "reference_identity" in " ".join(brief["review_criteria"])
     assert "http" not in json.dumps(brief) and "STORM" not in json.dumps(brief)
@@ -154,7 +154,7 @@ def test_figure_policy_and_legacy_bundle_preserve_frozen_appearance_and_measurem
     figures = build_scientific_figures(legacy)
     assert "style_version" not in figures[0]
     assert scientific_context({"plan": {"manuscript_contract": {"version": 2}}})["figure_style_version"] == 1
-    assert scientific_context({"plan": attach_manuscript_contract({}, "REVIEW", "en")})["figure_style_version"] == 3
+    assert scientific_context({"plan": attach_manuscript_contract({}, "REVIEW", "en")})["figure_style_version"] == 4
     data, _ = build_publication_bundle("Historical article", "![Figure 1](figures/evaluation.svg)", {"scientific_context": legacy, "scientific_figures": figures}, [], "ACM_SIGCONF", version_id="old", version_number=1)
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
         assert archive.read("figures/evaluation.svg").decode() == figures[0]["svg"]

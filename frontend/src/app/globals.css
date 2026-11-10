@@ -4,9 +4,31 @@
 
 @layer base {
   body {
-    @apply bg-zinc-50 text-zinc-950 antialiased;
+    @apply bg-white text-stone-900 antialiased;
     font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
+
+/* ==========================================================================
+   TAVILY-INSPIRED WARM SCENIC AESTHETICS
+   Soft pastoral horizon, elegant hero banners, and pill ergonomics
+   ========================================================================== */
+.tavily-scenic-bg {
+  background-color: #FAF8F5;
+  background-image:
+    radial-gradient(ellipse 130% 65% at 50% 100%, rgba(147, 197, 160, 0.38) 0%, rgba(190, 215, 195, 0.22) 30%, rgba(250, 248, 245, 0) 70%),
+    radial-gradient(ellipse 90% 50% at 15% 95%, rgba(220, 205, 170, 0.35) 0%, rgba(250, 248, 245, 0) 60%),
+    radial-gradient(ellipse 85% 55% at 85% 95%, rgba(165, 205, 180, 0.3) 0%, rgba(250, 248, 245, 0) 60%),
+    linear-gradient(180deg, #FAF8F5 0%, #FAF8F5 45%, #F4F1EA 75%, #E6EDE2 100%);
+}
+
+.tavily-hero-banner {
+  background:
+    linear-gradient(135deg, rgba(22, 48, 38, 0.92) 0%, rgba(26, 44, 52, 0.88) 50%, rgba(38, 58, 48, 0.94) 100%),
+    radial-gradient(circle at 85% 25%, rgba(52, 211, 153, 0.35) 0%, transparent 55%),
+    radial-gradient(circle at 15% 85%, rgba(251, 191, 36, 0.22) 0%, transparent 50%),
+    linear-gradient(180deg, #183327 0%, #11241c 100%);
+}
+
 }
 
 /* ==========================================================================
@@ -122,14 +144,49 @@
   }
 }
 
-/* Respond to actual paper space, including both navigation sidebars. */
-.paper-space { container-type: inline-size; container-name: paper; }
-.paper-layout-container { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2rem; align-items: start; }
-@container paper (min-width: 1000px) {
-  .paper-layout-container { grid-template-columns: minmax(0, 1fr) 240px; }
-  .paper-toc { position: sticky; top: 1rem; }
-}
+/* Full width unified article layout */
+.paper-space { width: 100%; }
+.paper-layout-container { display: block; width: 100%; }
 @media print {
   .paper-space { container-type: normal; }
   .paper-layout-container { display: block !important; }
+}
+
+/* ==========================================================================
+   ELEGANT CUSTOM SCROLLBARS
+   Replaces harsh OS scrollbars with subtle, modern semi-transparent bars
+   ========================================================================== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(168, 162, 158, 0.35) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(168, 162, 158, 0.35);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 113, 108, 0.6);
+}
+
+/* Hide scrollbars completely on navigation tab bars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }

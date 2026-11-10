@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ComponentProps } from 'react';
+import { useId, useState, type ComponentProps } from 'react';
 import { api } from '@/lib/api';
 import { MarkdownViewer } from '@/components/ui/MarkdownViewer';
 import Link from 'next/link';
@@ -11,6 +11,7 @@ export function PublicationExport({ taskId, version, isEn, showRevisionLink = tr
   const [template, setTemplate] = useState<'IEEE_CONFERENCE' | 'ACM_SIGCONF'>('IEEE_CONFERENCE');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const templateId = useId();
   const download = async () => {
     if (!version || busy) return;
     setBusy(true); setError('');
@@ -30,8 +31,11 @@ export function PublicationExport({ taskId, version, isEn, showRevisionLink = tr
     {version && showRevisionLink && <Link href={`/research/${taskId}/revisions?version=${version}`} className="rounded border px-3 py-2 font-medium">
       {isEn ? 'Revise & view versions' : 'Sửa bài & xem phiên bản'}
     </Link>}
-    <label className="font-medium" htmlFor="publication-template">{isEn ? 'Publication source' : 'Mẫu xuất bản'}</label>
-    <select id="publication-template" value={template} onChange={e => setTemplate(e.target.value as typeof template)} disabled={busy} className="border rounded px-2 py-2 bg-white text-zinc-900">
+    <details className="w-full rounded-lg border border-zinc-200 bg-zinc-50 p-3">
+    <summary className="cursor-pointer font-medium text-zinc-700">{isEn ? 'LaTeX & research files' : 'LaTeX và tệp nghiên cứu'}</summary>
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+    <label className="font-medium" htmlFor={templateId}>{isEn ? 'Template' : 'Mẫu trình bày'}</label>
+    <select id={templateId} value={template} onChange={e => setTemplate(e.target.value as typeof template)} disabled={busy} className="border rounded px-2 py-2 bg-white text-zinc-900">
       <option value="IEEE_CONFERENCE">IEEE Conference</option><option value="ACM_SIGCONF">ACM SIGCONF</option>
     </select>
     <button disabled={busy || !version} onClick={() => void download()} className="rounded border px-3 py-2 font-medium disabled:opacity-50">
@@ -39,6 +43,8 @@ export function PublicationExport({ taskId, version, isEn, showRevisionLink = tr
     </button>
     <span className="text-zinc-500">{isEn ? 'Compile the ZIP with XeLaTeX / Overleaf.' : 'Biên dịch ZIP bằng XeLaTeX / Overleaf.'}</span>
     <ExperimentBundleExport taskId={taskId} version={version} isEn={isEn} />
+    </div>
+    </details>
     {error && <p role="alert" className="w-full text-red-700">{error}</p>}
   </div>;
 }
@@ -46,12 +52,38 @@ export function PublicationExport({ taskId, version, isEn, showRevisionLink = tr
 export function PublicationArticle({ metadata, ...props }: ViewerProps & { metadata?: Record<string, unknown> }) {
   const raw = metadata?.scientific_figures;
   const figures = new Map((Array.isArray(raw) ? raw : []).filter((value): value is { id: string; caption: string; alt: string; svg: string; number: number } =>
-    value && typeof value.id === 'string' && typeof value.svg === 'string' && typeof value.caption === 'string'
+    value && typeof value.id === 'string' && /^[a-z0-9_-]+$/i.test(value.id) && typeof value.svg === 'string' && typeof value.caption === 'string'
     && value.svg.length < 200000 && !/<script|foreignObject|\bhref\s*=/i.test(value.svg)
   ).map(value => [value.id, value]));
-  const pieces = props.content.split(/(!\[[^\]]*\]\(figures\/[a-z_-]+\.svg\))/g);
+  // Older reports may have a saved SVG in metadata even when the writer omitted
+  // its Markdown marker. Keep the figure visible in the Results section instead
+  // of silently dropping an artifact that was generated from recorded data.
+  let displayContent = props.content;
+  for (const figure of figures.values()) {
+    if (displayContent.includes(`(figures/${figure.id}.svg)`)) continue;
+    const lines = displayContent.split('\n');
+    const headingAt = lines.findIndex(line => {
+      if (!/^#{1,3}\s+/.test(line)) return false;
+      const title = line.replace(/^#{1,3}\s+/, '').replace(/^\d+[.)]\s*/, '').trim().toLocaleLowerCase();
+      return ['results', 'results and analysis', 'findings', 'kết quả', 'kết quả nghiên cứu'].some(name => title === name || title.startsWith(`${name}:`) || title.startsWith(`${name} —`));
+    });
+    let insertionAt = lines.length;
+    if (headingAt >= 0) {
+      const level = (lines[headingAt].match(/^#+/) || ['##'])[0].length;
+      for (let i = headingAt + 1; i < lines.length; i += 1) {
+        const nextLevel = (lines[i].match(/^(#{1,3})\s+/) || [])[1]?.length;
+        if (nextLevel && nextLevel <= level) { insertionAt = i; break; }
+      }
+    } else {
+      const referencesAt = lines.findIndex(line => /^#{1,3}\s+(?:references|bibliography|works cited|tài liệu tham khảo)\b/i.test(line));
+      if (referencesAt >= 0) insertionAt = referencesAt;
+    }
+    lines.splice(insertionAt, 0, '', `![Figure ${figure.number}](figures/${figure.id}.svg)`, '');
+    displayContent = lines.join('\n');
+  }
+  const pieces = displayContent.split(/(!\[[^\]]*\]\(figures\/[a-z0-9_-]+\.svg\))/g);
   return <article className="font-serif leading-7">{pieces.map((piece, index) => {
-    const match = piece.match(/^!\[[^\]]*\]\(figures\/([a-z_-]+)\.svg\)$/);
+    const match = piece.match(/^!\[[^\]]*\]\(figures\/([a-z0-9_-]+)\.svg\)$/i);
     const figure = match && figures.get(match[1]);
     if (!figure) return <MarkdownViewer key={index} {...props} content={piece} />;
     return <figure key={index} id={`figure-${figure.id}`} className="my-7 break-inside-avoid">

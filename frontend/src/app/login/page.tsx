@@ -19,8 +19,10 @@ export default function LoginPage() {
   const [fullName, setFullName] = useState('');
   const [working, setWorking] = useState(false);
   const [error, setError] = useState('');
+  const [accountDeleted, setAccountDeleted] = useState(false);
 
   useEffect(() => {
+    setAccountDeleted(new URLSearchParams(window.location.search).get('account') === 'deleted');
     const requested = new URLSearchParams(window.location.search).get('next');
     if (requested?.startsWith('/') && !requested.startsWith('//') && !requested.startsWith('/\\')) {
       setNextPath(requested);
@@ -56,6 +58,7 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-12 text-zinc-900 flex items-center justify-center">
       <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
+        {accountDeleted && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{isEn ? 'Your account is closed. Research and file cleanup is in progress.' : 'Tài khoản đã đóng. Hệ thống đang dọn các bài nghiên cứu và file.'}</p>}
         <div className="flex items-center justify-between">
           <Link href="/" className="text-sm font-semibold text-zinc-900 flex items-center gap-2">
             <span className="w-6 h-6 rounded-md bg-zinc-900 text-white flex items-center justify-center text-xs font-semibold">S</span>

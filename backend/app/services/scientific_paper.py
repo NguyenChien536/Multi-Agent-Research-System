@@ -6,6 +6,7 @@ from xml.sax.saxutils import escape
 
 
 def scientific_context(state: dict) -> dict:
+    from app.services.fieldwork_intake import frozen_csv_statistics
     analysis = state.get("analysis_run") or {}
     claims = state.get("claims") or []
     claim_source_ids = {
@@ -13,8 +14,9 @@ def scientific_context(state: dict) -> dict:
         if claim.get("source_id") and claim.get("evidence_id")
     }
     contract_version = ((state.get("plan") or {}).get("manuscript_contract") or {}).get("version", 1)
+    rendering_version = (((state.get("plan") or {}).get("manuscript_contract") or {}).get("rendering_policy") or {}).get("version", 0)
     return {"research_type": state.get("research_type", "REVIEW"),
-            "figure_style_version": 3 if contract_version >= 5 else (2 if contract_version >= 3 else 1),
+            "figure_style_version": 4 if rendering_version >= 2 else (3 if contract_version >= 5 else (2 if contract_version >= 3 else 1)),
             "grounded_claim_count": len({c.get("claim_id") for c in state.get("claims", []) if c.get("evidence_id")}),
             "available_source_count": len(state.get("collected_sources") or []),
             "distinct_claim_source_count": len(claim_source_ids),
@@ -23,6 +25,9 @@ def scientific_context(state: dict) -> dict:
                 "analysis_run_id", "status", "routine_name", "metrics", "manifest", "reproducibility_status"
             ) if key in analysis},
             "statistical_significance_tested": False,
+            "fieldwork_csv_statistics": deepcopy(frozen_csv_statistics((state.get('user_data_submission') or {}).get('artifact_evidence'))),
+            "study_method_provenance": {key: str((state.get('user_data_submission') or {}).get(key) or '')
+                                        for key in ('method_notes', 'data_provenance')},
             "independent_datasets_evaluated": 1 if analysis else 0}
 
 
@@ -53,8 +58,11 @@ def _measured_figures(context: dict) -> list[dict]:
                     f'<text x="{x+60}" y="270" text-anchor="middle" font-family="serif" font-size="16">{label}</text>']
         svg.append('</svg>')
         n_test = (run.get("manifest") or {}).get("test_rows", "not recorded")
+        caption = f"Held-out MAE in target units on {n_test} test rows. One seeded split is exploratory; no confidence intervals or significance test were computed."
+        if context.get("figure_style_version", 1) >= 4:
+            caption += " The two bars are aggregate MAE values for the mean baseline and Ridge, not individual predictions, residuals, or an error distribution."
         figures.append({"id": "evaluation", "number": len(figures) + 1, "kind": "measured",
-                        "caption": f"Held-out MAE in target units on {n_test} test rows. One seeded split is exploratory; no confidence intervals or significance test were computed.",
+                        "caption": caption,
                         "alt": f"Mean baseline MAE {baseline:.5g}; Ridge MAE {model:.5g}.",
                         "svg": "".join(svg), "data": {"baseline_mae": baseline, "ridge_mae": model},
                         "latex": r"\begin{tikzpicture}\begin{axis}[ybar,width=\linewidth,height=4.5cm,ymin=0,ymax=1.25,xtick={1,2},xticklabels={Baseline,Ridge},ytick={0,0.5,1},yticklabels={0," + f"{scale/2:.4g},{scale:.4g}" + r"},ylabel={MAE (target units)},bar width=20pt]\addplot coordinates {(1," + f"{baseline/scale:.8f}" + ")(2," + f"{model/scale:.8f}" + r")};\end{axis}\end{tikzpicture}"})
@@ -153,12 +161,75 @@ def materialize_figures(markdown: str, figures: list[dict]) -> str:
     return markdown
 
 
+def measured_comparison_table(context: dict, contract: dict | None) -> str:
+    """Render recorded routine metrics; never derive results from manuscript prose."""
+    if not contract or (contract.get("rendering_policy") or {}).get("version", 0) < 2:
+        return ""
+    if contract.get("article_type") != "COMPUTATIONAL_STUDY":
+        return ""
+    run = context.get("analysis") or {}
+    if run.get("status") != "COMPLETED" or run.get("routine_name") != "tabular_regression_v1":
+        return ""
+    metrics = run.get("metrics") or {}
+    try:
+        rows = [[_number((metrics.get(key) or {}).get(metric)) for metric in ("mae", "rmse", "r2")]
+                for key in ("baseline", "model")]
+    except ValueError:
+        return ""
+    vi = contract.get("language") == "vi"
+    caption = ("Bảng 1. Kết quả đo trên cùng tập kiểm thử; một lần chia dữ liệu, chưa kiểm định ý nghĩa thống kê."
+               if vi else "Table 1. Recorded metrics on the same held-out split; one split, without a statistical significance test.")
+    lines = [caption, "", "| Model | MAE | RMSE | R² |", "|---|---:|---:|---:|"]
+    for label, values in zip(("Training-mean baseline", "Ridge"), rows):
+        lines.append("| " + label + " | " + " | ".join(f"{v:.6g}" for v in values) + " |")
+    return "\n".join(lines)
+
+
+def insert_measured_comparison_table(markdown: str, context: dict, contract: dict | None) -> str:
+    table = measured_comparison_table(context, contract)
+    if not table or table in markdown:
+        return markdown
+    # Reserve Table 1 for recorded results; do not silently rewrite a model's table.
+    if re.search(r"(?m)^\s*\*{0,2}(?:Table|Bảng)\s+1\s*[.:]", markdown, re.I):
+        return markdown
+    results = next((s["heading"] for s in contract["sections"] if s["id"] == "results"), None)
+    if not results:
+        return markdown
+    heading = re.compile(rf"(?m)^##\s+{re.escape(results)}\s*$")
+    return heading.sub(lambda m: m[0] + "\n\n" + table, markdown, count=1)
+
+
 def validate_scientific_reporting(markdown: str, contract: dict | None, context: dict, figures: list[dict]) -> list[dict]:
     if not contract or contract.get("version", 1) < 2:
         return []
     findings = []
+    if contract.get('study_provenance_policy'):
+        from app.services.study_reporting import study_reporting_findings
+        findings.extend(study_reporting_findings(markdown, contract, context))
+    if contract.get('rendering_policy'):
+        without_markers = re.sub(r'\[\[(?:@claim:[0-9a-fA-F-]{36}|figure:[a-zA-Z0-9_-]+)\]\]', '', markdown)
+        if '[[' in without_markers:
+            findings.append({'code':'UNRESOLVED_INTERNAL_MARKER','message':'Remove invented internal references such as manifest/metrics markers. Use supplied claim/figure markers and report recorded study results directly.'})
     def add(code, message):
         findings.append({"code": code, "message": message})
+    if (contract.get("rendering_policy") or {}).get("version", 0) >= 2:
+        references = set(re.findall(r"(?:Table|Bảng)\s+(\d+)\b", markdown, re.I))
+        captions = re.findall(r"(?m)^\s*\*{0,2}(?:Table|Bảng)\s+(\d+)\s*[.:][^\n]*\n\s*\n?(?=\s*\|)", markdown, re.I)
+        if references - set(captions):
+            add("MISSING_TABLE", "A numbered table is referenced without a captioned table. Include the actual recorded table or remove the unsupported reference.")
+        if len(captions) != len(set(captions)):
+            add("DUPLICATE_TABLE", "Use a unique number for each captioned table.")
+        for figure in figures:
+            if figure.get("id") != "evaluation" or context.get("figure_style_version", 1) < 4:
+                continue
+            # Remove supplied captions before checking the explanation: captions
+            # explicitly state that individual observations are NOT plotted.
+            body = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", markdown)
+            paragraphs = [p for p in body.split("\n\n") if re.search(r"(?:Figure|Fig\.?|Hình)\s*" + str(figure["number"]) + r"\b", p, re.I)]
+            positive = r"(?:shows?|displays?|visuali[sz]es?|plots?|depicts?)\s+(?:the\s+)?(?:absolute\s+)?(?:prediction\s+)?(?:errors?|residuals?|predictions?)\s+(?:for\s+)?(?:each|individual|per[- ]observation)|(?:shows?|displays?|depicts?)\s+(?:the\s+)?(?:residual|error)\s+distribution"
+            sentences = [s for p in paragraphs for s in re.split(r"(?<=[.!?])\s+", p)]
+            if any(re.search(positive, s, re.I) and not re.search(r"\b(?:not|never|neither|cannot|can't|doesn't|don't)\b", s, re.I) for s in sentences):
+                add("FIGURE_SCOPE_MISMATCH", "The supplied figure contains two aggregate MAE bars, not per-observation errors, predictions, residuals or their distribution. Correct its interpretation.")
     prose = re.sub(r"(?m)^!\[.*\]\(figures/[^)]+\)\s*$|\[\[figure:[^\]]+\]\]", "", markdown)
     if figures and re.search(r"(?s)```[^`]*[│▼─][^`]*```", markdown):
         add("REDUNDANT_TEXT_DIAGRAM", "Use the supplied numbered figure and explain it; remove the duplicate ASCII workflow diagram.")
@@ -188,6 +259,11 @@ def validate_scientific_reporting(markdown: str, contract: dict | None, context:
         if (name[0] or name[1]) not in allowed:
             add("UNKNOWN_FIGURE", "Use only figures produced from approved, topic-relevant data.")
     run = context.get("analysis") or {}
+    if contract.get('article_type') == 'EMPIRICAL_STUDY' and context.get('fieldwork_csv_statistics'):
+        from app.services.fieldwork_reporting import numeric_table_mismatches
+        mismatches = numeric_table_mismatches(markdown, context['fieldwork_csv_statistics'])
+        if mismatches:
+            add('FIELDWORK_NUMERIC_MISMATCH', 'Copy computed CSV statistics and counts without inventing values: ' + '; '.join(mismatches))
     if contract.get("article_type") == "COMPUTATIONAL_STUDY":
         if run.get("status") != "COMPLETED" or not (run.get("metrics") or {}).get("baseline") or not (run.get("metrics") or {}).get("model"):
             add("BASELINE_MISSING", "Report real executed baseline/model results before making a computational comparison.")
@@ -208,8 +284,10 @@ def validate_scientific_reporting(markdown: str, contract: dict | None, context:
                 expected = ((run.get("metrics") or {}).get(key) or {}).get("mae")
                 if expected is None:
                     continue
-                for value in re.findall(rf"\b{label}\b[^\n.]{{0,50}}\bMAE\b\s*(?:=|of|is|là|:)\s*([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)", body, re.I):
-                    if not math.isclose(float(value), float(expected), rel_tol=1e-3, abs_tol=1e-3):
+                for match in re.finditer(rf"\b{label}\b(?P<context>[^\n.]{{0,50}})\bMAE\b\s*(?:=|of|is|là|:)\s*(?P<value>[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)", body, re.I):
+                    if re.search(r'\b(?:delta|difference|reduction|improvement|change)\b|Δ|chênh lệch', match['context'], re.I):
+                        continue  # A delta is not the model's absolute MAE.
+                    if not math.isclose(float(match['value']), float(expected), rel_tol=1e-3, abs_tol=1e-3):
                         add("METRIC_MISMATCH", "A reported MAE differs from the executed result; copy measured values and label their scope.")
     # The generated supplementary search table has its own caption/explanation.
     # It must neither trigger nor satisfy validation of model-authored tables.
@@ -221,7 +299,7 @@ def validate_scientific_reporting(markdown: str, contract: dict | None, context:
         lowered = sentence.lower()
         if re.search(r"\b(not|no|without|không|chưa)\b", lowered):
             continue
-        if re.search(r"significantly (?:better|outperform)|statistically significant|vượt trội có ý nghĩa|có ý nghĩa thống kê", lowered) and not context.get("statistical_significance_tested"):
+        if re.search(r"significantly (?:better|outperform|improv|reduc|increas|enhanc)|statistically significant|vượt trội có ý nghĩa|có ý nghĩa thống kê", lowered) and not context.get("statistical_significance_tested"):
             add("UNSUPPORTED_SIGNIFICANCE", "No statistical significance test was executed; report descriptive differences and exploratory limits.")
         if re.search(r"\b(?:best (?:model|method|algorithm|performance)|perfect (?:accuracy|performance|results))\b", lowered):
             add("UNSUPPORTED_SUPERLATIVE", "Replace absolute superiority claims with a specific supported comparison and its evaluation scope.")

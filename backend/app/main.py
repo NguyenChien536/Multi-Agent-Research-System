@@ -3,6 +3,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.responses import JSONResponse
 
 from app.core.config import settings
 from app.api.v1.api import api_router
@@ -43,6 +46,17 @@ def create_application() -> FastAPI:
         )
 
     # Đăng ký API Routers
+    @application.exception_handler(RequestValidationError)
+    async def redact_connection_validation(request, exc):
+        # Pydantic normally echoes rejected input, including a nested secret.
+        if isinstance(exc.body, dict) and {"llm_connection", "api_key", "password", "current_password"}.intersection(exc.body):
+            return JSONResponse(status_code=422, content={"detail": [
+                {"loc": list(error["loc"]), "type": error["type"],
+                 "msg": "Invalid API connection configuration" if "llm_connection" in error["loc"] else "Invalid request value"}
+                for error in exc.errors()
+            ]})
+        return await request_validation_exception_handler(request, exc)
+
     application.include_router(api_router, prefix=settings.API_V1_STR)
 
     return application

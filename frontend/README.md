@@ -1,27 +1,9 @@
-# ATI Frontend
+# Synthia frontend
 
-Frontend prototype for the Multi-Agent Research System. It uses Next.js 14, React 18 and Tailwind CSS. The current UI supports a basic task creation/detail flow; target product flows, API expectations and implementation gaps are documented in the [SRS](../docs/requirements/SRS.md) and [System Design](../docs/architecture/system-design.md).
+Next.js/React/TypeScript cho Settings, dashboard, workspace, monitor, hỏi đáp và chỉnh sửa bài.
 
-## Run locally
+Chạy ứng dụng local bằng Docker theo README ở thư mục gốc; frontend gọi /api/v1 qua gateway cùng origin. API key lưu mã hóa ở backend, không lưu trong browser storage.
 
-From this directory:
+Kiểm tra tại thư mục này: `npm ci`, `npm test`, `npm run build`.
 
-```bash
-npm install
-npm run dev
-```
-
-Run the backend separately from the repository root as described in the [main README](../README.md). The UI/backend integration is still a development prototype; verify each flow end-to-end before treating it as complete.
-
-## Available scripts
-
-| Command | Purpose |
-|---|---|
-| `npm run dev` | Start the Next.js development server |
-| `npm run build` | Build the frontend |
-| `npm run start` | Serve a production build |
-| `npm run lint` | Run the configured Next.js lint command |
-
-## Project documentation
-
-Start at the [project documentation index](../docs/README.md). The root README describes the verified baseline and quick-start setup; the SRS and architecture docs describe target requirements and design.
+Luồng bắt đầu: Settings → lưu API/model → tạo bài → monitor → kiểm nguồn và bản thảo → xuất. Trong workspace, Settings có cấu hình riêng cho bài hiện tại.

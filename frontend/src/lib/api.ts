@@ -1,5 +1,6 @@
-import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, UserDataResumeRequest, ProtocolResponse, AnalysisRunResponse, ExperimentJournalEntryResponse, DatasetUploadResponse, TokenResponse, UserCreate, UserResponse } from '../types';
+﻿import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, UserDataResumeRequest, ProtocolResponse, AnalysisRunResponse, ExperimentJournalEntryResponse, DatasetUploadResponse, TokenResponse, UserCreate, UserResponse } from '../types';
 import type { ResearchMonitor } from '../types/monitoring';
+import type { UserProfileUpdate } from '../types';
 import type { ReportQuestion, ReportQuestionHistory, ReportVersionMetadata } from '../types/report-questions';
 import type { ReportRevision } from '../types/report-revisions';
 
@@ -32,7 +33,7 @@ async function fetcher<T>(endpoint: string, options?: RequestInit, responseKind:
   const headers = new Headers(options?.headers);
   if (options?.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   const token = getAccessToken();
-  const isPublicAuth = endpoint === '/auth/login' || endpoint === '/auth/register';
+  const isPublicAuth = endpoint === '/auth/login' || endpoint === '/auth/register' || endpoint === '/research/model-connections/options' || endpoint === '/research/model-connections/free-models';
   if (token && !isPublicAuth) headers.set('Authorization', `Bearer ${token}`);
 
   const config: RequestInit = {
@@ -65,6 +66,20 @@ async function fetcher<T>(endpoint: string, options?: RequestInit, responseKind:
 }
 
 export const api = {
+  settings: {
+    checkConnection: (value: Omit<import('../types').ModelConnectionInput, 'api_key'> & {api_key?: string; task_id?: string; generate?: boolean; free_tier_confirmed?: boolean; paid_probe_confirmed?:boolean}) =>
+      fetcher<import('../types').ModelConnectionCheck>('/settings/model-connection/check', {method: 'POST', body: JSON.stringify(value)}),
+    discoverModels: (value: {base_url: string; api_key?: string; task_id?: string; free_only?: boolean}) =>
+      fetcher<{models: Array<{id: string; display_name?: string; free: boolean | null; supports_json_schema?: boolean; recommended_output_mode?: import('../types').ModelConnectionInput['structured_output_mode']; max_output_tokens?: number}>; check: string; generation_calls: number}>('/settings/model-connection/models', {method: 'POST', body: JSON.stringify(value)}),
+    getModelConnection: () => fetcher<{connection: (Omit<import('../types').ModelConnectionInput, 'api_key'> & {has_key: boolean}) | null}>('/settings/model-connection', { cache: 'no-store' }),
+    saveModelConnection: (value: Omit<import('../types').ModelConnectionInput, 'api_key'> & {api_key?: string}) =>
+      fetcher<{connection: Omit<import('../types').ModelConnectionInput, 'api_key'> & {has_key: boolean}}>('/settings/model-connection', {method: 'PUT', body: JSON.stringify(value)}),
+    removeModelConnection: () => fetcher<void>('/settings/model-connection', {method: 'DELETE'}),
+    updateTaskConnection: (id: string, value: Omit<import('../types').ModelConnectionInput, 'api_key'> & {api_key?: string}) =>
+      fetcher<unknown>(`/settings/research/${id}/model-connection`, {method: 'PUT', body: JSON.stringify(value)}),
+    applyDefault: (id: string) => fetcher<unknown>(`/settings/research/${id}/use-default`, {method: 'POST'}),
+    saveTaskAsDefault: (id: string) => fetcher<unknown>(`/settings/research/${id}/save-as-default`, {method: 'POST'}),
+  },
   auth: {
     hasSession: () => Boolean(getAccessToken()),
     logout: clearAccessToken,
@@ -81,8 +96,17 @@ export const api = {
       return token;
     },
     me: () => fetcher<UserResponse>('/auth/me'),
+    updateProfile: (data: UserProfileUpdate) => fetcher<UserResponse>('/auth/me', {
+      method: 'PATCH', body: JSON.stringify(data),
+    }),
+    deleteAccount: (data: { current_password: string; confirmation: string }) =>
+      fetcher<{ status: string }>('/auth/me', { method: 'DELETE', body: JSON.stringify(data) }),
   },
   tasks: {
+    retry: (id: string, allowance?: {max_input_tokens:number;max_output_tokens:number;max_llm_calls?:number;timeout_seconds?:number}) => fetcher<unknown>(`/research/${id}/retry`, {method:'POST',...(allowance?{body:JSON.stringify(allowance)}:{})}),
+    modelConnectionOptions: () => fetcher<{ protocol: string; base_urls: string[]; use_server_providers?: boolean; server_provider_ready?: boolean; server_provider?: string | null }>('/research/model-connections/options', {cache: 'no-store'}),
+    freeModels: () => fetcher<{models: Array<{id:string;context_length:number;max_output_tokens:number | null}>}>('/research/model-connections/free-models'),
+    revokeModelConnection: (id: string) => fetcher<void>(`/research/${id}/model-connection`, { method: 'DELETE' }),
     downloadArtifact: (id: string, artifactId: string) =>
       fetcher<Blob>(`/research/${id}/artifacts/${artifactId}/download`, {cache: 'no-store'}, 'blob'),
     create: (data: ResearchTaskCreate) =>
@@ -150,6 +174,11 @@ export const api = {
 
     getSources: (id: string) =>
       fetcher<ResearchSourceResponse[]>(`/research/${id}/sources`),
+
+    retrySource: (id: string, sourceId: string) =>
+      fetcher<{ message?: string }>(`/research/${id}/sources/${sourceId}/retry`, {
+        method: 'POST',
+      }),
 
     getAgentRuns: (id: string) =>
       fetcher<AgentRunResponse[]>(`/research/${id}/agent-runs`),
@@ -228,23 +257,9 @@ export const api = {
       fetcher<ExperimentJournalEntryResponse[]>(`/research/${id}/journal`),
 
     uploadDataset: async (id: string, file: File) => {
-      const token = getAccessToken();
-      const headers = new Headers();
-      if (token) headers.set('Authorization', `Bearer ${token}`);
-
       const formData = new FormData();
       formData.append('file', file);
-
-      const response = await fetch(`${API_BASE_URL}/research/${id}/dataset`, {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        throw new APIError(response.status, data || { detail: 'Upload dataset failed' });
-      }
-      return data as DatasetUploadResponse;
+      return fetcher<DatasetUploadResponse>(`/research/${id}/dataset`, {method:'POST', body:formData});
     },
   }
 };

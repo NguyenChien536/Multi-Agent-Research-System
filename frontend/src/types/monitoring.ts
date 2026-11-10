@@ -8,6 +8,7 @@ export interface MonitorActivity {
   duration_ms: number;
   output: Record<string, number | string | boolean>;
   has_error: boolean;
+  error_summary?: string | null;
 }
 
 export interface ResearchMonitor {
@@ -16,6 +17,8 @@ export interface ResearchMonitor {
   research_type: string;
   status: string;
   current_step: string | null;
+  latest_error?: string | null;
+  failed_agent?: string | null;
   current_iteration: number;
   attempt_number: number;
   created_at: string;

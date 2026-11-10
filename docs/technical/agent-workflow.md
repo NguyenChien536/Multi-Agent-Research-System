@@ -1,6 +1,6 @@
 # Agent Workflow — vai trò, điều phối và kiểm tra
 
-**Cập nhật thiết kế:** 09/10/2026. Xem [SRS](../requirements/SRS.md), [System Design](../architecture/system-design.md), [ADR-004](../architecture/decisions/ADR-004-multi-agent-research-delivery.md).
+**Thiết kế gốc:** 09/10/2026; bổ sung cơ chế tiếp tục và phục hồi ngày 06/11/2026 ở mục 10. Xem [SRS](../requirements/SRS.md), [System Design](../architecture/system-design.md), [ADR-004](../architecture/decisions/ADR-004-multi-agent-research-delivery.md).
 
 ## 1. Agent và công cụ khác nhau thế nào?
 
@@ -202,6 +202,8 @@ Lượt kiểm tra metadata model ngày 02/11 trả input limit 1.048.576 và ou
 
 Writer mới ghi số nguồn/quote, kích thước prompt, token dự phòng, output limit, finish reason và model được provider báo khi có; không lưu raw prompt hay secrets vào log. Các số đo này hỗ trợ chẩn đoán thiếu nguồn, mất thông tin khi trích xuất, quota, output truncation và khả năng model riêng biệt. Cải thiện hierarchy chưa chứng minh chất lượng học thuật tốt hơn; cần chạy/chấm bài thật trên các thể loại/chủ đề theo Evaluation Plan. Không tự tăng cap hoặc đổi model để che lỗi pipeline.
 
+Với kết nối OpenRouter miễn phí, người dùng có thể chọn tối đa ba model `:free` dự phòng theo thứ tự. Danh sách được gửi cùng request; mọi lựa chọn chịu `max_price=0`, và không có chuyển âm thầm sang model trả phí. Lỗi provider/429 được OpenRouter xử lý qua chuỗi model; nếu cả chuỗi không nhận request, hệ thống lưu cùng run/checkpoint vào outbox, chuyển task sang `QUEUED`, nhả worker và hẹn lại theo `Retry-After` hoặc `X-RateLimit-Reset`; thiếu header thì dùng backoff. Số lần hẹn không tự làm task thất bại; người dùng vẫn có thể hủy. Quota miễn phí chung, hết tín dụng, lỗi xác thực hoặc request không hợp lệ không được chữa bằng model dự phòng; quota chung sẽ chờ reset. Cơ chế này tăng khả năng tự phục hồi nhưng không đảm bảo provider sẽ sẵn sàng hoặc các model tạo ra chất lượng tương đương. Model trả lời sai JSON có nhiều nhất một lượt sửa bằng model dự phòng đã chọn; Critic vẫn là bước đánh giá nội dung riêng.
+
 ### 9.3. Chọn và chuyển bằng chứng — cập nhật 03/11/2026 (#86)
 
 Policy `evidence_selection` v1 tách ba việc: phát hiện tài liệu, chọn đoạn liên quan, và đánh giá mức hỗ trợ của luận điểm. Điểm xếp hạng hay quote khớp không phải chứng nhận chất lượng nghiên cứu.
@@ -241,3 +243,54 @@ Tham khảo kỹ thuật: [PostgreSQL full-text ranking](https://www.postgresql.
 The application LLM factory coordinates Gemini calls through Redis using an atomic server-time reservation for each configured API key and model. `GEMINI_REQUESTS_PER_MINUTE` defaults to 12; `GEMINI_MAX_QUEUE_SECONDS` bounds total waiting at 90 seconds. Set the rate to the actual project quota, allowing for requests made outside this application. This limits request bursts; it does not guarantee remaining daily/token quota or provider availability.
 
 Waiting happens before the provider budget reservation. A full queue makes no provider request. A 429 records a bounded shared cooldown; requests already waiting re-reserve spaced slots instead of all waking together. There is no hidden same-provider retry. Cancellation and task budget checks still run before the actual request. Redis errors fail closed. The frozen evaluation transport is separate; the earlier pilot's rate-limit failures remain recorded and are not retrospectively repaired.
+
+## 10. Tiếp tục sau lỗi và giới hạn provider — 06/11/2026
+
+**Retry không đặt lại bài.** Endpoint retry tiếp tục checkpoint của workflow hiện có, giữ nguồn, artifacts, lịch sử và ledger. Nút workspace là **Continue from failed step**; tải lại report là thao tác đọc riêng. Bài chạm giới hạn bị chặn trước khi tạo job. Với thiếu token, người dùng có thể xem và chủ động chọn tăng rồi tiếp tục cùng bài. Không tự tăng cap hoặc xóa usage khi đổi model.
+
+Ngày 08/11, `POST /research/{id}/retry` nhận optional body gồm hai trần token mới. Request không có body giữ hành vi retry thông thường; body chỉ cho tăng, không cho giảm, sửa ledger hoặc thay trần tiền/lượt/thời gian. Mặc định 100.000 input/50.000 output, trần tuyệt đối 300.000/200.000. Chỉ nhận FAILED hoặc NEEDS_REVIEW do BUDGET_LIMIT, khóa task/run thuộc owner, giữ thread, ghi audit thay đổi, tái dùng outbox và commit một giao dịch. Retry trùng khi QUEUED bị từ chối; hết trần khác thì rollback cả thay đổi. Kiểm thử checkpoint PostgreSQL xác nhận bước tìm nguồn không chạy lại sau khi nâng token. Không có bảo đảm provider sẽ đáp ứng hoặc hạn mức thời gian/lượt còn đủ để hoàn tất.
+
+### 10.1. Chờ dịch vụ mà không giữ worker
+
+429 được phân loại từ HTTP status/metadata đã nhận: giới hạn ngày, upstream tạm thời, tốc độ hoặc chưa xác định. Chỉ tạm hoãn khi có tín hiệu retry phù hợp, tối đa hai lần trong cùng workflow và tối đa 300 giây mỗi lần. Checkpoint và `run_id` giữ nguyên; task về QUEUED, worker lease và đồng hồ active được nhả; outbox có `available_at` để dispatcher đánh thức sau. Delivery sớm không chạy workflow. Daily limit hoặc thời gian chờ không phù hợp cần quyết định người dùng. Raw response/key không được công bố.
+
+### 10.2. Đầu ra có cấu trúc và lỗi phân tích
+
+BYOK dùng JSON Schema khi người dùng chọn khả năng này và schema có thể đóng các object keys an toàn. Schema chứa dictionary động dùng JSON object để không mất biến nghiên cứu; cả hai đều được Pydantic kiểm đầy đủ. JSON không hợp lệ có tối đa một correction pass; output bị cắt không được sửa đoán. Mỗi attempt đều reserve/reconcile ngân sách. Một extraction hợp lệ rỗng nghĩa là chưa có bằng chứng hỗ trợ; lỗi provider không được biến thành extraction rỗng rồi tiếp tục tiêu hết ngân sách ở các câu hỏi khác.
+
+### 10.3. Lưu đơn vị đã hoàn tất
+
+`provider_results` lưu JSON đã kiểm tra và các nhóm Writer hoàn chỉnh, riêng cho task/workflow. Fingerprint bao gồm input, schema, model, giới hạn và cấu hình kết nối; không lưu key trong payload. Đọc/ghi kiểm owner, trạng thái task/run, attempt và lease; hủy hoặc delivery cũ không được ghi thêm. Một kết quả khớp dùng lại không tạo call hay usage mới. Thay input/config tạo fingerprint khác. Đây không phải bảo đảm exactly-once với provider: nếu tiến trình chết trước khi lưu phản hồi thì lần sau có thể cần gọi lại.
+
+Với kết nối cá nhân và độ dài MEDIUM/LONG, Writer bắt đầu bằng nhóm phần, không tiêu trước một lượt toàn bài dễ timeout. Các trường hợp khác thử bản đầy đủ và chuyển sang nhóm khi provider timeout/cắt. Abstract viết sau cùng nhưng lắp theo thứ tự contract. Các nhóm có cấu trúc dùng H2 trong tập heading được yêu cầu và các trường `heading/body/subsections` riêng; renderer sở hữu xuống dòng và H3. Body không chứa heading Markdown lẫn nội dung. Mỗi nhóm phải đúng thứ tự và đủ nội dung trước khi lưu. Retry giữ chiến lược và bỏ qua nhóm đã hoàn tất. Chưa đủ nhóm thì báo `MANUSCRIPT_INCOMPLETE`; không ghép đoạn bị cắt thành bài hoàn chỉnh. References vẫn được tạo từ lineage đã lưu. Tiến độ UI chỉ công bố số nhóm hoàn tất/tổng nhóm, không tiết lộ chain-of-thought.
+
+Khi có quote-backed claims và rendering policy v2, nhóm chứa Introduction, Related Work hoặc Thematic Synthesis phải giữ citation marker được cung cấp trong prose. Marker lạ bị từ chối; kiểm tra xảy ra trước khi lưu nhóm, không đợi Critic mới phát hiện cả bài không có citation. Yêu cầu này bảo vệ transport/provenance, không chứng minh nguồn hỗ trợ mọi phát biểu. Writer được hướng dẫn đối chiếu nghĩa của câu hỏi, population và outcome, loại nguồn chỉ trùng từ khóa nhưng đo hiện tượng khác; kết quả số của một nghiên cứu không được trình bày như hiệu ứng gộp của cả tổng quan. Prompt được tăng cường không phải bằng chứng rằng mọi lỗi ngữ nghĩa đã hết.
+
+Ngày 08/11, Methodologist chuyển sang `MethodologistPlan`: chỉ sinh các trường câu hỏi, giả thuyết, biến, thiết kế, thu thập, phân tích và đạo đức một lần. Renderer xác định tạo `protocol_markdown` từ chính các trường đó, giữ shape lưu trữ/resume cũ. Giả thuyết rỗng vẫn hợp lệ với nghiên cứu mô tả. Đây là giảm đầu ra lặp, không tự xác nhận phương pháp có giá trị khoa học.
+
+Transport của biến dùng danh sách object đóng `{role, names}` để có thể yêu cầu JSON Schema; sau khi kiểm hợp lệ mới chuyển sang dictionary đã lưu của protocol. Schema đóng không có nghĩa nhà cung cấp chắc chắn trả đúng: vẫn kiểm Pydantic và giới hạn correction pass. Catalog giữ khả năng structured output do provider công bố, kể cả router; log lỗi schema chỉ ghi tên schema/field/type đã biết, không ghi raw response hoặc dữ liệu người dùng.
+
+Rendering policy v2 chỉ áp dụng kế hoạch mới: routine `tabular_regression_v1` COMPLETED có đủ MAE/RMSE/R² hữu hạn được dựng bảng so sánh từ metrics, chèn một lần trong Results. Không tạo số khi thiếu run/metrics, không đổi policy của plan lịch sử. Writer được yêu cầu giải thích bảng và dùng đúng hình hai cột MAE. Validator báo tham chiếu bảng không có bảng thật, trùng số bảng và một số cách diễn giải sai hình như per-observation/residual plot. Quy tắc ngôn ngữ là bộ lọc giới hạn, không phải xác minh ngữ nghĩa toàn diện.
+
+Contract v6 thêm `study_provenance_policy` cho bài mới. Kiểm tra biên tập đối chiếu tuyên bố điều chỉnh/kiểm định công cụ đo với `method_notes`/`data_provenance` do người nghiên cứu cung cấp; tài liệu đã trích và protocol đề xuất không xác nhận công việc đã làm trong nghiên cứu này. Phát hiện bước đầu các khẳng định không có nghiên cứu trước/đầu tiên vượt phạm vi corpus; phân biệt mô tả phủ định, đề xuất tương lai và nghiên cứu trước. Rules tiếng Anh/Việt là bộ lọc bảo thủ, không phải kiểm chứng ngữ nghĩa đa ngôn ngữ toàn diện. Contract lịch sử giữ nguyên chính sách cũ. Writer/Critic nhận hướng dẫn tương ứng; user provenance vẫn là khai báo cần người nghiên cứu chịu trách nhiệm.
+
+Các cơ chế trên có kiểm thử lỗi, hủy, lặp delivery, cấu hình đổi và ba loại bài. Chúng giảm công việc lặp, không bảo đảm provider miễn phí luôn còn quota hoặc manuscript đạt chất lượng xuất bản.
+
+### 10.4. Giới hạn đầu ra theo model — 09/11/2026
+
+Catalog trả `max_output_tokens` từ trường `top_provider.max_completion_tokens`, không suy từ context window. Model miễn phí được xếp theo giới hạn đầu ra giảm dần. Khi tải catalog OpenRouter, placeholder router có thể được thay bằng model miễn phí có giới hạn lớn nhất; lựa chọn model cụ thể của người dùng vẫn được giữ. Chọn model có metadata giới hạn sẽ đặt mức đầu ra bằng giới hạn đó; có thể chọn lại bằng **Dùng mức tối đa của model**. Dữ liệu không có giới hạn thì để unknown, không khẳng định đã biết maximum.
+
+Settings hỗ trợ tới 1.000.000 token mỗi phản hồi, tùy khả năng dịch vụ; giá trị fallback cho cấu hình mới chưa có metadata là 32.768, không phải maximum đã xác minh. Snapshot mã hóa cũ thiếu trường này vẫn dùng 8.192 để không âm thầm đổi lịch sử. Mức model là trần, không phải lượng cần dành cho mọi request. Từ 10/11, node truyền dung lượng theo phần việc thay vì ép mọi JSON lên tối thiểu 16.384: JSON ngắn thường 4.096, Critic tối đa 8.192, Writer theo nhóm số từ; luôn bị chặn bởi trần model và hạn mức bài. Client dùng lại không được lấy dung lượng request trước làm trần cho request sau. Một phản hồi JSON thực sự bị cắt được phép thử lại đúng một lần với mức gấp đôi, vẫn không vượt trần model/ngân sách. Lỗi JSON thông thường không tự tăng dung lượng. Output cap không ép nội dung vượt word budget.
+
+Trước mỗi attempt cá nhân, lấy mức nhỏ hơn giữa giới hạn phản hồi và output allowance còn lại sau usage/reservations. Cùng mức đó được đặt vào **client thực gửi API** và kiểm tra ở reservation nguyên tử; wrapper JSON Schema cũng dùng cùng client. Preview không thay thế admission và không nâng hạn mức tổng. Concurrent reservation, attempt/ownership, tiền, lượt gọi và thời gian vẫn phải đạt. Hết dung lượng tối thiểu thì dừng rõ ràng; max token cao không bảo đảm tránh timeout hay quota ngoài hệ thống.
+
+Không dành cả output allowance của bài cho một nhóm phần: một provider timeout không có usage phải được ghi nhận thận trọng theo reservation, nên reservation gần toàn bộ bài có thể làm mất khả năng tiếp tục ngay sau một lỗi ngoài hệ thống. Việc chia phần và cấp token theo bước giữ dung lượng cho các bước sau; không xóa lượng đã ghi của các lượt lỗi trước đó.
+
+Deadline toàn workflow được nhận diện bằng timeout context đã thực sự expired, rồi ghi `TASK_TIME_LIMIT` và `BUDGET_LIMIT`, giải phóng worker. Provider timeout bên trong vẫn là `PROVIDER_TIMEOUT`, không bị đổi thành hết thời gian cả bài. Exception không có message vẫn được ghi bằng loại lỗi, không lưu null. Workspace và Monitor dùng chung safe summary, giới hạn đúng attempt; bản lịch sử lỗi rỗng có ledger active time đã cạn được giải thích từ ledger mà không ghi lại lịch sử.
+
+
+## Resource recovery and compact intermediate output — 10/11/2026
+
+The create form sends an explicit per-task budget (estimated USD 0.50, 40 calls, 150k input, 60k output, 30 active minutes); the user can choose cost/time before starting. Historical API defaults remain unchanged. Failed/budget-stopped workflows expose a bounded, explicit continuation offer: token increases plus 10 calls or 900 seconds only when the corresponding resource is exhausted, up to 60 calls/3600 seconds. The money ceiling, recorded usage, workflow ID and checkpoint thread are preserved. The API rejects lowered limits, hidden usage edits and increases above hard caps. A cost-exhausted task cannot extend through this endpoint. Stored FAILED/NEEDS_REVIEW status semantics remain compatible; the UI describes resource stops as paused.
+
+Compact schema prompts retain all validation and domain keys. Body writing groups receive prior-section headings and bounded continuity excerpts; the abstract receives the entire saved body. Citation lineage and final whole-manuscript review remain enabled. Schema compatibility probes exercise nested arrays/objects, use one bounded request and require explicit owner consent for paid generation. A small successful probe is not full-research acceptance. Typed 400/422 or SDK invalid-request errors remain distinct from 429; rejected requests are not charged hypothetical generated tokens, while unknown timeouts retain conservative accounting.

@@ -10,6 +10,9 @@ import {
 import { api } from '@/lib/api';
 import { useLanguage } from '@/lib/i18n';
 import type { ResearchTaskResponse, UserResponse } from '@/types';
+import { ModelSettingsPanel } from '@/components/ModelSettingsPanel';
+import { ProfileSettingsPanel } from '@/components/ProfileSettingsPanel';
+import { useDialogFocus } from '@/lib/use-dialog-focus';
 
 const DEFAULT_SIDEBAR_WIDTH = 260;
 const MIN_SIDEBAR_WIDTH = 220;
@@ -22,8 +25,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<'ai' | 'profile' | 'language'>('ai');
+  const settingsDialog = useDialogFocus(isSettingsOpen, () => setIsSettingsOpen(false));
   const [recentTasks, setRecentTasks] = useState<ResearchTaskResponse[]>([]);
   const [user, setUser] = useState<UserResponse | null>(null);
+  useEffect(() => {
+    const updated = (event: Event) => setUser((event as CustomEvent<UserResponse>).detail);
+    window.addEventListener('synthia-profile-updated', updated);
+    return () => window.removeEventListener('synthia-profile-updated', updated);
+  }, []);
+  useEffect(() => {
+    const open = () => setIsSettingsOpen(true);
+    window.addEventListener('synthia-open-settings', open);
+    return () => window.removeEventListener('synthia-open-settings', open);
+  }, []);
 
   // Resizable sidebar state
   const [sidebarWidth, setSidebarWidth] = useState<number>(DEFAULT_SIDEBAR_WIDTH);
@@ -122,12 +137,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="flex h-screen bg-zinc-50 overflow-hidden text-zinc-900 print:h-auto print:overflow-visible print:bg-white">
+    <div className="flex h-screen bg-white overflow-hidden text-stone-900 print:h-auto print:overflow-visible print:bg-white">
 
       {/* Mobile Header */}
-      <div id="mobile-header" className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white border-b border-zinc-200 z-50 flex items-center justify-between px-4 print:hidden">
+      <div id="mobile-header" className="md:hidden fixed top-0 left-0 right-0 h-16 bg-white/95 backdrop-blur-md border-b border-stone-200/80 z-50 flex items-center justify-between px-4 print:hidden">
         <div className="flex items-center gap-2 font-semibold text-base">
-          <div className="w-8 h-8 rounded-lg bg-zinc-900 text-white flex items-center justify-center text-sm font-semibold">S</div>
+          <div className="w-8 h-8 rounded-xl bg-stone-900 text-white flex items-center justify-center text-sm font-semibold shadow-2xs">S</div>
           <span>Synthia</span>
         </div>
         <div className="flex items-center gap-2">
@@ -140,7 +155,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           >
             {language === 'en' ? 'EN' : 'VI'}
           </button>
-          <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-zinc-700">
+          <button type="button" aria-label={isMobileMenuOpen ? (language==='en'?'Close navigation':'Đóng điều hướng') : (language==='en'?'Open navigation':'Mở điều hướng')} aria-expanded={isMobileMenuOpen} aria-controls="app-sidebar" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-zinc-700">
             {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
@@ -150,10 +165,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <aside
         id="app-sidebar"
         style={{ width: `${sidebarWidth}px` }}
-        className={`fixed inset-y-0 left-0 z-40 bg-white border-r border-zinc-200 md:static md:flex md:flex-col print:hidden relative shrink-0 ${
+        className={`fixed inset-y-0 left-0 z-40 bg-white border-r border-stone-200/80 md:relative flex flex-col print:hidden shrink-0 ${
           isResizing ? '' : 'transition-[width] duration-75'
         } ${
-          isMobileMenuOpen ? 'translate-x-0 w-72' : '-translate-x-full md:translate-x-0'
+          isMobileMenuOpen ? 'visible translate-x-0 w-72' : 'invisible -translate-x-full md:visible md:translate-x-0'
         }`}
       >
         {/* Resize Handle on Desktop */}
@@ -161,27 +176,27 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           onMouseDown={startResizing}
           onDoubleClick={resetWidth}
           title="Drag to resize sidebar (Double-click to reset)"
-          className={`hidden md:block absolute top-0 right-0 w-2 h-full cursor-col-resize z-50 group hover:bg-zinc-300/80 transition-colors ${
-            isResizing ? 'bg-zinc-400' : 'bg-transparent'
+          className={`hidden md:block absolute top-0 right-0 w-2 h-full cursor-col-resize z-50 group hover:bg-stone-300/80 transition-colors ${
+            isResizing ? 'bg-stone-400' : 'bg-transparent'
           }`}
         >
-          <div className="absolute top-1/2 -translate-y-1/2 right-0.5 w-1 h-8 rounded-full bg-zinc-300 group-hover:bg-zinc-500 transition-colors" />
+          <div className="absolute top-1/2 -translate-y-1/2 right-0.5 w-1 h-8 rounded-full bg-stone-300 group-hover:bg-stone-500 transition-colors" />
         </div>
 
         {/* Brand */}
-        <div className="h-16 flex items-center justify-between px-5 border-b border-zinc-200 hidden md:flex shrink-0">
+        <div className="h-16 flex items-center justify-between px-5 border-b border-stone-200/80 hidden md:flex shrink-0">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-zinc-900 text-white flex items-center justify-center text-sm font-semibold">S</div>
-            <span className="font-semibold text-lg tracking-tight text-zinc-900">Synthia</span>
+            <span className="font-semibold text-lg tracking-tight text-stone-900">Synthia</span>
           </div>
 
           {/* Quick Language Toggle */}
-          <div className="flex items-center rounded-lg border border-zinc-200 p-0.5 bg-zinc-50 text-xs font-semibold">
+          <div className="flex items-center rounded-full border border-stone-300/80 p-0.5 bg-stone-100 text-xs font-semibold">
             <button
               type="button"
               onClick={() => setLanguage('en')}
               className={`px-2 py-0.5 rounded transition-colors ${
-                language === 'en' ? 'bg-white text-zinc-900 font-semibold shadow-2xs' : 'text-zinc-500 hover:text-zinc-800'
+                language === 'en' ? 'bg-white text-stone-900 font-semibold shadow-2xs rounded-full' : 'text-stone-600 hover:text-stone-900 rounded-full'
               }`}
             >
               EN
@@ -190,7 +205,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               type="button"
               onClick={() => setLanguage('vi')}
               className={`px-2 py-0.5 rounded transition-colors ${
-                language === 'vi' ? 'bg-white text-zinc-900 font-semibold shadow-2xs' : 'text-zinc-500 hover:text-zinc-800'
+                language === 'vi' ? 'bg-white text-stone-900 font-semibold shadow-2xs rounded-full' : 'text-stone-600 hover:text-stone-900 rounded-full'
               }`}
             >
               VI
@@ -203,14 +218,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           <Link
             href="/"
             onClick={() => setIsMobileMenuOpen(false)}
-            className="w-full flex items-center justify-center gap-2 bg-zinc-900 text-white px-4 py-2.5 rounded-xl hover:bg-zinc-800 transition-colors shadow-2xs mb-3 font-medium text-sm sm:text-[15px]"
+            className="w-full flex items-center justify-center gap-2 bg-stone-900 text-white px-4 py-2.5 rounded-xl hover:bg-stone-800 transition-all shadow-xs mb-3 font-medium text-sm sm:text-[15px] cursor-pointer"
           >
             <Plus size={17} />
             <span>{t('nav_new_research')}</span>
           </Link>
 
           {/* Section: Main Menu */}
-          <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 mt-2 px-3">
+          <div className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider mb-2 mt-2 px-3">
             {t('nav_main_menu')}
           </div>
 
@@ -222,10 +237,10 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                 <Link key={item.href} href={item.href} onClick={() => setIsMobileMenuOpen(false)}>
                   <div className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm sm:text-[15px] transition-all cursor-pointer ${
                     isActive
-                      ? 'bg-zinc-100 text-zinc-900 font-semibold border border-zinc-200/80 shadow-2xs'
-                      : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 font-medium'
+                      ? 'bg-stone-100 text-stone-950 font-semibold border border-stone-200/80 shadow-2xs'
+                      : 'text-stone-700 hover:bg-stone-100 hover:text-stone-950 font-medium'
                   }`}>
-                    <Icon size={18} className={isActive ? 'text-zinc-900' : 'text-zinc-500'} />
+                    <Icon size={18} className={isActive ? 'text-stone-900' : 'text-stone-500'} />
                     <span>{item.name}</span>
                   </div>
                 </Link>
@@ -234,7 +249,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </nav>
 
           {/* Section: Recent Tasks */}
-          <div className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2 mt-6 px-3">
+          <div className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider mb-2 mt-6 px-3">
             {t('nav_recent')}
           </div>
           <nav className="flex flex-col gap-1">
@@ -250,15 +265,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={`group flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-sm transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-zinc-100 text-zinc-900 font-semibold border border-zinc-200/80 shadow-2xs'
-                      : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
+                      ? 'bg-stone-100 text-stone-950 font-semibold border border-stone-200/80 shadow-2xs'
+                      : 'text-stone-700 hover:bg-stone-100 hover:text-stone-900'
                   }`}
                   title={task.title}
                 >
                   <FileText
                     size={16}
                     className={`shrink-0 transition-colors ${
-                      isSelected ? 'text-zinc-900' : 'text-zinc-500 group-hover:text-zinc-800'
+                      isSelected ? 'text-stone-900' : 'text-stone-500 group-hover:text-stone-800'
                     }`}
                   />
                   <span className="truncate">{task.title}</span>
@@ -268,15 +283,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           </nav>
 
           {/* Footer Area */}
-          <div className="mt-auto pt-3 border-t border-zinc-200 flex flex-col gap-1.5 shrink-0">
+          <div className="mt-auto pt-3 border-t border-stone-200/80 flex flex-col gap-1.5 shrink-0">
             {user && (
-              <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-zinc-50 border border-zinc-200 text-xs">
-                <div className="w-7 h-7 rounded-lg bg-zinc-900 text-white flex items-center justify-center font-semibold text-xs shrink-0">
+              <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-stone-50 border border-stone-200/80 text-xs">
+                <div className="w-7 h-7 rounded-lg bg-stone-900 text-white flex items-center justify-center font-semibold text-xs shrink-0">
                   {(user.full_name || user.username || 'U')[0].toUpperCase()}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-zinc-900 text-sm truncate">{user.full_name || user.username}</div>
-                  <div className="text-xs text-zinc-600 truncate">{user.email}</div>
+                  <div className="font-semibold text-stone-900 text-sm truncate">{user.full_name || user.username}</div>
+                  <div className="text-xs text-stone-600 truncate">{user.email}</div>
                 </div>
               </div>
             )}
@@ -285,7 +300,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => setIsSettingsOpen(true)}
-                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 hover:text-zinc-900 transition-colors cursor-pointer"
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100 hover:text-stone-950 transition-colors cursor-pointer"
               >
                 <Settings size={16} className="text-zinc-500" />
                 <span>{t('nav_settings')}</span>
@@ -293,7 +308,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
               <button
                 type="button"
-                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-red-50 hover:text-red-700 transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-stone-700 hover:bg-rose-50 hover:text-rose-700 transition-colors cursor-pointer"
                 onClick={() => { api.auth.logout(); router.replace('/login'); }}
                 title={t('nav_logout')}
               >
@@ -320,18 +335,19 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Settings Modal (Cài đặt hệ thống & Chuyển ngôn ngữ sang Tiếng Anh / Tiếng Việt) */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-zinc-900/40 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-white rounded-2xl border border-zinc-200 shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-zinc-900/40 backdrop-blur-xs">
+          <div ref={settingsDialog} role="dialog" aria-modal="true" aria-labelledby="app-settings-title" tabIndex={-1} className="w-full max-w-2xl max-h-[90dvh] overflow-y-auto bg-white rounded-2xl border border-zinc-200 shadow-xl outline-none">
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 bg-zinc-50/70">
+            <div className="sticky top-0 z-20 flex items-center justify-between px-6 py-4 border-b border-zinc-200 bg-zinc-50">
               <div className="flex items-center gap-2">
                 <Settings size={18} className="text-zinc-700" />
-                <h3 className="font-semibold text-base text-zinc-900">
+                <h3 id="app-settings-title" className="font-semibold text-base text-zinc-900">
                   {t('settings_title')}
                 </h3>
               </div>
               <button
                 type="button"
+                aria-label={language==='en'?'Close settings':'Đóng cài đặt'}
                 onClick={() => setIsSettingsOpen(false)}
                 className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 transition-colors"
               >
@@ -341,12 +357,16 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
             {/* Modal Body */}
             <div className="p-6 space-y-5 text-sm">
-              <p className="text-xs text-zinc-600 leading-relaxed">
-                {t('settings_desc')}
-              </p>
+              <div className="flex flex-wrap gap-2" aria-label={language==='en'?'Settings sections':'Các mục cài đặt'}>
+                {(['ai','profile','language'] as const).map(tab=><button key={tab} type="button" aria-pressed={settingsTab===tab} onClick={()=>setSettingsTab(tab)} className={`rounded-lg px-3 py-2 font-medium ${settingsTab===tab?'bg-stone-900 text-white':'bg-stone-100 text-stone-700'}`}>
+                  {tab==='ai'?(language==='en'?'AI connection':'Kết nối AI'):tab==='profile'?(language==='en'?'Profile':'Tài khoản'):(language==='en'?'Language':'Ngôn ngữ')}
+                </button>)}
+              </div>
+              {settingsTab==='profile' && <ProfileSettingsPanel isEn={language === 'en'} />}
+              {settingsTab==='ai' && <ModelSettingsPanel isEn={language === 'en'} taskId={pathname.match(/^\/research\/([0-9a-f-]{36})(?:\/|$)/i)?.[1]} />}
 
               {/* Language Selection Setting */}
-              <div className="space-y-2.5">
+              <div className={settingsTab==='language'?'space-y-2.5':'hidden'}>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-700">
                   {t('settings_lang_label')}
                 </label>

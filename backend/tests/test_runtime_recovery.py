@@ -113,7 +113,24 @@ async def test_workflow_deadline_releases_slot(monkeypatch):
         await worker.run_langgraph_workflow(str(task_id))
     async with AsyncSessionLocal() as db:
         task = await db.get(ResearchTask, task_id)
-        assert task.status == "FAILED" and task.worker_lease_until is None
+        assert task.status == "NEEDS_REVIEW" and task.worker_lease_until is None
+        assert task.current_step == 'BUDGET_LIMIT'
+        assert task.budget_config['_last_failure']['message'].startswith('TASK_TIME_LIMIT:')
+
+
+@pytest.mark.asyncio
+async def test_provider_timeout_is_not_relabelled_as_workflow_time_exhaustion(monkeypatch):
+    from app.services.public_errors import ProviderResponseTimeout
+    task_id = await create_task()
+    graph = SimpleNamespace(ainvoke=AsyncMock(side_effect=ProviderResponseTimeout('PROVIDER_TIMEOUT: response stalled')))
+    monkeypatch.setattr(worker, 'research_graph', graph)
+    monkeypatch.setattr(task_dispatcher, 'dispatch_one_outbox_event', AsyncMock())
+    with pytest.raises(RuntimeError, match='Research workflow failed'):
+        await worker.run_langgraph_workflow(str(task_id))
+    async with AsyncSessionLocal() as db:
+        task = await db.get(ResearchTask, task_id)
+        assert task.status == 'FAILED'
+        assert task.budget_config['_last_failure']['message'].startswith('PROVIDER_TIMEOUT:')
 
 
 @pytest.mark.asyncio
@@ -151,7 +168,7 @@ async def test_configuration_matrix_survives_graph_and_approval(monkeypatch, dep
     async def noop(state):
         return {}
     async def analyst(state):
-        return {"claims": [{"claim_id": claim_id, "evidence_id": "e1", "source_id": "s1", "chunk_id": "c1", "source_title": "Verified title", "source_url": "https://example.org", "source_tag": "src_01"}]}
+        return {"claims": [{"claim_id": claim_id, "evidence_id": "e1", "source_id": "s1", "chunk_id": "c1", "claim": "A controlled fixture finding.", "evidence_quote": "A controlled fixture finding.", "source_title": "Verified title", "source_url": "https://example.org", "source_tag": "src_01"}]}
     async def critic(state):
         return {"critic_verdict": "PASS"}
     async def invoke(state, llm, messages, **kwargs):

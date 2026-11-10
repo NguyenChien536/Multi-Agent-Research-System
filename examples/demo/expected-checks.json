@@ -1,0 +1,164 @@
+{
+  "scope": "Offline checks of synthetic fixtures and the fixed routine; NOT API/LLM/browser E2E acceptance.",
+  "computational": {
+    "electricity": {
+      "sha256": "7fcf9b6021e6fb32621a4a137a2cf226cae253b661ea279861b6629e8b5a479d",
+      "manifest": {
+        "manifest_version": "1.0",
+        "routine_name": "tabular_regression_v1",
+        "routine_version": "1.0.0",
+        "input_checksum": "15a3dabc6722f083ff8d0201106d570c22702ab8f935cd89e4fd575056dcaef4",
+        "dataset_rows": 120,
+        "valid_rows": 120,
+        "train_rows": 96,
+        "test_rows": 24,
+        "target_column": "target",
+        "feature_columns": [
+          "temperature",
+          "occupied_hours"
+        ],
+        "parameters": {
+          "alpha": 1.0,
+          "test_size": 0.2,
+          "seed": 42,
+          "fit_intercept": true,
+          "standardize": true
+        }
+      },
+      "metrics": {
+        "baseline": {
+          "model_type": "MeanBaseline",
+          "mae": 12.338741,
+          "rmse": 14.210697,
+          "r2": -0.012568
+        },
+        "model": {
+          "model_type": "RidgeRegression",
+          "alpha": 1.0,
+          "mae": 1.335145,
+          "rmse": 1.468646,
+          "r2": 0.989185
+        },
+        "comparison": {
+          "primary_metric": "MAE",
+          "delta_mae": -11.003596,
+          "delta_rmse": -12.742051,
+          "verdict": "IMPROVEMENT",
+          "pct_improvement": 89.18
+        },
+        "coefficients": {
+          "temperature": 15.942708,
+          "occupied_hours": 15.59022
+        },
+        "intercept": 132.531353
+      },
+      "repeatability_passed": true
+    },
+    "negative_control": {
+      "sha256": "72415df71616008ff6596f78c4c774e409df763beae087dbe39bc5e89a13064d",
+      "manifest": {
+        "manifest_version": "1.0",
+        "routine_name": "tabular_regression_v1",
+        "routine_version": "1.0.0",
+        "input_checksum": "aa0e72182a4602368959537ac4bf440b4df5a7751947c5d01a8a9dfcb4afed6a",
+        "dataset_rows": 120,
+        "valid_rows": 120,
+        "train_rows": 96,
+        "test_rows": 24,
+        "target_column": "target",
+        "feature_columns": [
+          "temperature",
+          "occupied_hours"
+        ],
+        "parameters": {
+          "alpha": 1.0,
+          "test_size": 0.2,
+          "seed": 42,
+          "fit_intercept": true,
+          "standardize": true
+        }
+      },
+      "metrics": {
+        "baseline": {
+          "model_type": "MeanBaseline",
+          "mae": 7.74608,
+          "rmse": 8.535555,
+          "r2": -0.066123
+        },
+        "model": {
+          "model_type": "RidgeRegression",
+          "alpha": 1.0,
+          "mae": 7.74608,
+          "rmse": 8.535555,
+          "r2": -0.066123
+        },
+        "comparison": {
+          "primary_metric": "MAE",
+          "delta_mae": 0.0,
+          "delta_rmse": 0.0,
+          "verdict": "NO_IMPROVEMENT",
+          "pct_improvement": 0.0
+        },
+        "coefficients": {
+          "temperature": 0.0,
+          "occupied_hours": 0.0
+        },
+        "intercept": 100.413118
+      },
+      "repeatability_passed": true
+    }
+  },
+  "human": {
+    "sha256": "eed4667b96cb7bb1758d8a540d9e9e0a4582e9d98286a31b6ac7d6a362f2ecad",
+    "rows": 24,
+    "statistics": {
+      "synthetic_response_id": {
+        "count": 24,
+        "missing_count": 0,
+        "minimum": 1.0,
+        "maximum": 24.0,
+        "mean": 12.5,
+        "sample_sd": 7.0710678118654755,
+        "sample_sd_ddof": 1,
+        "population_sd": 6.922186552431729,
+        "value_counts": null,
+        "frequencies_omitted": true
+      },
+      "usefulness_1_to_5": {
+        "count": 24,
+        "missing_count": 0,
+        "minimum": 2.0,
+        "maximum": 5.0,
+        "mean": 3.5,
+        "sample_sd": 1.1420804814403216,
+        "sample_sd_ddof": 1,
+        "population_sd": 1.118033988749895,
+        "value_counts": {
+          "2.0": 6,
+          "3.0": 6,
+          "4.0": 6,
+          "5.0": 6
+        },
+        "frequencies_omitted": false
+      },
+      "verification_effort_1_to_5": {
+        "count": 24,
+        "missing_count": 0,
+        "minimum": 1.0,
+        "maximum": 5.0,
+        "mean": 3.0,
+        "sample_sd": 1.4744195615489712,
+        "sample_sd_ddof": 1,
+        "population_sd": 1.4433756729740643,
+        "value_counts": {
+          "1.0": 5,
+          "2.0": 5,
+          "3.0": 4,
+          "4.0": 5,
+          "5.0": 5
+        },
+        "frequencies_omitted": false
+      }
+    }
+  }
+}

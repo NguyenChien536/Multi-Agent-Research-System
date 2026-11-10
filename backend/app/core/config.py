@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     MOCK_PROVIDERS: bool = False  # If True, bypass real LLM/Search API calls for tests
+    USE_SERVER_PROVIDERS: bool = False  # Allow env provider default; explicit personal connections take priority.
 
     # Security
     APP_SECRET_KEY: str = "development-secret-key-replace-in-production-32-chars-min"
@@ -49,6 +50,13 @@ class Settings(BaseSettings):
     GEMINI_REQUESTS_PER_MINUTE: int = Field(default=12, ge=1, le=600)
     GEMINI_MAX_QUEUE_SECONDS: int = Field(default=90, ge=1, le=300)
     GROQ_API_KEY: str | None = None
+    # Exact trusted HTTPS roots. Add a gateway here to support another compatible API.
+    CUSTOM_LLM_API_ROOTS: str = (
+        "https://openrouter.ai/api/v1,https://api.groq.com/openai/v1,"
+        "https://generativelanguage.googleapis.com/v1beta/openai,https://api.openai.com/v1,"
+        "https://api.mistral.ai/v1,https://api.deepseek.com/v1,https://api.cerebras.ai/v1,"
+        "https://api.together.xyz/v1"
+    )
     
     # Priority Config (Comma-separated)
     LLM_PROVIDER_PRIORITY: str = "gemini,openai,anthropic,groq"

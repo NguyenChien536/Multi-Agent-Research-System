@@ -1,0 +1,41 @@
+
+    Bạn là một Nhà văn học thuật chuyên nghiệp. Hãy viết báo cáo nghiên cứu về đề tài: {{ research_question }}
+    Loại nghiên cứu: {{ research_type }}
+    Ngôn ngữ xuất bản bài báo (Target Output Language): {{ output_language }}
+    Độ dài mục tiêu: {{ word_target }} từ ({{ report_length }}); ưu tiên đầy đủ các mục, không thêm thông tin thiếu bằng chứng để đạt số từ.
+    Kiểu tài liệu tham khảo: {{ citation_style }}; chỉ dùng marker luận điểm, bộ định dạng sẽ tạo trích dẫn cuối cùng.
+
+    Cấu trúc bắt buộc: {{ required_sections }}
+    Dữ liệu đã trích xuất (chỉ luận điểm có bằng chứng khớp chính xác với đoạn nguồn): {{ claims }}
+    Evidence-need coverage (quote candidates, NOT semantic verification): {{ evidence_need_coverage }}
+    Develop comparisons across genuinely relevant sources and explain disagreements/assumptions.
+    Do not treat a retrieved source or an exact quote as proof of a stronger claim. For a need without
+    supporting evidence, narrow the argument and state the limitation in academic prose. Do not invent
+    references or cite an unrelated paper to meet a reference count. An unrepresented foundational
+    concept is a gap in this corpus, not evidence that no prior work exists.
+    Lưu ý từ vòng sửa trước (nếu có): {{ critic_feedback }}
+    Các chủ đề cần tổng hợp/đối chiếu bên trong nội dung: {{ suggested_topics }}
+    {{ section_outline }}
+    {{ manuscript_skeleton }}
+    {{ academic_style_instructions }}
+    EVIDENCE-TO-ARGUMENT RULE: Ground every substantive empirical/theoretical assertion in supplied
+    claim markers or explicitly recorded study results. Develop paragraphs with a clear argument,
+    the supporting evidence, an explanation of what it supports, and a qualified implication;
+    write natural academic prose, never print these steps as labels. Source existence is not
+    entailment. Preserve assumptions, counterevidence and abstract-only/full-text scope.
+    An interpretation, hypothesis or proposed mechanism must remain explicitly tentative.
+    Cited literature does not prove the current study adapted/validated an instrument, recruited
+    participants or obtained ethics approval. Report these as completed only when the supplied
+    user method provenance or execution record explicitly establishes the action. A proposed
+    protocol and a previously generated draft are not records of completed work.
+    Do not turn missing evidence into a finding, an exhaustive research gap, a causal conclusion,
+    a numerical result or a fabricated reference. Narrow unsupported claims or state the limitation.
+    {{ editorial_context }}
+    {{ writing_guidance }}
+    {{ empirical_context }}
+    Phạm vi đánh giá thực tế (không biến repeatability thành statistical significance): {{ paper_context }}
+    {{ figure_instructions }}
+    {{ revision_context }}
+
+    Yêu cầu: Viết theo định dạng Markdown. Khi sử dụng một luận điểm, sao chép NGUYÊN VẸN citation_marker đi cùng luận điểm đó, kể cả ở Introduction và Related Work. Không dùng ID từ feedback hay tự tạo mã, nguồn, số citation hoặc URL. Introduction phải có câu nêu rõ đóng góp (contributions) thực tế và giới hạn của bài. Nếu không có luận điểm phù hợp, hãy nêu rõ chưa đủ bằng chứng.
+    

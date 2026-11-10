@@ -2,7 +2,9 @@
 
 **Synthia — Multi-Agent Research System** hỗ trợ người nghiên cứu đi từ câu hỏi/tài liệu đến bản thảo bài báo có nguồn, có kết quả thực nghiệm khi phương pháp yêu cầu. Đây là đề tài học phần ATI; bản thảo vẫn cần người nghiên cứu kiểm tra.
 
-**Cập nhật 02/11/2026 — P7 / #81, PR #82:** bộ chạy A/B/C dùng cùng nguồn/model/cap đã qua **485 backend tests, 20 frontend tests và 5/5 CI** trên code `e457f17`; thêm 60 ca focused evaluation đạt. Issue **#83** tiếp tục pilot thật có ngân sách và chấm output. Chưa có kết quả benchmark khoa học hoặc kết luận multi-agent tốt hơn single-agent. **Chưa sẵn sàng production.**
+**Cập nhật 05/11/2026:** bản local đã gộp một Docker Compose; Settings lưu API/model mặc định và cấu hình riêng cho bài. Kiểm thử code: 701 backend pass, 3 skip; 34 frontend pass; Docker builds đạt. Xem [Vận hành local](technical/local-release.md) và [Hiểu code/demo](technical/demo-guide.md). Provider miễn phí đang trả 429 nên chưa nghiệm thu được các bài mới, chưa chứng nhận production hoặc chất lượng Q1.
+
+**Chuẩn bị thuyết trình:** [Hướng dẫn demo dễ hiểu](technical/demo-guide.md) và [Kịch bản nói/thao tác cho ba luồng](technical/demo-presentation-script.md).
 
 ## Chỉ cần mở ba tài liệu thường xuyên
 

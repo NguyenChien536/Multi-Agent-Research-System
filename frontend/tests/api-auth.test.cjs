@@ -36,6 +36,82 @@ test('protected auth/me and task requests both include the session token', async
   for (const request of c.requests) assert.equal(request.headers.get('Authorization'), 'Bearer test-token');
 });
 
+test('retry uses its owning article and preserves the session', async () => {
+  const c=client();
+  await c.api.tasks.retry('failed-article');
+  assert.ok(c.requests[0].url.endsWith('/research/failed-article/retry'));
+  assert.equal(c.requests[0].method,'POST');
+  assert.equal(c.requests[0].headers.get('Authorization'),'Bearer test-token');
+});
+
+test('model discovery sends credentials only in the authenticated POST body',async()=>{
+  const c=client();
+  const payload={base_url:'https://api.groq.com/openai/v1',api_key:'fake-catalog-key',task_id:'owned-task'};
+  await c.api.settings.discoverModels(payload);
+  assert.ok(c.requests[0].url.endsWith('/settings/model-connection/models'));
+  assert.ok(!c.requests[0].url.includes(payload.api_key));
+  assert.equal(c.requests[0].method,'POST');
+  assert.equal(c.requests[0].headers.get('Authorization'),'Bearer test-token');
+  assert.deepEqual(JSON.parse(c.requests[0].body),payload);
+});
+
+test('dataset upload shares session expiry handling', async()=>{
+  const c=client({status:401,response:{detail:'Session expired'}});
+  await assert.rejects(c.api.tasks.uploadDataset('owned-task',new Blob(['target\n1'])));
+  assert.ok(c.requests[0].url.endsWith('/research/owned-task/dataset'));
+  assert.ok(c.requests[0].body instanceof FormData);
+  assert.equal(c.storage.get('synthia_access_token'),undefined);
+  assert.equal(c.redirects.length,1);
+});
+
+test('response checks send owner credentials in an authenticated POST body, never in the URL',async()=>{
+  const c=client();
+  const payload={base_url:'https://api.groq.com/openai/v1',model:'fixture',api_key:'fake-check-key',generate:true,free_tier_confirmed:true};
+  await c.api.settings.checkConnection(payload);
+  assert.ok(c.requests[0].url.endsWith('/settings/model-connection/check'));
+  assert.ok(!c.requests[0].url.includes(payload.api_key));
+  assert.equal(c.requests[0].method,'POST');
+  assert.equal(c.requests[0].headers.get('Authorization'),'Bearer test-token');
+  assert.deepEqual(JSON.parse(c.requests[0].body),payload);
+});
+
+test('profile edits use the authenticated current-user route and preserve the session', async () => {
+  const updated = { id: 'owner-id', username: 'new-name', email: 'new@example.com', full_name: 'New Name' };
+  const c = client({ response: updated });
+  const payload = { email: 'new@example.com', current_password: 'fake-current-password' };
+  assert.equal(await c.api.auth.updateProfile(payload), updated);
+  assert.ok(c.requests[0].url.endsWith('/auth/me'));
+  assert.equal(c.requests[0].method, 'PATCH');
+  assert.equal(c.requests[0].headers.get('Authorization'), 'Bearer test-token');
+  assert.deepEqual(JSON.parse(c.requests[0].body), payload);
+  assert.equal(c.storage.get('synthia_access_token'), 'test-token');
+});
+
+test('saved model checks are authenticated and never reuse a cached profile', async () => {
+  const c = client({ response: { connection: { model: 'free-model', has_key: true } } });
+  assert.equal((await c.api.settings.getModelConnection()).connection.model, 'free-model');
+  assert.ok(c.requests[0].url.endsWith('/settings/model-connection'));
+  assert.equal(c.requests[0].headers.get('Authorization'), 'Bearer test-token');
+  assert.equal(c.requests[0].cache, 'no-store');
+});
+
+test('profile conflicts keep the current session and expose the server status', async () => {
+  const c = client({ status: 409, response: { detail: 'Already registered' } });
+  await assert.rejects(c.api.auth.updateProfile({ username: 'taken' }), error => error.status === 409);
+  assert.equal(c.storage.get('synthia_access_token'), 'test-token');
+  assert.equal(c.redirects.length, 0);
+});
+
+test('account deletion sends explicit confirmation and password on the authenticated self route', async () => {
+  const c = client({ response: { status: 'DELETING' } });
+  const payload = { current_password: 'fake-password', confirmation: 'DELETE' };
+  assert.equal((await c.api.auth.deleteAccount(payload)).status, 'DELETING');
+  assert.ok(c.requests[0].url.endsWith('/auth/me'));
+  assert.equal(c.requests[0].method, 'DELETE');
+  assert.equal(c.requests[0].headers.get('Authorization'), 'Bearer test-token');
+  assert.deepEqual(JSON.parse(c.requests[0].body), payload);
+});
+
 test('artifact downloads use shared authenticated binary handling and expire sessions consistently', async () => {
   const blob = new Blob(['private artifact']);
   const c = client({response: blob});

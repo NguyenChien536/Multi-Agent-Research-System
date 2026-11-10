@@ -2,7 +2,7 @@ import os
 import uuid
 from datetime import datetime, timezone
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Body, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Body, status, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -19,6 +19,7 @@ from app.models.agent_run import AgentRun
 from app.schemas.task import (
     ResearchTaskCreate,
     ResearchTaskResponse,
+    TokenAllowanceIncrease,
     PlanReviewResponse,
     PlanApprovalRequest,
     PlanRejectRequest,
@@ -45,6 +46,42 @@ from app.services.upload_reader import read_upload_with_limit, UploadSizeLimitEx
 from app.services.fieldwork_intake import MAX_RESULT_BYTES, RESULT_TYPES, validate_fieldwork_result
 
 router = APIRouter()
+
+
+@router.get("/model-connections/options")
+async def model_connection_options():
+    """Public connection catalog only; credentials and research remain private."""
+    provider_keys = {'gemini': settings.GEMINI_API_KEY, 'openai': settings.OPENAI_API_KEY,
+                     'anthropic': settings.ANTHROPIC_API_KEY, 'groq': settings.GROQ_API_KEY}
+    provider = next((name.strip().lower() for name in settings.LLM_PROVIDER_PRIORITY.split(',')
+                     if provider_keys.get(name.strip().lower()) and 'your_' not in provider_keys[name.strip().lower()]), None)
+    return {"protocol": "openai_compatible", "base_urls": [root.strip().rstrip('/')
+        for root in settings.CUSTOM_LLM_API_ROOTS.split(',') if root.strip()],
+        'use_server_providers': settings.USE_SERVER_PROVIDERS,
+        'server_provider_ready': provider is not None, 'server_provider': provider}
+
+@router.get('/model-connections/free-models')
+async def free_model_options():
+    from app.services.model_catalog import free_models
+    try:
+        return {'models': await free_models()}
+    except Exception:
+        raise HTTPException(503, 'Model catalog is unavailable; enter the exact model ID manually') from None
+
+
+@router.delete("/{task_id}/model-connection", status_code=204)
+async def revoke_model_connection(task_id: uuid.UUID, db: AsyncSession = Depends(get_db),
+                                  current_user: User = Depends(get_current_user)):
+    task = await db.scalar(select(ResearchTask).where(ResearchTask.id == task_id,
+        ResearchTask.user_id == current_user.id, ResearchTask.status != "DELETING").with_for_update())
+    if task is None:
+        raise HTTPException(404, "Research task not found")
+    config = dict(task.budget_config or {})
+    if stored := config.get('_llm_connection'):
+        config['_llm_connection'] = {'profile': stored.get('profile', {}), 'revoked': True}
+        task.budget_config = config
+        await db.commit()
+    return Response(status_code=204)
 
 
 async def _require_active_workflow_run(db: AsyncSession, task: ResearchTask, expected_status: str) -> WorkflowRun:
@@ -77,6 +114,9 @@ async def create_research_task(
     current_user: User = Depends(get_current_user),
 ):
     """Tạo mới một Research Task."""
+    owner = await db.scalar(select(User).where(User.id == current_user.id, User.deleted_at.is_(None)).with_for_update(read=True))
+    if owner is None:
+        raise HTTPException(status_code=401, detail="Please sign in again.")
     
     budget_dict = task_in.budget.model_dump() if task_in.budget else {
         "max_cost_usd": 2.0,
@@ -87,6 +127,7 @@ async def create_research_task(
     }
     
     task = ResearchTask(
+        id=uuid.uuid4(),
         user_id=current_user.id,
         title=task_in.title,
         research_question=task_in.research_question,
@@ -102,6 +143,20 @@ async def create_research_task(
         require_plan_approval=task_in.require_plan_approval,
         status="PENDING",
     )
+    connection_input = task_in.llm_connection
+    if connection_input is None and task_in.use_saved_connection and current_user.model_connection:
+        from app.services.user_model_settings import decode_input, settings_id
+        try:
+            connection_input = decode_input(current_user.model_connection, current_user.id, settings_id(current_user.id))
+        except ValueError:
+            raise HTTPException(409, 'Update your API connection in Settings before creating research') from None
+    if connection_input is not None:
+        from app.services.model_connection import seal_connection
+        try:
+            sealed = seal_connection(connection_input, task.id, current_user.id)
+        except ValueError:
+            raise HTTPException(503, "Private API connections are not configured securely on this server") from None
+        task.budget_config = {**budget_dict, "_llm_connection": sealed}
     db.add(task)
     await db.commit()
     await db.refresh(task)
@@ -138,7 +193,10 @@ async def get_research_task(
     task = result.scalar_one_or_none()
     if not task:
         raise HTTPException(status_code=404, detail="Research task not found")
-    return task
+    response = ResearchTaskResponse.model_validate(task)
+    from app.services.public_errors import task_error_summary
+    response.latest_error, response.failed_agent = await task_error_summary(db, task)
+    return response
 
 
 @router.post("/{task_id}/start", status_code=status.HTTP_202_ACCEPTED)
@@ -158,6 +216,9 @@ async def start_research_task(
         raise HTTPException(status_code=404, detail="Research task not found")
     if task.status not in ("PENDING", "CANCELLED", "FAILED", "NEEDS_REVIEW"):
         raise HTTPException(status_code=409, detail=f"Research task cannot be started from status {task.status}")
+    from app.services.provider_budget import retry_block_reason
+    if retry_block_reason(task):
+        raise HTTPException(409, 'TASK_BUDGET_LIMIT: This article cannot continue within its remaining allowance. Saved results are retained; create a new research article.')
 
     pending_ingestion = await db.scalar(
         select(func.count(ResearchSource.id)).where(
@@ -173,6 +234,7 @@ async def start_research_task(
     # hours spent reading a finished report as active research on explicit retry.
     from app.services.provider_budget import pause_budget_config
     task.budget_config = pause_budget_config(task.budget_config, now=task.completed_at)
+    task.budget_config = {key: value for key, value in task.budget_config.items() if key not in {'_writer_progress', '_provider_wait'}}
     task.status = "QUEUED"
     task.completed_at = None
     task.worker_lease_until = None
@@ -205,6 +267,49 @@ async def start_research_task(
     await db.commit()
 
     return {"status": "QUEUED", "message": "Workflow accepted for dispatch", "task_id": str(task_id)}
+
+
+@router.post('/{task_id}/retry', status_code=status.HTTP_202_ACCEPTED)
+async def retry_failed_research(task_id: uuid.UUID, allowance: TokenAllowanceIncrease | None = Body(default=None), db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Resume the owning failed run's durable checkpoint without repeating completed nodes."""
+    from app.models.task import WorkflowRun
+    task = await db.scalar(select(ResearchTask).where(ResearchTask.id == task_id,
+        ResearchTask.user_id == current_user.id).with_for_update())
+    if task is None or task.status == 'DELETING':
+        raise HTTPException(404, 'Research task not found')
+    budget_stopped = task.status == 'NEEDS_REVIEW' and task.current_step == 'BUDGET_LIMIT'
+    if task.status != 'FAILED' and not (budget_stopped and allowance is not None):
+        raise HTTPException(409, 'Only failed research can be retried from its saved step')
+    from app.services.provider_budget import retry_block_reason, pause_budget_config, increase_token_allowance
+    config = pause_budget_config(task.budget_config, now=task.completed_at)
+    if allowance is not None:
+        try:
+            config = increase_token_allowance(config, allowance.max_input_tokens, allowance.max_output_tokens,
+                max_llm_calls=allowance.max_llm_calls, timeout_seconds=allowance.timeout_seconds)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+    task.budget_config = config
+    if retry_block_reason(task, ignore_stop_marker=allowance is not None):
+        raise HTTPException(409, 'TASK_BUDGET_LIMIT: Remaining allowance is insufficient. Review token limits; cost, call and time limits still apply.')
+    run = await db.scalar(select(WorkflowRun).where(WorkflowRun.research_task_id == task.id
+        ).order_by(WorkflowRun.run_number.desc()).limit(1).with_for_update())
+    if run is None or run.status != ('NEEDS_REVIEW' if budget_stopped else 'FAILED'):
+        raise HTTPException(409, 'No saved failed workflow is available; start a new research run instead')
+    run.status, run.completed_at = 'RUNNING', None
+    task.status, task.completed_at = 'QUEUED', None
+    task.current_step = None
+    task.worker_lease_until = None
+    task.queued_at = datetime.now(timezone.utc)
+    event = await db.scalar(select(TaskDispatchOutbox).where(TaskDispatchOutbox.research_task_id == task.id,
+        TaskDispatchOutbox.event_type == 'START_RESEARCH').with_for_update())
+    if event is None:
+        db.add(TaskDispatchOutbox(research_task_id=task.id, event_type='START_RESEARCH'))
+    else:
+        event.dispatched_at = event.locked_until = event.last_error = None
+        event.available_at = datetime.now(timezone.utc)
+        event.attempts = event.unclaimed_retries = 0
+    await db.commit()
+    return {'status':'QUEUED','task_id':str(task_id),'message':'Retry accepted from the saved workflow step'}
 
 @router.get("/{task_id}/report", response_model=ResearchReportResponse)
 async def get_research_report(
@@ -270,9 +375,18 @@ async def list_report_versions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    task = await db.scalar(
+        select(ResearchTask).where(
+            ResearchTask.id == task_id,
+            ResearchTask.user_id == current_user.id,
+            ResearchTask.status != "DELETING",
+        )
+    )
+    if task is None:
+        raise HTTPException(status_code=404, detail="Research task not found")
     report = await _get_owned_report(db, task_id, current_user.id)
     if report is None:
-        raise HTTPException(status_code=404, detail="Report not found for this task")
+        return []
     versions = await db.scalars(
         select(ReportVersion)
         .where(ReportVersion.report_id == report.id)
@@ -527,33 +641,8 @@ async def delete_research_task(
 
     if task.status == "DELETING":
         return {"status": "DELETING", "message": "Task deletion is already queued", "task_id": str(task_id)}
-    task.status = "DELETING"
-    task.deleted_at = datetime.now(timezone.utc)
-    from app.services.provider_budget import pause_budget_config
-    task.budget_config = pause_budget_config(task.budget_config)
-    active_runs = await db.execute(
-        select(WorkflowRun).where(
-            WorkflowRun.research_task_id == task.id,
-            WorkflowRun.status.in_(["RUNNING", "WAITING_APPROVAL", "WAITING_USER_DATA"]),
-        ).with_for_update()
-    )
-    for workflow_run in active_runs.scalars():
-        workflow_run.status = "CANCELLED"
-        workflow_run.completed_at = datetime.now(timezone.utc)
-    pending_dispatches = await db.execute(
-        select(TaskDispatchOutbox).where(
-            TaskDispatchOutbox.research_task_id == task.id,
-            TaskDispatchOutbox.dispatched_at.is_(None),
-        ).with_for_update()
-    )
-    for event in pending_dispatches.scalars():
-        event.dispatched_at = datetime.now(timezone.utc)
-        event.last_error = "Task deleted by owner"
-    deletion_outbox = await db.scalar(
-        select(TaskDeletionOutbox).where(TaskDeletionOutbox.research_task_id == task.id).with_for_update()
-    )
-    if deletion_outbox is None:
-        db.add(TaskDeletionOutbox(research_task_id=task.id))
+    from app.services.account_deletion import tombstone_task
+    await tombstone_task(db, task)
     await db.commit()
     return {"status": "DELETING", "message": "Task hidden; cleanup queued", "task_id": str(task_id)}
 

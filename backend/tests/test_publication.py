@@ -216,3 +216,23 @@ async def test_publication_api_is_owner_scoped_and_version_pinned():
         async with AsyncSessionLocal() as db:
             task = await db.get(ResearchTask, tid); task.status = "DELETING"; await db.commit()
         assert (await client.get(url, headers=owner)).status_code == 404
+
+@pytest.mark.parametrize('claim', [
+    'These findings confirm that standardized features significantly improves predictive accuracy.',
+    'Ridge significantly improved accuracy on the synthetic sample.',
+    'Our algorithm significantly reduces prediction error.',
+    'The intervention significantly increased retention.',
+    'This procedure significantly enhances candidate satisfaction.',
+])
+def test_unexecuted_significance_cannot_hide_behind_other_comparative_verbs(claim):
+    contract = manuscript_contract('EMPIRICAL_COMPUTATIONAL', 'en')
+    codes = {f['code'] for f in validate_scientific_reporting(claim, contract, measured_context(), [])}
+    assert 'UNSUPPORTED_SIGNIFICANCE' in codes
+    supported = {**measured_context(), 'statistical_significance_tested': True}
+    assert 'UNSUPPORTED_SIGNIFICANCE' not in {f['code'] for f in validate_scientific_reporting(claim, contract, supported, [])}
+
+
+def test_explicitly_untested_significance_is_not_an_asserted_result():
+    text = 'The observed error reduction does not establish that Ridge significantly improves accuracy.'
+    codes = {f['code'] for f in validate_scientific_reporting(text, manuscript_contract('EMPIRICAL_COMPUTATIONAL', 'en'), measured_context(), [])}
+    assert 'UNSUPPORTED_SIGNIFICANCE' not in codes

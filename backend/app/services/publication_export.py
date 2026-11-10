@@ -23,12 +23,15 @@ def tex_escape(text) -> str:
 
 def _inline(text, labels):
     result = []
-    for part in re.split(r"(\$[^$\n]+\$|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|\[\d+\])", text):
+    for part in re.split(r"(\$\$[\s\S]*?\$\$|\$[^$\n]+\$|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`|\[[^\]]+\]\([^)]+\)|\[\d+\])", text):
         if part in labels:
             result.append(r"\cite{" + labels[part] + "}")
         elif part.startswith("$") and part.endswith("$"):
             commands = set(re.findall(r"\\([A-Za-z]+)", part))
             allowed = {"frac", "sqrt", "sum", "prod", "min", "max", "arg", "log", "exp", "alpha", "beta", "gamma", "delta", "sigma", "mu", "theta", "lambda", "epsilon", "Delta", "Sigma", "in", "leq", "geq", "neq", "times", "cdot", "mathrm", "mathbf", "text", "left", "right", "lVert", "rVert", "infty"}
+            allowed |= {"hat", "bar", "overline", "boldsymbol", "mathbb", "mathcal", "mathit",
+                        "operatorname", "partial", "nabla", "nu", "pi", "rho", "eta", "tau",
+                        "omega", "Omega", "pm", "approx", "sim", "equiv", "rightarrow", "propto", "quad", "qquad"}
             safe = len(part) <= 500 and commands <= allowed and part.count("{") == part.count("}") and not re.search(r"[%#&]", part)
             result.append(part if safe else tex_escape(part))
         elif part.startswith("**") and part.endswith("**"):
@@ -112,6 +115,7 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
         if heading:
             body.append(r"\section{" + tex_escape(heading) + "}")
         lines = text.splitlines(); in_list = False; in_code = False; table_rows = []; table_caption = None
+        math_lines = None
         def flush_table():
             nonlocal table_caption
             if not table_rows:
@@ -136,6 +140,19 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
             if in_code:
                 # Render code as escaped text, never a raw verbatim/TeX escape route.
                 body.append(r"\noindent\texttt{" + tex_escape(line) + r"}\par")
+                continue
+            if line.strip() == '$$':
+                if math_lines is None:
+                    flush_table()
+                    if in_list:
+                        body.append(r'\end{itemize}'); in_list = False
+                    math_lines = []
+                else:
+                    body.append(_inline('$$\n' + '\n'.join(math_lines) + '\n$$', labels))
+                    math_lines = None
+                continue
+            if math_lines is not None:
+                math_lines.append(line)
                 continue
             caption_match = re.fullmatch(r"\s*(?:\*\*)?(?:Table|Bảng)\s+\d+[.:]\s+(.+?)(?:\*\*)?\s*", line, re.I)
             following = next((candidate for candidate in lines[line_index + 1:] if candidate.strip()), "") if caption_match else ""
@@ -173,11 +190,13 @@ def build_publication_bundle(title: str, markdown: str, metadata: dict, citation
             elif line.strip() != "---":
                 body.append(_inline(line, labels))
         flush_table()
+        if math_lines is not None:
+            body.append(tex_escape('$$\n' + '\n'.join(math_lines)))
         if in_list:
             body.append(r"\end{itemize}")
     preamble = [r"\documentclass[" + profile["options"] + "]{" + profile["class"] + "}",
                 r"\usepackage{fontspec}",
-                r"\usepackage{amsmath,graphicx,tikz,pgfplots,tabularx,flafter}", r"\pgfplotsset{compat=1.18}"]
+                r"\usepackage{amsmath,amssymb,graphicx,tikz,pgfplots,tabularx,flafter}", r"\pgfplotsset{compat=1.18}"]
     if template == "IEEE_CONFERENCE":
         preamble += [r"\setmainfont{texgyretermes-regular.otf}[BoldFont=texgyretermes-bold.otf,ItalicFont=texgyretermes-italic.otf,BoldItalicFont=texgyretermes-bolditalic.otf]", r"\usepackage{cite}", r"\usepackage{hyperref}"]
     else:

@@ -314,7 +314,8 @@ def test_client_budget_schema_enforces_the_product_hard_caps():
     with pytest.raises(ValidationError):
         BudgetConfigSchema(max_llm_calls=200)
     with pytest.raises(ValidationError):
-        BudgetConfigSchema(timeout_seconds=1800)
+        BudgetConfigSchema(timeout_seconds=3601)
+    assert BudgetConfigSchema(timeout_seconds=1800).timeout_seconds == 1800
 
 
 @pytest.mark.asyncio
@@ -384,5 +385,22 @@ async def test_running_and_historical_paused_counters_use_settled_ledger_without
             assert response.total_tokens_used == 60 and response.total_cost_usd == .002
             assert '_provider_usage' not in response.model_dump_json()
             assert 'budget_config' not in response.model_dump()
+    finally:
+        await delete_test_user(user_id)
+
+@pytest.mark.asyncio
+async def test_invalid_completed_response_uses_measured_usage_but_timeout_stays_reserved():
+    task_id, user_id = await create_running_task()
+    try:
+        reservation = await reserve_provider_call(task_id=task_id, attempt_number=1, kind='llm', model='gpt-4o-mini', input_tokens=100, output_tokens=4096)
+        await settle_provider_call(task_id=task_id, reservation_id=reservation, input_tokens=33, output_tokens=17, cost_usd=0.001, succeeded=False, usage_reported=True)
+        reservation = await reserve_provider_call(task_id=task_id, attempt_number=1, kind='llm', model='gpt-4o-mini', input_tokens=100, output_tokens=4096)
+        await settle_provider_call(task_id=task_id, reservation_id=reservation, input_tokens=0, output_tokens=0, cost_usd=0, succeeded=False)
+        async with AsyncSessionLocal() as db:
+            task = await db.get(ResearchTask, task_id)
+            usage = task.budget_config['_provider_usage']
+            assert usage['llm_calls'] == 2
+            assert usage['input_tokens'] == 133
+            assert usage['output_tokens'] == 4113
     finally:
         await delete_test_user(user_id)
