@@ -31,9 +31,10 @@ def test_extension_retains_usage_and_non_token_guards_without_changing_defaults(
     assert all(new[k]==old[k] for k in ('max_cost_usd','max_llm_calls','timeout_seconds'))
     assert '_allowance_changes' not in old and len(new['_allowance_changes'])==1
     assert BudgetConfigSchema().max_output_tokens==50000 and BudgetConfigSchema().max_input_tokens==100000
+    assert increase_token_allowance({},500000,50000)['max_input_tokens']==500000
 
 
-@pytest.mark.parametrize('inputs,outputs',[(100000,50000),(90000,100000),(200000,49000),(300001,100000),(200000,200001)])
+@pytest.mark.parametrize('inputs,outputs',[(100000,50000),(90000,100000),(200000,49000),(500001,100000),(200000,200001)])
 def test_token_changes_cannot_lower_limits_repeat_or_exceed_caps(inputs,outputs):
     with pytest.raises(ValueError):increase_token_allowance({},inputs,outputs)
 

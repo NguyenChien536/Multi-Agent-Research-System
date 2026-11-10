@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 HARD_MAX_LLM_CALLS = 60
 HARD_MAX_COST_USD = 2.0
 HARD_MAX_ACTIVE_SECONDS = 3600
-HARD_MAX_INPUT_TOKENS = 300_000
+HARD_MAX_INPUT_TOKENS = 500_000
 HARD_MAX_OUTPUT_TOKENS = 200_000
 DEFAULT_CALL_OUTPUT_TOKENS = 4096
 
@@ -264,7 +264,10 @@ async def reserve_provider_call(
         connection = open_connection(config, task.id, task.user_id)
         if kind == "llm":
             if connection is not None:
-                if model != connection.model_tag:
+                allowed_models = {
+                    "byok:" + name for name in [connection.model, *connection.fallback_models]
+                }
+                if model not in allowed_models:
                     raise ProviderBudgetExceeded("Only the task owner's configured model may be called")
                 call_cost = connection.estimate(input_tokens, output_tokens)
             elif not model or model.startswith("byok:") or not any(key in model.lower() for key in MODEL_PRICING):

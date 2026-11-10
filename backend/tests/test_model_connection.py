@@ -316,6 +316,53 @@ async def test_custom_budget_no_server_spending_and_revocation_enforced_between_
 
 
 @pytest.mark.asyncio
+async def test_budget_allows_only_the_saved_free_fallback_models():
+    tid, uid = await create_running_task()
+    value = ModelConnectionInput(
+        api_key=SECRET,
+        base_url='https://openrouter.ai/api/v1',
+        model='provider/primary:free',
+        fallback_models=['provider/backup:free'],
+        input_price_per_million=0,
+        output_price_per_million=0,
+    )
+    stored = seal_connection(value, tid, uid)
+    try:
+        async with AsyncSessionLocal() as db:
+            task = await db.get(ResearchTask, tid)
+            task.budget_config = {**task.budget_config, '_llm_connection': stored}
+            await db.commit()
+
+        reservation = await reserve_provider_call(
+            task_id=tid,
+            attempt_number=1,
+            kind='llm',
+            model='byok:provider/backup:free',
+            input_tokens=100,
+            output_tokens=50,
+        )
+        await settle_provider_call(
+            task_id=tid,
+            reservation_id=reservation,
+            input_tokens=100,
+            output_tokens=50,
+            cost_usd=0,
+            succeeded=True,
+        )
+        with pytest.raises(ProviderBudgetExceeded, match='configured model'):
+            await reserve_provider_call(
+                task_id=tid,
+                attempt_number=1,
+                kind='llm',
+                model='byok:unconfigured/model:free',
+                input_tokens=100,
+                output_tokens=50,
+            )
+    finally:
+        await delete_test_user(uid)
+
+
+@pytest.mark.asyncio
 async def test_validation_never_echoes_secret_even_for_nested_or_parent_errors():
     tid, uid = await create_running_task()
     try:
@@ -491,3 +538,41 @@ def test_structured_roles_keep_the_users_output_capacity(monkeypatch):
     monkeypatch.setattr('app.services.model_connection.build_connection_client', lambda _: client)
     with connection_scope({'_llm_connection': seal_connection(value, tid, uid)}, tid, uid):
         assert build_llm_chain().models[0][1].max_tokens == 12288
+
+
+def test_openrouter_free_fallbacks_are_wired_as_independent_candidates(monkeypatch):
+    from types import SimpleNamespace
+    from app.agents.nodes import build_llm_chain
+
+    tid, uid = uuid.uuid4(), uuid.uuid4()
+    value = ModelConnectionInput(
+        api_key=SECRET,
+        base_url='https://openrouter.ai/api/v1',
+        model='provider/primary:free',
+        fallback_models=['provider/backup-a:free', 'provider/backup-b:free'],
+        input_price_per_million=0,
+        output_price_per_million=0,
+    )
+    built = []
+
+    def fake_builder(candidate):
+        built.append(candidate)
+        return SimpleNamespace(model_name=candidate.model)
+
+    monkeypatch.setattr('app.services.model_connection.build_connection_client', fake_builder)
+    with connection_scope({'_llm_connection': seal_connection(value, tid, uid)}, tid, uid):
+        connection = current_connection()
+        chain = build_llm_chain()
+        assert [name for name, _ in chain.models] == [
+            'byok:provider/primary:free',
+            'byok:provider/backup-a:free',
+            'byok:provider/backup-b:free',
+        ]
+        assert [candidate.model for candidate in built] == [
+            'provider/primary:free',
+            'provider/backup-a:free',
+            'provider/backup-b:free',
+        ]
+        assert all(candidate.fallback_models == [] for candidate in built)
+        assert len({id(candidate._clients) for candidate in built}) == len(built)
+        assert connection._clients == [client for _, client in chain.models]

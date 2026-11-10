@@ -4,6 +4,7 @@ import logging
 import hashlib
 import time
 import uuid
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Literal, Annotated
 from sqlalchemy import func, select
@@ -298,8 +299,19 @@ def build_llm_chain(is_smart: bool = False):
         return runtime.llm
     from app.services.model_connection import current_connection, build_connection_client
     if connection := current_connection():
-        client = build_connection_client(connection)
-        return BudgetedFallbackLLM([(connection.model_tag, client)])
+        models = []
+        for model_name in [connection.model, *connection.fallback_models]:
+            # Keep every user-selected backup as a budgeted candidate. Provider-side
+            # routing alone cannot recover from a successful HTTP response that is
+            # truncated or fails local structured-output validation.
+            # Give each candidate its own client list; dataclasses.replace is
+            # shallow by default and would otherwise share/clear the task list.
+            candidate = replace(connection, model=model_name, fallback_models=[], _clients=[])
+            client = build_connection_client(candidate)
+            # The active task scope owns all clients and closes them together.
+            connection.register_client(client)
+            models.append((candidate.model_tag, client))
+        return BudgetedFallbackLLM(models)
     providers = [p.strip().lower() for p in settings.LLM_PROVIDER_PRIORITY.split(",")]
     models: list[tuple[str, Any]] = []
     
