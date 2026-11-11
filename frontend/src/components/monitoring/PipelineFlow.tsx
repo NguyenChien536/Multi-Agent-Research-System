@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import {
-  CheckCircle2, Circle, Clock, Loader2, XCircle, Info, ChevronRight,
+  CheckCircle2, Circle, Clock, Loader2, XCircle, ChevronRight,
   ArrowUpRight
 } from 'lucide-react';
 
@@ -215,17 +215,17 @@ export function PipelineFlow({
       {/* Header bar without technical DAG jargon */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-zinc-900" />
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-800">
+          <div className="w-2.5 h-2.5 rounded-full bg-zinc-900" />
+          <h3 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-zinc-900">
             {t('mon_pipeline_title')} ({stages.length})
           </h3>
         </div>
 
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-zinc-500">{t('mon_current_step')}:</span>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-semibold text-xs bg-zinc-900 text-white shadow-2xs">
+        <div className="flex items-center gap-2 text-xs sm:text-sm">
+          <span className="text-zinc-500 font-medium">{t('mon_current_step')}:</span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full font-bold text-xs bg-zinc-900 text-white shadow-xs">
             {activeIdx !== -1 && (
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-ping shrink-0" />
+              <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping shrink-0" />
             )}
             <span>
               {activeIdx !== -1
@@ -239,16 +239,17 @@ export function PipelineFlow({
       </div>
 
       {/* GitHub Actions Connected Pipeline Flow Track */}
-      <div className="relative rounded-2xl border border-zinc-200/90 bg-white p-4 sm:p-5 shadow-xs overflow-hidden">
+      <div className="relative rounded-2xl border border-zinc-200 bg-white p-5 sm:p-6 shadow-xs overflow-hidden">
         {/* Subtle grid background for academic/pipeline visual */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#f4f4f5_1px,transparent_1px),linear-gradient(to_bottom,#f4f4f5_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-60 pointer-events-none" />
 
-        <div className="relative z-10 flex items-center overflow-x-auto py-3 px-1 scrollbar-thin scrollbar-thumb-zinc-300">
+        <div className="relative z-10 flex items-center overflow-x-auto py-2.5 px-1 scrollbar-thin scrollbar-thumb-zinc-300">
           {stages.map((stage, idx) => {
             const state = getStageState(stage, idx);
             const isLast = idx === stages.length - 1;
             const nextState = !isLast ? getStageState(stages[idx + 1], idx + 1) : null;
             const dest = getStageDestination(stage.key, researchId, status, researchType);
+            const stageTitle = isEn ? (stage.name_en || stage.name) : stage.name;
 
             return (
               <React.Fragment key={stage.key}>
@@ -256,93 +257,103 @@ export function PipelineFlow({
                 <Link
                   href={dest.href}
                   title={isEn ? dest.labelEn : dest.labelVi}
-                  className={`group relative flex flex-col justify-between p-3.5 rounded-xl border transition-all duration-200 shrink-0 min-w-[170px] sm:min-w-[195px] max-w-[215px] select-none cursor-pointer hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-zinc-900 ${
+                  className={`group relative flex flex-col justify-between p-4 rounded-xl border transition-all duration-200 shrink-0 min-w-[190px] sm:min-w-[210px] max-w-[235px] select-none cursor-pointer hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-zinc-900 ${
                     state === 'active'
-                      ? 'border-blue-500 bg-white ring-4 ring-blue-500/15 shadow-[0_0_20px_rgba(59,130,246,0.22)] -translate-y-0.5'
+                      ? 'border-blue-500 bg-blue-50/20 ring-4 ring-blue-500/15 shadow-[0_4px_20px_rgba(59,130,246,0.2)] -translate-y-0.5'
                       : state === 'paused'
-                      ? 'border-amber-400 bg-amber-50/60 ring-4 ring-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.2)] -translate-y-0.5 hover:border-amber-500'
+                      ? 'border-amber-400 bg-amber-50/70 ring-4 ring-amber-500/20 shadow-[0_4px_16px_rgba(245,158,11,0.2)] -translate-y-0.5 hover:border-amber-500'
                       : state === 'failed'
-                      ? 'border-red-400 bg-red-50/40 ring-2 ring-red-400/20'
+                      ? 'border-red-400 bg-red-50/50 ring-2 ring-red-400/20'
                       : state === 'done'
-                      ? 'border-emerald-200/90 bg-white hover:border-emerald-400 shadow-2xs hover:shadow-xs'
-                      : 'border-zinc-200/90 bg-zinc-50/60 text-zinc-500 hover:border-zinc-300'
+                      ? 'border-emerald-300 bg-white shadow-2xs hover:border-emerald-500 hover:shadow-xs'
+                      : 'border-zinc-200 bg-zinc-50/70 text-zinc-600 hover:border-zinc-300 hover:bg-white shadow-2xs'
                   }`}
                 >
                   {/* Top status indicator row */}
-                  <div className="flex items-center justify-between gap-1 mb-2">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-mono text-[11px] font-semibold text-zinc-400 group-hover:text-zinc-600 transition-colors">
-                        #{idx + 1}
-                      </span>
-                    </div>
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
+                    <span className={`font-mono text-xs font-bold px-2 py-0.5 rounded-md ${
+                      state === 'active'
+                        ? 'bg-blue-100 text-blue-800'
+                        : state === 'done'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : state === 'paused'
+                        ? 'bg-amber-100 text-amber-900'
+                        : state === 'failed'
+                        ? 'bg-red-100 text-red-800'
+                        : 'bg-zinc-100 text-zinc-600 group-hover:text-zinc-800'
+                    }`}>
+                      #{idx + 1}
+                    </span>
 
-                    {/* Status Icon */}
+                    {/* Status Badge */}
                     <div className="shrink-0">
                       {state === 'active' && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200 animate-pulse">
-                          <Loader2 size={11} className="animate-spin text-blue-600" />
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 animate-pulse">
+                          <Loader2 size={12} className="animate-spin text-blue-600" />
                           <span>{isEn ? 'Running' : 'Đang xử lý'}</span>
                         </span>
                       )}
                       {state === 'done' && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          <CheckCircle2 size={12} className="text-emerald-600" />
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-300">
+                          <CheckCircle2 size={13} className="text-emerald-600" />
                           <span>{isEn ? 'Done' : 'Xong'}</span>
                         </span>
                       )}
                       {state === 'paused' && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
-                          <Clock size={11} className="text-amber-700" />
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse">
+                          <Clock size={12} className="text-amber-700" />
                           <span>{isEn ? 'Awaiting' : 'Chờ duyệt'}</span>
                         </span>
                       )}
                       {state === 'failed' && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-50 text-red-700 border border-red-200">
-                          <XCircle size={11} className="text-red-600" />
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200">
+                          <XCircle size={12} className="text-red-600" />
                           <span>{isEn ? 'Failed' : 'Lỗi'}</span>
                         </span>
                       )}
                       {state === 'pending' && (
-                        <Circle size={12} className="text-zinc-300" />
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium text-zinc-400">
+                          <Circle size={13} className="text-zinc-300" />
+                        </span>
                       )}
                     </div>
                   </div>
 
-                  {/* Stage title */}
-                  <div className="space-y-0.5">
-                    <div className={`font-semibold text-xs sm:text-[13px] line-clamp-1 ${
+                  {/* Stage title & agent */}
+                  <div className="space-y-1">
+                    <h4 className={`font-bold text-sm sm:text-[15px] tracking-tight line-clamp-1 leading-snug ${
                       state === 'active'
-                        ? 'text-blue-900 font-bold'
+                        ? 'text-blue-950 font-bold'
                         : state === 'paused'
                         ? 'text-amber-950 font-bold'
                         : state === 'done'
-                        ? 'text-zinc-900'
-                        : 'text-zinc-700'
+                        ? 'text-zinc-900 font-bold'
+                        : 'text-zinc-800 font-semibold'
                     }`}>
-                      {isEn ? (stage.name_en || stage.name) : stage.name}
-                    </div>
+                      {stageTitle}
+                    </h4>
 
                     {/* Agent badge */}
-                    <div className="flex items-center gap-1 text-[11px] text-zinc-500 truncate font-medium">
-                      <span className="inline-block w-1 h-1 rounded-full bg-zinc-300 group-hover:bg-zinc-400" />
-                      <span>{stage.agent}</span>
+                    <div className="flex items-center gap-1.5 text-xs text-zinc-600 font-medium">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-zinc-300 group-hover:bg-zinc-400" />
+                      <span className="truncate">{stage.agent}</span>
                     </div>
                   </div>
 
                   {/* Bottom Action Hint & Destination Jump */}
                   {dest.isAwaiting ? (
-                    <div className="mt-2.5 pt-1.5 border-t border-amber-200/80 flex items-center justify-between text-[11px] font-semibold text-amber-900 bg-amber-100/60 -mx-1 px-2 py-1 rounded-lg">
+                    <div className="mt-3 pt-2 border-t border-amber-200/80 flex items-center justify-between text-xs font-bold text-amber-950 bg-amber-100/70 -mx-1 px-2.5 py-1.5 rounded-lg">
                       <span className="truncate">{isEn ? dest.actionTextEn : dest.actionTextVi}</span>
-                      <ArrowUpRight size={13} className="shrink-0 ml-1 text-amber-800" />
+                      <ArrowUpRight size={14} className="shrink-0 ml-1 text-amber-900" />
                     </div>
                   ) : (
-                    <div className="mt-2 pt-1.5 border-t border-zinc-100 flex items-center justify-between text-[10px] font-medium text-zinc-500 group-hover:text-zinc-900 transition-colors">
+                    <div className="mt-3 pt-2.5 border-t border-zinc-100 flex items-center justify-between text-xs font-semibold text-zinc-700 group-hover:text-zinc-950 transition-colors">
                       <span className="truncate">{isEn ? dest.actionTextEn : dest.actionTextVi}</span>
-                      <ArrowUpRight size={11} className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 ml-1 text-zinc-600" />
+                      <ArrowUpRight size={13} className="text-zinc-400 group-hover:text-zinc-950 transition-colors shrink-0 ml-1" />
                     </div>
                   )}
 
-                  {/* Subtle active glow bar at the bottom */}
+                  {/* Active bottom bar */}
                   {state === 'active' && (
                     <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-blue-600 rounded-b-xl" />
                   )}
@@ -350,7 +361,7 @@ export function PipelineFlow({
                     <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 rounded-b-xl" />
                   )}
                   {state === 'done' && (
-                    <div className="absolute inset-x-0 bottom-0 h-0.5 bg-emerald-500 rounded-b-xl opacity-80" />
+                    <div className="absolute inset-x-0 bottom-0 h-0.5 bg-emerald-500 rounded-b-xl opacity-90" />
                   )}
                 </Link>
 
@@ -359,7 +370,7 @@ export function PipelineFlow({
                   <div className="flex items-center shrink-0 w-8 sm:w-10 px-1 relative">
                     {/* Connector line */}
                     <div
-                      className={`h-[2px] w-full transition-colors duration-300 ${
+                      className={`h-[2.5px] w-full transition-colors duration-300 ${
                         state === 'done' && (nextState === 'done' || nextState === 'active')
                           ? 'bg-gradient-to-r from-emerald-500 to-blue-500'
                           : state === 'done'
@@ -371,7 +382,7 @@ export function PipelineFlow({
                     />
                     {/* Flow arrow head */}
                     <ChevronRight
-                      size={12}
+                      size={14}
                       className={`absolute right-0 top-1/2 -translate-y-1/2 -mr-1 transition-colors ${
                         state === 'done' && nextState === 'active'
                           ? 'text-blue-500'
@@ -385,12 +396,6 @@ export function PipelineFlow({
               </React.Fragment>
             );
           })}
-        </div>
-
-        {/* Constraint note on non-linear backtracking */}
-        <div className="mt-2 pt-3 border-t border-zinc-100 flex items-start gap-2 text-xs text-zinc-600 leading-relaxed font-normal">
-          <Info size={14} className="text-zinc-500 shrink-0 mt-0.5" />
-          <span>{t('mon_backtrack_note')}</span>
         </div>
       </div>
     </div>
