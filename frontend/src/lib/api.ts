@@ -1,4 +1,4 @@
-﻿import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, UserDataResumeRequest, ProtocolResponse, AnalysisRunResponse, ExperimentJournalEntryResponse, DatasetUploadResponse, TokenResponse, UserCreate, UserResponse } from '../types';
+import { ResearchTaskCreate, ResearchTaskResponse, ApiError, ResearchReportResponse, CitationResponse, ResearchSourceResponse, AgentRunResponse, ArtifactItemResponse, PdfUploadResponse, PlanReviewResponse, PlanApprovalRequest, PlanRejectRequest, UserDataResumeRequest, ProtocolResponse, AnalysisRunResponse, ExperimentJournalEntryResponse, DatasetUploadResponse, TokenResponse, UserCreate, UserResponse } from '../types';
 import type { ResearchMonitor } from '../types/monitoring';
 import type { UserProfileUpdate } from '../types';
 import type { ReportQuestion, ReportQuestionHistory, ReportVersionMetadata } from '../types/report-questions';
@@ -103,7 +103,7 @@ export const api = {
       fetcher<{ status: string }>('/auth/me', { method: 'DELETE', body: JSON.stringify(data) }),
   },
   tasks: {
-    retry: (id: string, allowance?: {max_input_tokens:number;max_output_tokens:number;max_llm_calls?:number;timeout_seconds?:number}) => fetcher<unknown>(`/research/${id}/retry`, {method:'POST',...(allowance?{body:JSON.stringify(allowance)}:{})}),
+    retry: (id: string, allowance?: {max_input_tokens:number;max_output_tokens:number;max_llm_calls?:number;timeout_seconds?:number;max_cost_usd?:number}) => fetcher<unknown>(`/research/${id}/retry`, {method:'POST',...(allowance?{body:JSON.stringify(allowance)}:{})}),
     modelConnectionOptions: () => fetcher<{ protocol: string; base_urls: string[]; use_server_providers?: boolean; server_provider_ready?: boolean; server_provider?: string | null }>('/research/model-connections/options', {cache: 'no-store'}),
     freeModels: () => fetcher<{models: Array<{id:string;context_length:number;max_output_tokens:number | null}>}>('/research/model-connections/free-models'),
     revokeModelConnection: (id: string) => fetcher<void>(`/research/${id}/model-connection`, { method: 'DELETE' }),

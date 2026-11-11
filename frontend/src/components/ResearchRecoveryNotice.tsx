@@ -20,23 +20,89 @@ export function ResearchRecoveryNotice({task, isEn, busy, onContinue, onExtend}:
   }
   if (!blocked && task.status !== 'FAILED') return null;
   const allowance = task.token_allowance;
-  return <section id="research-recovery-controls" aria-label={isEn ? 'Continue research' : 'Tiếp tục nghiên cứu'} className="mb-4 rounded-xl border border-zinc-200 bg-white p-4 text-sm">
-    <p className="mb-3 text-zinc-700">{blocked
+  return <section id="research-recovery-controls" aria-label={isEn ? 'Continue research' : 'Tiếp tục nghiên cứu'} className="mb-4 rounded-xl border border-zinc-200 bg-white p-4 text-sm shadow-xs">
+    <p className="mb-3 text-zinc-700 font-medium">{blocked
       ? (isEn ? 'Research is paused at its allowance. Saved sources and writing are kept; review the limits below to continue.' : 'Bài tạm dừng do chạm hạn mức. Nguồn và phần đã viết vẫn được giữ; xem hạn mức bên dưới để tiếp tục.')
       : (isEn ? 'Continue from the failed step using the remaining allowance.' : 'Tiếp tục từ bước lỗi, sử dụng phần giới hạn còn lại của bài.')}</p>
-    {allowance?.can_extend && onExtend && <div className="mb-3 rounded-lg bg-zinc-50 p-3">
-      <p>{isEn ? 'New token limits: ' : 'Hạn mức token mới: '}
+
+    {/* Recorded usage metrics grid */}
+    {allowance && (
+      <div className="mb-3 grid grid-cols-2 sm:grid-cols-4 gap-2 rounded-lg border border-zinc-200 bg-zinc-50/70 p-3 text-xs">
+        <div>
+          <span className="text-zinc-500 font-medium block">{isEn ? 'Cost Used' : 'Chi phí đã dùng'}</span>
+          <span className="font-mono font-bold text-zinc-900">
+            {allowance.cost_used_usd != null ? `$${allowance.cost_used_usd.toFixed(4)}` : '—'}
+            <span className="text-zinc-500 font-normal"> / ${((allowance.max_cost_usd ?? 0.5)).toFixed(2)}</span>
+          </span>
+        </div>
+        <div>
+          <span className="text-zinc-500 font-medium block">{isEn ? 'Model Calls' : 'Lượt gọi model'}</span>
+          <span className="font-mono font-bold text-zinc-900">
+            {allowance.calls_used ?? '—'}
+            <span className="text-zinc-500 font-normal"> / {allowance.max_llm_calls ?? 40}</span>
+          </span>
+        </div>
+        <div>
+          <span className="text-zinc-500 font-medium block">{isEn ? 'Input Tokens' : 'Token đầu vào'}</span>
+          <span className="font-mono font-bold text-zinc-900">
+            {allowance.input_used ? allowance.input_used.toLocaleString() : '0'}
+            <span className="text-zinc-500 font-normal"> / {(allowance.max_input_tokens || 150000).toLocaleString()}</span>
+          </span>
+        </div>
+        <div>
+          <span className="text-zinc-500 font-medium block">{isEn ? 'Output Tokens' : 'Token tạo ra'}</span>
+          <span className="font-mono font-bold text-zinc-900">
+            {allowance.output_used ? allowance.output_used.toLocaleString() : '0'}
+            <span className="text-zinc-500 font-normal"> / {(allowance.max_output_tokens || 60000).toLocaleString()}</span>
+          </span>
+        </div>
+      </div>
+    )}
+
+    {/* Extension proposal box */}
+    {allowance?.can_extend && onExtend && <div className="mb-3 rounded-lg border border-emerald-200 bg-emerald-50/60 p-3.5">
+      <p className="font-semibold text-emerald-950">{isEn ? 'New token limits: ' : 'Hạn mức token mới: '}
         {allowance.next_input_tokens.toLocaleString()} input / {allowance.next_output_tokens.toLocaleString()} output.</p>
-      {allowance.next_max_llm_calls != null && allowance.next_timeout_seconds != null && <p className="mt-1">{isEn ? 'Total allowance: ' : 'Tổng hạn mức: '}{allowance.next_max_llm_calls} {isEn ? 'calls' : 'lượt gọi'} · {Math.round(allowance.next_timeout_seconds / 60)} {isEn ? 'active minutes' : 'phút xử lý'} · ${allowance.max_cost_usd?.toFixed(2)} {isEn ? 'estimated cost ceiling' : 'trần chi phí ước tính'}.</p>}
-      <p className="mb-2 mt-1 text-xs text-zinc-500">{isEn ? 'Recorded usage is kept. The cost ceiling stays unchanged. Continuing can make additional API calls within that ceiling.' : 'Giữ lượng đã dùng và trần chi phí. Tiếp tục có thể gọi thêm API trong trần này.'}</p>
+      {allowance.next_max_cost_usd != null && allowance.next_max_cost_usd > (allowance.max_cost_usd ?? 0) ? (
+        <p className="mt-1 text-emerald-900">
+          {isEn ? 'Total allowance: ' : 'Tổng hạn mức: '}
+          {allowance.next_max_llm_calls} {isEn ? 'calls' : 'lượt gọi'} · {Math.round((allowance.next_timeout_seconds ?? 1800) / 60)} {isEn ? 'active minutes' : 'phút xử lý'} · ${(allowance.next_max_cost_usd).toFixed(2)} {isEn ? 'estimated cost ceiling' : 'trần chi phí ước tính'}.
+        </p>
+      ) : (
+        allowance.next_max_llm_calls != null && allowance.next_timeout_seconds != null && <p className="mt-1 text-emerald-900">{isEn ? 'Total allowance: ' : 'Tổng hạn mức: '}{allowance.next_max_llm_calls} {isEn ? 'calls' : 'lượt gọi'} · {Math.round(allowance.next_timeout_seconds / 60)} {isEn ? 'active minutes' : 'phút xử lý'} · ${allowance.max_cost_usd?.toFixed(2)} {isEn ? 'estimated cost ceiling' : 'trần chi phí ước tính'}.</p>
+      )}
+      {allowance.next_max_cost_usd != null && allowance.next_max_cost_usd > (allowance.max_cost_usd ?? 0) ? (
+        <p className="mb-2.5 mt-1 text-xs text-emerald-800">
+          {isEn
+            ? `Recorded usage is kept. Cost ceiling will be raised to $${allowance.next_max_cost_usd.toFixed(2)}. Continuing will make additional calls within that ceiling.`
+            : `Giữ lượng đã dùng. Trần chi phí sẽ được tăng lên $${allowance.next_max_cost_usd.toFixed(2)}. Tiếp tục sẽ thực hiện thêm lượt gọi trong trần mới.`}
+        </p>
+      ) : (
+        <p className="mb-2.5 mt-1 text-xs text-zinc-600">{isEn ? 'Recorded usage is kept. The cost ceiling stays unchanged. Continuing can make additional API calls within that ceiling.' : 'Giữ lượng đã dùng và trần chi phí. Tiếp tục có thể gọi thêm API trong trần này.'}</p>
+      )}
       <button type="button" disabled={busy} onClick={onExtend}
-        className="rounded-lg bg-emerald-700 px-4 py-2 font-medium text-white disabled:opacity-50">
+        className="rounded-lg bg-emerald-700 hover:bg-emerald-800 px-4 py-2 font-medium text-white disabled:opacity-50 transition-colors shadow-xs cursor-pointer">
         {busy ? (isEn ? 'Resuming…' : 'Đang tiếp tục…') : (isEn ? 'Approve limits and continue' : 'Duyệt hạn mức và tiếp tục')}
       </button>
     </div>}
-    {blocked ? <Link href="/" className="inline-block rounded-lg border border-zinc-200 px-4 py-2 font-medium text-zinc-700">
+
+    {/* Hard limit explanation when extension cannot be offered */}
+    {blocked && !allowance?.can_extend && (
+      <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+        <p className="font-semibold">
+          {isEn ? 'System allowance ceiling reached' : 'Đã đạt trần hạn mức tối đa của hệ thống'}
+        </p>
+        <p className="mt-1">
+          {isEn
+            ? 'This research has reached the absolute system limit ($2.00 / 60 calls / 60 active minutes / 500k input / 200k output tokens). Saved findings and drafts are preserved. Start a new research task to continue.'
+            : 'Bài nghiên cứu đã chạm trần tối đa của hệ thống ($2.00 / 60 lượt gọi / 60 phút / 500k input / 200k output tokens). Toàn bộ bản nháp và dữ liệu đã lưu được giữ nguyên. Vui lòng tạo nghiên cứu mới để tiếp tục.'}
+        </p>
+      </div>
+    )}
+
+    {blocked ? <Link href="/" className="inline-block rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 px-4 py-2 font-medium text-zinc-700 transition-colors">
       {isEn ? 'Create new research' : 'Tạo nghiên cứu mới'}</Link>
-      : <button type="button" disabled={busy} onClick={onContinue} className="rounded-lg bg-emerald-700 px-4 py-2 font-medium text-white disabled:opacity-50">
+      : <button type="button" disabled={busy} onClick={onContinue} className="rounded-lg bg-emerald-700 hover:bg-emerald-800 px-4 py-2 font-medium text-white disabled:opacity-50 transition-colors shadow-xs cursor-pointer">
         {busy ? (isEn ? 'Resuming…' : 'Đang tiếp tục…') : (isEn ? 'Continue from failed step' : 'Tiếp tục từ bước lỗi')}</button>}
   </section>;
 }

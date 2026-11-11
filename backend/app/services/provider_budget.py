@@ -64,38 +64,85 @@ def token_allowance_summary(task) -> dict:
                        and (usage.get('active_seconds', 0) < seconds or next_seconds > seconds))
     next_in = min(inputs + 100_000, HARD_MAX_INPUT_TOKENS)
     next_out = min(outputs + 50_000, HARD_MAX_OUTPUT_TOKENS)
-    return {'input_used': int(usage.get('input_tokens', 0)), 'output_used': int(usage.get('output_tokens', 0)),
-            'max_input_tokens': inputs, 'max_output_tokens': outputs,
-            'next_input_tokens': next_in, 'next_output_tokens': next_out,
-            'calls_used': int(usage.get('llm_calls', 0)), 'active_seconds_used': float(usage.get('active_seconds', 0)),
-            'next_max_llm_calls': next_calls, 'next_timeout_seconds': next_seconds,
-            'max_cost_usd': cost,
-            'can_extend': bool(eligible and other_limits_ok and (next_in > inputs or next_out > outputs or next_calls > calls or next_seconds > seconds)
-                               and (getattr(task, 'current_step', None) == 'BUDGET_LIMIT'
-                                    or remaining_out < int(call_output) or remaining_in < 1000
-                                    or next_calls > calls or next_seconds > seconds))}
+
+    can_extend = bool(
+        eligible and other_limits_ok and (next_in > inputs or next_out > outputs or next_calls > calls or next_seconds > seconds)
+        and (getattr(task, 'current_step', None) == 'BUDGET_LIMIT'
+             or remaining_out < int(call_output) or remaining_in < 1000
+             or next_calls > calls or next_seconds > seconds)
+    )
+
+    cost_used = float(usage.get('cost_usd', 0))
+    calls_used = int(usage.get('llm_calls', 0))
+    input_used = int(usage.get('input_tokens', 0))
+    output_used = int(usage.get('output_tokens', 0))
+    active_seconds = float(usage.get('active_seconds', 0))
+
+    blocked_limits = []
+    if input_used >= inputs and next_in <= inputs: blocked_limits.append('input_tokens')
+    if output_used >= outputs and next_out <= outputs: blocked_limits.append('output_tokens')
+    if calls_used >= calls and next_calls <= calls: blocked_limits.append('llm_calls')
+    if active_seconds >= seconds and next_seconds <= seconds: blocked_limits.append('active_time')
+    if cost_used >= cost: blocked_limits.append('cost')
+
+    if not eligible:
+        reason = 'not_paused_at_allowance'
+    elif blocked_limits:
+        reason = 'cost_or_hard_limit_reached' if 'cost' in blocked_limits else 'hard_limit_reached'
+    elif not can_extend:
+        reason = 'no_extension_required'
+    else:
+        reason = None
+
+    return {
+        'input_used': input_used,
+        'output_used': output_used,
+        'max_input_tokens': inputs,
+        'max_output_tokens': outputs,
+        'next_input_tokens': next_in,
+        'next_output_tokens': next_out,
+        'calls_used': calls_used,
+        'max_llm_calls': calls,
+        'next_max_llm_calls': next_calls,
+        'cost_used_usd': round(cost_used, 6),
+        'max_cost_usd': cost,
+        'next_max_cost_usd': cost,
+        'active_seconds_used': active_seconds,
+        'max_active_seconds': seconds,
+        'next_timeout_seconds': next_seconds,
+        'search_calls_used': int(usage.get('search_calls', 0)),
+        'embedding_calls_used': int(usage.get('embedding_calls', 0)),
+        'blocked_limits': blocked_limits,
+        'extension_blocked_reason': reason,
+        'can_extend': can_extend,
+    }
 
 
 def increase_token_allowance(config: dict, max_input_tokens: int, max_output_tokens: int,
-                             *, max_llm_calls: int | None = None, timeout_seconds: int | None = None) -> dict:
-    """Explicitly raise resource ceilings; retain all usage and the money limit."""
-    old_calls, old_in, old_out, _, old_seconds = _limits(config)
+                             *, max_llm_calls: int | None = None, timeout_seconds: int | None = None,
+                             max_cost_usd: float | None = None) -> dict:
+    """Explicitly raise task ceilings; retain all usage and audit approved changes."""
+    old_calls, old_in, old_out, old_cost, old_seconds = _limits(config)
     new_calls = old_calls if max_llm_calls is None else max_llm_calls
     new_seconds = old_seconds if timeout_seconds is None else timeout_seconds
+    new_cost = old_cost if max_cost_usd is None else max_cost_usd
     if not (old_in <= max_input_tokens <= HARD_MAX_INPUT_TOKENS
             and old_out <= max_output_tokens <= HARD_MAX_OUTPUT_TOKENS
             and old_calls <= new_calls <= HARD_MAX_LLM_CALLS
             and old_seconds <= new_seconds <= HARD_MAX_ACTIVE_SECONDS
-            and (max_input_tokens > old_in or max_output_tokens > old_out or new_calls > old_calls or new_seconds > old_seconds)):
+            and old_cost <= new_cost <= HARD_MAX_COST_USD
+            and (max_input_tokens > old_in or max_output_tokens > old_out or new_calls > old_calls
+                 or new_seconds > old_seconds or new_cost > old_cost)):
         raise ValueError('Increase at least one resource limit without lowering another limit or exceeding the maximum.')
     result = deepcopy(config)
     changes = list(result.get('_allowance_changes') or [])
     changes.append({'at': datetime.now(timezone.utc).isoformat(), 'input_before': old_in, 'output_before': old_out,
                     'input_after': max_input_tokens, 'output_after': max_output_tokens,
                     'calls_before': old_calls, 'calls_after': new_calls,
-                    'seconds_before': old_seconds, 'seconds_after': new_seconds})
+                    'seconds_before': old_seconds, 'seconds_after': new_seconds,
+                    'cost_before': old_cost, 'cost_after': new_cost})
     return {**result, 'max_input_tokens': max_input_tokens, 'max_output_tokens': max_output_tokens,
-            'max_llm_calls': new_calls, 'timeout_seconds': new_seconds,
+            'max_llm_calls': new_calls, 'timeout_seconds': new_seconds, 'max_cost_usd': new_cost,
             '_allowance_changes': changes[-10:]}
 
 
