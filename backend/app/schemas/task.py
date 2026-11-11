@@ -7,7 +7,7 @@ from app.services.model_connection import ModelConnectionInput
 
 class BudgetConfigSchema(BaseModel):
     max_cost_usd: float = Field(default=2.00, ge=0.1, le=2.0)
-    max_llm_calls: int = Field(default=40, ge=5, le=60)
+    max_llm_calls: int = Field(default=40, ge=5, le=100)
     max_input_tokens: int = Field(default=100000, ge=10000, le=500000)
     max_output_tokens: int = Field(default=50000, ge=5000, le=200000)
     timeout_seconds: int = Field(default=900, ge=60, le=3600)
@@ -33,7 +33,7 @@ class ResearchTaskCreate(BaseModel):
 class TokenAllowanceIncrease(BaseModel):
     max_input_tokens: int = Field(ge=10000, le=500000)
     max_output_tokens: int = Field(ge=5000, le=200000)
-    max_llm_calls: int | None = Field(default=None, ge=5, le=60)
+    max_llm_calls: int | None = Field(default=None, ge=5, le=100)
     timeout_seconds: int | None = Field(default=None, ge=60, le=3600)
     max_cost_usd: float | None = Field(default=None, ge=0.1, le=2.0)
     model_config = ConfigDict(extra='forbid')

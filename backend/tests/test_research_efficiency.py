@@ -7,7 +7,7 @@ from langchain_core.messages import SystemMessage
 from app.services.public_errors import public_error, provider_failure_message, provider_request_rejected
 from app.services.sectional_writer import group_output_tokens, prior_section_context
 from app.services.structured_output import compact_prompt_schema
-from app.services.provider_budget import increase_token_allowance, token_allowance_summary
+from app.services.provider_budget import HARD_MAX_LLM_CALLS, increase_token_allowance, token_allowance_summary
 
 
 def test_legacy_invalid_request_is_not_mislabelled_as_quota():
@@ -148,7 +148,7 @@ def test_spent_cost_and_absolute_resource_caps_cannot_offer_unsafe_resume():
         'max_cost_usd':.5,'_provider_usage':{'cost_usd':.5,'reservations':{}}})
     assert not token_allowance_summary(task)['can_extend']
     with pytest.raises(ValueError):
-        increase_token_allowance({},100000,50000,max_llm_calls=61)
+        increase_token_allowance({},100000,50000,max_llm_calls=HARD_MAX_LLM_CALLS + 1)
     with pytest.raises(ValueError):
         increase_token_allowance({},100000,50000,timeout_seconds=3601)
 

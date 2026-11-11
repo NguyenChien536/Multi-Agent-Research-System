@@ -95,7 +95,7 @@ export default function Home() {
         if (Number.isInteger(parsed.maxSources) && parsed.maxSources>=3 && parsed.maxSources<=30) setMaxSources(parsed.maxSources);
         if (typeof parsed.costLimit === 'number' && parsed.costLimit>=0.1 && parsed.costLimit<=2) setCostLimit(parsed.costLimit);
         if ([15,30,45,60].includes(parsed.activeMinutes)) setActiveMinutes(parsed.activeMinutes);
-        if (Number.isInteger(parsed.maxLlmCalls) && parsed.maxLlmCalls>=5 && parsed.maxLlmCalls<=60) setMaxLlmCalls(parsed.maxLlmCalls);
+        if (Number.isInteger(parsed.maxLlmCalls) && parsed.maxLlmCalls>=5 && parsed.maxLlmCalls<=100) setMaxLlmCalls(parsed.maxLlmCalls);
         if (Number.isInteger(parsed.maxInputTokens) && parsed.maxInputTokens>=10000 && parsed.maxInputTokens<=500000) setMaxInputTokens(parsed.maxInputTokens);
         if (Number.isInteger(parsed.maxOutputTokens) && parsed.maxOutputTokens>=5000 && parsed.maxOutputTokens<=200000) setMaxOutputTokens(parsed.maxOutputTokens);
       }
@@ -620,13 +620,13 @@ export default function Home() {
                       <input
                         type="number"
                         min={5}
-                        max={60}
+                        max={100}
                         step={1}
                         value={maxLlmCalls}
-                        onChange={event => setMaxLlmCalls(Math.max(5, Math.min(60, Number(event.target.value))))}
+                        onChange={event => setMaxLlmCalls(Math.max(5, Math.min(100, Number(event.target.value))))}
                         className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
                       />
-                      <span className="text-[10px] text-zinc-500 font-normal mt-0.5 block">5–60 calls</span>
+                      <span className="text-[10px] text-zinc-500 font-normal mt-0.5 block">5–100 calls</span>
                     </label>
                     <label className="block text-xs font-semibold text-zinc-800">
                       {isEn ? 'Input tokens' : 'Token đầu vào (Input)'}

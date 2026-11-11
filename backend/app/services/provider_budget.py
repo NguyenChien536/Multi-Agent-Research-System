@@ -1,6 +1,7 @@
 """Durable, fail-closed budget checks immediately before provider requests."""
 
 import logging
+import os
 import uuid
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -15,11 +16,11 @@ from app.services.agent_run import MODEL_PRICING, estimate_cost
 
 logger = logging.getLogger(__name__)
 
-HARD_MAX_LLM_CALLS = 60
-HARD_MAX_COST_USD = 2.0
-HARD_MAX_ACTIVE_SECONDS = 3600
-HARD_MAX_INPUT_TOKENS = 500_000
-HARD_MAX_OUTPUT_TOKENS = 200_000
+HARD_MAX_LLM_CALLS = int(os.getenv("HARD_MAX_LLM_CALLS", "100"))
+HARD_MAX_COST_USD = float(os.getenv("HARD_MAX_COST_USD", "2.0"))
+HARD_MAX_ACTIVE_SECONDS = int(os.getenv("HARD_MAX_ACTIVE_SECONDS", "3600"))
+HARD_MAX_INPUT_TOKENS = int(os.getenv("HARD_MAX_INPUT_TOKENS", "500000"))
+HARD_MAX_OUTPUT_TOKENS = int(os.getenv("HARD_MAX_OUTPUT_TOKENS", "200000"))
 DEFAULT_CALL_OUTPUT_TOKENS = 4096
 
 

@@ -13,7 +13,7 @@ from app.core.database import AsyncSessionLocal
 from app.core.security import create_access_token
 from app.main import app
 from app.models.task import ResearchTask,WorkflowRun,TaskDispatchOutbox
-from app.services.provider_budget import (ProviderBudgetExceeded,increase_token_allowance,
+from app.services.provider_budget import (HARD_MAX_LLM_CALLS,ProviderBudgetExceeded,increase_token_allowance,
     token_allowance_summary,reserve_provider_call,settle_provider_call)
 from app.schemas.task import BudgetConfigSchema
 from tests.test_provider_budget import create_running_task,delete_test_user
@@ -39,9 +39,9 @@ def test_token_changes_cannot_lower_limits_repeat_or_exceed_caps(inputs,outputs)
     with pytest.raises(ValueError):increase_token_allowance({},inputs,outputs)
 
 
-@pytest.mark.parametrize('guard',[{'llm_calls':60},{'cost_usd':2.0},{'active_seconds':3600}])
+@pytest.mark.parametrize('guard',[{'llm_calls':HARD_MAX_LLM_CALLS},{'cost_usd':2.0},{'active_seconds':3600}])
 def test_absolute_non_token_guards_cannot_offer_further_extension(guard):
-    task=SimpleNamespace(status='NEEDS_REVIEW',current_step='BUDGET_LIMIT',completed_at=None,budget_config={'max_llm_calls':60,'timeout_seconds':3600,'_provider_usage':usage(**guard)})
+    task=SimpleNamespace(status='NEEDS_REVIEW',current_step='BUDGET_LIMIT',completed_at=None,budget_config={'max_llm_calls':HARD_MAX_LLM_CALLS,'timeout_seconds':3600,'_provider_usage':usage(**guard)})
     assert not token_allowance_summary(task)['can_extend']
 
 
@@ -100,7 +100,7 @@ async def test_extension_enforces_owner_and_rejects_hidden_ledger_or_money_chang
             data={'max_input_tokens':200000,'max_output_tokens':100000}
             assert (await c.post(f'/api/v1/research/{tid}/retry',json=data)).status_code==401
             assert (await c.post(f'/api/v1/research/{tid}/retry',json=data,headers={'Authorization':'Bearer '+create_access_token(other_uid)})).status_code==404
-            for extra in ({'max_cost_usd':99},{'_provider_usage':{}},{'max_llm_calls':100}):
+            for extra in ({'max_cost_usd':99},{'_provider_usage':{}},{'max_llm_calls':HARD_MAX_LLM_CALLS + 1}):
                 assert (await c.post(f'/api/v1/research/{tid}/retry',json={**data,**extra},headers={'Authorization':'Bearer '+create_access_token(uid)})).status_code==422
     finally:await delete_test_user(uid);await delete_test_user(other_uid)
 
