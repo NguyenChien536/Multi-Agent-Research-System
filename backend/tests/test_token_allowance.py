@@ -100,7 +100,7 @@ async def test_extension_enforces_owner_and_rejects_hidden_ledger_or_money_chang
             data={'max_input_tokens':200000,'max_output_tokens':100000}
             assert (await c.post(f'/api/v1/research/{tid}/retry',json=data)).status_code==401
             assert (await c.post(f'/api/v1/research/{tid}/retry',json=data,headers={'Authorization':'Bearer '+create_access_token(other_uid)})).status_code==404
-            for extra in ({'max_cost_usd':99},{'_provider_usage':{}},{'max_llm_calls':100}):
+            for extra in ({'max_cost_usd':99},{'_provider_usage':{}},{'max_llm_calls':HARD_MAX_LLM_CALLS + 1}):
                 assert (await c.post(f'/api/v1/research/{tid}/retry',json={**data,**extra},headers={'Authorization':'Bearer '+create_access_token(uid)})).status_code==422
     finally:await delete_test_user(uid);await delete_test_user(other_uid)
 
