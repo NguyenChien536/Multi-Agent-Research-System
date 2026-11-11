@@ -285,21 +285,9 @@ export default function DashboardPage() {
         {/* Main Dashboard Header */}
         <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-xl border border-zinc-200 shadow-2xs">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-100 text-zinc-700 tracking-wider uppercase">
-                {t('dash_badge')}
-              </span>
-              <span className="text-zinc-300">•</span>
-              <span className="text-xs text-zinc-600 font-medium">
-                {t('dash_subtitle')}
-              </span>
-            </div>
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900">
               {t('dash_title')}
             </h1>
-            <p className="text-zinc-600 text-xs sm:text-sm font-normal mt-0.5 leading-relaxed max-w-3xl">
-              {t('dash_desc')}
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
@@ -338,16 +326,16 @@ export default function DashboardPage() {
           {/* Card 1: Total Tasks */}
           <div className="p-5 rounded-2xl bg-white border border-stone-200/90 shadow-xs">
             <div className="flex items-center justify-between text-zinc-600 mb-1.5">
-              <span className="text-xs font-medium text-zinc-600 uppercase tracking-wider">
+              <span className="text-sm font-semibold text-zinc-800 uppercase tracking-wide">
                 {t('kpi_total_tasks')}
               </span>
-              <FileText size={16} className="text-zinc-500" />
+              <FileText size={17} className="text-zinc-500" />
             </div>
             <div className="text-2xl sm:text-3xl font-bold font-mono text-zinc-900">
               {totalTasks}
             </div>
-            <div className="mt-2.5 pt-2.5 border-t border-stone-100 flex items-center justify-between text-xs text-zinc-600">
-              <span>{t('kpi_completion_rate')}:</span>
+            <div className="mt-2.5 pt-2.5 border-t border-stone-100 flex items-center justify-between text-sm text-zinc-700">
+              <span className="font-medium text-zinc-700">{t('kpi_completion_rate')}:</span>
               <strong className="font-semibold text-emerald-700">
                 {completionRate}% ({completedCount}/{totalTasks})
               </strong>
@@ -357,16 +345,16 @@ export default function DashboardPage() {
           {/* Card 2: Active Pipeline */}
           <div className="p-5 rounded-2xl bg-white border border-stone-200/90 shadow-xs">
             <div className="flex items-center justify-between text-zinc-600 mb-1.5">
-              <span className="text-xs font-medium text-blue-700 uppercase tracking-wider">
+              <span className="text-sm font-semibold text-blue-700 uppercase tracking-wide">
                 {t('kpi_in_progress')}
               </span>
-              <Activity size={16} className="text-blue-600" />
+              <Activity size={17} className="text-blue-600" />
             </div>
             <div className="text-2xl sm:text-3xl font-bold font-mono text-blue-700">
               {activeCount}
             </div>
-            <div className="mt-2.5 pt-2.5 border-t border-stone-100 flex items-center justify-between text-xs text-zinc-600">
-              <span>{t('kpi_needs_attention')}:</span>
+            <div className="mt-2.5 pt-2.5 border-t border-stone-100 flex items-center justify-between text-sm text-zinc-700">
+              <span className="font-medium text-zinc-700">{t('kpi_needs_attention')}:</span>
               <strong className="font-semibold text-amber-700">
                 {attentionCount}
               </strong>
@@ -376,16 +364,16 @@ export default function DashboardPage() {
           {/* Card 3: Total Tokens */}
           <div className="p-5 rounded-2xl bg-white border border-stone-200/90 shadow-xs">
             <div className="flex items-center justify-between text-zinc-600 mb-1.5">
-              <span className="text-xs font-medium text-zinc-600 uppercase tracking-wider">
+              <span className="text-sm font-semibold text-zinc-800 uppercase tracking-wide">
                 {t('kpi_tokens_used')}
               </span>
-              <span className="text-xs text-zinc-500 font-mono">tokens</span>
+              <span className="text-xs sm:text-sm text-zinc-600 font-mono font-medium">tokens</span>
             </div>
             <div className="text-2xl sm:text-3xl font-bold font-mono text-zinc-900">
               {formatNumber(totalTokensUsed, language)}
             </div>
-            <div className="mt-2.5 pt-2.5 border-t border-stone-100 flex items-center justify-between text-xs text-zinc-600">
-              <span>{t('kpi_avg_tokens')}:</span>
+            <div className="mt-2.5 pt-2.5 border-t border-stone-100 flex items-center justify-between text-sm text-zinc-700">
+              <span className="font-medium text-zinc-700">{t('kpi_avg_tokens')}:</span>
               <span className="font-mono text-zinc-800 font-medium">
                 ~{formatNumber(avgTokensPerTask, language)}
               </span>
@@ -395,16 +383,16 @@ export default function DashboardPage() {
           {/* Card 4: Total Cost (USD) */}
           <div className="p-5 rounded-2xl bg-white border border-stone-200/90 shadow-xs">
             <div className="flex items-center justify-between text-zinc-600 mb-1.5">
-              <span className="text-xs font-medium text-zinc-600 uppercase tracking-wider">
+              <span className="text-sm font-semibold text-zinc-800 uppercase tracking-wide">
                 {t('kpi_total_cost')}
               </span>
-              <span className="text-xs text-zinc-500 font-mono">USD</span>
+              <span className="text-xs sm:text-sm text-zinc-600 font-mono font-medium">USD</span>
             </div>
             <div className="text-2xl sm:text-3xl font-bold font-mono text-emerald-700">
               ${totalCostUSD.toFixed(4)}
             </div>
-            <div className="mt-2.5 pt-2.5 border-t border-stone-100 flex items-center justify-between text-xs text-zinc-600">
-              <span>{t('kpi_avg_cost')}:</span>
+            <div className="mt-2.5 pt-2.5 border-t border-stone-100 flex items-center justify-between text-sm text-zinc-700">
+              <span className="font-medium text-zinc-700">{t('kpi_avg_cost')}:</span>
               <span className="font-mono text-zinc-800 font-medium">
                 ${avgCostPerTask.toFixed(4)}
               </span>
