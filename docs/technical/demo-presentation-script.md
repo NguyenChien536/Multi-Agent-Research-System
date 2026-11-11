@@ -52,7 +52,22 @@ File ở `examples/demo/`. Dùng STANDARD, MEDIUM, English, tối đa 12 nguồn
 
 **Câu nhớ ngắn:** “Đọc tài liệu — chạy phép thử — chờ người thu thập dữ liệu.”
 
-## 4. Synthia khác gì chatbot và một AI agent? — 1–2 phút
+### Đi qua giao diện từ đầu đến cuối — khoảng 1 phút
+
+**Thao tác và lời dẫn:**
+
+1. **Dashboard:** “Đây là danh sách các bài nghiên cứu đã tạo và trạng thái của chúng. Em có thể quay lại một bài đang chạy hoặc đang chờ mà không làm mất bài đó.” Chọn **Tạo bài nghiên cứu mới** để bắt đầu.
+2. **Form tạo bài:** nhập câu hỏi, chọn một trong ba luồng, ngôn ngữ, độ sâu, độ dài và giới hạn nguồn/chi phí. “Các lựa chọn này điều chỉnh phạm vi chạy; loại nghiên cứu quyết định nhánh workflow và loại bằng chứng cần có.” Nếu cần, cấu hình provider/model trong Settings trước khi chạy. Bấm tạo để mở workspace của bài.
+3. **Workspace — Scientific Paper:** đây là bản thảo được tạo hoặc đang được cập nhật. Thanh trạng thái phía trên cho biết tình trạng bài; các nút chạy lại, tiếp tục hoặc dừng xuất hiện tùy trạng thái.
+4. **Sources:** xem tài liệu mà hệ thống tìm và thu thập. **Evidence & Citations:** kiểm tra luận điểm được nối với nguồn/đoạn bằng chứng nào. “Hai tab này giúp em lần từ câu trong bản thảo về căn cứ đã lưu; có citation vẫn cần mở nguồn để kiểm tra nội dung.”
+5. **Experiments & Journal:** dùng cho bài tính toán hoặc dữ liệu được upload; xem routine, cấu hình, kết quả, hình và nhật ký chạy. Với khảo sát/lab, workspace hiện vùng upload khi cần dữ liệu rồi cho người dùng tiếp tục bài đã tạm dừng.
+6. **Agent Runs & Cost** và **Live Monitor:** xem các bước/role đã chạy, thời gian, mức sử dụng và lỗi nếu có. “Monitor cho biết workflow đang ở đâu; nếu lỗi, em mở đúng lượt chạy để xem bước thất bại.” **Metadata** cho thông tin cấu hình bài. **Hỏi đáp bài báo** cho phép hỏi về bản thảo và bằng chứng đã lưu; câu trả lời vẫn cần kiểm chứng.
+
+**Đường đi ngắn để trình bày:** `Dashboard → Tạo bài → chọn loại và nhập câu hỏi → Scientific Paper → Sources → Evidence & Citations → Experiments & Journal (nếu có) → Agent Runs & Cost / Live Monitor`.
+
+> Nên demo bằng một bài đã có kết quả để không phải chờ provider. Không bấm chạy lại chỉ để đi qua giao diện nếu quota/model chưa được kiểm tra.
+
+## 4. Synthia khác gì chatbot và một AI agent? — 2–3 phút
 
 **Hiển thị:** sơ đồ kiến trúc và Agent Monitor. Nếu cần, dùng bảng dưới đây làm slide so sánh.
 
@@ -64,13 +79,56 @@ File ở `examples/demo/`. Dùng STANDARD, MEDIUM, English, tối đa 12 nguồn
 | Kiểm tra | Có thể được yêu cầu tự kiểm tra, nhưng mức kiểm tra tùy cách dùng | Có thể có bước tự rà soát | Có Critic và các validator có quy tắc; vòng sửa có giới hạn. Đây vẫn là kiểm tra nội bộ, không phải bình duyệt độc lập |
 | Đánh đổi | Nhanh và đơn giản, nhưng người dùng thường phải tự tổ chức các bước nghiên cứu | Ít thành phần hơn; một agent phải đảm nhiệm nhiều việc | Quy trình dễ theo dõi và chia vai hơn, nhưng tốn thêm lượt gọi, thời gian và có thêm điểm có thể lỗi |
 
-**Lời nói:**
+### Ai làm phần nào?
 
-> Supervisor lập kế hoạch, Researcher tìm nguồn, Evidence Analyst phân tích bằng chứng, Writer viết và Critic kiểm tra để yêu cầu sửa hoặc bổ sung nguồn. Khi cần thực nghiệm thì có thêm bước thiết kế phương pháp và xử lý dữ liệu.
+| Vai trò/thành phần | Công việc trong workflow | Có phải AI agent? |
+|---|---|---|
+| **Supervisor** | Chuyển câu hỏi và cài đặt thành kế hoạch, câu hỏi con và nhu cầu nguồn; có thể dừng chờ người dùng duyệt kế hoạch | Có, node gọi model |
+| **Researcher** | Tạo/tinh chỉnh truy vấn, gọi công cụ tìm kiếm và thu thập nội dung nguồn; có thể được gọi lại khi Critic yêu cầu thêm bằng chứng | Có, node gọi model và search tools |
+| **Curator** | Chuẩn hóa nguồn, tránh lưu trùng, chia đoạn, tạo embedding và lưu vào PostgreSQL/pgvector | **Không**; module Python xử lý dữ liệu |
+| **Evidence Analyst** | Phân tích nội dung nguồn thành claim có liên kết bằng chứng, tổng hợp đồng thuận, mâu thuẫn và phần còn thiếu | Có, node gọi model |
+| **Methodologist** | Chỉ dùng ở nhánh thực nghiệm: đề xuất phương pháp/protocol và xác định dữ liệu cần có | Có, node gọi model |
+| **Experiment Runner** | Chạy routine tính toán được hỗ trợ trên CSV, lưu metrics, hình và journal; hoặc dừng chờ dữ liệu | **Không**; code chạy có kiểm soát, không phải model tự chạy Python tùy ý |
+| **Writer** | Soạn bản thảo theo cấu trúc phù hợp loại nghiên cứu, dựa trên kế hoạch, claim, nguồn và kết quả đã lưu | Có, node gọi model |
+| **Critic** | Rà soát bản thảo theo tiêu chí nội bộ; trả verdict như sửa bản thảo, cần thêm dữ liệu/nguồn, hoặc chuyển kiểm tra cuối | Có, node gọi model; không phải phản biện độc lập |
+| **Post-processor / validators** | Chạy kiểm tra theo quy tắc, liên kết citation/provenance, đóng gói và lưu đầu ra | **Không**; code kiểm tra, không chứng minh nội dung đúng về học thuật |
+
+### Các vai trò được điều phối như thế nào?
+
+**Sơ đồ để chỉ khi thuyết trình:**
+
+~~~text
+Người dùng
+  → Supervisor ── (nếu bật) chờ duyệt kế hoạch
+  → Researcher → Curator (code) → Evidence Analyst
+  → [REVIEW: Writer | THỰC NGHIỆM: Methodologist → Runner hoặc chờ dữ liệu]
+  → Writer → Critic
+       ├─ REVISE → Writer (vòng sửa có giới hạn)
+       ├─ NEED_MORE_DATA → Researcher (vòng tìm thêm có giới hạn)
+       └─ tiếp tục → Post-processor / kiểm tra → lưu bản thảo
+~~~
+
+**Lời nói dễ nhớ:**
+
+> Người dùng giao câu hỏi. Supervisor chia câu hỏi thành kế hoạch; nếu bật duyệt, bài dừng để người dùng xem và sửa kế hoạch trước khi tiếp tục. Researcher tìm tài liệu. Curator là code thông thường giúp làm sạch, loại trùng, chia đoạn và lưu nguồn. Evidence Analyst phân tích nội dung nguồn thành luận điểm có bằng chứng. Nếu là tổng quan thì chuyển sang Writer; nếu là thực nghiệm thì Methodologist tạo đề cương, rồi hệ thống chạy routine được hỗ trợ hoặc dừng chờ người dùng cung cấp dữ liệu.
 >
-> Các vai trò không tự do tự giao việc cho nhau. Luồng và điều kiện chuyển bước được định nghĩa trong workflow LangGraph; các agent phối hợp qua trạng thái chung. Công việc dài chạy ở Celery worker nên giao diện không giữ một HTTP request trong suốt quá trình. PostgreSQL lưu bài, nguồn, trạng thái và phiên bản; giao diện theo dõi qua API.
->
-> Điểm khác biệt cốt lõi của Synthia là quy trình có mục tiêu, phân vai, trạng thái dùng chung, truy xuất bằng chứng và vòng rà soát có giới hạn — chứ không phải khẳng định rằng nhiều agent luôn tốt hơn một agent. Một agent đơn lẻ cũng có thể dùng công cụ hoặc tự rà soát. Dự án chưa có đánh giá đối chứng chứng minh Synthia viết tốt hơn chatbot hay single-agent, và Critic không bảo đảm loại hết lỗi.
+> Writer soạn bài từ dữ liệu đã có. Critic kiểm tra và trả quyết định có cấu trúc. Nếu cần sửa bản thảo, workflow quay lại Writer; thiếu bằng chứng thì quay lại Researcher. Số vòng có giới hạn để tránh lặp vô tận và tiêu tốn tài nguyên. Sau đó Post-processor cùng validators chạy kiểm tra bằng code rồi lưu bản thảo. Người dùng vẫn phải mở nguồn, xem số liệu và duyệt.
+
+### Công nghệ nào điều phối?
+
+| Công nghệ | Vai trò, nói đơn giản |
+|---|---|
+| **Next.js** | Giao diện web: tạo bài, workspace, monitor và hiển thị đầu ra |
+| **FastAPI** | API nhận yêu cầu từ giao diện, kiểm tra quyền/trạng thái và đưa việc dài vào hàng đợi |
+| **Celery + Redis** | Celery worker chạy job nền; Redis chuyển job để API không giữ kết nối web suốt lúc nghiên cứu |
+| **LangGraph `StateGraph`** | Bản đồ workflow: định nghĩa node, thứ tự, nhánh điều kiện, vòng lặp và điểm tạm dừng/tiếp tục |
+| **`ResearchState`** | Dữ liệu chung có cấu trúc giữa các node: câu hỏi, kế hoạch, nguồn, bằng chứng, bản thảo, verdict, hạn mức và trạng thái |
+| **PostgreSQL + LangGraph checkpointer** | Lưu dữ liệu nghiệp vụ và checkpoint của graph để theo dõi, khôi phục/tiếp tục khi chờ hoặc lỗi phù hợp |
+| **Provider adapter + budget guard** | Gọi model/search theo cấu hình và giới hạn mức sử dụng theo cấu hình bài |
+
+**Cách giải thích kiến trúc:** “Các agent không phải dịch vụ độc lập tự nhắn tin qua lại. Trong code, mỗi vai trò AI là một node được gọi theo graph; Curator, định tuyến, runner và validators là code thông thường. Celery chạy workflow ở nền, LangGraph chọn node tiếp theo dựa trên state, còn PostgreSQL giữ dữ liệu và checkpoint.”
+
+**Điểm cần nói thật:** đây là điều phối theo workflow có điều kiện, không phải các agent tự do tự giao việc hoặc chạy song song mặc định. Nhiều lượt gọi model tăng thời gian, chi phí và điểm có thể lỗi. Critic chỉ là kiểm tra nội bộ; dự án chưa có benchmark đối chứng chứng minh nhiều agent luôn tốt hơn chatbot hay single-agent, và không bước nào bảo đảm loại hết hallucination.
 
 ## 5. Demo A — Tổng quan tài liệu — 2 phút
 
