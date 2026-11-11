@@ -26,9 +26,15 @@ File ở `examples/demo/`. Dùng STANDARD, MEDIUM, English, tối đa 12 nguồn
 
 > Em xin trình bày Synthia — Multi-Agent Research System, hệ thống hỗ trợ người nghiên cứu từ câu hỏi đến bản thảo bài báo có nguồn và bằng chứng.
 >
+> Synthia là ứng dụng web: người dùng thao tác bằng trình duyệt, còn phiên bản demo này chạy cục bộ bằng Docker trên máy của em. Về kiến trúc, hệ thống có thể phát triển thành ứng dụng nội bộ cho nhóm nghiên cứu hoặc doanh nghiệp. Tuy nhiên, bản demo hiện tại chưa được nghiệm thu là dịch vụ production cho doanh nghiệp.
+>
 > Khi làm nghiên cứu, khó khăn không chỉ là viết đủ Abstract, Introduction hay Conclusion. Người nghiên cứu còn phải tìm tài liệu, kiểm bằng chứng, chọn phương pháp, thu thập hoặc chạy dữ liệu rồi xem kết luận có được hỗ trợ hay không. Nếu chỉ yêu cầu AI viết ngay, những bước này khó theo dõi và có thể bị trộn lẫn giữa điều dự kiến làm với kết quả đã thực sự thu được.
 >
 > Mục tiêu của em là tổ chức công việc đó thành một quy trình có phân vai, lưu trạng thái và cho phép đối chiếu nguồn gốc kết quả. Đầu ra là bản thảo hỗ trợ nghiên cứu; người dùng vẫn kiểm chứng và chịu trách nhiệm khi sử dụng.
+
+**Lưu ý cần nói rõ:**
+
+> AI có thể bịa tài liệu tham khảo, trích dẫn sai hoặc diễn giải nhầm số liệu. Vì vậy, người nghiên cứu phải kiểm tra từng nguồn, đoạn bằng chứng, con số, phương pháp và kết luận trước khi dùng hoặc gửi bài. Bản thảo do Synthia tạo không đồng nghĩa với bài đã được bình duyệt hay sẵn sàng xuất bản.
 
 ## 3. Vì sao có ba luồng nghiên cứu? — 1–2 phút
 
@@ -46,15 +52,25 @@ File ở `examples/demo/`. Dùng STANDARD, MEDIUM, English, tối đa 12 nguồn
 
 **Câu nhớ ngắn:** “Đọc tài liệu — chạy phép thử — chờ người thu thập dữ liệu.”
 
-## 4. Multi-agent phối hợp ra sao? — 1–2 phút
+## 4. Synthia khác gì chatbot và một AI agent? — 1–2 phút
 
-**Hiển thị:** Agent Monitor hoặc sơ đồ kiến trúc đã chuẩn bị.
+**Hiển thị:** sơ đồ kiến trúc và Agent Monitor. Nếu cần, dùng bảng dưới đây làm slide so sánh.
+
+| Tiêu chí | Chatbot | Một AI agent | Synthia — Multi-Agent Research System |
+|---|---|---|---|
+| Cách làm việc | Chủ yếu trao đổi theo từng yêu cầu; khả năng dùng công cụ tùy sản phẩm và cấu hình | Nhận mục tiêu, một agent có thể tự lập kế hoạch và gọi công cụ | Quy trình nghiên cứu chia thành các vai trò chuyên biệt, được LangGraph điều phối theo trạng thái |
+| Vai trò trong dự án | Không mặc định có quy trình nghiên cứu và hồ sơ nguồn của riêng bài | Một agent có thể tìm, phân tích và viết trong cùng một luồng | Supervisor lập kế hoạch; Researcher tìm nguồn; Evidence Analyst phân tích bằng chứng; Writer soạn; Critic rà soát |
+| Theo dõi và truy xuất | Tùy sản phẩm; hội thoại không tự đảm bảo lưu nguồn và bằng chứng theo từng bài | Có thể lưu trạng thái nếu được thiết kế | Lưu trạng thái bài, nguồn, bằng chứng và tiến trình để người dùng kiểm tra |
+| Kiểm tra | Có thể được yêu cầu tự kiểm tra, nhưng mức kiểm tra tùy cách dùng | Có thể có bước tự rà soát | Có Critic và các validator có quy tắc; vòng sửa có giới hạn. Đây vẫn là kiểm tra nội bộ, không phải bình duyệt độc lập |
+| Đánh đổi | Nhanh và đơn giản, nhưng người dùng thường phải tự tổ chức các bước nghiên cứu | Ít thành phần hơn; một agent phải đảm nhiệm nhiều việc | Quy trình dễ theo dõi và chia vai hơn, nhưng tốn thêm lượt gọi, thời gian và có thêm điểm có thể lỗi |
+
+**Lời nói:**
 
 > Supervisor lập kế hoạch, Researcher tìm nguồn, Evidence Analyst phân tích bằng chứng, Writer viết và Critic kiểm tra để yêu cầu sửa hoặc bổ sung nguồn. Khi cần thực nghiệm thì có thêm bước thiết kế phương pháp và xử lý dữ liệu.
 >
-> Đây không phải các chatbot chạy rời rạc. Chúng phối hợp qua trạng thái chung do LangGraph điều phối. Công việc dài chạy ở Celery worker nên giao diện không giữ một HTTP request trong suốt quá trình. PostgreSQL lưu bài, nguồn, trạng thái và phiên bản; giao diện theo dõi qua API.
+> Các vai trò không tự do tự giao việc cho nhau. Luồng và điều kiện chuyển bước được định nghĩa trong workflow LangGraph; các agent phối hợp qua trạng thái chung. Công việc dài chạy ở Celery worker nên giao diện không giữ một HTTP request trong suốt quá trình. PostgreSQL lưu bài, nguồn, trạng thái và phiên bản; giao diện theo dõi qua API.
 >
-> Vòng phản biện có giới hạn lượt, token và thời gian. Critic là kiểm tra nội bộ, không thay phản biện học thuật độc lập và không bảo đảm mọi khẳng định đều đúng.
+> Điểm khác biệt cốt lõi của Synthia là quy trình có mục tiêu, phân vai, trạng thái dùng chung, truy xuất bằng chứng và vòng rà soát có giới hạn — chứ không phải khẳng định rằng nhiều agent luôn tốt hơn một agent. Một agent đơn lẻ cũng có thể dùng công cụ hoặc tự rà soát. Dự án chưa có đánh giá đối chứng chứng minh Synthia viết tốt hơn chatbot hay single-agent, và Critic không bảo đảm loại hết lỗi.
 
 ## 5. Demo A — Tổng quan tài liệu — 2 phút
 
@@ -170,7 +186,9 @@ Các mô tả nhập sẵn là để diễn tập form, phải đối chiếu v�
 
 > Qua ba bài, em làm rõ ba kiểu bằng chứng: tài liệu đã công bố, số liệu do chương trình tính và dữ liệu người dùng cung cấp. Giá trị của Synthia là tổ chức các vai trò và bước xử lý thành quy trình theo dõi được, có thể dừng/tiếp tục và đối chiếu nguồn gốc.
 >
-> Phạm vi còn giới hạn: routine tính toán cố định, nội dung vẫn cần con người kiểm tra và API miễn phí có hạn mức. Kiểm thử phần mềm không chứng minh bài đạt chuẩn tạp chí. Hướng tiếp theo là đánh giá chất lượng có đối chứng và mở rộng thí nghiệm khi có môi trường chạy an toàn.
+> Đây là ứng dụng web chạy local cho bản demo. Có thể phát triển thành dịch vụ nội bộ cho doanh nghiệp, nhưng cần hoàn thiện thêm bảo mật, phân quyền và cách ly dữ liệu, quản lý khóa API, nhật ký kiểm toán, sao lưu, giám sát và nghiệm thu vận hành trước khi triển khai thật.
+>
+> Phạm vi hiện tại còn giới hạn: routine tính toán cố định, nội dung cần con người kiểm tra và API miễn phí có hạn mức. Kiểm thử phần mềm không chứng minh bài đạt chuẩn tạp chí; vòng Critic không thay phản biện độc lập. Hướng tiếp theo là đánh giá chất lượng có đối chứng và mở rộng thí nghiệm khi có môi trường chạy an toàn.
 
 Nếu cần nêu số test: bản chốt `068b532876e8` có **701 backend passed/3 skipped, 34 frontend passed, CI 6/6**. Không nói mọi tình huống hoặc mọi model đã được kiểm hết. Ba lượt nghiệm thu mới gần nhất bị 429; chỉ thay thông tin này sau khi đã có lượt thực chạy thành công và đã đọc bài.
 

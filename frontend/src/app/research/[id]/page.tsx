@@ -929,10 +929,10 @@ export default function WorkspacePage() {
                 return (
                   <div className="p-3">
                     <div className="flex items-center justify-between mb-2 px-1">
-                      <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                      <span className="text-xs sm:text-sm font-bold text-zinc-800 uppercase tracking-wide">
                         {isEn ? "Sections" : "Các đề mục"}
                       </span>
-                      <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-800 font-bold">
+                      <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-zinc-200 text-zinc-900 font-bold">
                         {headings.length} {isEn ? "parts" : "mục"}
                       </span>
                     </div>
@@ -953,10 +953,10 @@ export default function WorkspacePage() {
                             }, 50);
                           }}
                           className={`block py-1.5 px-2.5 rounded-lg transition-colors truncate ${
-                            h.level === 1 ? 'font-bold text-zinc-900 text-xs' :
-                            h.level === 2 ? 'pl-4 font-semibold text-zinc-700 text-xs' :
-                            'pl-6 text-zinc-500 text-[11px]'
-                          } hover:bg-zinc-200/70 hover:text-zinc-950 ${activeTocSlug === h.slug ? 'bg-stone-100 shadow-xs text-stone-950 font-bold border-l-2 border-stone-900' : ''}`}
+                            h.level === 1 ? 'font-bold text-zinc-950 text-sm' :
+                            h.level === 2 ? 'pl-4 font-semibold text-zinc-900 text-[13px] sm:text-sm' :
+                            'pl-6 font-medium text-zinc-800 text-xs sm:text-[13px]'
+                          } hover:bg-zinc-200/80 hover:text-zinc-950 ${activeTocSlug === h.slug ? 'bg-stone-100 shadow-xs text-stone-950 font-bold border-l-2 border-stone-900' : ''}`}
                           title={h.title}
                         >
                           {h.title}
@@ -967,7 +967,7 @@ export default function WorkspacePage() {
                 );
               }
               return (
-                <div className="p-4 text-xs text-zinc-500 leading-relaxed italic">
+                <div className="p-4 text-xs sm:text-sm text-zinc-600 leading-relaxed italic">
                   {report
                     ? (isEn ? "Draft contains no section headings." : "Bản thảo chưa phân mục.")
                     : (isEn ? "Table of contents will appear once manuscript draft is generated." : "Mục lục sẽ hiển thị khi bản thảo bài báo được tạo.")
@@ -977,42 +977,42 @@ export default function WorkspacePage() {
             })()}
 
             {/* Draft Details (Thông tin bản thảo) */}
-            <div className="p-4 space-y-3.5 text-xs">
+            <div className="p-4 space-y-3.5 text-xs sm:text-sm">
               <div className="flex items-center gap-1.5 pb-2 border-b border-zinc-200">
-                <Bookmark size={15} className="text-zinc-700" />
-                <h3 className="font-bold text-xs uppercase tracking-wider text-zinc-900">
+                <Bookmark size={15} className="text-zinc-800" />
+                <h3 className="font-bold text-xs sm:text-sm uppercase tracking-wide text-zinc-900">
                   {isEn ? "Draft Details" : "Thông tin bản thảo"}
                 </h3>
               </div>
 
               {report && (
-                <div className="space-y-2.5 text-zinc-700">
+                <div className="space-y-2.5 text-zinc-800">
                   <div className="flex justify-between items-center">
-                    <span className="text-zinc-500">{isEn ? "Word count:" : "Số lượng từ:"}</span>
-                    <strong className="font-bold text-zinc-900 font-mono text-xs">{report.word_count.toLocaleString()} {isEn ? "words" : "từ"}</strong>
+                    <span className="text-zinc-600 font-medium">{isEn ? "Word count:" : "Số lượng từ:"}</span>
+                    <strong className="font-bold text-zinc-950 font-mono text-xs sm:text-sm">{report.word_count.toLocaleString()} {isEn ? "words" : "từ"}</strong>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-zinc-500">{isEn ? "Reading time:" : "Thời gian đọc:"}</span>
-                    <strong className="font-bold text-zinc-900 font-mono text-xs">~{Math.max(1, Math.ceil((report.word_count || 1) / 220))} {isEn ? "min" : "phút"}</strong>
+                    <span className="text-zinc-600 font-medium">{isEn ? "Reading time:" : "Thời gian đọc:"}</span>
+                    <strong className="font-bold text-zinc-950 font-mono text-xs sm:text-sm">~{Math.max(1, Math.ceil((report.word_count || 1) / 220))} {isEn ? "min" : "phút"}</strong>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-zinc-500">{isEn ? "Sources cited:" : "Nguồn tài liệu:"}</span>
-                    <span className="font-bold text-zinc-900">{sources.length} {isEn ? "sources" : "nguồn"}</span>
+                    <span className="text-zinc-600 font-medium">{isEn ? "Sources cited:" : "Nguồn tài liệu:"}</span>
+                    <span className="font-bold text-zinc-950">{sources.length} {isEn ? "sources" : "nguồn"}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-zinc-500">{isEn ? "Linked citations:" : "Trích dẫn có nguồn:"}</span>
-                    <span className="font-bold text-zinc-900">{citations.length} {isEn ? "claims" : "đoạn"}</span>
+                    <span className="text-zinc-600 font-medium">{isEn ? "Linked citations:" : "Trích dẫn có nguồn:"}</span>
+                    <span className="font-bold text-zinc-950">{citations.length} {isEn ? "claims" : "đoạn"}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-zinc-500">{isEn ? "Citation style:" : "Kiểu trích dẫn:"}</span>
+                    <span className="text-zinc-600 font-medium">{isEn ? "Citation style:" : "Kiểu trích dẫn:"}</span>
                     <Badge variant="outline">{task.citation_style}</Badge>
                   </div>
                   <div className="flex justify-between items-center pt-2 border-t border-zinc-100">
-                    <span className="text-zinc-500 text-xs">{isEn ? "Reading mode:" : "Chế độ đọc:"}</span>
+                    <span className="text-zinc-600 font-medium text-xs sm:text-sm">{isEn ? "Reading mode:" : "Chế độ đọc:"}</span>
                     <button
                       type="button"
                       onClick={handleToggleWidePaper}
-                      className="text-blue-600 hover:text-blue-800 font-semibold cursor-pointer text-xs hover:underline flex items-center gap-1"
+                      className="text-blue-700 hover:text-blue-900 font-bold cursor-pointer text-xs sm:text-sm hover:underline flex items-center gap-1"
                     >
                       {isWidePaper ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
                       <span>{isWidePaper ? (isEn ? "Standard width" : "Thu gọn về chuẩn") : (isEn ? "Full width" : "Phóng to toàn màn hình ↗")}</span>
@@ -1022,24 +1022,24 @@ export default function WorkspacePage() {
               )}
 
               {/* Research Metadata */}
-              <div className={`space-y-2 text-zinc-600 ${report ? 'pt-3 border-t border-zinc-200' : ''}`}>
+              <div className={`space-y-2 text-zinc-700 ${report ? 'pt-3 border-t border-zinc-200' : ''}`}>
                 <div className="flex justify-between items-center">
-                  <span className="text-zinc-500">{isEn ? "Research Type:" : "Loại nghiên cứu:"}</span>
+                  <span className="text-zinc-600 font-medium">{isEn ? "Research Type:" : "Loại nghiên cứu:"}</span>
                   <Badge variant="outline">
                     {task.research_type === 'EMPIRICAL_HUMAN' ? (isEn ? 'Fieldwork' : 'Thực địa') : task.research_type === 'EMPIRICAL_COMPUTATIONAL' ? (isEn ? 'Computational' : 'Tính toán') : (isEn ? 'Literature Review' : 'Tổng quan')}
                   </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-zinc-500">{isEn ? "Tokens used:" : "Tokens tiêu thụ:"}</span>
-                  <strong className="font-bold text-zinc-900 font-mono text-xs">{task.total_tokens_used.toLocaleString('vi-VN')}</strong>
+                  <span className="text-zinc-600 font-medium">{isEn ? "Tokens used:" : "Tokens tiêu thụ:"}</span>
+                  <strong className="font-bold text-zinc-950 font-mono text-xs sm:text-sm">{task.total_tokens_used.toLocaleString('vi-VN')}</strong>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-zinc-500">{isEn ? "Estimated cost:" : "Chi phí ước tính:"}</span>
-                  <strong className="font-bold text-zinc-900 font-mono text-xs">${Number(task.total_cost_usd).toFixed(4)}</strong>
+                  <span className="text-zinc-600 font-medium">{isEn ? "Estimated cost:" : "Chi phí ước tính:"}</span>
+                  <strong className="font-bold text-zinc-950 font-mono text-xs sm:text-sm">${Number(task.total_cost_usd).toFixed(4)}</strong>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-zinc-500">{isEn ? "Updated:" : "Cập nhật:"}</span>
-                  <span className="text-zinc-700 text-[11px]">{formatDate(task.updated_at, language)}</span>
+                  <span className="text-zinc-600 font-medium">{isEn ? "Updated:" : "Cập nhật:"}</span>
+                  <span className="text-zinc-900 font-medium text-xs">{formatDate(task.updated_at, language)}</span>
                 </div>
               </div>
             </div>
@@ -2885,12 +2885,12 @@ export default function WorkspacePage() {
 
           <div className="p-4 flex-1 overflow-y-auto space-y-4">
             <div className="flex items-center justify-between px-1">
-              <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">
+              <span className="text-xs sm:text-sm font-bold text-zinc-800 uppercase tracking-wide">
                 {isEn ? "Execution Stages" : "Tiến trình các bước"}
               </span>
               <Link
                 href={`/research/${params.id}/monitor`}
-                className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 hover:underline"
+                className="text-xs font-bold text-blue-700 hover:text-blue-900 flex items-center gap-0.5 hover:underline"
               >
                 {isEn ? "Live Monitor →" : "Giám sát tác tử →"}
               </Link>
@@ -2921,23 +2921,23 @@ export default function WorkspacePage() {
                         <Icon size={12} className={state === 'active' ? 'animate-pulse' : ''} />
                       </span>
                       <div>
-                        <span className={`text-xs leading-snug block ${
-                          state === 'waiting' ? 'text-zinc-400 font-normal'
-                          : state === 'active' ? 'font-bold text-blue-900'
-                          : 'font-medium text-zinc-700'
+                        <span className={`text-[13px] sm:text-sm leading-snug block ${
+                          state === 'waiting' ? 'text-zinc-500 font-medium'
+                          : state === 'active' ? 'font-bold text-blue-950'
+                          : 'font-semibold text-zinc-900'
                         }`}>
                           {isEn ? stage.title_en : stage.title_vi}
                         </span>
                         {state === 'active' && (
-                          <span className="text-[10px] text-blue-600 font-bold">
+                          <span className="text-xs text-blue-700 font-bold">
                             {isEn ? 'In progress…' : 'Đang thực hiện…'}
                           </span>
                         )}
                         {['review', 'failed', 'cancelled', 'paused'].includes(state) && (
-                          <span className="text-[10px] text-amber-700 font-bold">{statusLabel(task.status, language)}</span>
+                          <span className="text-xs text-amber-800 font-bold">{statusLabel(task.status, language)}</span>
                         )}
                         {state === 'done' && (
-                          <span className="text-[10px] text-emerald-600 font-medium">
+                          <span className="text-xs text-emerald-700 font-semibold">
                             {isEn ? 'Completed' : 'Hoàn thành'}
                           </span>
                         )}
@@ -2951,7 +2951,7 @@ export default function WorkspacePage() {
             <div className="pt-3 border-t border-zinc-200/80">
               <Link
                 href={`/research/${params.id}/monitor`}
-                className="inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-3 text-xs font-bold text-zinc-800 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors border border-zinc-200"
+                className="inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-3 text-xs sm:text-sm font-bold text-zinc-900 bg-zinc-100 hover:bg-zinc-200 rounded-lg transition-colors border border-zinc-200"
               >
                 <Activity size={13} />
                 {isEn ? "Open Live Monitor" : "Mở giám sát trực tiếp"}
