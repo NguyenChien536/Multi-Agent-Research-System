@@ -277,21 +277,21 @@ export default function Home() {
   return (
     <div className="min-h-screen tavily-scenic-bg flex flex-col text-stone-900 relative">
       {/* Header */}
-      <header className="w-full px-6 py-4 flex justify-between items-center z-20 border-b border-stone-200/80 bg-[#FAF8F5]/85 backdrop-blur-md">
+      <header className="w-full px-6 sm:px-8 py-4 flex justify-between items-center z-20 border-b border-stone-200/80 bg-[#FAF8F5]/85 backdrop-blur-md">
         <div className="flex items-center gap-2.5 font-semibold text-lg tracking-tight">
-          <div className="w-8 h-8 rounded-xl bg-stone-900 text-white flex items-center justify-center text-sm font-bold shadow-2xs">S</div>
-          <span className="text-stone-950 font-bold text-lg tracking-tight">Synthia</span>
+          <div className="w-9 h-9 rounded-xl bg-stone-900 text-white flex items-center justify-center text-base font-bold shadow-2xs">S</div>
+          <span className="text-stone-950 font-bold text-xl tracking-tight">Synthia</span>
         </div>
 
         {/* Clean, Non-redundant Navbar */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3.5">
           {/* Quick Lang Switch */}
-          <div className="flex items-center border border-stone-200 rounded-full p-0.5 bg-stone-100 text-xs font-semibold">
+          <div className="flex items-center border border-stone-200/90 rounded-full p-1 bg-stone-100/90 shadow-2xs text-xs font-semibold">
             <button
               type="button"
               onClick={() => setLanguage('en')}
-              className={`px-2 py-0.5 rounded text-xs transition-colors ${
-                language === 'en' ? 'bg-white text-stone-900 font-semibold shadow-2xs rounded-full' : 'text-stone-600 hover:text-stone-900 rounded-full'
+              className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                language === 'en' ? 'bg-white text-stone-950 shadow-2xs font-bold' : 'text-stone-600 hover:text-stone-900 font-semibold'
               }`}
               title="English (Default)"
             >
@@ -300,8 +300,8 @@ export default function Home() {
             <button
               type="button"
               onClick={() => setLanguage('vi')}
-              className={`px-2 py-0.5 rounded text-xs transition-colors ${
-                language === 'vi' ? 'bg-white text-stone-900 font-semibold shadow-2xs rounded-full' : 'text-stone-600 hover:text-stone-900 rounded-full'
+              className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                language === 'vi' ? 'bg-white text-stone-950 shadow-2xs font-bold' : 'text-stone-600 hover:text-stone-900 font-semibold'
               }`}
               title="Tiếng Việt"
             >
@@ -312,23 +312,27 @@ export default function Home() {
           {hasSession ? (
             <>
               {currentUser && (
-                <div className="hidden sm:flex items-center gap-2 px-3 py-1 rounded-full bg-white/90 border border-stone-200/90 shadow-2xs text-xs">
-                  <div className="w-5 h-5 rounded-full bg-stone-900 text-white flex items-center justify-center font-bold text-[10px]">
+                <div className="hidden sm:flex items-center gap-2.5 px-3.5 py-1.5 rounded-full bg-white border border-stone-200/90 shadow-2xs">
+                  <div className="w-6 h-6 rounded-full bg-stone-900 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
                     {(currentUser.full_name || currentUser.username || 'U')[0].toUpperCase()}
                   </div>
-                  <span className="font-medium text-stone-800 truncate max-w-[140px]">{currentUser.full_name || currentUser.username}</span>
+                  <span className="font-semibold text-sm text-stone-900 truncate max-w-[160px]">
+                    {currentUser.full_name || currentUser.username}
+                  </span>
                 </div>
               )}
-              <Button variant="outline" onClick={() => router.push('/settings')} className="text-xs h-8">Settings</Button>
-              <Button variant="outline" onClick={() => router.push('/dashboard')} className="text-xs h-8">
-                <LayoutDashboard size={14} className="mr-1.5 text-zinc-500" /> {t('nav_dashboard')}
+              <Button variant="outline" onClick={() => router.push('/settings')} className="text-sm font-semibold h-10 px-4 rounded-xl border-stone-200 text-stone-800 hover:bg-stone-50 hover:text-stone-950 shadow-2xs cursor-pointer">
+                Settings
               </Button>
-              <Button variant="ghost" onClick={handleLogout} title={t('nav_logout')} className="text-xs h-8">
-                <LogOut size={14} className="mr-1 text-zinc-500" /> {t('nav_logout')}
+              <Button variant="outline" onClick={() => router.push('/dashboard')} className="text-sm font-semibold h-10 px-4 rounded-xl border-stone-200 text-stone-800 hover:bg-stone-50 hover:text-stone-950 shadow-2xs cursor-pointer">
+                <LayoutDashboard size={16} className="mr-2 text-stone-600" /> {t('nav_dashboard')}
+              </Button>
+              <Button variant="ghost" onClick={handleLogout} title={t('nav_logout')} className="text-sm font-semibold h-10 px-3.5 rounded-xl text-stone-700 hover:text-stone-950 hover:bg-stone-100/80 cursor-pointer">
+                <LogOut size={16} className="mr-1.5 text-stone-500" /> {t('nav_logout')}
               </Button>
             </>
           ) : (
-            <Button variant="primary" onClick={() => router.push('/login')} className="text-xs h-8">
+            <Button variant="primary" onClick={() => router.push('/login')} className="text-sm font-semibold h-10 px-5 rounded-xl shadow-xs cursor-pointer">
               {isEn ? 'Sign In / Register' : 'Đăng nhập / Đăng ký'}
             </Button>
           )}
