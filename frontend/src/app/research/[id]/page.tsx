@@ -468,7 +468,8 @@ export default function WorkspacePage() {
       await api.tasks.retry(task.id, {max_input_tokens:task.token_allowance.next_input_tokens,
         max_output_tokens:task.token_allowance.next_output_tokens,
         max_llm_calls:task.token_allowance.next_max_llm_calls,
-        timeout_seconds:task.token_allowance.next_timeout_seconds});
+        timeout_seconds:task.token_allowance.next_timeout_seconds,
+        max_cost_usd:task.token_allowance.next_max_cost_usd});
       setReloadKey(v => v + 1);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : (isEn ? 'Unable to extend token allowance.' : 'Không thể tăng hạn mức token.'));
@@ -2296,6 +2297,63 @@ export default function WorkspacePage() {
                     <span className="text-xs text-zinc-700 font-medium">{isEn ? "Attempt #" : "Lần chạy #"}{task.attempt_number}</span>
                   </div>
                 </div>
+
+                {/* Workflow Allowance & Quota Status Card */}
+                {task.token_allowance && (
+                  <Card className="p-5 border border-zinc-200 bg-white space-y-3 shadow-xs">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-100 pb-2.5">
+                      <div>
+                        <h3 className="font-bold text-sm text-zinc-900">
+                          {isEn ? "Shared Agent Workflow Allowance" : "Hạn mức phân bổ toàn chu trình tác tử"}
+                        </h3>
+                        <p className="text-xs text-zinc-500 mt-0.5">
+                          {isEn
+                            ? "All 7 agents in the workflow share this common budget and call limit. When reached, allowances can be extended."
+                            : "Toàn bộ 7 tác tử trong chu trình dùng chung ngân sách và giới hạn lượt gọi này. Khi chạm trần, có thể duyệt nâng thêm hạn mức."}
+                        </p>
+                      </div>
+                      {task.token_allowance.can_extend && (
+                        <span className="shrink-0 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {isEn ? "Extension Available" : "Có thể tăng hạn mức"}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                      <div className="p-3 rounded-lg bg-zinc-50 border border-zinc-200/80">
+                        <span className="text-zinc-500 font-medium block mb-0.5">{isEn ? "Cost Allowance" : "Hạn mức chi phí"}</span>
+                        <div className="font-mono font-bold text-zinc-900 text-sm">
+                          ${task.token_allowance.cost_used_usd != null ? task.token_allowance.cost_used_usd.toFixed(4) : Number(task.total_cost_usd).toFixed(4)}
+                          <span className="text-zinc-500 text-xs font-normal"> / ${((task.token_allowance.max_cost_usd ?? 0.5)).toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-lg bg-zinc-50 border border-zinc-200/80">
+                        <span className="text-zinc-500 font-medium block mb-0.5">{isEn ? "Model Calls" : "Lượt gọi mô hình"}</span>
+                        <div className="font-mono font-bold text-zinc-900 text-sm">
+                          {task.token_allowance.calls_used ?? runs.length}
+                          <span className="text-zinc-500 text-xs font-normal"> / {task.token_allowance.max_llm_calls ?? 40}</span>
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-lg bg-zinc-50 border border-zinc-200/80">
+                        <span className="text-zinc-500 font-medium block mb-0.5">{isEn ? "Input Tokens" : "Token đầu vào (Input)"}</span>
+                        <div className="font-mono font-bold text-zinc-900 text-sm">
+                          {task.token_allowance.input_used ? task.token_allowance.input_used.toLocaleString() : '0'}
+                          <span className="text-zinc-500 text-xs font-normal"> / {(task.token_allowance.max_input_tokens || 150000).toLocaleString()}</span>
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-lg bg-zinc-50 border border-zinc-200/80">
+                        <span className="text-zinc-500 font-medium block mb-0.5">{isEn ? "Output Tokens" : "Token tạo ra (Output)"}</span>
+                        <div className="font-mono font-bold text-zinc-900 text-sm">
+                          {task.token_allowance.output_used ? task.token_allowance.output_used.toLocaleString() : '0'}
+                          <span className="text-zinc-500 text-xs font-normal"> / {(task.token_allowance.max_output_tokens || 60000).toLocaleString()}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                )}
 
                 {runsError && (
                   <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-sm text-red-700">

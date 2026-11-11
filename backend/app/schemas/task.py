@@ -35,6 +35,7 @@ class TokenAllowanceIncrease(BaseModel):
     max_output_tokens: int = Field(ge=5000, le=200000)
     max_llm_calls: int | None = Field(default=None, ge=5, le=60)
     timeout_seconds: int | None = Field(default=None, ge=60, le=3600)
+    max_cost_usd: float | None = Field(default=None, ge=0.1, le=2.0)
     model_config = ConfigDict(extra='forbid')
 
 

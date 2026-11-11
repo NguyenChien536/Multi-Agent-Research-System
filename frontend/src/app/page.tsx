@@ -43,6 +43,9 @@ export default function Home() {
   const [maxSources, setMaxSources] = useState(12);
   const [costLimit, setCostLimit] = useState(0.5);
   const [activeMinutes, setActiveMinutes] = useState(30);
+  const [maxLlmCalls, setMaxLlmCalls] = useState(40);
+  const [maxInputTokens, setMaxInputTokens] = useState(150000);
+  const [maxOutputTokens, setMaxOutputTokens] = useState(60000);
   const [useServerProviders, setUseServerProviders] = useState(false);
   const [savedModel, setSavedModel] = useState<string | null>(null);
   const [modelStatus, setModelStatus] = useState<'loading' | 'ready' | 'missing' | 'error'>('loading');
@@ -92,6 +95,9 @@ export default function Home() {
         if (Number.isInteger(parsed.maxSources) && parsed.maxSources>=3 && parsed.maxSources<=30) setMaxSources(parsed.maxSources);
         if (typeof parsed.costLimit === 'number' && parsed.costLimit>=0.1 && parsed.costLimit<=2) setCostLimit(parsed.costLimit);
         if ([15,30,45,60].includes(parsed.activeMinutes)) setActiveMinutes(parsed.activeMinutes);
+        if (Number.isInteger(parsed.maxLlmCalls) && parsed.maxLlmCalls>=5 && parsed.maxLlmCalls<=60) setMaxLlmCalls(parsed.maxLlmCalls);
+        if (Number.isInteger(parsed.maxInputTokens) && parsed.maxInputTokens>=10000 && parsed.maxInputTokens<=500000) setMaxInputTokens(parsed.maxInputTokens);
+        if (Number.isInteger(parsed.maxOutputTokens) && parsed.maxOutputTokens>=5000 && parsed.maxOutputTokens<=200000) setMaxOutputTokens(parsed.maxOutputTokens);
       }
     } catch {}
   }, []);
@@ -122,11 +128,14 @@ export default function Home() {
             maxSources,
             costLimit,
             activeMinutes,
+            maxLlmCalls,
+            maxInputTokens,
+            maxOutputTokens,
           })
         );
       }
     } catch {}
-  }, [topic, researchType, researchDepth, reportLength, citationStyle, taskLanguage, requirePlanApproval, maxSources, costLimit, activeMinutes, showAdvanced]);
+  }, [topic, researchType, researchDepth, reportLength, citationStyle, taskLanguage, requirePlanApproval, maxSources, costLimit, activeMinutes, maxLlmCalls, maxInputTokens, maxOutputTokens, showAdvanced]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
@@ -233,8 +242,8 @@ export default function Home() {
         require_plan_approval: requirePlanApproval,
         max_iterations: researchDepth === 'SHALLOW' ? 1 : researchDepth === 'DEEP' ? 3 : 2,
         max_sources: maxSources,
-        budget: {max_cost_usd:costLimit, max_llm_calls:40, max_input_tokens:150000,
-          max_output_tokens:60000, timeout_seconds:activeMinutes*60},
+        budget: {max_cost_usd:costLimit, max_llm_calls:maxLlmCalls, max_input_tokens:maxInputTokens,
+          max_output_tokens:maxOutputTokens, timeout_seconds:activeMinutes*60},
       });
       setCreatedWorkspace(task.id);
 
@@ -591,6 +600,60 @@ export default function Home() {
                       onChange={event => setMaxSources(Number(event.target.value))}
                       className="w-full rounded-lg border border-zinc-200 bg-zinc-50/50 px-2.5 py-1.5 text-sm font-bold text-zinc-900 focus:bg-white focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors"
                     />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50/70 p-4 space-y-3">
+                  <div>
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-900">
+                      {isEn ? 'Shared Agent Allowance' : 'Hạn mức toàn chu trình tác tử'}
+                    </h4>
+                    <p className="mt-1 text-xs text-zinc-600 leading-relaxed font-normal">
+                      {isEn
+                        ? 'These limits are shared across all 7 autonomous agents. If a limit is reached, you can approve an extension directly in the workspace.'
+                        : 'Hạn mức dùng chung cho toàn bộ 7 tác tử AI. Khi chạm trần, bạn có thể duyệt nâng thêm hạn mức trực tiếp trong workspace.'}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <label className="block text-xs font-semibold text-zinc-800">
+                      {isEn ? 'Max model calls' : 'Số lượt gọi tối đa'}
+                      <input
+                        type="number"
+                        min={5}
+                        max={60}
+                        step={1}
+                        value={maxLlmCalls}
+                        onChange={event => setMaxLlmCalls(Math.max(5, Math.min(60, Number(event.target.value))))}
+                        className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                      />
+                      <span className="text-[10px] text-zinc-500 font-normal mt-0.5 block">5–60 calls</span>
+                    </label>
+                    <label className="block text-xs font-semibold text-zinc-800">
+                      {isEn ? 'Input tokens' : 'Token đầu vào (Input)'}
+                      <input
+                        type="number"
+                        min={10000}
+                        max={500000}
+                        step={10000}
+                        value={maxInputTokens}
+                        onChange={event => setMaxInputTokens(Math.max(10000, Math.min(500000, Number(event.target.value))))}
+                        className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                      />
+                      <span className="text-[10px] text-zinc-500 font-normal mt-0.5 block">10,000–500,000</span>
+                    </label>
+                    <label className="block text-xs font-semibold text-zinc-800">
+                      {isEn ? 'Output tokens' : 'Token tạo ra (Output)'}
+                      <input
+                        type="number"
+                        min={5000}
+                        max={200000}
+                        step={5000}
+                        value={maxOutputTokens}
+                        onChange={event => setMaxOutputTokens(Math.max(5000, Math.min(200000, Number(event.target.value))))}
+                        className="mt-1 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm font-bold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+                      />
+                      <span className="text-[10px] text-zinc-500 font-normal mt-0.5 block">5,000–200,000</span>
+                    </label>
                   </div>
                 </div>
 

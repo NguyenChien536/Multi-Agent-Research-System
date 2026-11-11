@@ -1,4 +1,4 @@
-﻿export interface BudgetConfig {
+export interface BudgetConfig {
   max_cost_usd?: number;
   max_llm_calls?: number;
   max_input_tokens?: number;
@@ -60,7 +60,28 @@ export interface ResearchTaskResponse {
   latest_error?: string | null;
   failed_agent?: string | null;
   retry_blocked_reason?: string | null;
-  token_allowance?: {input_used:number;output_used:number;max_input_tokens:number;max_output_tokens:number;next_input_tokens:number;next_output_tokens:number;can_extend:boolean;next_max_llm_calls?:number;next_timeout_seconds?:number;max_cost_usd?:number;calls_used?:number;active_seconds_used?:number} | null;
+  token_allowance?: {
+    input_used: number;
+    output_used: number;
+    max_input_tokens: number;
+    max_output_tokens: number;
+    next_input_tokens: number;
+    next_output_tokens: number;
+    can_extend: boolean;
+    next_max_llm_calls?: number;
+    next_timeout_seconds?: number;
+    max_llm_calls?: number;
+    max_active_seconds?: number;
+    max_cost_usd?: number;
+    next_max_cost_usd?: number;
+    cost_used_usd?: number;
+    calls_used?: number;
+    active_seconds_used?: number;
+    search_calls_used?: number;
+    embedding_calls_used?: number;
+    blocked_limits?: string[];
+    extension_blocked_reason?: string | null;
+  } | null;
   provider_wait?: { reason: string; retry_at: string; retry_count: number } | null;
   writing_progress?: {completed: number; total: number} | null;
   require_plan_approval: boolean;
