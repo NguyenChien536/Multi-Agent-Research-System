@@ -505,100 +505,154 @@ export default function Home() {
 
             {/* Advanced Options Drawer */}
             {showAdvanced && (
-              <div className="mt-3 bg-white rounded-xl border border-zinc-200 p-5 shadow-xs space-y-5 animate-in fade-in duration-150 z-10 relative">
-                <div>
-                  <h3 className="font-semibold text-sm text-zinc-900">
-                    {isEn ? 'Research Configuration' : 'Tùy chọn cấu hình nghiên cứu'}
-                  </h3>
+              <div className="mt-3 bg-white rounded-2xl border border-zinc-200/90 p-5 shadow-xs space-y-5 animate-in fade-in duration-150 z-10 relative">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-3 border-b border-zinc-100">
+                  <div className="flex items-center gap-2">
+                    <Settings2 size={16} className="text-zinc-800" />
+                    <h3 className="font-bold text-sm text-zinc-900 tracking-tight">
+                      {isEn ? 'Research Configuration' : 'Cấu hình nghiên cứu'}
+                    </h3>
+                  </div>
+                  {!useServerProviders && (
+                    <button
+                      type="button"
+                      className="px-3 py-1 rounded-lg border border-zinc-300 bg-white hover:bg-zinc-50 text-xs font-semibold text-zinc-900 shadow-2xs transition-colors cursor-pointer"
+                      onClick={() => setShowModelSettings(true)}
+                    >
+                      API & model
+                    </button>
+                  )}
                 </div>
 
-                {/* 1. Research Depth (Cards) */}
-                <fieldset className="rounded-xl border border-zinc-200 p-3">
-                  <legend className="px-1 text-sm font-medium">{isEn ? 'Research allowance' : 'Hạn mức cho bài này'}</legend>
-                  <div className="flex flex-wrap gap-4 text-sm">
-                    <label>{isEn ? 'Estimated cost ceiling (USD)' : 'Trần chi phí ước tính (USD)'}
-                      <input type="number" required min={0.1} max={2} step={0.1} value={costLimit} onChange={event=>setCostLimit(Number(event.target.value))} className="mt-1 block w-28 rounded-lg border p-2" />
-                    </label>
-                    <label>{isEn ? 'Active processing time' : 'Thời gian xử lý'}
-                      <select value={activeMinutes} onChange={event=>setActiveMinutes(Number(event.target.value))} className="mt-1 block rounded-lg border p-2">
-                        {[15,30,45,60].map(minutes=><option key={minutes} value={minutes}>{minutes} {isEn ? 'minutes' : 'phút'}</option>)}
-                      </select>
-                    </label>
+                {/* Active AI Model Bar */}
+                <div className="flex items-center justify-between px-3.5 py-2.5 rounded-xl bg-zinc-50 border border-zinc-200 text-xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <Cpu size={14} className="text-zinc-500 shrink-0" />
+                    <span className="text-zinc-500 font-medium">{isEn ? 'Active Model:' : 'Mô hình hoạt động:'}</span>
+                    <span className="font-mono font-semibold text-zinc-900 truncate">
+                      {savedModel || (isEn ? 'Choose an API connection in Settings' : 'Chọn kết nối API trong Settings')}
+                    </span>
                   </div>
-                  <p className="mt-2 text-xs text-zinc-500">{isEn ? '40 calls · 150,000 input / 60,000 output tokens. Provider billing depends on actual usage and the prices saved in Settings. Waiting for uploaded data does not consume processing time.' : '40 lượt gọi · 150.000 input / 60.000 output token. Phí thực tế phụ thuộc lượng sử dụng và giá đã lưu trong Settings. Chờ bạn tải dữ liệu không tính vào thời gian xử lý.'}</p>
-                </fieldset>
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-zinc-200 p-3 text-sm">
-                  <span>{savedModel || (isEn ? 'Choose an API connection in Settings' : 'Chọn kết nối API trong Settings')}</span>
-                  {!useServerProviders && <button type="button" className="font-medium underline" onClick={()=>setShowModelSettings(true)}>API & model</button>}
                 </div>
-                <label className="block space-y-1 text-xs font-medium text-zinc-700">
-                  <span>{isEn ? 'Maximum sources to collect' : 'Số nguồn tối đa cần thu thập'}</span>
-                  <input type="number" min={3} max={30} required value={maxSources}
-                    onChange={event => setMaxSources(Number(event.target.value))}
-                    className="block w-28 rounded-lg border border-zinc-200 p-2 text-sm" />
-                  <span className="block font-normal text-zinc-500">{isEn
-                    ? '3–30. Only relevant sources supporting the manuscript are cited; more sources may take longer.'
-                    : '3–30. Chỉ trích dẫn nguồn phù hợp có hỗ trợ nội dung; tìm nhiều nguồn có thể lâu hơn.'}</span>
-                </label>
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-600">
-                    {isEn ? 'Depth' : 'Độ sâu nghiên cứu'}
+
+                {/* 1. Limits: Cost, Time, Sources */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="p-3 rounded-xl border border-zinc-200 bg-white">
+                    <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+                      {isEn ? 'Estimated cost ceiling (USD)' : 'Trần chi phí ước tính (USD)'}
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-semibold text-zinc-500">$</span>
+                      <input
+                        type="number"
+                        required
+                        min={0.1}
+                        max={2}
+                        step={0.1}
+                        value={costLimit}
+                        onChange={event => setCostLimit(Number(event.target.value))}
+                        className="w-full rounded-lg border border-zinc-200 bg-zinc-50/50 px-2.5 py-1.5 text-sm font-bold text-zinc-900 focus:bg-white focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="p-3 rounded-xl border border-zinc-200 bg-white">
+                    <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+                      {isEn ? 'Active processing time' : 'Thời gian xử lý'}
+                    </label>
+                    <select
+                      value={activeMinutes}
+                      onChange={event => setActiveMinutes(Number(event.target.value))}
+                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50/50 px-2.5 py-1.5 text-sm font-bold text-zinc-900 focus:bg-white focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors cursor-pointer"
+                    >
+                      {[15, 30, 45, 60].map(minutes => (
+                        <option key={minutes} value={minutes}>
+                          {minutes} {isEn ? 'minutes' : 'phút'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="p-3 rounded-xl border border-zinc-200 bg-white">
+                    <label className="block text-xs font-bold text-zinc-800 mb-1.5">
+                      {isEn ? 'Maximum sources to collect' : 'Số nguồn tối đa cần thu thập'}
+                    </label>
+                    <input
+                      type="number"
+                      min={3}
+                      max={30}
+                      required
+                      value={maxSources}
+                      onChange={event => setMaxSources(Number(event.target.value))}
+                      className="w-full rounded-lg border border-zinc-200 bg-zinc-50/50 px-2.5 py-1.5 text-sm font-bold text-zinc-900 focus:bg-white focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-colors"
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Research Depth */}
+                <div className="space-y-2 pt-1 border-t border-zinc-100">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-800">
+                    {isEn ? 'Research Depth' : 'Độ sâu nghiên cứu'}
                   </label>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                     <button
                       type="button"
                       onClick={() => setResearchDepth('SHALLOW')}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${researchDepth === 'SHALLOW' ? 'border-zinc-900 bg-zinc-900 text-white shadow-2xs' : 'border-zinc-200 bg-zinc-50/70 hover:bg-zinc-100 text-zinc-800'}`}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        researchDepth === 'SHALLOW'
+                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                          : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50 text-zinc-900'
+                      }`}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="font-semibold text-xs sm:text-sm">
+                        <span className="font-bold text-sm">
                           {isEn ? 'Fast (SHALLOW)' : 'Nhanh (SHALLOW)'}
-                        </div>
-                        {researchDepth === 'SHALLOW' && <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />}
-                      </div>
-                      <div className={`text-xs mt-0.5 ${researchDepth === 'SHALLOW' ? 'text-zinc-300' : 'text-zinc-500'}`}>
-                        {isEn ? 'Up to 1 research round' : 'Tối đa 1 vòng nghiên cứu'}
+                        </span>
+                        {researchDepth === 'SHALLOW' && <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />}
                       </div>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setResearchDepth('STANDARD')}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${researchDepth === 'STANDARD' ? 'border-zinc-900 bg-zinc-900 text-white shadow-2xs' : 'border-zinc-200 bg-zinc-50/70 hover:bg-zinc-100 text-zinc-800'}`}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        researchDepth === 'STANDARD'
+                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                          : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50 text-zinc-900'
+                      }`}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="font-semibold text-xs sm:text-sm">
+                        <span className="font-bold text-sm">
                           {isEn ? 'Standard (STANDARD)' : 'Tiêu chuẩn (STANDARD)'}
-                        </div>
-                        {researchDepth === 'STANDARD' && <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />}
-                      </div>
-                      <div className={`text-xs mt-0.5 ${researchDepth === 'STANDARD' ? 'text-zinc-300' : 'text-zinc-500'}`}>
-                        {isEn ? 'Up to 2 research rounds' : 'Tối đa 2 vòng nghiên cứu'}
+                        </span>
+                        {researchDepth === 'STANDARD' && <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />}
                       </div>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => setResearchDepth('DEEP')}
-                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${researchDepth === 'DEEP' ? 'border-zinc-900 bg-zinc-900 text-white shadow-2xs' : 'border-zinc-200 bg-zinc-50/70 hover:bg-zinc-100 text-zinc-800'}`}
+                      className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        researchDepth === 'DEEP'
+                          ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                          : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50 text-zinc-900'
+                      }`}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="font-semibold text-xs sm:text-sm">
+                        <span className="font-bold text-sm">
                           {isEn ? 'Comprehensive (DEEP)' : 'Chuyên sâu (DEEP)'}
-                        </div>
-                        {researchDepth === 'DEEP' && <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />}
-                      </div>
-                      <div className={`text-xs mt-0.5 ${researchDepth === 'DEEP' ? 'text-zinc-300' : 'text-zinc-500'}`}>
-                        {isEn ? 'Up to 3 research rounds' : 'Tối đa 3 vòng nghiên cứu'}
+                        </span>
+                        {researchDepth === 'DEEP' && <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />}
                       </div>
                     </button>
                   </div>
                 </div>
 
-                {/* 2 & 3. Length & Citation */}
+                {/* 3. Length & Citation */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1 border-t border-zinc-100">
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-600">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-800">
                       {isEn ? 'Report Length' : 'Độ dài bài báo'}
                     </label>
                     <div className="grid grid-cols-3 gap-2">
@@ -607,7 +661,11 @@ export default function Home() {
                           key={len}
                           type="button"
                           onClick={() => setReportLength(len)}
-                          className={`py-1.5 px-2.5 rounded-lg border text-xs font-medium text-center transition-all cursor-pointer ${reportLength === len ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'}`}
+                          className={`py-2 px-2.5 rounded-lg border text-xs font-bold text-center transition-all cursor-pointer ${
+                            reportLength === len
+                              ? 'bg-zinc-900 text-white border-zinc-900 shadow-2xs'
+                              : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 text-zinc-800'
+                          }`}
                         >
                           {len === 'SHORT' ? (isEn ? 'Short' : 'Ngắn') : len === 'MEDIUM' ? (isEn ? 'Medium' : 'Vừa') : (isEn ? 'Long' : 'Dài')}
                         </button>
@@ -616,7 +674,7 @@ export default function Home() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-600">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-800">
                       {isEn ? 'Citation Style' : 'Kiểu trích dẫn'}
                     </label>
                     <div className="grid grid-cols-3 gap-2">
@@ -625,7 +683,11 @@ export default function Home() {
                           key={style}
                           type="button"
                           onClick={() => setCitationStyle(style)}
-                          className={`py-1.5 px-2.5 rounded-lg border text-xs font-medium text-center transition-all cursor-pointer ${citationStyle === style ? 'bg-zinc-900 text-white border-zinc-900' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:bg-zinc-100'}`}
+                          className={`py-2 px-2.5 rounded-lg border text-xs font-bold text-center transition-all cursor-pointer ${
+                            citationStyle === style
+                              ? 'bg-zinc-900 text-white border-zinc-900 shadow-2xs'
+                              : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 text-zinc-800'
+                          }`}
                         >
                           {style}
                         </button>
@@ -634,13 +696,13 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Report Output Language Configuration */}
-                <div className="space-y-2 pt-2 border-t border-zinc-100">
+                {/* 4. Report Output Language Configuration */}
+                <div className="space-y-2 pt-1 border-t border-zinc-100">
                   <div className="flex items-center justify-between">
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-600">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-zinc-800">
                       {isEn ? 'Paper Output Language' : 'Ngôn ngữ bài báo xuất bản'}
                     </label>
-                    <span className="text-xs font-semibold text-zinc-700 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">
+                    <span className="text-xs font-bold text-zinc-800 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200">
                       {OUTPUT_LANGUAGES.find(l => l.code === taskLanguage)?.native || taskLanguage.toUpperCase()}
                     </span>
                   </div>
@@ -654,96 +716,80 @@ export default function Home() {
                         onClick={() => setTaskLanguage(lang.code)}
                         className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
                           taskLanguage === lang.code
-                            ? 'border-zinc-900 bg-zinc-900 text-white shadow-2xs'
-                            : 'border-zinc-200 bg-zinc-50/70 hover:bg-zinc-100 text-zinc-800'
+                            ? 'border-zinc-900 bg-zinc-900 text-white shadow-xs'
+                            : 'border-zinc-200 bg-white hover:border-zinc-300 hover:bg-zinc-50 text-zinc-900'
                         }`}
                       >
                         <div className="flex items-center justify-between">
-                          <span className="font-semibold text-xs sm:text-sm">{lang.native}</span>
-                          {taskLanguage === lang.code && <CheckCircle2 size={14} className="text-emerald-400" />}
-                        </div>
-                        <div className={`text-xs mt-0.5 ${taskLanguage === lang.code ? 'text-zinc-300' : 'text-zinc-500'}`}>
-                          {isEn ? lang.desc_en : lang.desc_vi}
+                          <span className="font-bold text-sm">{lang.native}</span>
+                          {taskLanguage === lang.code && <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />}
                         </div>
                       </button>
                     ))}
                   </div>
 
                   {/* Additional International Languages */}
-                  <div>
-                    <span className="block text-[11px] font-medium text-zinc-500 mb-1.5">
-                      {isEn ? 'Or publish in other languages:' : 'Hoặc xuất bản bằng các ngôn ngữ khác:'}
-                    </span>
+                  <div className="pt-1">
                     <div className="flex flex-wrap gap-1.5">
                       {OUTPUT_LANGUAGES.slice(2).map(lang => (
                         <button
                           key={lang.code}
                           type="button"
                           onClick={() => setTaskLanguage(lang.code)}
-                          className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${
+                          className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
                             taskLanguage === lang.code
                               ? 'border-zinc-900 bg-zinc-900 text-white shadow-2xs'
                               : 'border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700'
                           }`}
                         >
                           <span>{lang.native}</span>
-                          <span className={`text-[10px] ${taskLanguage === lang.code ? 'text-zinc-300' : 'text-zinc-400'}`}>({lang.name})</span>
-                          {taskLanguage === lang.code && <CheckCircle2 size={12} className="text-emerald-400" />}
+                          <span className={`text-[11px] ${taskLanguage === lang.code ? 'text-zinc-300' : 'text-zinc-500'}`}>({lang.name})</span>
+                          {taskLanguage === lang.code && <CheckCircle2 size={13} className="text-emerald-400" />}
                         </button>
                       ))}
                     </div>
                   </div>
                 </div>
 
-                {/* HITL Plan Review */}
-                <div className="border-t border-zinc-100 pt-3">
+                {/* 5. HITL Plan Review */}
+                <div className="pt-1 border-t border-zinc-100">
                   <button
                     type="button"
                     onClick={() => setRequirePlanApproval(!requirePlanApproval)}
-                    className={`w-full p-3 rounded-xl border text-left flex items-start gap-2.5 transition-colors cursor-pointer ${requirePlanApproval ? 'bg-zinc-100/90 border-zinc-400 ring-1 ring-zinc-400' : 'bg-zinc-50 border-zinc-200 hover:bg-zinc-100'}`}
+                    className={`w-full p-3.5 rounded-xl border text-left flex items-center justify-between gap-3 transition-all cursor-pointer ${
+                      requirePlanApproval
+                        ? 'bg-zinc-900 text-white border-zinc-900 shadow-xs'
+                        : 'bg-white border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 text-zinc-900'
+                    }`}
                   >
-                    <div className="mt-0.5">
-                      <input
-                        type="checkbox"
-                        checked={requirePlanApproval}
-                        onChange={() => {}}
-                        className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 w-3.5 h-3.5 cursor-pointer"
-                      />
-                    </div>
-                    <div>
-                      <div className="font-semibold text-xs text-zinc-900 flex items-center gap-1.5">
-                        <ShieldCheck size={14} className="text-blue-600" />
+                    <div className="flex items-center gap-2.5">
+                      <ShieldCheck size={16} className={requirePlanApproval ? 'text-emerald-400' : 'text-blue-600'} />
+                      <span className="font-bold text-xs sm:text-sm">
                         {isEn ? 'Require Plan Approval (Human-in-the-Loop)' : 'Chế độ phê duyệt đề cương (Human-in-the-Loop)'}
-                      </div>
-                      <div className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
-                        {isEn
-                          ? 'Workflow pauses after planning for you to review and approve research queries before gathering sources.'
-                          : 'Hệ thống sẽ tạm dừng sau giai đoạn Supervisor để bạn xem và duyệt đề cương trước khi bắt đầu tìm nguồn.'}
-                      </div>
+                      </span>
                     </div>
+                    <input
+                      type="checkbox"
+                      checked={requirePlanApproval}
+                      onChange={() => {}}
+                      className="rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900 w-4 h-4 cursor-pointer accent-zinc-900"
+                    />
                   </button>
                 </div>
 
-                {/* Private PDF Upload */}
-                <div className="border-t border-zinc-100 pt-3 space-y-2.5">
+                {/* 6. Private PDF Upload */}
+                <div className="pt-1 border-t border-zinc-100 space-y-2.5">
                   <div className="flex items-center justify-between">
-                    <div>
-                      <h4 className="font-semibold text-xs text-zinc-900 flex items-center gap-1.5">
-                        <FileUp size={13} className="text-zinc-600" />
-                        {isEn ? 'Upload Private PDF Documents (Optional)' : 'Nạp tài liệu PDF riêng tư (Tùy chọn)'}
-                      </h4>
-                      <p className="text-xs text-zinc-500 mt-0.5">
-                        {isEn
-                          ? 'Custom papers will be parsed, chunked, and indexed into this project\'s vector knowledge store.'
-                          : 'Tài liệu riêng sẽ được trích xuất text, băm nhỏ và nhúng vector vào tri thức nghiên cứu của bài.'}
-                      </p>
-                    </div>
-                    <span className="text-xs text-zinc-600 font-medium shrink-0">Max 5 files, 10 MiB</span>
+                    <span className="font-bold text-xs sm:text-sm text-zinc-900 flex items-center gap-1.5">
+                      <FileUp size={15} className="text-zinc-700" />
+                      {isEn ? 'Upload Private PDF Documents (Optional)' : 'Nạp tài liệu PDF riêng tư (Tùy chọn)'}
+                    </span>
+                    <span className="text-xs font-semibold text-zinc-500">Max 5 files, 10 MiB</span>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-50 hover:bg-zinc-100 border border-dashed border-zinc-300 text-xs font-medium text-zinc-700 cursor-pointer transition-colors">
-                      <FileUp size={13} className="text-zinc-500" />
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white hover:bg-zinc-50 border border-zinc-300 text-xs font-semibold text-zinc-900 cursor-pointer shadow-2xs transition-colors">
+                      <FileUp size={14} className="text-zinc-600" />
                       <span>{isEn ? 'Select PDF file' : 'Chọn file PDF tải lên'}</span>
                       <input
                         type="file"
@@ -753,7 +799,7 @@ export default function Home() {
                         onChange={handleFileSelect}
                       />
                     </label>
-                    <span className="text-xs text-zinc-600 font-medium">
+                    <span className="text-xs font-medium text-zinc-600">
                       {pdfFiles.length === 0 ? (isEn ? 'No files selected' : 'Chưa chọn file nào') : `${pdfFiles.length}/5 PDFs`}
                     </span>
                   </div>
@@ -761,11 +807,11 @@ export default function Home() {
                   {pdfFiles.length > 0 && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                       {pdfFiles.map((file, idx) => (
-                        <div key={idx} className="flex items-center justify-between p-2 rounded-lg bg-zinc-50 border border-zinc-200 text-xs">
+                        <div key={idx} className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-50 border border-zinc-200 text-xs">
                           <div className="flex items-center gap-2 truncate pr-2">
-                            <FileText size={13} className="text-zinc-500 shrink-0" />
-                            <span className="truncate font-medium text-zinc-800">{file.name}</span>
-                            <span className="text-xs text-zinc-600 font-medium shrink-0">({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
+                            <FileText size={14} className="text-zinc-500 shrink-0" />
+                            <span className="truncate font-semibold text-zinc-900">{file.name}</span>
+                            <span className="text-xs text-zinc-500 font-medium shrink-0">({(file.size / 1024 / 1024).toFixed(2)} MB)</span>
                           </div>
                           <button
                             type="button"
@@ -773,7 +819,7 @@ export default function Home() {
                             className="text-zinc-400 hover:text-red-500 p-0.5 rounded transition-colors cursor-pointer"
                             title="Remove"
                           >
-                            <X size={13} />
+                            <X size={14} />
                           </button>
                         </div>
                       ))}
