@@ -395,7 +395,7 @@ export default function ResearchMonitorPage() {
                 }`}>
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
                     <div className="space-y-1.5 max-w-3xl">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2.5">
                         <span className={`h-2.5 w-2.5 rounded-full ${
                           action.tone === 'amber' ? 'bg-amber-600 animate-pulse' :
                           action.tone === 'red' ? 'bg-red-600' :
@@ -405,11 +405,11 @@ export default function ResearchMonitorPage() {
                           {action.title}
                         </h3>
                       </div>
-                      <p className="text-xs sm:text-sm text-zinc-700 leading-relaxed font-normal">
-                        {snapshot.latest_error || snapshot.status === 'FAILED'
-                          ? researchErrorText(snapshot.latest_error || snapshot.activities.find(activity => activity.has_error)?.error_summary, isEn)
-                          : action.text}
-                      </p>
+                      {(snapshot.latest_error || snapshot.status === 'FAILED') && (
+                        <p className="text-xs sm:text-sm text-red-700 leading-relaxed font-medium">
+                          {researchErrorText(snapshot.latest_error || snapshot.activities.find(activity => activity.has_error)?.error_summary, isEn)}
+                        </p>
+                      )}
                     </div>
 
                     {/* Failure details stay on this monitor; other actions open their workspace inputs. */}
