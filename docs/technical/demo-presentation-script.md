@@ -154,13 +154,147 @@ Synthia được xây dựng trên nền tảng công nghệ hiện đại, đ�
 
 ---
 
-### 4.5. Lời nói dẫn dắt của người trình bày (1–2 phút)
+### 4.5. Hướng dẫn luồng thao tác trên giao diện (UI User Journey)
+
+Khi bắt đầu sử dụng hệ thống, người nghiên cứu thao tác theo các bước tuần tự trên giao diện web:
+
+1. **Truy cập & Thiết lập cấu hình cá nhân:**
+   - Mở trình duyệt vào `http://127.0.0.1:3082`.
+   - Đăng nhập tài khoản cá nhân. Vào mục **Settings** ở thanh điều hướng trên cùng để quản lý thông tin hồ sơ và cấu hình API Key/Model (OpenAI, Gemini, OpenRouter...).
+2. **Khởi tạo nghiên cứu mới (Home / Dashboard):**
+   - Tại trang chủ, nhập câu hỏi nghiên cứu (Research Question / Topic) vào ô tìm kiếm trung tâm.
+   - Nhấn vào nút **Research Configuration** (biểu tượng cấu hình) để mở hộp thoại thiết lập chuyên sâu:
+     - **Chọn loại hình nghiên cứu (Study Mode):** Tổng quan tài liệu (`REVIEW`), Thực nghiệm tính toán (`EMPIRICAL_COMPUTATIONAL`), hoặc Khảo sát thực địa ngoài hệ thống (`EMPIRICAL_HUMAN`).
+     - **Độ sâu nghiên cứu (Research Depth):** Fast (1 vòng nghiên cứu), Standard (2 vòng), hoặc Comprehensive (3 vòng).
+     - **Độ dài bài báo & Phong cách trích dẫn:** Short, Medium, Long; Định dạng trích dẫn IEEE, APA hoặc Harvard.
+     - **Tùy chọn phê duyệt đề cương (Human-in-the-Loop):** Tích chọn *Require Plan Approval* nếu muốn tự tay duyệt kế hoạch và câu truy vấn trước khi Agent tiến hành tìm kiếm.
+     - **Nạp tài liệu PDF cá nhân (Private PDF Documents):** Cho phép tải lên tối đa 5 tệp PDF tài liệu tham khảo riêng (giới hạn 10 MiB) để hệ thống lập chỉ mục và ưu tiên trích dẫn.
+     - **Cấu hình trần hạn mức (Shared Agent Allowance):** Tùy chỉnh số lượt gọi LLM tối đa (5–100 calls), trần token đầu vào/đầu ra và trần ngân sách USD dùng chung cho cả 7 Agent.
+3. **Theo dõi tiến trình trực tiếp trong Workspace (`/research/[id]`):**
+   - Sau khi bấm **Start Research**, hệ thống tự động điều hướng vào trang Workspace riêng của bài báo.
+   - **Thanh tiến trình Workflow Pipeline (7 chặng):** Hiển thị rõ ràng giai đoạn đang chạy (Planning ➔ Literature Search ➔ Source Processing ➔ Evidence Analysis ➔ Drafting Paper ➔ AI Critique ➔ Citation Check).
+   - **Bảng giám sát trực tiếp (Live Monitor):** Bấm nút **Open Live Monitor** (`/research/[id]/monitor`) để theo dõi chi tiết từng hành động của các Agent theo thời gian thực.
+4. **Kiểm tra kết quả & Đối chiếu nguồn:**
+   - Đọc bản thảo bài báo đầy đủ trong tab **Scientific Paper**.
+   - Bấm vào bất kỳ trích dẫn nào trong bài để xem đối chiếu tức thời đoạn văn gốc tại tab **Sources** hoặc ma trận đối soát tại tab **Evidence & Citations**.
+   - Xem kết quả chạy mô hình, số liệu sai số và biểu đồ phân tích trong tab **Experiments**.
+   - Theo dõi chi phí và số token đã tiêu thụ của từng Agent trong tab **Agent Runs & Cost**.
+5. **Xuất bản bài báo (Export):**
+   - Bấm nút **Export** ở góc trên để tải về bài báo dưới dạng Microsoft Word (`.docx`), Markdown (`.md`), hoặc in bản PDF đã được format học thuật chuẩn mực.
+
+---
+
+### 4.6. Cấu trúc của một bài nghiên cứu hoàn chỉnh (Full Manuscript Structure)
+
+Bản thảo do Synthia tạo ra không phải là một đoạn tóm tắt đơn giản, mà là một bài báo khoa học hoàn chỉnh tuân thủ cấu trúc học thuật quốc tế **IMRaD**:
+
+1. **Title & Abstract:** Tiêu đề học thuật súc tích, phần tóm tắt nêu bật bài toán, phương pháp luận, kết quả chính lượng hóa và đóng góp của bài báo. Kèm danh sách từ khóa (Keywords).
+2. **1. Introduction (Mở đầu & Định vị khoảng trống):**
+   - Giới thiệu bối cảnh học thuật và thực tiễn của đề tài.
+   - Nêu rõ bài toán trọng tâm, tính cấp thiết và động lực nghiên cứu.
+   - **Định vị Research Gap (Khoảng trống nghiên cứu):** Chỉ ra những mâu thuẫn, hạn chế hoặc điểm chưa được giải quyết trong các nghiên cứu giai đoạn gần đây (2020–2025).
+3. **2. Related Work / Background (Tổng quan tài liệu & Bằng chứng):**
+   - Tổng hợp có hệ thống các công trình nghiên cứu tiền nhiệm.
+   - Phân loại các trường phái nghiên cứu, so sánh ưu nhược điểm qua ma trận bằng chứng đối chứng.
+4. **3. Methodology & Hypotheses (Phương pháp luận & Giả thuyết):**
+   - Thiết kế nghiên cứu và quy trình thu thập dữ liệu / bằng chứng.
+   - **Phát biểu Giả thuyết nghiên cứu ($H_0, H_1$):** Đưa ra các giả thuyết khoa học rõ ràng, có thể kiểm chứng được bằng dữ liệu hoặc bằng chứng thực nghiệm.
+   - Mô tả tiêu chí chọn lọc (eligibility criteria), phương pháp phân tích số liệu hoặc thuật toán mô hình hóa.
+5. **4. Experiments & Results / Findings (Thực nghiệm & Kết quả):**
+   - **Thiết lập thực nghiệm:** Chi tiết về tập dữ liệu (dataset), chia train/test split, random seed đảm bảo tính tái lập (reproducibility).
+   - **Bảng so sánh định lượng:** Bảng đối chuẩn kết quả giữa mô hình thực nghiệm với Baseline trung bình (đầy đủ các chỉ số đo lường như MAE, RMSE, $R^2$).
+   - **Biểu đồ thực nghiệm (Figures):** Chèn trực tiếp các hình ảnh biểu đồ phân tán, biểu đồ phần dư được sinh ra từ code phân tích thực tế kèm chú thích (caption) học thuật chuẩn mực.
+6. **5. Discussion (Thảo luận):**
+   - Phân tích và lý giải ý nghĩa khoa học của các kết quả vừa đạt được.
+   - Đối chiếu với các phát hiện của các tác giả trước đó để làm rõ kết quả này củng cố hay phản bác quan điểm nào.
+7. **6. Limitations & Threats to Validity (Hạn chế của nghiên cứu):**
+   - Thẳng thắn chỉ ra các giới hạn về mặt dữ liệu (cỡ mẫu, tính đại diện), giới hạn của thuật toán và các yếu tố ngoại cảnh có thể ảnh hưởng đến kết luận.
+8. **7. Conclusion & Future Work (Kết luận & Hướng phát triển):**
+   - Đúc kết ngắn gọn các phát hiện cốt lõi và đề xuất các hướng nghiên cứu mở rộng trong tương lai.
+9. **References (Danh mục tài liệu tham khảo):**
+   - Danh sách nguồn trích dẫn được chuẩn hóa tự động theo định dạng yêu cầu (IEEE, APA, Harvard).
+   - Từng tài liệu tham khảo đều có liên kết đối chiếu với các đoạn trích dẫn thực tế trong bài, không bịa đặt nguồn ma.
+
+---
+
+### 4.7. Cơ chế tìm Research Gap, Đặt giả thuyết & Sinh đề cương thực nghiệm
+
+Một trong những năng lực học thuật quan trọng nhất của hệ thống là khả năng suy luận khoa học theo quy trình:
+
+1. **Cơ chế tìm Research Gap (Khoảng trống nghiên cứu):**
+   - Tác tử **Researcher** thu thập các bài báo khoa học mới nhất xoay quanh câu hỏi nghiên cứu.
+   - Tác tử **Evidence Analyst** đọc sâu nội dung các nghiên cứu và lập ma trận so sánh chéo. Tác tử này được trang bị chỉ dẫn chuyên biệt để phát hiện **điểm mâu thuẫn (Contradictions)** giữa các nghiên cứu (ví dụ: công trình A kết luận phương pháp X vượt trội, nhưng công trình B lại chỉ ra phương pháp X suy giảm độ chính xác khi áp dụng trên tập dữ liệu đa biến).
+   - Từ các bất đồng quan điểm và các giới hạn chưa được khảo sát, tác tử **Supervisor** tổng hợp và định vị chính xác **Research Gap** cần giải quyết.
+2. **Cơ chế phát biểu Giả thuyết nghiên cứu ($H_0, H_1$):**
+   - Dựa trên Research Gap đã định vị, hệ thống tự động xây dựng các cặp giả thuyết khoa học:
+     - **Giả thuyết không ($H_0$ - Null Hypothesis):** Khẳng định không có sự khác biệt có ý nghĩa thống kê hoặc phương pháp đề xuất không cải thiện hiệu năng so với baseline mặc định.
+     - **Giả thuyết đối ($H_1$ - Alternative Hypothesis):** Khẳng định phương pháp hoặc mô hình đề xuất tạo ra sự khác biệt hoặc giảm thiểu sai số có ý nghĩa trên tập dữ liệu kiểm nghiệm.
+3. **Sinh đề cương thực nghiệm (Protocol Generation):**
+   - Hệ thống tự động tạo ra một **Research Protocol** chuẩn hóa dưới định dạng JSON/Markdown quy định:
+     - Biến độc lập (Independent variables), biến phụ thuộc (Dependent variables / Target).
+     - Quy trình tiền xử lý dữ liệu (chỉ chuẩn hóa trên tập train, tránh rò rỉ dữ liệu - data leakage).
+     - Baseline so sánh được chỉ định rõ ràng.
+     - Metrics đánh giá mục tiêu và routine tính toán tương ứng cần gọi.
+
+---
+
+### 4.8. Cơ chế chạy thí nghiệm thực tế & Tự động sinh biểu đồ
+
+Hệ thống trả lời dứt khoát câu hỏi: **"Hệ thống có chạy thí nghiệm thật không, hay AI tự tưởng tượng ra số liệu?"**
+
+- **CHẠY THÍ NGHIỆM THẬT (Không sinh số liệu giả):**
+  - Ở luồng **EMPIRICAL_COMPUTATIONAL**, hệ thống **hoàn toàn không để LLM tự đoán hay tự viết số đo**.
+  - Khi người dùng tải lên tập dữ liệu thực nghiệm (file CSV, ví dụ: dữ liệu tiêu thụ điện năng 120 dòng), worker Celery sẽ kích hoạt một **routine phân tích tính toán Python độc lập** (sử dụng thư viện chuẩn `scikit-learn`, `numpy`, `pandas`).
+  - Routine này chạy trên môi trường thực tế:
+    - Chia tập dữ liệu cố định với random seed kiểm soát (ví dụ: seed 42, 96 dòng train và 24 dòng test).
+    - Tính toán Baseline (dự đoán bằng trung bình tập train).
+    - Huấn luyện mô hình thực nghiệm (ví dụ: Ridge Regression với tham số $\alpha = 1.0$).
+    - Đo lường sai số thực tế trên tập kiểm nghiệm held-out: MAE, RMSE, $R^2$.
+- **Cơ chế tự động sinh và chèn biểu đồ (Figure Generation):**
+  - Trong quá trình chạy routine tính toán, mã nguồn Python tự động gọi `matplotlib.pyplot` và `seaborn` để vẽ các biểu đồ phân tích trực quan:
+    - **Biểu đồ phân tán (Scatter Plot):** Thể hiện tương quan giữa giá trị thực tế (Ground Truth) và giá trị mô hình dự đoán (Predicted), kèm đường tham chiếu lý tưởng $y = x$.
+    - **Biểu đồ phân phối phần dư (Residual Plot):** Trực quan hóa sai số dự đoán để đánh giá tính chuẩn tắc và hiện tượng phương sai thay đổi (heteroscedasticity).
+    - **Biểu đồ cột so sánh sai số:** So sánh trực diện sai số MAE và RMSE giữa Baseline và Mô hình đề xuất.
+  - Các biểu đồ được lưu bền vững thành tệp ảnh chất lượng cao trong hệ thống lưu trữ artifact (`/storage/artifacts/{task_id}/figure_{n}.png`).
+  - Tác tử **Writer** sau đó tự động nhúng các hình ảnh này vào đúng vị trí trong mục Results của bản thảo bằng cú pháp markdown học thuật:
+    `![Figure 1: Comparison of Actual vs Predicted Values](/api/v1/research/{task_id}/figures/figure_1.png)`
+    đồng thời viết đoạn văn phân tích, diễn giải các xu hướng định lượng được thể hiện trên biểu đồ.
+
+---
+
+### 4.9. Thu nạp tài liệu cá nhân, Giám sát thời gian thực & Lưu Log kiểm toán
+
+1. **Thu nạp tài liệu & Dữ liệu do người dùng cung cấp (Private Ingestion):**
+   - **Tải lên PDF cá nhân:** Ngay tại màn hình tạo bài, người dùng có thể đính kèm các tài liệu nghiên cứu nội bộ hoặc tài liệu chuyên ngành chưa công bố (tối đa 5 file PDF, 10 MiB).
+   - **Xử lý trích xuất & Vector Embeddings:** Tác tử **Curator** sử dụng bộ bóc tách văn bản, làm sạch cấu trúc, băm nhỏ thành các đoạn có ngữ cảnh (chunking 1024 ký tự kèm overlap 128 ký tự). Sau đó gọi model embedding để tạo vector và lưu vào `pgvector` trong PostgreSQL.
+   - **Ưu tiên trích dẫn:** Khi Agent tìm kiếm bằng chứng, các đoạn tài liệu từ file PDF của người dùng được tìm kiếm theo độ tương đồng ngữ nghĩa (Cosine Similarity) và được ưu tiên đưa vào ma trận bằng chứng có gắn nhãn nguồn riêng.
+2. **Giám sát từng bước theo thời gian thực (Step-by-step Monitoring):**
+   - **Giao diện Pipeline 7 bước:** Phản ánh trực quan trạng thái từng tác tử (Xanh lá: Hoàn tất; Xanh dương nhấp nháy: Đang xử lý; Vàng cam: Đang chờ duyệt kế hoạch hoặc chờ nạp dữ liệu).
+   - **Bảng Agent Monitor (`/research/[id]/monitor`):**
+     - Hiển thị nhật ký thời gian thực theo từng sự kiện của Agent.
+     - Cho phép mở xem chi tiết: Input payload, Output sinh ra ở từng bước, mô hình LLM đảm nhiệm, thời gian thực thi (latency), lượng token tiêu thụ và chi phí tương ứng.
+     - Hiển thị quyết định rẽ nhánh của tác tử Critic (chấp thuận đi tiếp hay yêu cầu viết lại).
+3. **Kiến trúc lưu trữ Log, Checkpoint & Nhật ký kiểm toán (Audit Ledger):**
+   - **Log vận hành kỹ thuật:** Ghi nhận có cấu trúc qua module `logging` của Python và nhật ký worker Celery; hỗ trợ gán correlation ID để theo dõi vết lỗi xuyên suốt từ frontend đến worker.
+   - **Nhật ký kiểm toán tài nguyên bền vững (Audit Ledger trong PostgreSQL):**
+     - Bảng `research_tasks`: Lưu trữ trạng thái tổng thể và trường JSONB `budget_config` chứa thông tin chi tiết từng token input/output, số lượt gọi và số USD đã tiêu thụ theo thời gian thực.
+     - Bảng `agent_runs`: Lưu trữ lịch sử từng lần gọi của từng Agent phục vụ kiểm toán minh bạch và đánh giá hiệu năng mô hình.
+     - Bảng `workflow_runs`: Lưu lại lịch sử các phiên chạy và phiên bản bản thảo.
+   - **Cơ chế Checkpoint bền bỉ (Durable State Checkpoint):**
+     - Toàn bộ trạng thái của đồ thị tác tử `ResearchState` được tuần tự hóa và lưu trữ liên tục vào PostgreSQL sau mỗi node xử lý thông qua cơ chế Checkpointer của LangGraph.
+     - Nếu worker bị khởi động lại, mạng bị ngắt hoặc bài bị tạm dừng do chạm trần chi phí, tiến trình nghiên cứu **không bao giờ bị mất**. Khi người dùng bấm duyệt tiếp tục, worker sẽ khôi phục chính xác trạng thái từ checkpoint và tiếp tục luồng công việc từ đúng vị trí dang dở.
+
+---
+
+### 4.10. Lời nói dẫn dắt của người trình bày (1–2 phút)
 
 > *"Điểm khác biệt cốt lõi của Synthia so với một chatbot hay một AI agent đơn lẻ nằm ở 3 yếu tố: **cơ chế tự chủ theo mục tiêu**, **sự chuyên môn hóa thành 7 tác tử độc lập**, và **vòng lặp kiểm chứng chéo chặt chẽ**.*
 >
-> *Thay vì để một AI duy nhất vừa đọc tài liệu, vừa phân tích, vừa viết và dễ bị 'ảo giác' hay quá tải ngữ cảnh, Synthia dùng LangGraph tổ chức thành một quy trình khoa học: Supervisor lập kế hoạch, Researcher và Curator gom và đánh chỉ mục tài liệu vào pgvector, Evidence Analyst trích xuất ma trận bằng chứng, Writer chấp bút theo cấu trúc chuẩn IMRaD, và đặc biệt là Critic Agent độc lập đóng vai người phản biện khó tính để bắt lỗi trích dẫn và yêu cầu sửa lại.*
+> *Quy trình bắt đầu ngay từ giao diện trực quan: người dùng nhập đề tài, có thể tải lên tài liệu PDF cá nhân để nạp vào cơ sở tri thức vector pgvector và cấu hình hạn mức an toàn. Toàn bộ tiến trình được theo dõi minh bạch qua thanh Pipeline 7 chặng và bảng Live Monitor.*
 >
-> *Toàn bộ quy trình chạy ngầm qua Celery và Redis, có lưu vết checkpoint và quản lý trần chi phí an toàn, giúp người nghiên cứu kiểm tra được tường tận nguồn gốc của từng câu khẳng định trong bài báo."*
+> *Thay vì để AI tự bịa số liệu, ở các bài thực nghiệm, Synthia kích hoạt routine Python chạy tính toán thật trên dữ liệu, đo lường chính xác các chỉ số sai số MAE, RMSE, R² và tự động vẽ biểu đồ trực quan để nhúng vào bài báo. Đặc biệt, hệ thống phát hiện Research Gap từ các mâu thuẫn học thuật, tự phát biểu giả thuyết khoa học H0/H1 và soạn thảo bản thảo hoàn chỉnh theo chuẩn quốc tế IMRaD.*
+>
+> *Toàn bộ dữ liệu, lịch sử gọi của Agent và checkpoint được lưu bền vững trong PostgreSQL, đảm bảo bài nghiên cứu có thể dừng và tiếp tục an toàn mà không bao giờ mất dữ liệu."*
 
 ## 5. Demo A — Tổng quan tài liệu — 2 phút
 
@@ -295,6 +429,10 @@ Nếu cần nêu số test: bản chốt có **1,013 backend passed, 90 frontend
 | Có loại hết bịa đặt? | Không. Có kiểm bằng chứng, tham chiếu và Critic; hỗ trợ ngữ nghĩa vẫn cần người rà soát |
 | Free mà hiện USD? | Dự toán không phải hóa đơn. Phí thực phụ thuộc dịch vụ/model; không được âm thầm chuyển sang model trả phí |
 | Tái lập nghĩa là đúng? | Không. Chạy lại khớp chưa chứng minh thiết kế đúng hoặc kết quả khái quát được |
+| Có chạy thí nghiệm thật không? | Có. Ở luồng tính toán, worker chạy code Python thực tế (Scikit-learn, Pandas), đo MAE/RMSE/R² thật và vẽ biểu đồ, không để LLM bịa số liệu |
+| Sinh biểu đồ như thế nào? | Routine Python tự động gọi Matplotlib/Seaborn xuất ảnh PNG vào artifact storage và Writer nhúng trực tiếp vào mục Results kèm caption học thuật |
+| Làm sao tìm Research Gap & đặt giả thuyết? | Evidence Analyst đối chiếu các nghiên cứu tìm điểm mâu thuẫn để định vị Gap; Supervisor xây dựng cặp giả thuyết H0/H1 và protocol thực nghiệm |
+| Giám sát từng bước và lưu log thế nào? | Giao diện có Pipeline 7 chặng và Live Monitor xem input/output từng Agent; hệ thống lưu audit log, token/cost và checkpoint bền vững trong PostgreSQL |
 
 ## 10. Checklist diễn tập
 
