@@ -47,3 +47,18 @@ Với dữ liệu thí nghiệm ngoài hệ thống, ATI lưu người cung cấ
 4. Quyền/hạn mức thực thi, xác nhận của người dùng khi cần, audit và incident/kill switch rõ. Không tự ghi vào bài báo rằng thí nghiệm đã được xác nhận khoa học chỉ vì runner chạy xong.
 
 Nguồn ranh giới kỹ thuật: [Docker Engine security](https://docs.docker.com/engine/security/). Cách báo cáo dữ liệu/code/protocol cũng cần theo quy định của lĩnh vực và nơi nộp; xem [Nature Portfolio reporting standards](https://www.nature.com/nature/editorial-policies/reporting-standards).
+
+## 6. Gói tái lập theo phiên bản — issue #77, 31/10/2026
+
+Trước execution, `PLAN_FROZEN.payload.reproduction_snapshot` lưu tham chiếu artifact riêng của input CSV và mã routine dự án, kèm SHA-256, kích thước và môi trường CPython. Mã routine được kiểm lại trước/sau execution. `EXECUTION_RESULT` giữ tham chiếu bản kết quả đầy đủ, gồm raw metrics và dữ liệu biểu đồ. Không suy ngược source code hoặc input của run cũ từ phiên bản code/dataset hiện tại.
+
+| API | Hành vi |
+|---|---|
+| `GET /research/{task_id}/report/versions/{version}/experiment-bundle/availability` | Theo owner/version; báo có snapshot tính toán phù hợp hay lý do chưa thể xuất |
+| `GET /research/{task_id}/report/versions/{version}/experiment-bundle` | ZIP riêng tư, `no-store`; kiểm identity/task, manifest, metrics, file hash/kích thước và journal tại thời điểm version được tạo |
+
+Gói gồm `input.csv`, `routine.py`, `reproduce.py`, config/environment, expected result có raw metrics, metrics/chart data, SVG predicted-vs-actual/residuals, journal, manuscript, README và inventory SHA-256. Biểu đồ biểu diễn tối đa 50 quan sát held-out đã lưu, không suy ra toàn bộ tập dữ liệu. Đường dẫn ZIP do server cố định; không chứa credentials hoặc đường dẫn file trên máy chủ. Gói có dữ liệu người dùng nên UI ghi rõ trước khi tải.
+
+Giải nén vào thư mục riêng và chạy `python reproduce.py` bằng đúng phiên bản CPython đã ghi. Launcher chỉ cần thư viện chuẩn, kiểm inventory trước khi nạp routine, chạy cấu hình đã đóng băng và so **kết quả vừa chạy** với raw metrics trong tolerance abs `1e-8`/rel `1e-6`, manifest, outcome và chart data. Ghi kết quả mới vào `reproduced/`, giữ file gốc; exit 0 = đạt, 1 = khác kết quả, 2 = lỗi integrity/environment/execution. Hash không phải chữ ký xác thực một archive bị kẻ khác sửa cả manifest; chỉ chạy gói tin cậy. Đây không phải sandbox cho code LLM.
+
+Run thất bại hoặc version lịch sử thiếu snapshot trả 409 có lý do; không tạo Results hay giả metadata còn thiếu. `NO_IMPROVEMENT` và trạng thái kiểm tái lập không đạt vẫn được giữ khi run đã thực thi hoàn chỉnh. Journal xuất chỉ gồm entry của run được version tham chiếu, có timestamp không muộn hơn thời điểm tạo version; các run/correction mới hơn không bị trộn vào. Trạng thái PASSED nội bộ hoặc replay thành công không chứng minh replication khoa học, tính đúng của mọi lập luận hay mức sẵn sàng production.

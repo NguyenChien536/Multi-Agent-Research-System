@@ -1,113 +1,224 @@
-# Kế hoạch triển khai đã chốt — ATI
+# Kế hoạch triển khai đến production — Synthia
 
-**Cập nhật:** 09/10/2026 · **Hạn:** 10/11/2026 · **Baseline source:** `ebb525a`.<br>
-Phạm vi theo [SRS v4.1](../requirements/SRS.md) và [User Journey](user-journey-and-outputs.md); lý do và findings ở [Product Assessment](product-assessment.md). Đây là backlog đề xuất, **chưa phải các GitHub issues đã tạo**.
+**Chốt kế hoạch:** 23/10/2026 · **Cập nhật:** 02/11/2026, code đã kiểm e457f17 / PR #82; pilot P7 issue #83 · **Mốc bàn giao cuối kỳ mới:** 05/11/2026; chốt bản nộp trước hết 04/11.
 
-## 1. Quy tắc thực hiện
+Đây là nguồn duy nhất về **việc cần làm, thứ tự và điều kiện phát hành**. [Roadmap](roadmap-and-progress.md) ghi việc đã làm; [biên bản](baseline-verification.md) ghi bằng chứng. P0–P7/G0–G7 giữ ý nghĩa trong [SRS](../requirements/SRS.md); P8–P10 bổ sung đường đến production. Lịch này thay lịch 12/10 đã lỗi thời.
 
-- Giả định để lập lịch (chưa đo năng lực): Chiến có 3–4 giờ tập trung/ngày, khoảng 90–115 giờ thực tế còn lại sau các nghĩa vụ khác. P0–P7 hiện ước lượng **104–140 giờ** khi tính thêm journal append-only và rerun; nếu chỉ có 90 giờ khả dụng, thiếu khoảng 14–50 giờ, còn 115 giờ vẫn không đủ ở kịch bản 140 giờ. Đây là rủi ro tiến độ cao, không phải cam kết đã đủ nguồn lực. Cần đo lại sau G0/G1 và dành thêm thời gian tập trung hoặc báo giới hạn scope theo gate thực tế; không thêm feature ngoài scope.
-- Mỗi gói là một lát cắt có thể kiểm tra; cần chia nhỏ PR nếu vượt khoảng 2 ngày làm việc. Giữ một feature branch/PR đang triển khai cho Chiến.
-- Cùng thư mục làm việc; không cần tạo thêm checkout. Ví dụ branch `codex/p1-auth-task-lifecycle`; base là nhánh tích hợp đã chứa prerequisite và được chọn rõ trước khi bắt đầu. Không mặc định có `develop` hoặc merge trực tiếp `main`.
-- Chu trình: đọc issue/contract → plan ngắn → code → checks phù hợp → review diff → sửa findings → lưu evidence → merge qua PR. Codex/Antigravity đọc cùng SRS, ADR và file này; tool/model có thể thay mà contract không đổi.
-- Done cần source + checks + runtime evidence phù hợp; tài liệu ghi planned/implemented/verified tách biệt. Stub-provider test không thay run provider thật cuối cùng.
-- Mỗi issue/PR ghi FR/NFR liên quan và gate G0–G7 theo [SRS §8–9](../requirements/SRS.md#8-acceptance-gates). Gói P0–P7 là thứ tự triển khai, khác với mức ưu tiên lỗi P0/P1 trong Product Assessment.
+**Cập nhật 02/11 — bộ chạy P7 / #81:** dùng đúng production graph cho B/C, một controller cho A, cùng corpus/model/cap; database đánh giá riêng, không có live source/embedding, ledger tổng không reset qua retry. Code e457f17 đạt 485 backend tests, 20 frontend tests, 60 ca focused evaluation và 5/5 CI; CLI plan chạy thật trong Docker với 0 provider calls. Chưa chạy pilot trả phí hoặc có kết quả khoa học; issue #83 tiếp tục chốt profile/ngân sách, freeze code/corpus, chạy pilot rồi chấm và held-out. Chi tiết tại Evaluation Plan §8; không tự đóng G7 hoặc đưa lên main.
 
-## 2. Dependency và lịch
+**Hạn cuối kỳ mới — người dùng chốt 02/11:** hoàn tất bản nộp trước hết ngày **04/11/2026**, dành **05/11** cho diễn tập và dự phòng (mốc T+3). Đây là bàn giao kết thúc môn học; lịch 10/11 phía dưới là lịch sử. Nghiệm thu đầy đủ ba nhóm nghiên cứu đã công bố, không lấy một bài ghép cặp làm đại diện mọi loại bài. P8–P10 là đường production sau bản nộp, không thay thế việc hoàn tất phạm vi đồ án.
 
-`P0 → P1 → P2 → P3 → P4 → P5 → P6 → P7`. Monitoring tối thiểu bắt đầu ở P1, citation/loops làm ở P2; không chờ tới cuối mới kiểm chất lượng.
+| Ngày | Công việc ưu tiên | Bằng chứng cần có |
+|---|---|---|
+| 02/11 | Chất lượng viết theo thể loại (#84), xử lý lỗi Critic đọc hierarchy; tích hợp và rà soát FE/API trên candidate; bổ sung nguồn/bằng chứng còn thiếu | CI, một bài REVIEW thật được đọc/chấm, lỗi trọng yếu được ghi và sửa |
+| 03/11 | Luồng tính toán có CSV/metrics/baseline/charts/journal/rerun; human-led chờ/nạp dữ liệu/resume; nhiều bài độc lập; pilot A/B/C trong ngân sách đã chốt | Output thật của từng luồng, trace và kết quả đánh giá; không dùng fixture như nghiên cứu |
+| 04/11 | Sửa blockers, regression/UI/restart cần thiết, đóng candidate cùng revision FE/API/worker; hoàn tất báo cáo/kịch bản/gói nộp | Chạy trọn kịch bản và CI đạt trước main; công khai phần chưa đạt thay vì gắn nhãn hoàn thành |
+| 05/11 | Diễn tập, dự phòng sự cố và bàn giao cuối kỳ | Bản đã kiểm, dữ liệu/output đã tạo thật và bằng chứng có thể kiểm lại |
 
-| Gói | Mốc mục tiêu | Giờ Chiến | Đầu ra | Gate |
-|---|---|---:|---|---|
-| P0 · baseline tái lập | 08–10/10 | 4–6 | Runtime/dependency thống nhất, DB sạch, test isolation | G0: dựng lại được, tests không gọi dịch vụ thật |
-| P1 · auth và lifecycle | 11–14/10 | 12–16 | Owner, nhiều task/user, ResearchRun, start/cancel/idempotency, outbox, events, quota RUNNING | G1: task A chờ không chặn B; không truy cập chéo/dispatch lặp |
-| P2 · research E2E có evidence | 15–19/10 | 16–20 | Web → persisted evidence → draft/critic → citations, budget | G2: một review chạy thật trong cap |
-| P3 · PDF và workspace UI | 20–23/10 | 11–14 | Upload/ingest, danh sách nhiều bài, evidence explorer, stage/event timeline | G3: web + PDF chung task, UI thấy trạng thái/việc cần làm |
-| P4 · plan/protocol/resume | 24–26/10 | 14–18 | Assisted/automatic, PostgreSQL checkpoint, protocol trung gian, durable waits | G4: A chờ vẫn chạy B, restart/resume đúng |
-| P5 · experiment và bài empirical | 27–30/10 | 24–34 | Routine CSV, metrics/charts, journal mọi attempt, rerun, kết quả human-led có provenance, empirical manuscript | G5: Results thật; cùng input/config tính toán tái lập được |
-| P6 · Q&A/revision và hoàn thiện | 31/10–02/11 | 9–12 | Hỏi đáp có nguồn, report versions, authorized export | G6: sửa giữ bản cũ, không dùng result lỗi thời |
-| P7 · evaluation và bản nộp | 03–07/11 | 14–20 | Baseline/ablation, QA, sửa blockers, evaluation report | G7: evidence đủ, failures/limits công khai |
-| Buffer / freeze | 08–10/11 | Ngoài ước lượng trên | Dry run, backup demo, đồng bộ báo cáo/AI disclosure | Không thêm feature |
+**#84 / PR #85 — code c72e936 đã qua kiểm:** contract v4 có đề cương phân cấp theo loại bài, kiểm mục nhỏ có nội dung và giữ ngữ cảnh mục cha khi Critic review; bổ sung chẩn đoán context/token và tách chúng khỏi quota tài khoản. 118 focused tests đạt; toàn bộ backend 513, frontend 20 và 5/5 CI đạt trên code c72e936. Các lần chạy dùng fixture không phải kết quả nghiên cứu. Đây là cải thiện cơ chế viết/kiểm, chưa phải bằng chứng chất lượng học thuật đã đạt trên mọi đề tài. Issue #86 tiếp tục bộ chọn nguồn và evidence coverage; #83 đo/chấm pilot thật trong cap đã chốt.
 
-## 3. Nội dung từng gói
+## 1. Định hướng đã chốt
 
-### P0 — Baseline và môi trường
+**Giữ hướng Multi-Agent Research Orchestrator.** Hệ thống nhận câu hỏi/nguồn riêng, lập kế hoạch, tìm bằng chứng, chọn phương pháp, phân tích khi phù hợp, phản biện và tạo **bản thảo bài báo hoàn chỉnh theo loại nghiên cứu**. Người nghiên cứu chịu trách nhiệm kiểm tra trước khi sử dụng/công bố; bản thảo đủ cấu trúc không đồng nghĩa đã được bình duyệt.
 
-- Chốt Python 3.11 cho backend/local dev để khớp Docker hiện có; root scaffold 3.14 phải đồng bộ hoặc ghi rõ không phải entrypoint backend.
-- Khóa bộ backend dependencies tương thích (LangGraph/checkpointer/provider integrations/SQLAlchemy); không nâng hàng loạt chỉ để dùng API mới trên docs.
-- DB test riêng: empty DB → Alembic head `a1b2c3d4e5f6`; kiểm migration/data backfill. Không xóa volume dev để giả lập DB sạch.
-- Tách API test hiện có khỏi broker/real providers; dùng fake dispatch/provider trong tests. Ghi hiện trạng frontend build và các lỗi thực tế.
-- Artifact nghiệm thu: command, exit status, revision và log đã redacted; thêm entry có ngày vào baseline verification.
+| Luồng | Người dùng làm gì? | Đầu ra | Điều kiện hoàn thành |
+|---|---|---|---|
+| REVIEW | Đưa câu hỏi, có thể thêm PDF, duyệt kế hoạch nếu muốn | Bản thảo tổng quan, nguồn/bằng chứng, gợi ý research gap và giới hạn | Claim truy được nguồn, phản biện toàn bài; không tự gọi là systematic review/PRISMA nếu chưa đủ quy trình |
+| EMPIRICAL_COMPUTATIONAL | Thêm CSV phù hợp routine, xác nhận phương pháp | Methods/Results từ số liệu thật, bảng/biểu đồ, journal và gói chạy lại | Routine chạy trong runner riêng; không dựng Results khi chạy thất bại |
+| EMPIRICAL_HUMAN | Nhận protocol, thực hiện bên ngoài, tải kết quả lên | Protocol lúc chờ; bài thực nghiệm khi đủ dữ liệu và provenance | Không biến mô tả do người dùng nhập thành kết quả đã được hệ thống xác minh |
+| Nhiều bài và chỉnh sửa | Mở A/B/C/D…, chuyển bài, hỏi và sửa | Workspace và lịch sử riêng cho từng bài | WAITING không giữ worker; tối đa 2 RUNNING/user; quota lưu trữ/hàng đợi riêng |
 
-### P1 — Auth, run và dispatch reliability
+REVIEW dùng **Supervisor, Researcher, Evidence Analyst, Writer, Critic**. Methodologist/Data Analyst chỉ tham gia khi cần. Parser, validator, exporter và runner là module code. Giá trị đa tác tử cần đo qua phân công, evidence dùng chung và vòng phản biện có giới hạn; không lấy số agent làm thước đo chất lượng.
 
-- Login/token hoặc session, dependency current_user, owner-scoped query cho mọi route; registration chỉ là bước tạo tài khoản.
-- ResearchRun, status/stage và transition table; compare-and-set start, một active run/task, nhiều task/user, idempotency key. Task POST vẫn tạo tài nguyên 201; start/resume được nhận vào queue trả 202. Dispatcher/worker enforce tối đa 2 RUNNING/user bằng DB admission/lease atomically; QUEUED đợi bền vững, WAITING_* không chiếm suất. Cấu hình source hiện tên `MAX_CONCURRENT_TASKS_PER_USER=2` nhưng chưa enforce; khi triển khai đổi tên/ý nghĩa rõ thành giới hạn **RUNNING jobs**, không giới hạn số workspace chờ.
-- Transactional outbox cùng task/run; dispatcher nền trong API lifespan claim/retry, worker claim/lease; không dựa riêng Celery task ID/acks_late. Cancellation kiểm trước mỗi stage/tool, stale worker không ghi terminal đè run mới.
-- TaskEvent/AgentRun từ đầu; JSON logs, task/run/step ID; UI polling snapshot trước, SSE khi contract ổn.
-- Gate: user A/B isolation; task A WAITING_USER_DATA vẫn tạo/chạy task B; cả hai suất bận thì resume A QUEUED và chạy sau; double start; broker unavailable; worker redelivery; cancel; no silent queue loss.
+**Không mở scope trước khi khép gate hiện tại:** không code tùy ý do AI sinh, GPU training, OCR, nhóm cộng tác hoặc marketplace. #63 bổ sung hình phương pháp, biểu đồ từ kết quả đã chạy và ZIP nguồn LaTeX IEEE/ACM; chưa mở dịch vụ biên dịch PDF tự động. Ảnh tìm từ web để sau, cần attribution và cho người dùng bỏ. Không thay thực nghiệm thật bằng mock để báo hoàn thành.
 
-### P2 — Một luồng research thực sự có căn cứ
+**Bài báo theo loại nghiên cứu (#61/#63):** bản mới dùng khung có Related Work; Introduction nêu câu hỏi, gap có nguồn và đóng góp đúng phạm vi. Writer/Critic/PostProcessor cùng kiểm cấu trúc, văn xuôi, giải thích hình, baseline/số liệu và các kết luận vượt bằng chứng. Bản tổng quan không bị ép có Results thực nghiệm; dữ liệu người dùng không bị coi là hệ thống đã tự xác minh. Mẫu IEEE/ACM xử lý bố cục; không thay việc đánh giá khoa học. Chi tiết quy cách và API xuất bản tại [Agent Workflow, mục 7](../technical/agent-workflow.md#7-quy-cách-bản-thảo--cập-nhật-29102026-61-63).
 
-- Provider gateway + budget reserve/reconcile cho search/LLM/embedding/retries/fallbacks. Model/price/profile cấu hình, không tự đổi provider ngoài data policy.
-- Safe fetch có connection-level address policy và size/type/time limits; retry hữu hạn, không nuốt lỗi thành “không có nguồn” rồi báo thành công.
-- Immutable delta_sources, canonical URL/hash dedup; pin embedding profile, lưu chunk/source/task IDs và locators.
-- Analyst structured output chọn chunk IDs trong retrieved set, quote xác minh với text; persist Evidence/Claim/ClaimEvidence. Writer dùng evidence bundle và references xác định; không tự bịa citation.
-- Tạo nền ResearchReport version/ReportClaim từ P2 cho REVIEW v1; P6 mới mở thao tác revision/Q&A. Lưu plan schema/version cơ bản từ P2, P4 bổ sung approval/checkpoint; tránh tạo report hoặc plan tạm không thể migration sang contract đã chốt.
-- Critic đọc toàn bài theo section + evidence/method/results. Typed verdict PASS/REVISE/NEED_EVIDENCE/NEED_METHOD_REVIEW; targeted queries; 3 research rounds, 2 revisions; no-delta stop; deterministic citation gate.
-- Gate: no-source/contradiction/budget/invalid-citation tests; report không hợp lệ không COMPLETED; một provider-backed run nhỏ trong cap sau khi guard hoạt động.
+**Cập nhật 31/10 — cuối P6, chuẩn bị P7:** PR #66/#68/#70/#72/#74/#76 đã merge develop; nền `f252223` có 413 backend tests và 5/5 CI đạt. Nguồn học thuật/nhật ký tìm kiếm và kiểm bằng chứng đã được bổ sung; vẫn cần đánh giá REVIEW thật sau sửa. Issue #77 bổ sung gói tái lập theo report version: đóng băng CSV/code/environment trước chạy, giữ raw results/journal, kiểm hash và chạy lại độc lập. Sau nghiệm thu gói này, ưu tiên evaluation P7, browser/runtime ba luồng và fault/restart/concurrency; chưa mở P8–P10 hoặc coi G0–G7 đã khép.
 
-### P3 — Nguồn riêng và giao diện quan sát
+**Cập nhật 02/11 — nền P7:** #77 đã merge qua PR #78; 425 backend tests, 20 frontend tests, 5/5 CI đạt và gói thực nghiệm chạy lại độc lập được kiểm. Issue #79 triển khai CLI freeze/record/blind/score/summarize; giữ attempt đầu và reruns, lỗi/thiếu/chưa chấm, chênh lệch âm và tách pilot/held-out. Đây là nền quản lý bằng chứng đánh giá, chưa có runner A/B/C trên corpus thật hoặc kết quả benchmark. Tiếp theo: hoàn thiện adapter production-aligned và corpus/câu hỏi thật → pilot → held-out/chấm → kiểm browser/runtime/fault còn thiếu. Chi tiết và giới hạn tại Evaluation Plan §7; G7/P8–P10 chưa đóng.
 
-- ArtifactStore private local volume; upload status, metadata/checksum, PDF text parser có limits. Không OCR; lỗi hướng dẫn người dùng rõ.
-- File/ingestion job gắn owner/task và tombstone check từ đầu; thống kê mọi storage key/index/checkpoint cần cleanup để P6 triển khai xóa đầy đủ.
-- Ingestion độc lập/idempotent; source READY mới được retrieve; embedding nhất quán web/PDF. Tắt cache private nếu chưa enforce scope/retention.
-- UI login/create/list/detail; mỗi bài có status/stage/next_action/updated_at, role/round/budget, timeline, evidence/source passages, report và warnings. Owner-only API fetch, sanitize Markdown.
-- Gate: PDF hợp lệ/quá lớn/malformed/không text; foreign artifact denied; reconnect polling đúng trạng thái, không fake phần trăm tiến độ.
+## 2. Kiến trúc và công nghệ
 
-### P4 — Plan, protocol, pause/resume
+Giữ **modular monolith**: backend chia module nghiệp vụ; API và worker là các tiến trình triển khai riêng. Chưa tách mỗi agent thành microservice. [System Design](../architecture/system-design.md) là thiết kế mục tiêu, không phải danh sách chức năng đã nghiệm thu.
 
-- Plan versions, policy-assisted/automatic và audit decision. Methodologist chỉ chạy khi protocol/experiment cần; review path bỏ qua roles đó.
-- PostgreSQL checkpointer/thread ID, interrupt trả về worker như WAITING, không coi thiếu report là exception. Side effects trước interrupt phải idempotent.
-- Human-led protocol/biểu mẫu qua Writer/Critic/Validator; artifact có trước khi chờ, task không COMPLETED trong lúc WAITING_USER_DATA. Form thu kết quả có tối thiểu phương pháp, cỡ mẫu/đơn vị, thời điểm, nguồn file và mô tả phân tích để Writer không tự suy đoán.
-- Resume chỉ sau owner/state/checkpoint/plan version đúng và data READY; unsupported input trả lỗi hoặc tiếp tục chờ. Không tự dựng “user supplied summary” khi chưa có file kết quả.
-- Gate: restart worker/API; duplicate approval/upload/resume; stale plan decision; wait không giữ worker/slot RUNNING và không đếm active-time; B hoàn thành trong lúc A chờ.
+| Thành phần / pattern | Quyết định | Điều kiện cần khép |
+|---|---|---|
+| Next.js + FastAPI | UI gọi API có xác thực; polling là nền, SSE chỉ thêm khi có replay/reconnect | Browser E2E login/create/upload/wait/resume/report; session hết hạn rõ ràng |
+| LangGraph + state machine | Roles có input/output schema; Postgres checkpointer theo workflow run, interrupt cho approval/data wait | Resume đúng node/version; còn cần fault test worker process restart và kiểm tra side effect idempotent khi redelivery |
+| PostgreSQL + pgvector | Nguồn chuẩn cho owner, run, versions, evidence, journal và outbox | Migration dữ liệu cũ, constraints/index; pin embedding profile, không trộn vector khác model |
+| Transactional outbox + Celery/Redis | Ghi yêu cầu chạy cùng transaction DB, retry hữu hạn, claim có lease | ACK/redelivery cấu hình rõ; delivery có thể lặp nên ghi output phải idempotent; thử crash thật |
+| Provider gateway | Một đường gọi LLM/search/embedding có quota, timeout, retry, usage ledger | Reserve trước từng call/retry/fallback; server áp cap, không chỉ cộng tiền sau call |
+| Ports/adapters | Bao provider, ArtifactStore và runner bằng interface | Fake dùng cho test; không trả fake output khi provider thật hỏng |
+| Isolated runner | Routine ID/config/artifact IDs được cho phép; job riêng | API/worker không có Docker socket; không nhận shell/code LLM; tính toán không chặn Celery workflow |
+| Private artifact storage | Local volume dev; S3-compatible private bucket khi triển khai | Owner-only download/URL ký ngắn hạn, checksum, cleanup, backup cùng metadata |
+| Observability | JSON log theo request/task/run/step; metrics/cảnh báo độc lập UI | Không log secrets/nội dung riêng; queue age, lease, errors, cost, runner, cleanup |
+| Theo dõi nghiên cứu cho người dùng | Trang tổng quan nhiều bài và trang tiến độ từng bài; đọc task/run, AgentRun, số liệu và output đã lưu | Đúng owner, trạng thái chờ/lỗi/phục hồi rõ ràng; không đoán %/ETA hoặc coi bước trước đã xong chỉ vì đã chuyển bước |
 
-### P5 — Experiment hẹp chạy thật
+Restricted container là lựa chọn cho **routine tin cậy**. Nếu mở code tùy ý sau này phải có ADR về sandbox, network policy, đánh giá bảo mật/chi phí; không coi Docker đơn thuần là bảo đảm an toàn cho mã thù địch.
 
-- Routine `tabular_regression_v1`: numeric CSV, profile dữ liệu, mean baseline vs Ridge(alpha=1), split/seed định trước; preprocessing fit train-only.
-- Experiment spec ghi câu hỏi, giả thuyết khi có, dataset, columns, metric, split/seed, limits. Không thay hypothesis/metric sau khi thấy test để săn kết quả tốt.
-- Trusted host launcher chạy Docker job container riêng theo manifest; API/worker không có Docker socket. Routine/code/image pin, network off, non-root, caps/resource/output limits.
-- Lưu AnalysisRun/input/output hash/exit code/log redacted; metrics JSON/CSV, plots PNG, manifest, config, routine source/launcher và README tái lập. Validate schema/finite numbers/artifact paths trước Writer.
-- `ExperimentJournalEntry` append-only: plan đóng băng trước chạy, attempt/result/error, quan sát, diễn giải và correction; phân biệt kết quả âm hợp lệ với technical failure. Rerun cùng manifest trong runner mới, lưu metrics/sai khác và trạng thái kiểm tái lập. UI có timeline khoa học riêng với progress; export kèm journal. Chi tiết [Experiment Journal](../technical/experiment-journal-and-reproducibility.md).
-- Data Analyst diễn giải actual output; Writer viết Methods/Results có provenance, phân biệt exploratory/predictive và không tuyên bố causal.
-- Human-led result intake: form metadata + file kết quả thật; CSV hợp routine thì phân tích lại, ngoài routine thì gắn nhãn user-supplied/chưa tái lập và kiểm tính nhất quán trong khả năng. Thiếu metadata bắt buộc tiếp tục WAITING_USER_DATA/NEEDS_REVIEW; không tạo empirical paper hoàn chỉnh từ protocol.
-- Gate: empty/invalid CSV, target leakage, timeout/OOM, forged artifact, repeatability với hai executions, journal không mất attempt, ca `NO_IMPROVEMENT` vẫn báo Results; human-led data thiếu/thật và provenance; cả hai đường empirical có bài báo đủ phần khi điều kiện đạt. Routine thất bại không tạo Results.
+Nguồn kỹ thuật: [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence), [Celery acknowledgement và idempotency](https://docs.celeryq.dev/en/stable/userguide/tasks.html). Dùng thư viện chưa đủ; phải kiểm hành vi thực tế.
 
-### P6 — Hỏi đáp, sửa và xuất
+## 3. Backlog audit phải xử lý trước
 
-- Q&A đọc report version/evidence, không kích hoạt research lại ngầm; câu hỏi ngoài nguồn phải nói thiếu căn cứ.
-- Mỗi Q&A có operation ID/cap riêng trong quota task, dùng provider gateway; không reset budget research run đã đóng. Kiểm câu hỏi lặp/rate limit, thiếu budget và không đọc report của owner khác.
-- Revision dùng base_report_version và unique request; lưu version mới; đổi data/method tạo plan/run mới, không tái sử dụng kết quả của input cũ.
-- Authenticated event stream/reconnect theo DB event IDs nếu triển khai SSE; polling vẫn là nghiệm thu tối thiểu.
-- Export Markdown và experiment package qua API; protocol **trung gian**/report đều kiểm lineage trước phát hành, UI phân biệt trạng thái. PDF polished/image enrichment để sau.
-- Xóa task: tombstone chặn read/resume/late writes ngay, cancel tại safe boundary; cleanup có retry trong 24 giờ, backup retention tối đa 7 ngày theo SRS. Gate gồm xóa task đang chạy/chờ, duplicate cleanup và file không bị tạo lại bởi worker cũ.
+Các bản ghi 22–26/10 dưới đây là **lịch sử audit và ước lượng**, không phải danh sách việc còn thiếu hiện tại. Nền PR #64 có 328 backend tests; lượt #65 cùng hồi quy trích dẫn #67 có 343 backend tests và 17 frontend tests đạt cục bộ. Tiến độ gọn, bằng chứng provider thật và việc tiếp theo được tổng hợp tại [Roadmap](roadmap-and-progress.md). G1–G7 vẫn chưa nghiệm thu đầy đủ, hệ thống chưa production-ready. R1–R8 là mã đầu việc, không phải số GitHub issue.
 
-### P7 — Đánh giá và bàn giao
+| Thứ tự | Vấn đề thực tế | Cách sửa đã chọn | Nghiệm thu |
+|---|---|---|---|
+| R1 | FE bỏ token ở /auth/me; data/resume có UUID lỗi JSON, thiếu file/provenance vẫn QUEUED | Chỉ bỏ token với login/register; serialize JSON đúng; artifact phải READY, đúng owner/task/type; intake có provenance | Token, UUID, file thiếu/sai owner, duplicate resume; G1/G4 |
+| R2 | Budget chưa chặn trước call; cancel chưa chặn graph gọi tool tiếp | Gateway + ledger reserve/reconcile; kiểm cancel/lease trước stage/call/side effect | Hết cap không có call tiếp; tính retry/fallback/embedding; không output muộn. Không hứa thu hồi call provider đã nhận; G1/G2 |
+| R3 | Resume dựng lại graph từ đầu; thiếu checkpoint/run/plan version bền vững | WorkflowRun, Postgres checkpointer, interrupt, decision ID/version và migration | Đã merge PR #44; suite test resume approval/data và stale version. Còn cần fault test kill/restart worker và kiểm tra cạnh tranh nhiều worker; G1/G4 chưa khép |
+| R4 | Routine trong worker; PLAN_FROZEN dựng sau tính toán; rerun cùng process | Runner riêng; persist plan/start trước dispatch; ghi từng attempt; rerun execution độc lập | Kill/timeout vẫn giữ journal; kết quả âm được giữ; so manifest/checksum/tolerance; G5 |
+| R5 | Critic chỉ đọc 3.000 ký tự đầu; protocol chưa đủ review gate | Review từng section với evidence/method/results; tổng hợp verdict; no-delta stop, citation repair dùng chung cap | Lỗi cuối bài bị phát hiện; nguồn bất đồng/thiếu evidence, protocol chưa đạt không phát hành như đã duyệt; G2/G4/G5 |
+| R6 | PDF parse/embed ngay trong HTTP request; hard-delete rồi cleanup có thể bỏ qua lỗi | Ingest job riêng, READY gating; tombstone và cleanup retry | Timeout, upload trùng, xóa khi ingest/run, file mồ côi; G3/G6 |
+| R7 | Một report/task; Q&A/report versions chưa đầy đủ | ReportVersion/base version, Q&A theo evidence của version; thay data/method tạo run mới | Giữ bản cũ, không dùng result lỗi thời; export đúng owner/version; G6 |
+| R8 | Release image dùng dependency không khóa; Compose dev; chưa có deploy/restore gate | Release lockfile đã test, image bất biến; staging → production; readiness, backup/rollback | P8–P10 và checklist phát hành |
 
-- Chạy [Evaluation Plan](evaluation-plan.md), chỉ công bố số thực đo. Chạy provider tốn phí phải nằm trong cap riêng đã cấu hình cho đợt evaluation.
-- Chiến chuẩn bị bộ câu hỏi/nguồn đóng băng, chấm rubric ẩn nhãn cấu hình, chạy kịch bản sử dụng và lưu bất đồng/giới hạn đánh giá một người; sửa blockers và xác nhận runtime. Nếu có người đánh giá độc lập sau này, ghi rõ đóng góp thực tế lúc đó.
-- Cập nhật midterm/final progress, limitations, acceptance matrix; AI disclosure theo đóng góp thực tế, không điền tỷ lệ tùy ý.
+**Cập nhật 23/10 — R1 / issue #39:** đã sửa client auth/me và intake file; local có 98 backend tests và 5 frontend tests đạt. File thực địa hiện hỗ trợ CSV/TXT UTF-8 ≤5 MiB, có provenance và chỉ nhận artifact cùng task đã lưu/kiểm nội dung thành công. Chưa có trạng thái READY riêng trong schema; kiểm file tồn tại/đúng loại/kích thước/nội dung tại resume là điều kiện sẵn sàng hiện tại. PR #40 đã đạt 5/5 CI và merge develop tại baac5ba ngày 23/10; chưa đóng toàn bộ G1/G4 hoặc xác nhận browser E2E. Bảng R1 phía trên lưu vấn đề và nghiệm thu của đầu việc.
 
-## 4. Điều kiện dừng mở scope
+**Cập nhật 24/10 — R2 / issue #41:** giới hạn API theo SRS, đặt chỗ và đối chiếu ngân sách trong JSON task bền vững, tính từng lần thử LLM/fallback/embedding và mỗi truy vấn search, kiểm tra trạng thái/attempt/lease trước request, dừng khi hủy hoặc hết thời gian. Backend suite đạt **109 tests trên PostgreSQL/pgvector tạm**; Docker backend build và OpenAPI đạt. PR #42 đạt 5/5 CI và đã squash-merge vào `develop` tại `eacdb2b`. Không có provider thật trong lần kiểm này. Search mặc định tính 0.01 USD/request để ước lượng; phải đối chiếu với gói Tavily đang dùng trước pilot, nên đây chưa phải bảo đảm hóa đơn chính xác. PDF upload chỉ chia/lưu chunks cục bộ; embedding được tạo trong workflow có ngân sách.
 
-Nếu G2 chưa đạt 19/10, cắt PDF đẹp/ảnh/SSE nâng cao và UI trang trí. Nếu G4/G5 trễ hơn 2 ngày, thu nhỏ dataset/template và dành thời gian cho lỗi nền; báo rõ các cam kết chưa đạt. Không bỏ ownership, citation lineage, budget, kết quả thật hoặc evaluation để thay bằng demo đẹp.
+**Cập nhật 24/10 — R3 / issue #43:** thêm `workflow_runs`, PostgreSQL LangGraph checkpointer, interrupt/resume cho duyệt kế hoạch và nạp kết quả, `plan_version` cùng quyết định có version. Worker đóng checkpointer sau mỗi lần chạy; test resume khôi phục state qua một graph/checkpointer mới. Backend suite đạt **109 tests** trên DB PostgreSQL/pgvector tạm; backend/frontend/Compose build đạt; PR #44 đạt **5/5 CI** và merge vào `develop` tại `b2e39b7`. Chưa chạy provider thật, kill worker giữa execution hoặc thử nhiều worker đồng thời; G1/G4 chưa khép.
 
-## 5. Bước bắt đầu ngay
+**Cập nhật 26/10:** R5 review toàn bài đã merge PR #47; sửa empirical integrity/runner/journal PR #48; ingestion nền PR #51; tombstone/cleanup PR #52; nền report versions PR #54. Issue #53 đã đóng; backend suite gần nhất **120 tests**, PR #54 CI **5/5**. Đây là bằng chứng kiểm thử với provider giả, chưa đóng các gate provider thật/browser/fault/release. Ưu tiên mới: **issue #56 — theo dõi tiến độ nghiên cứu**, sau đó **#55 — hỏi đáp theo phiên bản**, rồi sửa bài có base version và export đúng phiên bản. Các mục kế tiếp không đồng nghĩa đã hoàn tất R7.
 
-Thực hiện **P0 trước**: baseline tái lập + DB sạch/test isolation, sau đó P1. Không tạo agent mới trước khi G1/G2 đạt. Chiến ghi command/evidence log, chọn query/dataset công khai và kịch bản A-chờ/B-chạy để kiểm lifecycle.
+**Khép sai khác contract:** R2 thống nhất server/schema/UI/tests với cap SRS (40 LLM calls, 2 USD ước tính, 15 phút active/run). R4 thống nhất CSV 5 MiB/20.000 hàng/30 cột; hiện code nhận giới hạn 10 MiB/10.000 hàng/51 cột. Không nâng số hàng trước khi đo runner 120 giây; khi chưa hỗ trợ phải từ chối rõ ràng và chưa đóng G5. R6/R8 xử lý cache riêng tư theo owner/task/version hoặc tắt cache đó, bao gồm invalidation khi xóa; không chỉ xóa file gốc.
 
-## 6. Bàn giao giữa các gói
+## 4. P0–P7: phần còn lại và ước lượng
 
-Một gói chỉ được đánh dấu Verified khi có: FR/NFR + gate, commit/revision, môi trường/config không chứa secrets, lệnh hoặc bước thao tác, expected/actual, output/log đã che dữ liệu và người xác nhận. Phân biệt fake-provider checks với run provider thật.
+Không xây lại phần đã có. Các số dưới là **ước lượng trước khi R3 hoàn tất (23/10)** cho phần việc được liệt kê, gồm test/review cơ bản, chưa gồm 20% dự phòng hoặc chờ provider/hạ tầng. Đo lại tổng giờ còn lại ngày 25/10 sau khi chốt phạm vi R5/R4.
 
-Roadmap ghi Planned / In progress / Implemented / Verified / Blocked theo evidence thực tế. Khi phát hiện lỗi làm gate đã đạt không còn đúng, mở lại gate và ghi regression; không chỉ sửa ngày trên timeline. Giá trị nghiệm thu của từng gate nằm tại SRS, cách đo nằm tại Evaluation Plan; không đặt điều kiện khác trong issue/PR.
+| Chặng | Đã có code | Phần còn lại | Phụ thuộc | Giờ | Gate |
+|---|---|---|---|---:|---|
+| P0 — nền tảng | Docker, migration sạch, DB test riêng, lock dev/CI | Duy trì bằng chứng revision/config | — | 0–2 | G0 đã kiểm lại 22/10 |
+| P1 — quyền/lifecycle | Auth, owner, outbox, lease/recovery, quota RUNNING, cancel/delete | R1/R2/R3 đã merge; fault test kill/restart worker, nhiều worker và late-write | P0 | 8–12 | G1 đầy đủ |
+| P2 — REVIEW có căn cứ | Web/evidence/writer/critic/citations/AgentRun | R2 budget, R5 toàn bài/no-delta, provider smoke có cap | P1 | 12–18 | G2 với provider thật |
+| P3 — PDF/workspace | PDF/artifacts, UI nối nhiều API, polling | R6 ingestion, READY/embedding scope, browser E2E web+PDF | P1/P2 | 6–10 | G3 |
+| P4 — approval/human-led | Approval, protocol, WAITING_USER_DATA, R1 intake, R3 checkpoint/version | R5 protocol review; fault test restart/concurrency | P1; plan/evidence P2 | 12–18 | G4 qua restart |
+| P5 — thực nghiệm | Routine regression, metrics/journal, kiểm lặp | R4 runner/journal/rerun, provenance human-led, artifact integrity | P2/P4 | 16–24 | G5 |
+| P6 — hỏi/sửa/xuất | Xem report, tải artifact cơ bản | R7, export Markdown/gói thực nghiệm; R6 deletion/retention | P2/P4/P5 | 10–16 | G6 |
+| Theo dõi nghiên cứu — #56 | Task.current_step, WorkflowRun, AgentRun, ledger và journal đã được lưu | API snapshot riêng, tổng quan nhiều bài, nhật ký theo bài, cảnh báo chờ/lỗi/lease; polling có ngắt và báo dữ liệu cũ | P1–P5; độc lập Q&A | 6–10 bổ sung | Quyền owner, số liệu thật, chờ/resume, lỗi mạng và UI regression |
+| P7 — đánh giá/bản nộp | Có thiết kế evaluation | Freeze dataset/rubric, baseline/ablation, browser/runtime QA, báo cáo kết quả | Các gate tương ứng | 10–16 | G7 |
+| **Tổng (ước lượng 23/10, trước R3)** | | | | **74–116** | **Khoảng 89–140 giờ có 20% dự phòng; cần cập nhật 25/10** |
+
+### Lịch cũ đến 10/11 — tham khảo lịch sử, đã được thay bởi mốc cuối kỳ phía trên
+
+23/10 đến 10/11 cách nhau 18 ngày. Giả định 3–4 giờ/ngày cho khoảng 54–72 giờ, **chưa đủ chắc chắn cho 89–140 giờ ước lượng**. Đây là rủi ro tiến độ, không phải cam kết mọi gate sẽ kịp.
+
+| Khoảng thời gian | Ưu tiên điều phối | Điểm kiểm soát |
+|---|---|---|
+| 23–25/10 | R1/R2/R3 đã merge; khóa contract run/budget và kiểm resume | 109 backend tests; còn cần fault test restart/worker concurrency |
+| 26/10–01/11 | REVIEW/R5, provider smoke có cap, upload | Critic review cả bài; bài REVIEW qua UI; restart/resume và nhiều bài không lẫn nhau |
+| 02–05/11 | R4; protocol/data path và ingestion | Execution riêng; human-led chỉ hoàn thành khi đủ dữ liệu |
+| 06–09/11 | R7/R6 nếu dependency đạt; evaluation/sửa blockers ưu tiên | Freeze candidate và evidence trên cùng revision |
+| 10/11 | Demo/bàn giao | Không thêm feature; báo gate đạt/chưa đạt |
+
+Đo lại thời gian còn lại vào **25/10 và 01/11**. Thiếu thời gian thì giữ quality gate, dời nghiệm thu phần chưa xong và công khai trong báo cáo; không âm thầm xóa FR khỏi SRS hoặc mock thí nghiệm. Phần chưa đạt không được quảng bá/bật cho người ngoài. PDF đẹp/ảnh/OCR không nằm trên đường găng. Việc chốt plan là chốt hướng và thứ tự, không xác nhận deadline đã khả thi.
+
+### Theo dõi tiến độ và monitoring vận hành
+
+Hai lớp dùng chung task/run identity nhưng phục vụ nhu cầu khác nhau. Người dùng xem **bài đang làm đến đâu và cần làm gì**; Chiến vận hành hệ thống xem **dịch vụ có bị nghẽn, treo hay vượt tài nguyên không**. Tiến độ không hiển thị suy nghĩ nội bộ của model.
+
+| Lát cắt | Nội dung cụ thể | Thời điểm / trạng thái | Điều kiện nghiệm thu |
+|---|---|---|---|
+| M1 — Theo dõi bài nghiên cứu (#56) | `/research/monitor` liệt kê bài của owner; `/research/{id}/monitor` hiển thị bước gần nhất, agent/module, vòng lặp, hoạt động đã lưu, số nguồn/claim/version/artifact, chi phí ước tính, chờ duyệt/dữ liệu, lỗi và lease hết hạn | Triển khai trước Q&A; 6–10 giờ bổ sung | Refresh/đổi bài không mất lịch sử đã lưu; không lẫn owner; chỉ ghi thành công khi có dữ liệu; network error ghi rõ dữ liệu cũ; không tự suy phần trăm/ETA |
+| M2 — Log và metrics vận hành | JSON log với request/task/workflow-run/attempt/step; đo queue age, worker lease/recovery, failed provider calls, ingestion/runner/cleanup failure, latency và provider usage. Chuẩn hóa việc AgentRun gắn workflow_run_id trước khi lọc lịch sử theo lần chạy | Phần còn lại P1/P7/P8; 8–12 giờ dự kiến | Inject lỗi worker/provider/runner và truy ra cùng task/run; không log secrets, raw prompt hay file người dùng; counter/histogram không gắn task/user ID làm nhãn có cardinality cao |
+| M3 — Dashboard và cảnh báo | Prometheus + Grafana hoặc dịch vụ tương đương (chọn qua ADR khi staging); dashboard API/queue/worker/runner, alert backlog/lease lặp/error rate/storage/budget | P8; hiệu chỉnh ngưỡng theo đo thực tế ở P9 | Dashboard vận hành được bảo vệ quyền, không công khai; alert đến người nhận thật; có runbook xử lý và diễn tập lỗi/khôi phục |
+| M4 — Push tiến độ | SSE chỉ khi có event ID bền vững, owner scope, replay/reconnect và polling fallback | Sau M1, khi đo polling cho thấy cần; không bắt buộc bản demo | Mất kết nối/reload không mất event; không gán Pub/Sub không bền vững thành nhật ký chuẩn |
+
+M1 đọc trạng thái đã lưu ở backend và tự cập nhật định kỳ; trang tổng quan có phân trang, các số tổng hợp ghi rõ phạm vi trang. Bài WAITING không giữ worker và vẫn nằm trong danh sách để người dùng chuyển sang bài D hoặc bài khác. Nhật ký AgentRun hiện là lịch sử toàn bài; khi chưa có khóa run trên từng dòng, UI không được khẳng định đây chỉ là nhật ký của workflow run mới nhất. Chi phí là ước tính từ ledger; reservation đang chạy phải tách khỏi khoản đã đối chiếu. Output summary chỉ gồm counters/verdict được cho phép, không đưa lỗi provider thô hoặc đường dẫn storage vào monitor.
+
+Issue #55 giữ phạm vi Q&A theo report version. Issue #65 triển khai sửa văn bản có base version và serialize cấp version; đổi dữ liệu/phương pháp vẫn cần lượt research mới. Sau M1 phải đo lại lịch còn lại, không cộng các chức năng này vào cam kết deadline cũ mà không tính thời gian.
+
+**M1 đã merge:** PR #57 / `develop@c5ff300`; 132 backend tests, 11 frontend tests và 5/5 CI đạt. Đã có tổng quan nhiều bài, snapshot riêng theo owner và nhật ký có phân trang. Kiểm tra trực quan/browser E2E và dashboard vận hành M2/M3 vẫn còn; M1 không đóng toàn bộ FR-12/NFR-06.
+
+### Hỏi đáp theo phiên bản — R7 / #55
+
+Người dùng chọn phiên bản bài báo, đặt câu hỏi cụ thể và xem câu trả lời cùng đoạn nguồn được trích dẫn. Bản thảo giữ nguyên; lịch sử gắn cố định với version ID. #55 triển khai phần hỏi đáp của FR-15; #63 bổ sung publication source export và #65 bổ sung sửa cách trình bày theo base version. Đổi phương pháp/dữ liệu và gói tái lập đầy đủ vẫn cần nghiệm thu riêng trước khi khép G6. Chi tiết luồng sửa tại [Agent Workflow, mục 8](../technical/agent-workflow.md#8-chỉnh-sửa-bản-thảo-theo-phiên-bản--65).
+
+| Quyết định | Hành vi cần giữ |
+|---|---|
+| Quyền và API | GET/POST `/research/{task_id}/report/versions/{version_number}/questions`; owner-only, bỏ task DELETING, phản hồi private/no-store; lịch sử phân trang |
+| Dữ liệu dùng để trả lời | Chỉ nội dung bản thảo và citation/chunk cùng task/version đã lưu; chọn đoạn theo câu hỏi trong giới hạn 8.000 ký tự bài + tối đa 8 đoạn nguồn, mỗi đoạn 1.200 ký tự; xét tối đa 100 citation đầu. Khi chọn lọc có thể bỏ sót nội dung, UI phải hiển thị giới hạn |
+| Kiểm tra trích dẫn | Citation ID phải thuộc tập bằng chứng đã gửi; quote phải là chuỗi nguyên văn trong đoạn nguồn đó. Kiểm này xác nhận nguồn/đoạn trích, không chứng minh mọi diễn giải của LLM là đúng; người dùng vẫn đối chiếu nguồn |
+| Thiếu hoặc sai bằng chứng | Không có đoạn nguồn hợp lệ thì lưu INSUFFICIENT_EVIDENCE và không gọi provider. Model báo thiếu thì dùng thông báo cố định. Citation/quote sai thì FAILED/INVALID_REFERENCE và không phát hành phần trả lời đó |
+| Ngân sách và giới hạn | Dùng chung ledger/cap của bài, không tự tăng ngân sách sau khi chạy xong; reserve từng attempt/fallback, tối đa 2 provider attempts/câu hỏi, output 1.024 token/attempt, timeout xử lý 40 giây. 1 câu đang xử lý/user, tối đa 50 câu/bài, câu hỏi 3–2.000 ký tự |
+| Vòng đời và gửi lặp | Request UUID duy nhất theo user; gửi lại cùng câu/version trả dòng đã lưu thay vì gọi lại. Lease 75 giây; lịch sử/yêu cầu tiếp theo đánh dấu request bị gián đoạn khi lease hết hạn. Request lỗi không được hiển thị như đã trả lời thành công |
+| Không giữ khóa khi chờ AI | Lưu câu hỏi trước provider call, thả transaction; trước khi lưu output kiểm lại task/attempt/lease và tombstone. Xóa version/bài kéo theo lịch sử qua FK cascade; kết quả muộn không được tái tạo dữ liệu đã xóa |
+| Điều kiện hỏi | Tạo câu hỏi khi task COMPLETED/NEEDS_REVIEW/PARTIAL và có version; task đang chạy/chờ/hủy trả 409. Lịch sử cũ vẫn đọc theo quyền owner khi task chưa bị xóa |
+| UI | Trang `/research/{id}/questions`, chọn version, lịch sử tự cập nhật, trạng thái lỗi/thiếu nguồn/ngân sách, quote và link HTTP(S) an toàn. Không render HTML/model links tùy ý. Shared LLM prompt cache tắt cho hỏi đáp |
+
+Nghiệm thu phải có: hai owner và hai version; gửi lặp/cạnh tranh; trích dẫn nhầm version; quote bịa; thiếu nguồn; lỗi/timeout provider; hết ngân sách trước call; trạng thái task đổi hoặc bị xóa trong lúc chờ; phục hồi request gián đoạn; xóa dữ liệu; regression UI/API và CI. Provider giả kiểm hành vi phần mềm, chưa thay cho đánh giá chất lượng câu trả lời với provider thật.
+
+## 5. Từ bản nộp đến production
+
+Production là mốc sau nghiệm thu chức năng, **không đồng nhất với 10/11**. Đích đầu tiên đủ nhỏ để một người vận hành; chưa có bằng chứng tải thì chưa phân tán thêm.
+
+| Chặng | Đầu vào | Công việc | Ước lượng | Cổng kết thúc |
+|---|---|---|---:|---|
+| P8 — staging giống môi trường thật | Candidate với G0–G7 đạt | FE/API/worker release images; TLS; private DB/Redis/storage; runner riêng; secrets; backup/restore; metrics; migration/release | 20–30 giờ | GP8: fresh install, upgrade, restore DB+files, rollback app, smoke 3 luồng qua UI |
+| P9 — dùng thử giới hạn | GP8 | Invite-only khoảng 5–10 người; quota/support/deletion; load/fault tests; chi phí/chất lượng thực; quan sát ít nhất 7 ngày | 12–20 giờ công + quan sát | GP9: không lỗi nghiêm trọng quyền/data loss/kết quả giả; đạt tải đã đo, xử lý phản hồi |
+| P10 — production giới hạn | GP9; Chiến quyết định go/no-go | Chốt cost ceiling/retention/vận hành; diễn tập sự cố; release có rollback; tăng quota từng bước | 8–12 giờ công + cửa sổ release | GP10: checklist §8 đạt, kiểm sau deploy, có người nhận alert |
+
+Sau P7 còn **40–62 giờ**, khoảng 48–75 giờ có dự phòng, cộng thời gian quan sát. Chỉ đặt ngày production khi P7 đạt và biết môi trường/chi phí; không tự mua dịch vụ. Chỉ phục vụ mức tải đã kiểm, không mở công khai không giới hạn.
+
+### Hạ tầng và CI/CD cần hoàn thiện ở P8
+
+1. **Topology:** HTTPS reverse proxy → FE/API; DB/Redis mạng riêng; worker và runner tách execution; bucket private. Một VPS có thể đủ cho pilot nếu đo tài nguyên, công khai điểm lỗi đơn. DB managed tùy ngân sách; chưa cần Kubernetes.
+2. **Cấu hình/auth:** production từ chối secret mặc định, DEBUG=false, không reload/source mount; CORS allowlist, upload/request limit, auth rate limit. Chốt session production trước pilot: ưu tiên HttpOnly/Secure cookie cùng origin, CSRF protection khi dùng cookie. Nếu chưa có refresh/revoke thì session hết hạn phải dẫn đăng nhập lại rõ ràng.
+3. **Dữ liệu:** owner-scope file/cache/retrieval; pin embedding model/dimension; không log toàn prompt/nguồn riêng. Tombstone chặn ngay, cleanup ≤24 giờ, backup retention ≤7 ngày theo SRS. Restore phải áp lại deletion ledger để không phục hồi quyền đọc dữ liệu đã xóa.
+4. **CI:** full backend tests, FE lint/build + browser tests, migration DB rỗng và bản release trước, secret/dependency/container scan và licenses. Không tự nâng major để xóa cảnh báo; xử lý theo ảnh hưởng thực tế.
+5. **CD:** build bằng lockfile, ghi SHA/digest; staging nhận artifact bất biến; smoke/integration/provider có cap; promotion **cùng digest** lên production qua environment gate. Hiện Action chỉ publish backend image, chưa có chuỗi này.
+6. **Migration/rollback:** backup; expand–migrate–contract giữ tương thích bản app trước; một migration job. Rollback app về digest trước, không tự downgrade phá dữ liệu. Restore cần dừng ghi, phục hồi DB+files cùng mốc và reconcile outbox, không replay mù mọi job.
+7. **Secrets:** tách dev/staging/prod, quyền tối thiểu, rotation; không nhúng key vào image. GitHub environments tách secrets/protection theo gói tài khoản thực tế, theo [tài liệu GitHub](https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments).
+
+Upload phải kiểm type/signature/size/parser/authorization/storage nhiều lớp, theo [OWASP File Upload Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/File_Upload_Cheat_Sheet.html). Không phục vụ file riêng bằng URL công khai.
+
+### Vận hành và mục tiêu đo ở P9–P10
+
+Các số dưới là **mục tiêu ban đầu, chưa phải SLA đạt được**. Dashboard dùng metrics collector/Grafana hoặc dịch vụ tương đương; không xây một hệ thống quan sát quá lớn.
+
+| Chỉ số | Mục tiêu ban đầu | Xử lý khi không đạt |
+|---|---|---|
+| API CRUD/list/status | p95 <500 ms, server error <1%, test 30 phút với 10 phiên UI và 2 workflow; tách provider/ingestion khỏi request | Lưu cấu hình máy/data/tải; giảm quota hoặc sửa bottleneck và đo lại |
+| Job lifecycle | Không mất job/output trùng trong bộ crash/retry; WAITING không giữ slot | Alert queue age >5 phút/lease hết; phân biệt đợi quota với lỗi dispatch |
+| Availability | 99,5%/30 ngày sau khi đủ quan sát | Pilot 7 ngày không chứng minh SLA tháng; ghi outage/cách phục hồi |
+| Cost | Server cap theo SRS: ≤2 USD ước tính/run, ≤40 LLM calls/run; chốt thêm cap ngày/user/toàn deployment trước pilot | Không biết giá/usage thì chặn paid call; alert 80%, ngừng cấp ở 100%; thêm quota phía provider |
+| Runner | 1 job/runner, 2 CPU, 1 GiB, 120 giây; network off, output ≤20 MiB | Timeout/OOM giữ attempt lỗi, không tạo Results, retry hữu hạn |
+| Backup | RPO ≤24 giờ (dữ liệu tối đa có thể mất), RTO ≤4 giờ (khôi phục) | Backup hằng ngày private/encrypted; diễn tập restore riêng, ghi thời gian thực |
+| Data/quality | Không leak chéo owner, fabricated Results hoặc citation reference chưa giải quyết trong bộ nghiệm thu | Chặn release, khóa đường lỗi và giữ evidence |
+| Người vận hành | Chiến nhận alert lỗi/cost/disk/backup; runbook Redis/provider/worker/DB/storage lỗi | Có công tắc ngừng nhận job, triage và kiểm phục hồi; không retry vô hạn |
+
+## 6. Ma trận kiểm tra trước khi coi chức năng ổn
+
+| Nhóm | Ca bắt buộc | Bằng chứng |
+|---|---|---|
+| Auth/ownership | Token hết hạn, auth/me, truy cập chéo task/report/artifact/events, rate limit | API + browser, log không có token |
+| Lifecycle | Start/resume lặp, broker lỗi trước/sau publish, kill worker sau side effect, stale lease/cancel/delete | DB/broker/worker staging riêng; một active run, output đúng version |
+| Nhiều bài | A/B/C WAITING, D chạy; đủ 2 RUNNING thì E QUEUED; resume lúc hết slot | UI/API, restart không mất workspace |
+| Review/quality | No-source, mâu thuẫn, injection web/PDF, citation giả, lỗi cuối bài, no-delta, hết budget | Fake deterministic + live smoke; semantic support đo riêng FK validation |
+| Upload/intake | Quá lớn/sai type/malformed, timeout; thiếu provenance/file READY/owner; upload/resume trùng | DB/artifacts riêng, không dữ liệu nhạy cảm |
+| Experiment | CSV đúng/sai, leakage, constant target, NO_IMPROVEMENT, timeout/kill, rerun riêng | Manifest/hash/code/image/seed/metrics/diff; giữ lỗi và kết quả âm |
+| Revision/delete | Q&A đúng version; edit giữ bản cũ; đổi data không dùng Results cũ; delete khi chạy | HTTP/browser + DB/storage; cleanup không tái tạo file |
+| Release/ops | Fresh install/upgrade/rollback/restore, load, alert thực sự gửi được | Cùng digest phát hành; expected/actual/ngày và log đã che dữ liệu |
+
+Evaluation khoa học theo [Evaluation Plan](evaluation-plan.md): pilot 4 câu riêng; held-out 8 câu × 3 cấu hình cùng corpus/model/cap; đo support/coverage/integrity/cost/latency/failures. So multi-agent đầy đủ với single-agent và multi-agent **tắt macro loop nhưng giữ micro revision**. Không so mock với model thật, không suy SLA từ vài run; công khai giới hạn mẫu nhỏ/chấm một người.
+
+## 7. Quy trình thực hiện
+
+1. Chọn việc đầu tiên chưa đạt trong R1–R8/P8–P10. Issue ghi vấn đề người dùng, phạm vi, acceptance, FR/NFR/gate và ngoài phạm vi.
+2. Branch từ develop: feature/<issue>-<slug>, bugfix/<issue>-<slug>, docs/<slug> hoặc chore/<slug>; không tên người/AI/công cụ. Một nhánh code hoạt động tại một thời điểm.
+3. Triển khai lát cắt → tests → review diff → sửa → PR develop. Test DB/artifacts riêng, không dùng DB dev/production.
+4. Ghi SHA, môi trường, lệnh/thao tác, expected/actual, provider thật/giả, giới hạn; cập nhật đúng hàng Roadmap. Không tạo nhiều báo cáo trùng nhau.
+5. CI xanh là cần nhưng chưa đủ: develop → main chỉ khi full tests và demo UI/API/queue/provider thật trên cùng candidate đạt. Theo [CONTRIBUTING](../../CONTRIBUTING.md).
+
+## 8. Checklist chốt release
+
+- [ ] G0–G7 đạt trên cùng candidate; không còn R1–R7 chưa giải quyết trong chức năng công bố.
+- [ ] Không lỗi nghiêm trọng auth/data loss/chi phí/Results giả/late write.
+- [ ] Migration tương thích, release dùng lockfile, runtime/provider profile được pin.
+- [ ] GP8 staging/restore/rollback/alert và GP9 pilot đạt trước GP10.
+- [ ] Docs/UI mô tả đúng tính năng mở, giới hạn, cách xóa dữ liệu và trách nhiệm kiểm tra của người nghiên cứu.
+- [ ] Chiến quyết định go/no-go theo evidence; main/tag cùng artifact đã kiểm; health/smoke sau deploy đạt.
+
+**Chốt hướng triển khai 29/10:** giữ sản phẩm và kiến trúc; không xây lại R1–R6 đã có code. Sau lượt sửa bản thảo #65, ưu tiên gói tái lập/bàn giao còn thiếu của P6, evaluation P7 và nghiệm thu runtime/UI trên cùng candidate. Chưa đủ điều kiện chốt phát hành production; P8–P10 chỉ mở sau các gate liên quan.

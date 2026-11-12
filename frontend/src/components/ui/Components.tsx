@@ -17,11 +17,32 @@ export function Card({ className = '', children }: { className?: string, childre
   return <div className={`rounded-xl border border-zinc-200 bg-white text-zinc-950 shadow-sm ${className}`}>{children}</div>;
 }
 
-export function Badge({ className = '', children, variant = 'default' }: { className?: string, children: React.ReactNode, variant?: 'default'|'outline' }) {
-  const base = "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-zinc-950 focus:ring-offset-2";
-  const variants = {
-    default: "bg-zinc-900 text-zinc-50 hover:bg-zinc-900/80",
-    outline: "text-zinc-950 border border-zinc-200"
-  };
-  return <div className={`${base} ${variants[variant]} ${className}`}>{children}</div>;
+export function Badge({
+  className = '',
+  children,
+  variant = 'default',
+}: {
+  className?: string;
+  children: React.ReactNode;
+  variant?: 'default' | 'outline' | 'success' | 'danger' | 'purple';
+}) {
+  const dotColor =
+    variant === 'success'
+      ? 'bg-emerald-600'
+      : variant === 'danger'
+      ? 'bg-red-600'
+      : variant === 'purple'
+      ? 'bg-indigo-600'
+      : variant === 'default'
+      ? 'bg-blue-600'
+      : null;
+
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-zinc-100/90 text-zinc-800 border border-zinc-200 ${className}`}
+    >
+      {dotColor && <span className={`w-1.5 h-1.5 rounded-full ${dotColor} mr-1.5 shrink-0`} />}
+      {children}
+    </span>
+  );
 }

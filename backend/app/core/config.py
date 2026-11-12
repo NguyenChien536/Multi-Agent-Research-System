@@ -1,15 +1,16 @@
 from typing import List, Union, Optional
-from pydantic import AnyHttpUrl, field_validator
+from pydantic import AnyHttpUrl, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Multi-Agent Research System"
+    PROJECT_NAME: str = "Synthia — Multi-Agent Research System"
     VERSION: str = "2.2.0"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     MOCK_PROVIDERS: bool = False  # If True, bypass real LLM/Search API calls for tests
+    USE_SERVER_PROVIDERS: bool = False  # Allow env provider default; explicit personal connections take priority.
 
     # Security
     APP_SECRET_KEY: str = "development-secret-key-replace-in-production-32-chars-min"
@@ -33,10 +34,29 @@ class Settings(BaseSettings):
 
     # AI Model Providers & Keys
     TAVILY_API_KEY: str | None = None
+    TAVILY_SEARCH_DEPTH: str = "basic"
+    # Optional comma-separated domains for a second, narrowly scoped Tavily search.
+    # Leave empty to avoid extra API calls; OpenAlex/Crossref provide the scholarly index path.
+    TAVILY_ACADEMIC_DOMAINS: str = ""
+    OPENALEX_API_KEY: str | None = None
+    CROSSREF_MAILTO: str | None = None
+    SCHOLARLY_SEARCH_TIMEOUT_SECONDS: float = 20.0
+    # Conservative search request estimate; Crossref/free calls release it.
+    SCHOLARLY_REQUEST_COST_USD: float = 0.001
     ANTHROPIC_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None
+    # Shared across API/worker processes through Redis. Tune to the key's actual quota.
+    GEMINI_REQUESTS_PER_MINUTE: int = Field(default=12, ge=1, le=600)
+    GEMINI_MAX_QUEUE_SECONDS: int = Field(default=90, ge=1, le=300)
     GROQ_API_KEY: str | None = None
+    # Exact trusted HTTPS roots. Add a gateway here to support another compatible API.
+    CUSTOM_LLM_API_ROOTS: str = (
+        "https://openrouter.ai/api/v1,https://api.groq.com/openai/v1,"
+        "https://generativelanguage.googleapis.com/v1beta/openai,https://api.openai.com/v1,"
+        "https://api.mistral.ai/v1,https://api.deepseek.com/v1,https://api.cerebras.ai/v1,"
+        "https://api.together.xyz/v1"
+    )
     
     # Priority Config (Comma-separated)
     LLM_PROVIDER_PRIORITY: str = "gemini,openai,anthropic,groq"
@@ -54,13 +74,56 @@ class Settings(BaseSettings):
 
     # Quotas & Guardrails
     MAX_CONCURRENT_TASKS_PER_USER: int = 2
+    OUTBOX_POLL_SECONDS: float = 1.0
+    OUTBOX_LOCK_SECONDS: int = 30
+    OUTBOX_RETRY_SECONDS: int = 2
+    OUTBOX_MAX_RETRY_SECONDS: int = 60
+    OUTBOX_DISPATCH_ACK_TIMEOUT_SECONDS: int = 300
+    OUTBOX_AUTO_RECOVERY_MAX_AGE_SECONDS: int = 86400
+    OUTBOX_MAX_UNCLAIMED_RETRIES: int = 5
+    WORKER_LEASE_SECONDS: int = 300
+    WORKER_HEARTBEAT_SECONDS: int = 30
+    WORKER_MAX_RECOVERIES: int = 3
+    PROVIDER_CALL_TIMEOUT_SECONDS: int = 90
     DEFAULT_BUDGET_USD: float = 2.00
-    DEFAULT_MAX_LLM_CALLS: int = 50
+    DEFAULT_MAX_LLM_CALLS: int = 40
     DEFAULT_MAX_INPUT_TOKENS: int = 100000
     DEFAULT_MAX_OUTPUT_TOKENS: int = 50000
-    DEFAULT_TIMEOUT_SECONDS: int = 300
+    DEFAULT_TIMEOUT_SECONDS: int = 900
+    # Conservative per-request estimate used when reserving Tavily search budget.
+    TAVILY_REQUEST_COST_USD: float = 0.01
+
+    # Artifact Storage & Upload Limits (SRS FR-02 & P3)
+    ARTIFACTS_DIR: str = "storage/artifacts"
+    MAX_UPLOAD_SIZE_BYTES: int = 10 * 1024 * 1024  # 10 MiB per file
+    MAX_PDF_PAGES: int = 100  # Max 100 pages per file
+    MAX_UPLOAD_FILES_PER_TASK: int = 5  # Max 5 files per task
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @model_validator(mode="after")
+    def sync_postgres_url(self) -> "Settings":
+        if (
+            self.POSTGRES_SYNC_URL == "postgresql://research_user:research_secure_password@localhost:5432/research_db"
+            and self.DATABASE_URL != "postgresql+asyncpg://research_user:research_secure_password@localhost:5432/research_db"
+        ):
+            self.POSTGRES_SYNC_URL = self.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+        return self
+
+    @model_validator(mode="after")
+    def require_production_secret(self) -> "Settings":
+        if self.ENVIRONMENT == "production" and (self.DEBUG or self.MOCK_PROVIDERS):
+            raise ValueError("Production requires DEBUG=false and MOCK_PROVIDERS=false")
+        if self.ENVIRONMENT != "development" and (
+            len(self.APP_SECRET_KEY) < 32
+            or self.APP_SECRET_KEY in {
+                "development-secret-key-replace-in-production-32-chars-min",
+                "replace-with-a-secure-random-secret-key-32-chars-min",
+            }
+        ):
+            raise ValueError("APP_SECRET_KEY must be a unique secret of at least 32 characters outside development")
+        return self
+
 
 
 settings = Settings()

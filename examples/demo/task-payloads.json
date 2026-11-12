@@ -1,0 +1,38 @@
+{
+  "review": {
+    "title": "Spaced Practice and Delayed Retention: A Critical Narrative Review",
+    "research_question": "Under what conditions does spaced practice improve delayed retention compared with massed practice in adult or university learners? Prepare a critical narrative review. Compare practice schedules, retention intervals, outcome measures and populations, including conflicting findings and limits on transfer. Use relevant primary research and credible scholarly syntheses, and cite the evidence actually retrieved. Report the real search queries, index providers, eligibility criteria and search limitations; do not claim an exhaustive systematic review. Write academic English prose with meaningful subsections in substantial sections and explain any figures or tables. Distinguish supported conclusions from tentative research gaps.",
+    "research_type": "REVIEW",
+    "research_depth": "STANDARD",
+    "report_length": "MEDIUM",
+    "language": "en",
+    "citation_style": "APA",
+    "require_plan_approval": true,
+    "max_sources": 12,
+    "max_iterations": 2
+  },
+  "computational": {
+    "title": "Synthetic Electricity Demand: Ridge Regression versus a Mean Baseline",
+    "research_question": "On the supplied SYNTHETIC electricity-demand CSV, how does the supported tabular_regression_v1 Ridge regression routine compare with a training-mean baseline on its recorded held-out split? Use temperature and occupied_hours to predict target. Run the supported routine and report its actual MAE, RMSE and R-squared, train-only preprocessing, split, seed and repeatability. Present a baseline comparison table and explain the generated figures. Write a computational paper-style draft with meaningful Methods, Experimental Setup, Results and Discussion subsections. Literature is for background, not a substitute for measured results. This is a synthetic demonstration, not a novel algorithm, causal study or real-world forecasting validation. Do not claim cross-validation, significance tests or multiple seeds were run.",
+    "research_type": "EMPIRICAL_COMPUTATIONAL",
+    "research_depth": "STANDARD",
+    "report_length": "MEDIUM",
+    "language": "en",
+    "citation_style": "IEEE",
+    "require_plan_approval": false,
+    "max_sources": 12,
+    "max_iterations": 2
+  },
+  "human": {
+    "title": "AI Research Assistants: A Synthetic Descriptive Survey Demonstration",
+    "research_question": "How can an exploratory descriptive survey characterize perceived usefulness and verification effort when university students use AI research assistants? Prepare a protocol, then wait for a result file and provenance. For this SOFTWARE DEMONSTRATION I will upload 24 SYNTHETIC responses, not data collected from real people. After upload, write an empirical-style draft with meaningful subsections, explicitly labeling the data as synthetic in the Abstract, Methods, Results and Conclusion. Report only uploaded or computed descriptive statistics, specifying sample versus population SD. Do not invent recruitment, ethics approval, instrument validation, p-values, causal effects or generalizability. Explain how genuine future data collection would differ.",
+    "research_type": "EMPIRICAL_HUMAN",
+    "research_depth": "STANDARD",
+    "report_length": "MEDIUM",
+    "language": "en",
+    "citation_style": "APA",
+    "require_plan_approval": false,
+    "max_sources": 12,
+    "max_iterations": 2
+  }
+}

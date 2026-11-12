@@ -1,0 +1,167 @@
+import json
+
+import pytest
+from langchain_core.runnables import RunnableLambda
+from pydantic import ValidationError
+
+from app.agents.nodes import CriticVerdict
+from app.services.structured_output import compatible_structured_output
+from pydantic import create_model
+
+
+class StructuredClient:
+    def __init__(self, response):
+        self.response = response
+        self.schema = None
+
+    def with_structured_output(self, schema):
+        self.schema = schema
+        return RunnableLambda(lambda _: self.response)
+
+
+@pytest.mark.asyncio
+async def test_gemini_uses_small_wire_schema_and_returns_validated_pydantic_output():
+    original = CriticVerdict.model_json_schema()
+    client = StructuredClient({"verdict": "REVISE", "evidence_reviews": [{
+        "statement_id": "p1", "judgment": "UNSUPPORTED", "reason": "No supplied evidence."}]})
+    result = await compatible_structured_output("gemini-fixture", client, CriticVerdict).ainvoke("fixture")
+    wire = json.dumps(client.schema)
+    assert all(f'"{key}"' not in wire for key in ("maxItems", "maxLength", "minLength", "default"))
+    assert isinstance(result, CriticVerdict)
+    assert result.evidence_reviews[0].supporting_claim_ids == []
+    assert not result.evidence_reviews[0].assumptions_preserved
+    assert CriticVerdict.model_json_schema() == original
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid", [
+    {"verdict": "PASS", "evidence_reviews": [{"statement_id": "p", "judgment": "SUPPORTED", "reason": "x"}] * 33},
+    {"verdict": "PASS", "evidence_reviews": [{"statement_id": "p", "judgment": "SUPPORTED", "reason": "x", "supporting_claim_ids": ["c"] * 25}]},
+    {"verdict": "PASS", "evidence_reviews": [{"statement_id": "p", "judgment": "SUPPORTED", "reason": ""}]},
+    {"verdict": "PASS", "evidence_reviews": [{"statement_id": "p", "judgment": "INVENTED", "reason": "x"}]},
+])
+async def test_simplified_transport_still_rejects_invalid_reviewer_output(invalid):
+    client = StructuredClient(invalid)
+    with pytest.raises(ValidationError):
+        await compatible_structured_output("gemini-fixture", client, CriticVerdict).ainvoke("fixture")
+
+
+def test_other_provider_keeps_native_schema():
+    client = StructuredClient({"verdict": "PASS"})
+    compatible_structured_output("other-fixture", client, CriticVerdict)
+    assert client.schema is CriticVerdict
+
+
+def test_schema_keyword_names_are_preserved_when_they_are_domain_fields():
+    schema = create_model("DomainFields", default=(str, ...), maxLength=(str, ...))
+    client = StructuredClient({"default": "a", "maxLength": "b"})
+    compatible_structured_output("gemini-fixture", client, schema)
+    assert set(client.schema["properties"]) == {"default", "maxLength"}
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('content,finish,valid', [('{"answer":"ok"}', 'STOP', True), ('```json\n{"answer":"ok"}\n```', 'stop', True), ('{"answer":null}', 'stop', False), ('not json', 'stop', False), ('{"answer":"ok"}', 'LENGTH', False)])
+async def test_custom_json_keeps_usage_without_weakening_validation(content, finish, valid):
+    from langchain_core.messages import AIMessage
+    from pydantic import BaseModel
+    from app.services.structured_output import StructuredOutputFailure
+    class Output(BaseModel):
+        answer: str
+    response = AIMessage(content=content, usage_metadata={'input_tokens': 31, 'output_tokens': 8, 'total_tokens': 39}, response_metadata={'finish_reason': finish})
+    class Model:
+        extra_body = {}
+        def bind(self, **kwargs):
+            return RunnableLambda(lambda _: response)
+    chain = compatible_structured_output('byok:fixture', Model(), Output)
+    if valid:
+        result = await chain.ainvoke([])
+        assert result.usage_metadata == response.usage_metadata
+        assert result.model_dump() == {'answer': 'ok'}
+    else:
+        with pytest.raises(StructuredOutputFailure) as caught:
+            await chain.ainvoke([])
+        assert caught.value.response.usage_metadata['output_tokens'] == 8
+        assert content not in str(caught.value)
+
+@pytest.mark.asyncio
+async def test_strict_wire_keeps_domain_field_names_and_local_validation(monkeypatch):
+    from types import SimpleNamespace
+    from langchain_core.messages import AIMessage
+    from pydantic import BaseModel
+    class Output(BaseModel):
+        default: str
+        optional: str = ''
+    seen={}
+    class Model:
+        extra_body={}
+        def bind(self, **kwargs):
+            seen.update(kwargs)
+            return RunnableLambda(lambda _: AIMessage(content='{"default":"verified","optional":""}'))
+    monkeypatch.setattr('app.services.model_connection.current_connection',lambda:SimpleNamespace(structured_output_mode='json_schema'))
+    result=await compatible_structured_output('byok:fixture',Model(),Output).ainvoke([])
+    schema=seen['extra_body']['response_format']['json_schema']['schema']
+    assert seen['extra_body']['response_format']['type']=='json_schema'
+    assert set(schema['required'])=={'default','optional'}
+    assert schema['additionalProperties'] is False
+    assert 'default' in schema['properties']
+    assert result.default=='verified'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('truncated', [False, True])
+async def test_json_correction_is_one_bounded_call_and_never_repairs_truncation(truncated):
+    from app.agents.nodes import BudgetedFallbackLLM
+    from app.services.structured_output import StructuredOutputFailure
+    from pydantic import BaseModel
+    from langchain_core.messages import AIMessage, HumanMessage
+    class Output(BaseModel):
+        answer: str
+    calls=[]
+    class Model:
+        async def ainvoke(self,messages):
+            calls.append(messages)
+            if len(calls)==1:
+                raise StructuredOutputFailure('MODEL_OUTPUT_TRUNCATED: cut off' if truncated else 'MODEL_INVALID_JSON: invalid shape',AIMessage(content='bad'))
+            return Output(answer='verified')
+    chain=BudgetedFallbackLLM([('byok:fixture',Model())],structured_schema=Output)
+    if truncated:
+        with pytest.raises(StructuredOutputFailure):await chain.ainvoke([HumanMessage(content='original')])
+        assert len(calls)==1
+    else:
+        assert (await chain.ainvoke([HumanMessage(content='original')])).answer=='verified'
+        assert len(calls)==2
+        assert 'Do not invent' in calls[1][-1].content
+
+@pytest.mark.asyncio
+async def test_dynamic_protocol_variables_keep_json_compatibility_without_dropping_data(monkeypatch):
+    from types import SimpleNamespace
+    from langchain_core.messages import AIMessage
+    from pydantic import BaseModel
+    class Protocol(BaseModel):
+        variables: dict[str,str]
+    seen={}
+    class Model:
+        extra_body={}
+        def bind(self, **kwargs):
+            seen.update(kwargs)
+            return RunnableLambda(lambda _:AIMessage(content='{"variables":{"temperature":"measured exposure"}}'))
+    monkeypatch.setattr('app.services.model_connection.current_connection',lambda:SimpleNamespace(structured_output_mode='json_schema'))
+    value=await compatible_structured_output('byok:fixture',Model(),Protocol).ainvoke([])
+    assert seen['extra_body']['response_format']['type']=='json_object'
+    assert value.variables=={'temperature':'measured exposure'}
+
+
+@pytest.mark.asyncio
+async def test_validation_diagnostics_log_only_field_names_and_codes(caplog):
+    from langchain_core.messages import AIMessage
+    from pydantic import BaseModel
+    from app.services.structured_output import StructuredOutputFailure
+    class Output(BaseModel):
+        required_items: list[str]
+    secret='private-response-must-never-be-logged'
+    class Model:
+        extra_body={}
+        def bind(self,**kwargs):
+            return RunnableLambda(lambda _:AIMessage(content=json.dumps({'required_items':secret})))
+    with pytest.raises(StructuredOutputFailure):
+        await compatible_structured_output('byok:fixture',Model(),Output).ainvoke([])
+    assert 'required_items:list_type' in caplog.text and secret not in caplog.text

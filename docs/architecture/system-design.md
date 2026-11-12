@@ -1,10 +1,10 @@
-# System Design — Multi-Agent Research System (ATI)
+# System Design — Synthia (Multi-Agent Research System)
 
 ## 1. Phạm vi và nguyên tắc
 
 **Cập nhật thiết kế: 09/10/2026.** Đây là nguồn chuẩn cho sơ đồ mục tiêu; không mô tả mọi tính năng đã chạy. [SRS v4.1](../requirements/SRS.md) chốt yêu cầu; [ADR-004](decisions/ADR-004-multi-agent-research-delivery.md) giải thích quyết định; mục 9 tách hiện trạng.
 
-ATI phối hợp agent để tạo bài báo có bằng chứng và thực nghiệm tái lập. Ba đường REVIEW / EMPIRICAL_COMPUTATIONAL / EMPIRICAL_HUMAN dùng chung provenance và review; **mỗi bài có workspace, run, checkpoint và phiên bản riêng**. Protocol là artifact trung gian của đường human-led, không phải bài báo đã hoàn thành. Execution tự động chỉ cho routine hỗ trợ. Không có dữ liệu thật thì không tạo Results. Gợi ý khoảng trống nghiên cứu phải nêu phạm vi nguồn đã xem; Critic không thay peer review.
+Synthia phối hợp agent để tạo bài báo có bằng chứng và thực nghiệm tái lập. Ba đường REVIEW / EMPIRICAL_COMPUTATIONAL / EMPIRICAL_HUMAN dùng chung provenance và review; **mỗi bài có workspace, run, checkpoint và phiên bản riêng**. Protocol là artifact trung gian của đường human-led, không phải bài báo đã hoàn thành. Execution tự động chỉ cho routine hỗ trợ. Không có dữ liệu thật thì không tạo Results. Gợi ý khoảng trống nghiên cứu phải nêu phạm vi nguồn đã xem; Critic không thay peer review.
 
 Năm hình chính đáp ứng kiến trúc, data flow, inference, tương tác bất đồng bộ và mô hình dữ liệu. Hai phụ lục phục vụ kỹ thuật. Mermaid dùng notation dễ đọc; Logical DFD là biểu diễn logic, không tuyên bố đúng toàn bộ hình dạng Gane–Sarson. Hình kiến trúc thể hiện process/data boundary; agent là logic bên trong worker.
 
@@ -18,7 +18,7 @@ Một kiến trúc hoàn chỉnh với các dependency chính. Mũi tên tới p
 flowchart TB
     User(["Người nghiên cứu"])
 
-    subgraph ATI["ATI — Multi-Agent Research System"]
+    subgraph ATI["Synthia — Multi-Agent Research System"]
         UI["Web application<br/>Next.js · danh sách bài, workspace và progress"]
         API["Application API<br/>FastAPI · auth · task · report · dispatcher"]
         Worker["Research worker<br/>Celery + LangGraph · agent workflow"]
@@ -29,7 +29,7 @@ flowchart TB
         Runner["Analysis container<br/>approved routine · resource limits"]
     end
 
-    subgraph Outside["Ngoài ranh giới ATI"]
+    subgraph Outside["Ngoài ranh giới Synthia"]
         Search["Search provider"]
         Web["Public websites"]
         Models["LLM / embedding provider"]
@@ -71,7 +71,7 @@ flowchart TB
 
 ## 3. Logical Data Flow — DFD Level 1
 
-Tập trung dữ liệu nghiệp vụ; hạ tầng được tách sang Physical DFD. Mọi external entity/data store trao đổi qua process. Lab/thực địa trả dữ liệu cho người dùng rồi được nạp vào ATI.
+Tập trung dữ liệu nghiệp vụ; hạ tầng được tách sang Physical DFD. Mọi external entity/data store trao đổi qua process. Lab/thực địa trả dữ liệu cho người dùng rồi được nạp vào Synthia.
 
 ```mermaid
 flowchart LR
@@ -125,7 +125,7 @@ flowchart LR
     class D1,D2,D3,D4,D5 data
 ```
 
-P5 chỉ chạy routine được hỗ trợ; dữ liệu/kết quả human-led đã nạp vẫn đi từ D4 qua kiểm provenance tới P6, không gắn nhãn ATI đã chạy nếu ATI không phân tích lại. P6 có thể cung cấp REVIEW không qua thí nghiệm hoặc cung cấp **protocol trung gian** khi đang chờ; chỉ bài đáp ứng gate theo loại mới là đầu ra `COMPLETED`. DFD không biểu diễn điều kiện điều khiển hay mọi provider call; xem inference và physical view.
+P5 chỉ chạy routine được hỗ trợ; dữ liệu/kết quả human-led đã nạp vẫn đi từ D4 qua kiểm provenance tới P6, không gắn nhãn Synthia đã chạy nếu Synthia không phân tích lại. P6 có thể cung cấp REVIEW không qua thí nghiệm hoặc cung cấp **protocol trung gian** khi đang chờ; chỉ bài đáp ứng gate theo loại mới là đầu ra `COMPLETED`. DFD không biểu diễn điều kiện điều khiển hay mọi provider call; xem inference và physical view.
 
 ## 4. Inference Flow — Multi-Agent Workflow
 
@@ -453,7 +453,7 @@ flowchart LR
     class DB,Files,Redis data
 ```
 
-Lab/khảo sát/thực địa không thuộc runtime ATI; người dùng nạp dữ liệu qua API có kiểm tra rồi API lưu private storage. Analysis node gom adapter/launcher/container trong góc nhìn dòng dữ liệu; ranh giới execution tách tại hình kiến trúc. Các bước validate/checkpoint là logic target, không phải bằng chứng đã triển khai.
+Lab/khảo sát/thực địa không thuộc runtime Synthia; người dùng nạp dữ liệu qua API có kiểm tra rồi API lưu private storage. Analysis node gom adapter/launcher/container trong góc nhìn dòng dữ liệu; ranh giới execution tách tại hình kiến trúc. Các bước validate/checkpoint là logic target, không phải bằng chứng đã triển khai.
 
 ## 8. Phụ lục — Conceptual Class Diagram
 

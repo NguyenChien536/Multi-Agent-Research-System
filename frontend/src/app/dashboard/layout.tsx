@@ -1,5 +1,11 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return <AppLayout>{children}</AppLayout>;
+  return (
+    <AppLayout>
+      <div className="min-h-0 flex-1 flex flex-col h-full overflow-hidden print:overflow-visible">
+        {children}
+      </div>
+    </AppLayout>
+  );
 }

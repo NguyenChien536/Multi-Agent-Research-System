@@ -1,16 +1,31 @@
 from app.core.database import Base
 from app.models.user import User
-from app.models.task import ResearchTask, ResearchIteration
+from app.models.task import (
+    ResearchTask,
+    ResearchIteration,
+    TaskDispatchOutbox,
+    DocumentIngestionOutbox,
+    TaskDeletionOutbox,
+    WorkflowRun,
+)
 from app.models.source import ResearchSource, DocumentChunk
 from app.models.grounding import ClaimEvidence, Evidence, ResearchClaim, Citation
-from app.models.report import ResearchReport, ExportArtifact
+from app.models.report import ResearchReport, ReportVersion, ExportArtifact
 from app.models.agent_run import AgentRun, Evaluation
+from app.models.experiment import AnalysisRun, ExperimentJournalEntry
+from app.models.report_question import ReportQuestion
+from app.models.report_revision import ReportRevision
+from app.models.provider_result import ProviderResult
 
 __all__ = [
     "Base",
     "User",
     "ResearchTask",
     "ResearchIteration",
+    "TaskDispatchOutbox",
+    "DocumentIngestionOutbox",
+    "TaskDeletionOutbox",
+    "WorkflowRun",
     "ResearchSource",
     "DocumentChunk",
     "ClaimEvidence",
@@ -18,7 +33,13 @@ __all__ = [
     "ResearchClaim",
     "Citation",
     "ResearchReport",
+    "ReportVersion",
     "ExportArtifact",
     "AgentRun",
     "Evaluation",
+    "AnalysisRun",
+    "ExperimentJournalEntry",
+    "ReportQuestion",
+    "ReportRevision",
+    "ProviderResult",
 ]

@@ -14,12 +14,18 @@ engine = create_async_engine(
 )
 
 # Async Session Factory
-AsyncSessionLocal = async_sessionmaker(
+_default_sessions = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
     expire_on_commit=False,
     autoflush=False,
 )
+
+
+def AsyncSessionLocal(**kwargs):
+    from app.core.runtime import current_runtime
+    runtime = current_runtime()
+    return (runtime.sessions if runtime else _default_sessions)(**kwargs)
 
 # Base class cho các Models
 Base = declarative_base()

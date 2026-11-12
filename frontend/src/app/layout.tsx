@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
-
-const inter = Inter({ subsets: ["latin"] });
+import 'katex/dist/katex.min.css';
+import { LanguageProvider } from "@/lib/i18n";
 
 export const metadata: Metadata = {
   title: "Synthia | Automated Research System",
-  description: "Hệ thống nghiên cứu tự động chuyên sâu, tổng hợp thông tin và trích dẫn bằng AI.",
+  description: "Advanced multi-agent research platform for scientific inquiry, synthesis, and evidence-backed writing.",
 };
 
 export default function RootLayout({
@@ -16,7 +15,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={inter.className}>{children}</body>
+      <body>
+        <LanguageProvider>
+          {children}
+        </LanguageProvider>
+      </body>
     </html>
   );
 }

@@ -1,21 +1,23 @@
 import uuid
 from typing import Optional, List, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
+from app.services.model_connection import ModelConnectionInput
 
 
 class BudgetConfigSchema(BaseModel):
-    max_cost_usd: float = Field(default=2.00, ge=0.1, le=20.0)
-    max_llm_calls: int = Field(default=50, ge=5, le=200)
-    max_input_tokens: int = Field(default=100000, ge=10000)
-    max_output_tokens: int = Field(default=50000, ge=5000)
-    timeout_seconds: int = Field(default=300, ge=60, le=1800)
+    max_cost_usd: float = Field(default=2.00, ge=0.1, le=2.0)
+    max_llm_calls: int = Field(default=40, ge=5, le=100)
+    max_input_tokens: int = Field(default=100000, ge=10000, le=500000)
+    max_output_tokens: int = Field(default=50000, ge=5000, le=200000)
+    timeout_seconds: int = Field(default=900, ge=60, le=3600)
 
 
 class ResearchTaskCreate(BaseModel):
     title: str = Field(..., min_length=5, max_length=255)
     research_question: str = Field(..., min_length=10)
     description: Optional[str] = None
+    research_type: str = Field(default="REVIEW", pattern="^(REVIEW|EMPIRICAL_COMPUTATIONAL|EMPIRICAL_HUMAN)$")
     research_depth: str = Field(default="STANDARD", pattern="^(SHALLOW|STANDARD|DEEP)$")
     language: str = Field(default="vi", max_length=10)
     require_plan_approval: bool = Field(default=False, description="Enable Human-in-the-Loop plan review")
@@ -24,6 +26,17 @@ class ResearchTaskCreate(BaseModel):
     report_length: str = Field(default="MEDIUM", pattern="^(SHORT|MEDIUM|LONG)$")
     citation_style: str = Field(default="IEEE", pattern="^(IEEE|APA|HARVARD)$")
     budget: Optional[BudgetConfigSchema] = None
+    llm_connection: Optional[ModelConnectionInput] = Field(default=None, repr=False)
+    use_saved_connection: bool = True
+
+
+class TokenAllowanceIncrease(BaseModel):
+    max_input_tokens: int = Field(ge=10000, le=500000)
+    max_output_tokens: int = Field(ge=5000, le=200000)
+    max_llm_calls: int | None = Field(default=None, ge=5, le=100)
+    timeout_seconds: int | None = Field(default=None, ge=60, le=3600)
+    max_cost_usd: float | None = Field(default=None, ge=0.1, le=2.0)
+    model_config = ConfigDict(extra='forbid')
 
 
 class ResearchTaskResponse(BaseModel):
@@ -32,18 +45,107 @@ class ResearchTaskResponse(BaseModel):
     title: str
     description: Optional[str] = None
     research_question: str
+    research_type: str = "REVIEW"
     research_depth: str
     language: str
     status: str
+    current_step: Optional[str] = None
+    latest_error: Optional[str] = None
+    failed_agent: Optional[str] = None
+    retry_blocked_reason: Optional[str] = None
+    token_allowance: Optional[Dict[str, Any]] = None
+    provider_wait: Optional[Dict[str, Any]] = None
+    writing_progress: Optional[Dict[str, int]] = None
     require_plan_approval: bool
     max_sources: int
     max_iterations: int
     current_iteration: int
     attempt_number: int
+    report_length: str = "MEDIUM"
+    citation_style: str = "IEEE"
     total_cost_usd: float
     total_tokens_used: int
+    model_connection: Optional[Dict[str, Any]] = None
+    plan: Optional[Dict[str, Any]] = None
+    plan_version: int = 0
+    plan_approved: bool = False
+    plan_feedback: Optional[str] = None
+    protocol_artifact_id: Optional[uuid.UUID] = None
+    user_data_submission: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+    @model_validator(mode='wrap')
+    @classmethod
+    def canonical_usage_totals(cls, value, handler):
+        if isinstance(value, cls):
+            return handler(value)  # FastAPI may serialize an already enriched response again.
+        result = handler(value)
+        from app.services.provider_budget import retry_block_reason
+        result.retry_blocked_reason = retry_block_reason(value)
+        from app.services.provider_budget import token_allowance_summary
+        result.token_allowance = token_allowance_summary(value)
+        waiting = (getattr(value, 'budget_config', None) or {}).get('_provider_wait')
+        if result.status == 'QUEUED' and isinstance(waiting, dict):
+            result.provider_wait = {key: waiting.get(key) for key in ('reason', 'retry_at', 'retry_count')}
+        writing = (getattr(value, 'budget_config', None) or {}).get('_writer_progress')
+        if isinstance(writing, dict):
+            result.writing_progress = {key: int(writing.get(key, 0)) for key in ('completed', 'total')}
+        connection = (getattr(value, 'budget_config', None) or {}).get('_llm_connection')
+        if isinstance(connection, dict):
+            profile = connection.get('profile') or {}
+            result.model_connection = {key: profile.get(key) for key in (
+                'base_url', 'model', 'input_price_per_million', 'output_price_per_million', 'output_token_limit', 'reasoning_effort', 'structured_output_mode')}
+            result.model_connection['revoked'] = bool(connection.get('revoked'))
+            result.model_connection['cost_basis'] = 'user_declared_estimate_not_invoice'
+        # Historical paused records can have stale denormalized totals. Read
+        # their durable ledger without exposing private budget/reservation data.
+        usage = (getattr(value, 'budget_config', None) or {}).get('_provider_usage')
+        if isinstance(usage, dict) and any(usage.get(k, 0) for k in ('llm_calls', 'search_calls', 'embedding_calls')):
+            result.total_tokens_used = int(usage.get('input_tokens', 0)) + int(usage.get('output_tokens', 0))
+            result.total_cost_usd = round(float(usage.get('cost_usd', 0)), 4)
+        return result
+
+
+class PlanReviewResponse(BaseModel):
+    task_id: uuid.UUID
+    status: str
+    require_plan_approval: bool
+    plan_approved: bool
+    plan_version: int
+    plan: Optional[Dict[str, Any]] = None
+    plan_feedback: Optional[str] = None
+
+
+class PlanApprovalRequest(BaseModel):
+    plan_version: int = Field(..., ge=1)
+    approved_queries: Optional[List[str]] = Field(default=None, description="Optional updated or curated search queries")
+    feedback: Optional[str] = Field(default=None, description="Optional feedback notes for the research run")
+
+
+class PlanRejectRequest(BaseModel):
+    plan_version: int = Field(..., ge=1)
+    reason: Optional[str] = Field(default=None, description="Reason for rejection or requested changes")
+
+
+class UserDataResumeRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    plan_version: int = Field(..., ge=1, description="Plan version this result file belongs to")
+    sample_size: int = Field(..., ge=1, description="Sample size or observation count from fieldwork/lab")
+    method_notes: str = Field(..., min_length=10, max_length=5000, description="Fieldwork/lab execution notes and procedure")
+    results_summary: str = Field(..., min_length=10, max_length=20000, description="Summary of collected observations, metrics, or raw results")
+    data_provenance: str = Field(..., min_length=10, max_length=2000, description="Data origin, collection date and responsible researcher")
+    file_artifact_id: uuid.UUID = Field(..., description="Validated result file belonging to this research task")
+
+
+class ProtocolResponse(BaseModel):
+    task_id: uuid.UUID
+    research_type: str
+    status: str
+    protocol_artifact_id: Optional[uuid.UUID] = None
+    download_url: Optional[str] = None
+    content_markdown: Optional[str] = None

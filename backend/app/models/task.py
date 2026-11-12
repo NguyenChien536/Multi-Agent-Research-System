@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, Integer, Numeric, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, String, Text, Integer, Numeric, DateTime, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
@@ -17,14 +17,25 @@ class ResearchTask(Base):
     description = Column(Text, nullable=True)
     research_depth = Column(String(20), default="STANDARD", nullable=False)  # SHALLOW | STANDARD | DEEP
     language = Column(String(10), default="vi", nullable=False)
-    status = Column(String(30), default="PENDING", nullable=False, index=True)  # PENDING, QUEUED, PLANNING, WAITING_APPROVAL, RESEARCHING, INDEXING, ANALYZING, WRITING, REVIEWING, FINALIZING, COMPLETED, RETRYING, FAILED, CANCELLED
+    research_type = Column(String(30), default="REVIEW", nullable=False)  # REVIEW | EMPIRICAL_COMPUTATIONAL | EMPIRICAL_HUMAN
+    status = Column(String(30), default="PENDING", nullable=False, index=True)  # PENDING, QUEUED, ..., COMPLETED, NEEDS_REVIEW, FAILED, CANCELLED
+    current_step = Column(String(30), nullable=True)  # Current agent/module; status remains RUNNING during execution
     require_plan_approval = Column(Boolean, default=False, nullable=False)  # Human-in-the-Loop flag
+    plan = Column(JSONB, nullable=True)  # Generated supervisor research plan
+    plan_version = Column(Integer, default=0, nullable=False)
+    plan_approved = Column(Boolean, default=False, nullable=False)  # Approval status
+    plan_feedback = Column(Text, nullable=True)  # User feedback or adjustment notes
+    resume_action = Column(String(40), nullable=True)
+    resume_payload = Column(JSONB, nullable=True)
+    protocol_artifact_id = Column(UUID(as_uuid=True), ForeignKey("export_artifacts.id", ondelete="SET NULL"), nullable=True)
+    user_data_submission = Column(JSONB, nullable=True)  # Fieldwork or user-provided data metadata
     
     # Resource Limits & Accrual
     max_sources = Column(Integer, default=10, nullable=False)
     max_iterations = Column(Integer, default=2, nullable=False)
     current_iteration = Column(Integer, default=0, nullable=False)
     attempt_number = Column(Integer, default=0, nullable=False)  # Crash recovery counter
+    worker_lease_until = Column(DateTime(timezone=True), nullable=True)
     
     budget_config = Column(JSONB, default=dict, nullable=False)  # max_cost_usd, max_llm_calls, max_tokens, timeout_s
     total_cost_usd = Column(Numeric(10, 4), default=0.0, nullable=False)
@@ -34,6 +45,7 @@ class ResearchTask(Base):
     citation_style = Column(String(20), default="IEEE", nullable=False)
     
     queued_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
@@ -48,7 +60,90 @@ class ResearchTask(Base):
     agent_runs = relationship("AgentRun", back_populates="task", cascade="all, delete-orphan")
     evaluations = relationship("Evaluation", back_populates="task", cascade="all, delete-orphan")
     report = relationship("ResearchReport", back_populates="task", uselist=False, cascade="all, delete-orphan")
-    artifacts = relationship("ExportArtifact", back_populates="task", cascade="all, delete-orphan")
+    artifacts = relationship("ExportArtifact", back_populates="task", cascade="all, delete-orphan", foreign_keys="[ExportArtifact.research_task_id]")
+    protocol_artifact = relationship("ExportArtifact", foreign_keys=[protocol_artifact_id])
+    analysis_runs = relationship("AnalysisRun", back_populates="task", cascade="all, delete-orphan", order_by="AnalysisRun.created_at")
+    journal_entries = relationship("ExperimentJournalEntry", back_populates="task", cascade="all, delete-orphan", order_by="ExperimentJournalEntry.created_at")
+    dispatch_events = relationship("TaskDispatchOutbox", back_populates="task", cascade="all, delete-orphan")
+    workflow_runs = relationship("WorkflowRun", back_populates="task", cascade="all, delete-orphan", order_by="WorkflowRun.run_number")
+
+
+class WorkflowRun(Base):
+    """Durable LangGraph thread identity and lifecycle for one research execution."""
+
+    __tablename__ = "workflow_runs"
+    __table_args__ = (UniqueConstraint("research_task_id", "run_number", name="uq_workflow_run_number"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    research_task_id = Column(UUID(as_uuid=True), ForeignKey("research_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    run_number = Column(Integer, nullable=False)
+    plan_version = Column(Integer, default=0, nullable=False)
+    status = Column(String(30), default="RUNNING", nullable=False)
+    checkpoint_thread_id = Column(String(64), nullable=False, unique=True)
+    last_decision_id = Column(UUID(as_uuid=True), nullable=True)
+    started_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    task = relationship("ResearchTask", back_populates="workflow_runs")
+
+
+class TaskDispatchOutbox(Base):
+    """Durable handoff from the task transaction to Celery."""
+
+    __tablename__ = "task_dispatch_outbox"
+    # A research task is started once; retries reuse its durable event.
+    __table_args__ = (UniqueConstraint("research_task_id", "event_type", name="uq_task_dispatch_event"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    research_task_id = Column(UUID(as_uuid=True), ForeignKey("research_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_type = Column(String(40), nullable=False, default="START_RESEARCH")
+    attempts = Column(Integer, nullable=False, default=0)
+    unclaimed_retries = Column(Integer, nullable=False, default=0, server_default="0")
+    available_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+    dispatched_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    task = relationship("ResearchTask", back_populates="dispatch_events")
+
+
+class DocumentIngestionOutbox(Base):
+    """Durable handoff from a stored PDF/source row to its ingestion worker."""
+    __tablename__ = "document_ingestion_outbox"
+    __table_args__ = (UniqueConstraint("source_id", name="uq_document_ingestion_source"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    research_task_id = Column(UUID(as_uuid=True), ForeignKey("research_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_id = Column(UUID(as_uuid=True), ForeignKey("research_sources.id", ondelete="CASCADE"), nullable=False, index=True)
+    attempts = Column(Integer, nullable=False, default=0)
+    unclaimed_retries = Column(Integer, nullable=False, default=0, server_default="0")
+    available_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+    dispatched_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+
+class TaskDeletionOutbox(Base):
+    """Durable task tombstone cleanup record; retained until cleanup succeeds."""
+    __tablename__ = "task_deletion_outbox"
+    __table_args__ = (UniqueConstraint("research_task_id", name="uq_task_deletion_research_task"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    research_task_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("research_tasks.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    attempts = Column(Integer, nullable=False, default=0)
+    available_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    locked_until = Column(DateTime(timezone=True), nullable=True)
+    cleanup_lease_until = Column(DateTime(timezone=True), nullable=True)
+    dispatched_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
 
 class ResearchIteration(Base):

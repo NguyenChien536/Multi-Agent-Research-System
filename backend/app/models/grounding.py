@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Text, Float, Boolean, Integer, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, Float, Boolean, Integer, DateTime, ForeignKey, ForeignKeyConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -44,7 +44,7 @@ class Evidence(Base):
     chunk_id = Column(UUID(as_uuid=True), ForeignKey("document_chunks.id", ondelete="CASCADE"), nullable=False, index=True)
     content = Column(Text, nullable=False)  # Exact quote / statistic from chunk
     evidence_type = Column(String(30), default="FACT", nullable=False)  # STATISTIC | QUOTE | FACT | OPINION
-    confidence_score = Column(Float, default=1.0, nullable=False)
+    confidence_score = Column(Float, default=1.0, nullable=False)  # QUOTE: literal-match score, not factual certainty.
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     # Relationships
@@ -62,7 +62,7 @@ class ResearchClaim(Base):
     claim_text = Column(Text, nullable=False)
     claim_type = Column(String(30), default="KEY_FINDING", nullable=False)  # KEY_FINDING | CONTRADICTION | LIMITATION
     # evidence_ids (UUID[]) removed — replaced by ClaimEvidence junction table (migration a1b2c3d4e5f6)
-    is_verified = Column(Boolean, default=False, nullable=False)
+    is_verified = Column(Boolean, default=False, nullable=False)  # Historical name: quote provenance, not semantic truth.
     verification_note = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
@@ -79,6 +79,14 @@ class ResearchClaim(Base):
 
 class Citation(Base):
     __tablename__ = "citations"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["report_version_id", "report_id"],
+            ["report_versions.id", "report_versions.report_id"],
+            ondelete="CASCADE",
+            name="fk_citations_report_version_identity",
+        ),
+    )
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     research_task_id = Column(
@@ -88,6 +96,7 @@ class Citation(Base):
         index=True,
     )
     report_id = Column(UUID(as_uuid=True), ForeignKey("research_reports.id", ondelete="CASCADE"), nullable=False, index=True)
+    report_version_id = Column(UUID(as_uuid=True), ForeignKey("report_versions.id", ondelete="CASCADE"), nullable=False, index=True)
     source_id = Column(UUID(as_uuid=True), ForeignKey("research_sources.id", ondelete="CASCADE"), nullable=False, index=True)
     chunk_id = Column(
         UUID(as_uuid=True),
@@ -97,13 +106,14 @@ class Citation(Base):
     )
     claim_id = Column(UUID(as_uuid=True), ForeignKey("research_claims.id", ondelete="SET NULL"), nullable=True, index=True)
     citation_number = Column(Integer, nullable=True)    # Sequential number within report: 1, 2, 3...
-    citation_label = Column(String(20), nullable=False)  # Backward compat: retain until report writer migrates
+    citation_label = Column(String(500), nullable=False)
     claim_text = Column(Text, nullable=True)
     chunk_reference = Column(String(100), nullable=True)  # DEPRECATED — use chunk_id FK; drop after Writer is updated
 
     # Relationships
     task = relationship("ResearchTask", foreign_keys=[research_task_id])
     report = relationship("ResearchReport", back_populates="citations")
+    report_version = relationship("ReportVersion", back_populates="citations", foreign_keys=[report_version_id])
     source = relationship("ResearchSource", back_populates="citations")
     chunk = relationship("DocumentChunk", foreign_keys=[chunk_id])
     claim = relationship("ResearchClaim", back_populates="citations")

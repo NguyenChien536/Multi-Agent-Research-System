@@ -85,6 +85,17 @@ Tên tài nguyên dưới đây là **contract thiết kế**, implementation ph
 
 Các route rút gọn trong bảng đều ở `/api/v1`. Mã lỗi: 401 thiếu token, 404 không có quyền/tài nguyên, 409 stale version/state conflict, 413 vượt size, 422 sai schema/routine, 429 vượt quota. Operation lặp cùng key+payload trả cùng kết quả; cùng key khác payload trả 409. Upload nội dung lớn có thể 202 processing; UI chờ READY trước resume.
 
+### Contract đã triển khai 23/10 — intake thực địa (R1 / issue #39)
+
+Các route sau thuộc `/api/v1`, có bearer auth và owner scope. Chỉ dùng khi task là EMPIRICAL_HUMAN và đang WAITING_USER_DATA; không thay thế checkpoint/versioned decisions dự kiến ở R3.
+
+| Route | Input / output | Điều kiện và lỗi |
+|---|---|---|
+| POST /research/{id}/data/files | Multipart `file`; trả 201 với artifact_id, file_name, file_size_bytes, sha256_hash | CSV/TXT UTF-8 ≤5 MiB; CSV có header duy nhất, ≤30 cột/20.000 dòng. Giới hạn số file theo MAX_UPLOAD_FILES_PER_TASK. Không tự enqueue |
+| POST /research/{id}/data/resume | sample_size ≥1, method_notes 10–5.000 ký tự, results_summary 10–20.000, data_provenance 10–2.000, file_artifact_id bắt buộc | 200 với QUEUED sau cùng transaction lưu submission/outbox. 422 nếu thiếu/không hợp lệ; 404 sai owner/task; 409 sai type/state hoặc lần resume thứ hai |
+
+Artifact được nhận phải có loại USER_DATA_CSV/USER_DATA_TEXT, cùng task, có file bytes đúng kích thước và qua validation nội dung. Hiện chưa có cột trạng thái READY riêng; lưu thành công rồi kiểm lại lúc resume là điều kiện sẵn sàng. ID được serialize JSON; submission lưu checksum/trích đoạn có giới hạn và nhãn USER_SUPPLIED_NOT_INDEPENDENTLY_VERIFIED. Không coi việc đính kèm file là chứng minh tính đúng khoa học; không tự dựng AnalysisRun. UI cho chọn lại file đã upload sau reload, nhập provenance và gửi một lần tiếp tục.
+
 ## 5. Files và dữ liệu phân tích
 
 Private ArtifactStore dùng local volume cho bản nộp, có interface thay object storage sau này. DB lưu metadata/checksum, không file bytes. PDF chỉ text extraction trong giới hạn SRS; không hứa OCR. CSV numeric theo schema routine, không dùng RAG để tính thống kê.
@@ -101,3 +112,27 @@ Delete trả thành công sau khi tombstone bền vững, không có nghĩa file
 4. AnalysisRun, ExperimentJournalEntry append-only, routine manifest, rerun records và provenance kết quả (P5).
 
 Backfill data cũ phải đánh dấu thiếu lineage; không tạo evidence giả để migration pass. Giữ DB demo riêng khi thử upgrade/downgrade. Chi tiết nhiệm vụ và gates ở [Implementation Plan](../project/implementation-plan.md).
+
+
+## Settings API và model — 05/11/2026
+
+### Thông tin cá nhân
+
+`GET /api/v1/auth/me` đọc hồ sơ; `PATCH /api/v1/auth/me` cập nhật tài khoản đang đăng nhập. Các trường cho phép: `full_name` (tối đa 100 ký tự, có thể xóa), `username` (3–50 ký tự), `email` (email hợp lệ, tối đa 255 ký tự). Chỉ gửi trường cần sửa; không nhận user ID hoặc trường nội bộ. Đổi email cần `current_password` đúng; lần đăng nhập tiếp theo dùng email mới. Trùng email/username trả 409, sai/thiếu mật khẩu đổi email trả 403, dữ liệu sai trả 422, chưa đăng nhập trả 401. Mật khẩu không được trả trong response hoặc lỗi validation. Không đổi password, quyền sở hữu bài hoặc cấu hình model khi sửa hồ sơ. Các trường đã có trong bảng users nên không cần migration.
+
+Giao diện: **Settings → Thông tin cá nhân** trên trang `/settings` và hộp thoại Settings. Sau khi lưu, thông tin ở thanh bên được cập nhật ngay. Email mới chưa được xác minh bằng email; đây là luồng tài khoản local, chưa có hệ thống gửi thư xác minh.
+
+Hồ sơ mặc định chỉ xem; bấm **Chỉnh sửa** để mở form, **Lưu thay đổi** mới gửi PATCH, **Hủy** bỏ bản nháp. **Xóa tài khoản** mở xác nhận riêng: nhập mật khẩu hiện tại và đúng chữ `DELETE`. `DELETE /api/v1/auth/me` nhận `current_password`, `confirmation`, trả 202. Migration `f297c20d0003` thêm `users.deleted_at` làm ý định xóa bền vững. Ngay sau xác nhận, đăng nhập/token cũ và provider calls mới bị từ chối, key mặc định bị gỡ. Dispatcher đánh dấu từng bài để tái sử dụng outbox xóa file; worker chờ lease đang hoạt động, xóa file và checkpoint đúng thread rồi xóa dữ liệu task. Chỉ xóa bản ghi tài khoản khi hết task. Lỗi cleanup giữ ý định/outbox để retry qua lần khởi động sau, không cascade mất thông tin dọn file. Khóa tài khoản không thể hủy qua giao diện. Các backup ngoại tuyến có sẵn không tự bị xóa bởi endpoint này; quy trình backup/khôi phục được quản lý riêng.
+
+`users.model_connection` lưu JSONB gồm profile công khai và ciphertext owner-bound; API không trả key/ciphertext. Bài mới mặc định giải mã cấu hình chủ sở hữu rồi mã hóa lại theo task ID, giữ snapshot riêng. Đổi cấu hình mặc định không đổi các bài cũ. Các endpoint bên dưới yêu cầu đăng nhập và quyền sở hữu:
+
+| Endpoint | Ý nghĩa |
+|---|---|
+| GET/PUT/DELETE `/api/v1/settings/model-connection` | Đọc profile, lưu/cập nhật hoặc xóa mặc định; key bỏ trống giữ key cũ khi cùng dịch vụ |
+| PUT `/api/v1/settings/research/{id}/model-connection` | Đổi kết nối riêng khi bài không RUNNING/QUEUED |
+| POST `/api/v1/settings/research/{id}/use-default` | Áp dụng snapshot mặc định cho bài đã dừng/chờ |
+| POST `/api/v1/settings/research/{id}/save-as-default` | Lưu kết nối bài làm mặc định mà không trả key về browser |
+
+`output_token_limit` và `reasoning_effort` là cấu hình model; reasoning hiện áp dụng qua OpenRouter. `fallback_models` là danh sách tùy chọn tối đa ba ID OpenRouter `:free`, giữ nguyên thứ tự đã chọn; API chỉ nhận danh sách này với kết nối OpenRouter có đơn giá bằng 0, và request luôn đặt trần giá bằng 0. Danh sách nằm trong profile mã hóa của mỗi bài, không cần migration. Giới hạn ngân sách task vẫn độc lập và không reset khi đổi model. Xóa mặc định không thu hồi snapshot của bài cũ; từng bài có thao tác thu hồi key riêng. Catalog công khai chỉ có địa chỉ/model metadata, không có tài khoản hoặc key.
+
+Khi provider trả 429, worker lưu checkpoint hiện tại và thời điểm thử lại vào transactional outbox, nhả slot và đặt task ở `QUEUED`; không giữ request/worker ngủ trong lúc chờ. Hệ thống tôn trọng `Retry-After`/`X-RateLimit-Reset`, nếu thiếu thì backoff; việc thử lại không có giới hạn số lần tự dừng nhưng người dùng có thể hủy. Hạn mức miễn phí chung được chờ đến thời điểm reset thay vì chuyển qua model khác để né quota. Các lỗi xác thực, dữ liệu request không hợp lệ, hết ngân sách bài và hạn mức chi tiêu không được tự retry. Đây là cơ chế phục hồi tác vụ, không phải bảo đảm nhà cung cấp sẽ sớm cấp quota hoặc model dự phòng sẽ viết tương đương.

@@ -1,0 +1,308 @@
+"""Measured-figure construction and conservative scientific reporting gates."""
+import math
+import re
+from copy import deepcopy
+from xml.sax.saxutils import escape
+
+
+def scientific_context(state: dict) -> dict:
+    from app.services.fieldwork_intake import frozen_csv_statistics
+    analysis = state.get("analysis_run") or {}
+    claims = state.get("claims") or []
+    claim_source_ids = {
+        str(claim.get("source_id")) for claim in claims
+        if claim.get("source_id") and claim.get("evidence_id")
+    }
+    contract_version = ((state.get("plan") or {}).get("manuscript_contract") or {}).get("version", 1)
+    rendering_version = (((state.get("plan") or {}).get("manuscript_contract") or {}).get("rendering_policy") or {}).get("version", 0)
+    return {"research_type": state.get("research_type", "REVIEW"),
+            "figure_style_version": 4 if rendering_version >= 2 else (3 if contract_version >= 5 else (2 if contract_version >= 3 else 1)),
+            "grounded_claim_count": len({c.get("claim_id") for c in state.get("claims", []) if c.get("evidence_id")}),
+            "available_source_count": len(state.get("collected_sources") or []),
+            "distinct_claim_source_count": len(claim_source_ids),
+            "evaluation_scope": "single_seeded_split_exploratory" if analysis else "literature_or_user_supplied_observations",
+            "analysis": {key: deepcopy(analysis[key]) for key in (
+                "analysis_run_id", "status", "routine_name", "metrics", "manifest", "reproducibility_status"
+            ) if key in analysis},
+            "statistical_significance_tested": False,
+            "fieldwork_csv_statistics": deepcopy(frozen_csv_statistics((state.get('user_data_submission') or {}).get('artifact_evidence'))),
+            "study_method_provenance": {key: str((state.get('user_data_submission') or {}).get(key) or '')
+                                        for key in ('method_notes', 'data_provenance')},
+            "independent_datasets_evaluated": 1 if analysis else 0}
+
+
+def _number(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise ValueError("Figure metrics must be finite measured numbers")
+    return float(value)
+
+
+def _measured_figures(context: dict) -> list[dict]:
+    figures = []
+    run = context.get("analysis") or {}
+    metrics = run.get("metrics") or {}
+    if run.get("status") == "COMPLETED" and metrics.get("baseline") and metrics.get("model"):
+        baseline = _number(metrics["baseline"]["mae"])
+        model = _number(metrics["model"]["mae"])
+        if min(baseline, model) < 0:
+            raise ValueError("MAE cannot be negative")
+        scale = max(baseline, model, 1e-12)
+        svg = ['<svg xmlns="http://www.w3.org/2000/svg" width="660" height="300" viewBox="0 0 660 300" role="img">',
+               '<rect width="660" height="300" fill="white"/>',
+               '<text x="330" y="25" text-anchor="middle" font-family="serif" font-size="17">Held-out MAE (lower is better)</text>',
+               '<path d="M70 45v200h540" fill="none" stroke="#111827"/>']
+        for x, value, label, color in [(150, baseline, "Mean baseline", "#94a3b8"), (390, model, "Ridge", "#334155")]:
+            h = 165 * (value / scale)
+            svg += [f'<rect x="{x}" y="{245-h:.3f}" width="120" height="{h:.3f}" fill="{color}"/>',
+                    f'<text x="{x+60}" y="{230-h:.3f}" text-anchor="middle" font-family="serif" font-size="16">{value:.5g}</text>',
+                    f'<text x="{x+60}" y="270" text-anchor="middle" font-family="serif" font-size="16">{label}</text>']
+        svg.append('</svg>')
+        n_test = (run.get("manifest") or {}).get("test_rows", "not recorded")
+        caption = f"Held-out MAE in target units on {n_test} test rows. One seeded split is exploratory; no confidence intervals or significance test were computed."
+        if context.get("figure_style_version", 1) >= 4:
+            caption += " The two bars are aggregate MAE values for the mean baseline and Ridge, not individual predictions, residuals, or an error distribution."
+        figures.append({"id": "evaluation", "number": len(figures) + 1, "kind": "measured",
+                        "caption": caption,
+                        "alt": f"Mean baseline MAE {baseline:.5g}; Ridge MAE {model:.5g}.",
+                        "svg": "".join(svg), "data": {"baseline_mae": baseline, "ridge_mae": model},
+                        "latex": r"\begin{tikzpicture}\begin{axis}[ybar,width=\linewidth,height=4.5cm,ymin=0,ymax=1.25,xtick={1,2},xticklabels={Baseline,Ridge},ytick={0,0.5,1},yticklabels={0," + f"{scale/2:.4g},{scale:.4g}" + r"},ylabel={MAE (target units)},bar width=20pt]\addplot coordinates {(1," + f"{baseline/scale:.8f}" + ")(2," + f"{model/scale:.8f}" + r")};\end{axis}\end{tikzpicture}"})
+    return figures
+
+
+def _historical_workflow_figure(style_version: int) -> dict:
+    """Rebuild the old decorative workflow only for immutable pre-v5 exports."""
+    if style_version >= 2:
+        alt = "Three stages: available sources, source-linked evidence, and question-led synthesis. This is a processing schematic, not an experimental result."
+        labels = [("Available sources", "Web pages / supplied PDFs"), ("Grounded evidence", "Claim linked to source text"), ("Question-led synthesis", "Compare findings and limits")]
+        svg = ['<svg xmlns="http://www.w3.org/2000/svg" width="720" height="180" viewBox="0 0 720 180" role="img" aria-labelledby="workflow-title workflow-desc">',
+               '<title id="workflow-title">Evidence synthesis workflow</title>',
+               '<desc id="workflow-desc">' + escape(alt) + '</desc><rect width="720" height="180" fill="white"/>']
+        for index, (title, detail) in enumerate(labels):
+            x = 10 + index * 245
+            svg += [f'<rect x="{x}" y="35" width="210" height="95" rx="8" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>',
+                    f'<text x="{x+105}" y="74" text-anchor="middle" font-family="sans-serif" font-size="17">{title}</text>',
+                    f'<text x="{x+105}" y="102" text-anchor="middle" font-family="sans-serif" font-size="12">{detail}</text>']
+            if index < 2:
+                svg.append(f'<path d="M{x+214} 82h24m-7 -5 7 5-7 5" fill="none" stroke="#334155" stroke-width="2"/>')
+        svg.append('</svg>')
+        return {"id": "workflow", "number": 1, "kind": "conceptual",
+                "caption": "Conceptual source-to-evidence synthesis workflow. Source availability is not a count of screened studies or a measure of review completeness.",
+                "alt": alt, "svg": "".join(svg),
+                "latex": r"\begin{tikzpicture}[every node/.style={draw,rounded corners,align=center,text width=1.6cm,font=\scriptsize}]\node (s) at (0,0) {Available sources\\Web / supplied PDFs};\node (e) at (2,0) {Grounded evidence\\Source-linked claims};\node (w) at (4,0) {Question-led synthesis\\Findings and limits};\draw[->] (s)--(e);\draw[->] (e)--(w);\end{tikzpicture}"}
+
+    labels = ["Sources", "Evidence", "Synthesis"]
+    svg = ['<svg xmlns="http://www.w3.org/2000/svg" width="660" height="160" viewBox="0 0 660 160" role="img">',
+           '<rect width="660" height="160" fill="white"/>']
+    for index, label in enumerate(labels):
+        x = 20 + index * 220
+        svg += [f'<rect x="{x}" y="35" width="180" height="65" rx="6" fill="#eff6ff" stroke="#334155"/>',
+                f'<text x="{x+90}" y="74" text-anchor="middle" font-family="serif" font-size="20">{escape(label)}</text>']
+        if index < 2:
+            svg.append(f'<path d="M{x+182} 67h32m-8 -6 8 6-8 6" fill="none" stroke="#334155" stroke-width="2"/>')
+    svg.append('</svg>')
+    return {"id": "workflow", "number": 1, "kind": "conceptual",
+            "caption": "Conceptual evidence-processing workflow. Arrows describe processing stages, not measured performance.",
+            "alt": "Sources feed evidence extraction, followed by synthesis.", "svg": "".join(svg),
+            "latex": r"\begin{tikzpicture}[every node/.style={draw,rounded corners,align=center,font=\small}]\node (s) at (0,0) {Sources};\node (e) at (2.2,0) {Evidence};\node (w) at (4.5,0) {Synthesis};\draw[->] (s)--(e);\draw[->] (e)--(w);\end{tikzpicture}"}
+
+
+def build_scientific_figures(context: dict) -> list[dict]:
+    """Build topic-relevant figures from measured outputs only."""
+    style_version = context.get("figure_style_version", 1)
+    figures = _measured_figures(context)
+    if style_version < 3 and context.get("available_source_count", 0):
+        workflow = _historical_workflow_figure(style_version)
+        for figure in figures:
+            figure["number"] += 1
+        figures.insert(0, workflow)
+    if style_version < 2:
+        return figures
+    for figure in figures:
+        if figure["id"] == "workflow":
+            continue
+        baseline, model = figure["data"]["baseline_mae"], figure["data"]["ridge_mae"]
+        scale = max(baseline, model) or 1.0
+        svg = ['<svg xmlns="http://www.w3.org/2000/svg" width="720" height="380" viewBox="0 0 720 380" role="img" aria-labelledby="evaluation-title evaluation-desc">',
+               '<title id="evaluation-title">Held-out prediction error</title>',
+               '<desc id="evaluation-desc">' + escape(figure["alt"] + ' A zero-based vertical axis shows mean absolute error in target units; uncertainty was not estimated.') + '</desc>',
+               '<rect width="720" height="380" fill="white"/>',
+               '<text x="385" y="28" text-anchor="middle" font-family="sans-serif" font-size="19">Held-out prediction error</text>',
+               '<text x="385" y="51" text-anchor="middle" font-family="sans-serif" font-size="13">Same test split · lower MAE is better</text>',
+               '<text transform="translate(20,190) rotate(-90)" text-anchor="middle" font-family="sans-serif" font-size="13">MAE (target units)</text>']
+        for fraction in (0, 0.25, 0.5, 0.75, 1):
+            y = 300 - 200 * fraction
+            svg += [f'<path d="M105 {y}h540" stroke="#e2e8f0"/>',
+                    f'<text x="98" y="{y+4}" text-anchor="end" font-family="sans-serif" font-size="12">{scale*fraction:.4g}</text>']
+        svg.append('<path d="M105 75v225h540" fill="none" stroke="#334155" stroke-width="1.5"/>')
+        for x, value, label, color in ((190, baseline, "Mean baseline", "#94a3b8"), (430, model, "Ridge", "#334155")):
+            height = 200 * (value / scale)
+            svg += [f'<rect x="{x}" y="{300-height:.4f}" width="110" height="{height:.4f}" fill="{color}" stroke="#334155"/>',
+                    f'<text x="{x+55}" y="{287-height:.4f}" text-anchor="middle" font-family="sans-serif" font-size="15">{value:.5g}</text>',
+                    f'<text x="{x+55}" y="325" text-anchor="middle" font-family="sans-serif" font-size="14">{label}</text>']
+        svg.append('<text x="385" y="360" text-anchor="middle" font-family="sans-serif" font-size="12">One seeded split; uncertainty not estimated</text></svg>')
+        figure["svg"] = "".join(svg)
+        figure["latex"] = r"\begin{tikzpicture}\begin{axis}[ybar,width=\linewidth,height=5cm,ymin=0,ymax=1.2,enlarge x limits=0.5,xtick={1,2},xticklabels={Mean baseline,Ridge},ytick={0,0.25,0.5,0.75,1},yticklabels={" + ",".join(f"{scale*f:.4g}" for f in (0, .25, .5, .75, 1)) + r"},ylabel={MAE (target units)},tick label style={font=\scriptsize},label style={font=\small},ymajorgrids=true,grid style={gray!20},bar width=18pt,point meta=explicit symbolic,nodes near coords,nodes near coords style={font=\scriptsize}]\addplot[fill=gray!40,draw=black] coordinates {(1," + f"{baseline/scale:.8f}) [{baseline:.5g}] (2,{model/scale:.8f}) [{model:.5g}]" + r"};\end{axis}\end{tikzpicture}"
+        figure["style_version"] = 2
+    return figures
+
+
+def figure_instructions(figures: list[dict]) -> str:
+    if not figures:
+        return "No topic-relevant, evidence-backed figures are available. Omit figures; a paper does not need a decorative figure. Do not invent plots, diagrams, image URLs, or figure assets."
+    lines = ["APPROVED FIGURES: use each supplied figure once. Write a body paragraph of at least two sentences referring to Figure N (or Hình N), then place its marker on a separate line in Methods/Results as appropriate. The renderer supplies the caption: do not write another caption or use a caption in place of explanatory prose. Explain only what the actual figure shows and what it does not establish."]
+    for figure in figures:
+        lines.append(f"Figure {figure['number']} ({figure['kind']}): {figure['caption']} Marker: [[figure:{figure['id']}]]")
+    return "\n".join(lines)
+
+
+def materialize_figures(markdown: str, figures: list[dict]) -> str:
+    for f in figures:
+        markdown = markdown.replace(f"[[figure:{f['id']}]]", f"![Figure {f['number']}. {f['caption']}](figures/{f['id']}.svg)")
+    return markdown
+
+
+def measured_comparison_table(context: dict, contract: dict | None) -> str:
+    """Render recorded routine metrics; never derive results from manuscript prose."""
+    if not contract or (contract.get("rendering_policy") or {}).get("version", 0) < 2:
+        return ""
+    if contract.get("article_type") != "COMPUTATIONAL_STUDY":
+        return ""
+    run = context.get("analysis") or {}
+    if run.get("status") != "COMPLETED" or run.get("routine_name") != "tabular_regression_v1":
+        return ""
+    metrics = run.get("metrics") or {}
+    try:
+        rows = [[_number((metrics.get(key) or {}).get(metric)) for metric in ("mae", "rmse", "r2")]
+                for key in ("baseline", "model")]
+    except ValueError:
+        return ""
+    vi = contract.get("language") == "vi"
+    caption = ("Bảng 1. Kết quả đo trên cùng tập kiểm thử; một lần chia dữ liệu, chưa kiểm định ý nghĩa thống kê."
+               if vi else "Table 1. Recorded metrics on the same held-out split; one split, without a statistical significance test.")
+    lines = [caption, "", "| Model | MAE | RMSE | R² |", "|---|---:|---:|---:|"]
+    for label, values in zip(("Training-mean baseline", "Ridge"), rows):
+        lines.append("| " + label + " | " + " | ".join(f"{v:.6g}" for v in values) + " |")
+    return "\n".join(lines)
+
+
+def insert_measured_comparison_table(markdown: str, context: dict, contract: dict | None) -> str:
+    table = measured_comparison_table(context, contract)
+    if not table or table in markdown:
+        return markdown
+    # Reserve Table 1 for recorded results; do not silently rewrite a model's table.
+    if re.search(r"(?m)^\s*\*{0,2}(?:Table|Bảng)\s+1\s*[.:]", markdown, re.I):
+        return markdown
+    results = next((s["heading"] for s in contract["sections"] if s["id"] == "results"), None)
+    if not results:
+        return markdown
+    heading = re.compile(rf"(?m)^##\s+{re.escape(results)}\s*$")
+    return heading.sub(lambda m: m[0] + "\n\n" + table, markdown, count=1)
+
+
+def validate_scientific_reporting(markdown: str, contract: dict | None, context: dict, figures: list[dict]) -> list[dict]:
+    if not contract or contract.get("version", 1) < 2:
+        return []
+    findings = []
+    if contract.get('study_provenance_policy'):
+        from app.services.study_reporting import study_reporting_findings
+        findings.extend(study_reporting_findings(markdown, contract, context))
+    if contract.get('rendering_policy'):
+        without_markers = re.sub(r'\[\[(?:@claim:[0-9a-fA-F-]{36}|figure:[a-zA-Z0-9_-]+)\]\]', '', markdown)
+        if '[[' in without_markers:
+            findings.append({'code':'UNRESOLVED_INTERNAL_MARKER','message':'Remove invented internal references such as manifest/metrics markers. Use supplied claim/figure markers and report recorded study results directly.'})
+    def add(code, message):
+        findings.append({"code": code, "message": message})
+    if (contract.get("rendering_policy") or {}).get("version", 0) >= 2:
+        references = set(re.findall(r"(?:Table|Bảng)\s+(\d+)\b", markdown, re.I))
+        captions = re.findall(r"(?m)^\s*\*{0,2}(?:Table|Bảng)\s+(\d+)\s*[.:][^\n]*\n\s*\n?(?=\s*\|)", markdown, re.I)
+        if references - set(captions):
+            add("MISSING_TABLE", "A numbered table is referenced without a captioned table. Include the actual recorded table or remove the unsupported reference.")
+        if len(captions) != len(set(captions)):
+            add("DUPLICATE_TABLE", "Use a unique number for each captioned table.")
+        for figure in figures:
+            if figure.get("id") != "evaluation" or context.get("figure_style_version", 1) < 4:
+                continue
+            # Remove supplied captions before checking the explanation: captions
+            # explicitly state that individual observations are NOT plotted.
+            body = re.sub(r"!\[[^\]]*\]\([^)]+\)", "", markdown)
+            paragraphs = [p for p in body.split("\n\n") if re.search(r"(?:Figure|Fig\.?|Hình)\s*" + str(figure["number"]) + r"\b", p, re.I)]
+            positive = r"(?:shows?|displays?|visuali[sz]es?|plots?|depicts?)\s+(?:the\s+)?(?:absolute\s+)?(?:prediction\s+)?(?:errors?|residuals?|predictions?)\s+(?:for\s+)?(?:each|individual|per[- ]observation)|(?:shows?|displays?|depicts?)\s+(?:the\s+)?(?:residual|error)\s+distribution"
+            sentences = [s for p in paragraphs for s in re.split(r"(?<=[.!?])\s+", p)]
+            if any(re.search(positive, s, re.I) and not re.search(r"\b(?:not|never|neither|cannot|can't|doesn't|don't)\b", s, re.I) for s in sentences):
+                add("FIGURE_SCOPE_MISMATCH", "The supplied figure contains two aggregate MAE bars, not per-observation errors, predictions, residuals or their distribution. Correct its interpretation.")
+    prose = re.sub(r"(?m)^!\[.*\]\(figures/[^)]+\)\s*$|\[\[figure:[^\]]+\]\]", "", markdown)
+    if figures and re.search(r"(?s)```[^`]*[│▼─][^`]*```", markdown):
+        add("REDUNDANT_TEXT_DIAGRAM", "Use the supplied numbered figure and explain it; remove the duplicate ASCII workflow diagram.")
+    for f in figures:
+        marker = f"[[figure:{f['id']}]]"
+        asset = f"](figures/{f['id']}.svg)"
+        if marker not in markdown and asset not in markdown:
+            add("FIGURE_MISSING", f"Include supplied Figure {f['number']} and its caption; do not invent an alternative plot.")
+        if contract.get("version", 1) >= 3 and markdown.count(marker) + markdown.count(asset) > 1:
+            add("DUPLICATE_FIGURE", f"Include Figure {f['number']} once; refer back to it in prose instead of repeating the asset.")
+        matching = [p for p in prose.split("\n\n") if re.search(rf"(?:Figure|Fig\.?|Hình)\s*{f['number']}\b", p, re.I)
+                    and not re.match(rf"\s*\*{{0,2}}(?:Figure|Fig\.?|Hình)\s*{f['number']}\s*[:.]", p, re.I)]
+        if not any(len(p.split()) >= 12 for p in matching):
+            add("FIGURE_UNEXPLAINED", f"Explain Figure {f['number']} in a substantive paragraph, including what it shows and its limits.")
+    if contract.get("version", 1) >= 3:
+        positions = [markdown.find(f"[[figure:{f['id']}]]") if f"[[figure:{f['id']}]]" in markdown
+                     else markdown.find(f"](figures/{f['id']}.svg)") for f in sorted(figures, key=lambda f: f["number"])]
+        visible_positions = [position for position in positions if position >= 0]
+        if visible_positions != sorted(visible_positions):
+            add("FIGURE_ORDER", "Place supplied figures in numerical order so body references match publication figure numbering.")
+    allowed = {f["id"] for f in figures}
+    approved_paths = {f"figures/{name}.svg" for name in allowed}
+    for image_path in re.findall(r"!\[[^\]]*\]\(([^)]+)\)", markdown):
+        if image_path not in approved_paths:
+            add("UNKNOWN_FIGURE", "Do not insert invented or unapproved image URLs; use the supplied versioned figure assets.")
+    for name in re.findall(r"\[\[figure:([^\]]+)\]\]|\]\(figures/([^)]+)\.svg\)", markdown):
+        if (name[0] or name[1]) not in allowed:
+            add("UNKNOWN_FIGURE", "Use only figures produced from approved, topic-relevant data.")
+    run = context.get("analysis") or {}
+    if contract.get('article_type') == 'EMPIRICAL_STUDY' and context.get('fieldwork_csv_statistics'):
+        from app.services.fieldwork_reporting import numeric_table_mismatches
+        mismatches = numeric_table_mismatches(markdown, context['fieldwork_csv_statistics'])
+        if mismatches:
+            add('FIELDWORK_NUMERIC_MISMATCH', 'Copy computed CSV statistics and counts without inventing values: ' + '; '.join(mismatches))
+    if contract.get("article_type") == "COMPUTATIONAL_STUDY":
+        if run.get("status") != "COMPLETED" or not (run.get("metrics") or {}).get("baseline") or not (run.get("metrics") or {}).get("model"):
+            add("BASELINE_MISSING", "Report real executed baseline/model results before making a computational comparison.")
+    if contract.get("article_type") == "NARRATIVE_REVIEW":
+        source_count = context.get("used_source_count", context.get("distinct_claim_source_count"))
+        if source_count is not None and source_count < 2:
+            add("SINGLE_SOURCE_SCOPE", "Fewer than two distinct cited sources support this review. Label it as a preliminary single-source synthesis, avoid cross-study or field-wide conclusions, and request more sources before presenting it as a literature review.")
+    for section in contract.get("sections", []):
+        if section["id"] not in {"related_work", "introduction", "results"}:
+            continue
+        match = re.search(rf"(?ms)^##\s+{re.escape(section['heading'])}\s*\n(.*?)(?=^##\s|\Z)", markdown)
+        body = match[1] if match else ""
+        if section["id"] in {"related_work", "introduction"} and context.get("grounded_claim_count", 0):
+            if not re.search(r"\[\[@claim:|\[\d+\]|\([^\n)]+,\s*(?:\d{4}|n\.d\.)\)", body):
+                add("UNCITED_RESEARCH_CONTEXT", f"Cite the source-backed comparisons and bounded gap in {section['heading']}.")
+        if section["id"] == "results" and run.get("status") == "COMPLETED":
+            for label, key in (("Ridge", "model"), ("(?:Mean baseline|baseline)", "baseline")):
+                expected = ((run.get("metrics") or {}).get(key) or {}).get("mae")
+                if expected is None:
+                    continue
+                for match in re.finditer(rf"\b{label}\b(?P<context>[^\n.]{{0,50}})\bMAE\b\s*(?:=|of|is|là|:)\s*(?P<value>[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)", body, re.I):
+                    if re.search(r'\b(?:delta|difference|reduction|improvement|change)\b|Δ|chênh lệch', match['context'], re.I):
+                        continue  # A delta is not the model's absolute MAE.
+                    if not math.isclose(float(match['value']), float(expected), rel_tol=1e-3, abs_tol=1e-3):
+                        add("METRIC_MISMATCH", "A reported MAE differs from the executed result; copy measured values and label their scope.")
+    # The generated supplementary search table has its own caption/explanation.
+    # It must neither trigger nor satisfy validation of model-authored tables.
+    from app.services.research_quality import LEDGER_PATTERN
+    table_content = re.sub(LEDGER_PATTERN, "", markdown) if contract.get("research_quality_policy") else markdown
+    if re.search(r"(?m)^\s*\|.+\|\s*$", table_content) and not re.search(r"(?:Table|Bảng)\s*\d+", table_content, re.I):
+        add("TABLE_UNEXPLAINED", "Number and caption each table and explain it in the surrounding text.")
+    for sentence in re.split(r"[.!?\n;]|\bbut\b|\bhowever\b|\bnhưng\b|\btuy nhiên\b", prose, flags=re.I):
+        lowered = sentence.lower()
+        if re.search(r"\b(not|no|without|không|chưa)\b", lowered):
+            continue
+        if re.search(r"significantly (?:better|outperform|improv|reduc|increas|enhanc)|statistically significant|vượt trội có ý nghĩa|có ý nghĩa thống kê", lowered) and not context.get("statistical_significance_tested"):
+            add("UNSUPPORTED_SIGNIFICANCE", "No statistical significance test was executed; report descriptive differences and exploratory limits.")
+        if re.search(r"\b(?:best (?:model|method|algorithm|performance)|perfect (?:accuracy|performance|results))\b", lowered):
+            add("UNSUPPORTED_SUPERLATIVE", "Replace absolute superiority claims with a specific supported comparison and its evaluation scope.")
+        if context.get("independent_datasets_evaluated", 0) <= 1 and re.search(r"across all datasets|in all cases|universally superior|mọi bộ dữ liệu|vượt trội trên tất cả", lowered):
+            add("UNSUPPORTED_GENERALIZATION", "One limited evaluation cannot justify a universal performance claim.")
+    return findings

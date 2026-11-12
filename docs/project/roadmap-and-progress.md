@@ -1,74 +1,59 @@
-# Roadmap và tiến độ — ATI
+# Tiến độ triển khai — Synthia
 
-**Cập nhật planning:** 09/10/2026 · **Kỳ hạn:** 10/09–10/11/2026.<br>
-Định hướng: Multi-Agent Research tạo bài báo có bằng chứng và thực nghiệm tái lập. Nguồn chi tiết: [User Journey](user-journey-and-outputs.md), [Implementation Plan](implementation-plan.md), [SRS v4.1](../requirements/SRS.md), [Evaluation Plan](evaluation-plan.md).
+**Cập nhật: 02/11/2026.** Code đã kiểm e457f17 / PR #82; bộ chạy P7 đã qua CI, tiếp theo pilot issue #83. Hạn cuối kỳ mới: 05/11/2026; mục tiêu chốt bản nộp trước hết 04/11.
 
-## 1. Mốc đã có bằng chứng
+Tài liệu này trả lời **đã có gì, đã kiểm đến đâu, tiếp theo làm gì**. Thứ tự và điều kiện phát hành nằm trong [Implementation Plan](implementation-plan.md). Các biên bản ngày 22–24/10 là lịch sử, không phải trạng thái code hiện tại.
 
-| Mốc | Bằng chứng | Cách hiểu |
+## 1. Hiện tại người dùng làm được gì?
+
+| Chức năng | Đã triển khai | Bằng chứng và giới hạn |
 |---|---|---|
-| 10/09–24/09 | Hồ sơ đề tài/planning phát triển trong giai đoạn đầu | Không suy ra code đã hoàn thành từ tài liệu |
-| 27/09, biên bản 28/09 | Docker/DB/API/worker ping/graph compile và routing mẫu trong baseline log | Chỉ xác minh những lệnh đã ghi, chưa research E2E |
-| Source `ebb525a`, đọc 08/10 | Register, ClaimEvidence/Citation migration đã commit; graph/search/retrieval/Writer có source | DB hiện tại và feature runtime sau baseline chưa được xác minh |
-| 08–09/10 | Rà scope/code, chốt SRS v4.1, ADR-004, luồng nhiều bài và kế hoạch/evaluation | Planning đã được cập nhật; không phải implementation đã nghiệm thu |
+| Tài khoản và nhiều bài độc lập | Đăng nhập, quyền owner, danh sách bài, quota chạy, hủy và xóa có cleanup nền | Kiểm thử API/lifecycle. Chưa nghiệm thu toàn bộ tải, lỗi hạ tầng và browser cho mọi chế độ |
+| Bài tổng quan có nguồn | Tìm/fetch nguồn, upload PDF và ingestion nền, evidence/claims, Writer/Critic/validator | Có lượt REVIEW chạy provider thật. Không tự nhận systematic review/PRISMA hay chất lượng học thuật chỉ vì workflow hoàn tất |
+| Cấu trúc bài theo loại nghiên cứu | Khung riêng REVIEW / thực nghiệm tính toán / dữ liệu thực địa; Related Work, câu hỏi/gap/đóng góp, văn xuôi, kiểm tra kết luận và hình | PR #62/#64; giới hạn phương pháp và bộ kiểm tra heuristic được công khai. Provider thật mới xác minh cho REVIEW trong các lượt gần đây |
+| Chờ duyệt và chờ dữ liệu | Checkpoint PostgreSQL, duyệt theo plan version, WAITING không giữ worker, resume theo quyết định | API/graph tests có khôi phục state; chưa coi đó là đầy đủ bằng chứng kill/restart process hay nhiều worker cạnh tranh |
+| Thực nghiệm được hỗ trợ | Routine regression có baseline, manifest, kết quả âm/lỗi, kiểm tra lặp và nhật ký | Có kiểm thử routine và execution riêng. Chưa mở chạy code tùy ý; chưa nghiệm thu production sandbox |
+| Theo dõi tiến độ | Tổng quan nhiều bài, trạng thái/stage, lịch sử agent, ngân sách và cảnh báo từ dữ liệu đã lưu | PR #57. Dashboard vận hành, cảnh báo thực sự gửi được và tải staging còn ở P8–P10 |
+| Hỏi bài đã viết | Hỏi đáp dựa trên phiên bản bài và nguồn/chunk của phiên bản đó; lịch sử và chống gửi lặp | PR #58. Câu trả lời vẫn cần người dùng đối chiếu bằng chứng |
+| Sửa cách trình bày bài | Issue #65: chọn phiên bản, gửi yêu cầu, Writer/Critic/validator tạo bản mới; nguồn và dữ liệu đóng băng theo bản gốc | Kiểm thử quyền, cạnh tranh, stale base, budget, hủy/xóa và mô phỏng crash/redelivery. Một lượt provider thật tạo v3 từ v2, v2 giữ nguyên |
+| Xuất bản thảo | Markdown và ZIP nguồn IEEE/ACM kèm hình/dữ liệu biểu đồ/provenance theo version | PR #64; đã biên dịch và xem PDF mẫu. Chưa có dịch vụ tự biên dịch PDF trong backend; gói tái lập thực nghiệm đã có ở PR #78, xem bằng chứng bên dưới |
 
-## 2. Mục tiêu đến 10/11
+**Chưa đủ điều kiện phát hành production hoặc nâng `main` thành bản demo đã nghiệm thu.** Các chức năng có code và tests không tự đóng toàn bộ G0–G7.
 
-Ba đường đều nhắm **bài báo hoàn chỉnh**: REVIEW web+PDF có citation; EMPIRICAL_COMPUTATIONAL với một CSV routine chạy thật và gói tái lập; EMPIRICAL_HUMAN có protocol trung gian, pause/upload/resume rồi viết bài sau khi có kết quả thật. Mỗi bài có workspace riêng; A chờ không cản B. Q&A/sửa phiên bản, progress/log, auth/ownership/budget dùng chung. Tổng quan và human-led nhận nhiều lĩnh vực; execution tự động giới hạn method/schema hỗ trợ.
+**Cập nhật #84 / PR #85:** code c72e936 với contract v4/hierarchy theo loại bài đạt 118 focused tests, 513 backend tests, 20 frontend tests và 5/5 CI; chưa chấm bài thật sau thay đổi. Writer của bài được audit nhận 5 evidence records từ 3 nguồn; giới hạn chính ở lượng bằng chứng và tổ chức nội dung, chưa có bằng chứng context overflow. Xem Agent Workflow §9.1–9.2.
 
-Experiment không còn là phần “nếu kịp”. Nếu không đạt gate phải ghi thiếu so với mục tiêu; không thay bằng mock và nhận đã xong. Ảnh, PDF trình bày đẹp, nhiều routine, OCR, arbitrary-code sandbox và cộng tác nhóm để sau.
+## Bằng chứng cập nhật 02/11
 
-## 3. Lịch còn lại
+- **P6 / PR #78 đã merge tại `bb63c99`:** 425 backend tests, 20 frontend tests và 5/5 CI đạt. Export theo owner/version, đóng băng input/code/result, kiểm hash, giữ kết quả âm, journal cutoff; chạy ZIP độc lập thực sự, không dùng LLM để giả kết quả tính toán.
+- **P7 / #79 đã merge qua PR #80:** freeze/record/blind/score/summarize; 458 backend tests, 20 frontend tests, 5/5 CI đạt. Giữ attempt đầu, reruns, missing/failures, delta âm và split riêng; chưa có kết quả khoa học.
+- **P7 / #81, PR #82 đã qua kiểm thử:** A controller và B/C production graph chạy trên frozen lexical corpus với model/cap chung; scope riêng cho DB/providers, ledger tổng bền vững, timeout/failure/rerun và draft chưa đạt được giữ. Code e457f17 đạt 485 backend tests, 20 frontend tests, 60 ca focused và 5/5 CI; CLI plan trong Docker có 0 provider calls. Issue #83 dành cho pilot thật. Không dùng các fixture này như bằng chứng chất lượng nghiên cứu.
+- **Chưa có benchmark thật:** chưa chốt/chạy model trả phí trên pilot/held-out và chưa chấm output thật. Chọn profile/ngân sách, freeze code/corpus rồi chạy có giới hạn; G7, browser/runtime/fault và P8–P10 chưa đóng.
 
-Ước lượng dựa trên giả định Chiến dành 3–4 giờ tập trung/ngày; chưa phải cam kết năng lực đã đo. Chốt lại velocity sau P0/P1; điều chỉnh ngày/gói công việc bằng evidence.
+## Bằng chứng cập nhật 31/10
 
-| Thời gian | Gói triển khai của Chiến | Gate |
+- Nền `develop@f252223`: PR #66/#68 (sửa bài và citation theo phiên bản), #70 (viết học thuật), #72 (nguồn học thuật/provenance), #74/#76 (kiểm hỗ trợ và cân bằng truy vấn) đã merge; **413 backend tests, 5/5 CI đạt** trên PR #76. Pilot Gemini thật phân biệt được phát biểu có điều kiện với kết luận hybrid vượt bằng chứng; chưa phải semantic benchmark.
+- Issue #77 bổ sung gói thí nghiệm theo version: input/code/environment đóng băng trước chạy, kết quả đầy đủ, journal theo mốc version, checksum, launcher độc lập và SVG đo từ chart data. Bài cũ thiếu snapshot báo rõ, không dùng code/data mới để lấp chỗ trống. Xem kiểm thử và CI của PR liên kết issue #77 để biết trạng thái nghiệm thu cuối cùng.
+- Lượt kiểm tập trung ban đầu: **38 tests backend liên quan đạt**; chạy thật routine và chạy lại ZIP bằng Python độc lập, giữ kết quả âm, kiểm sai quyền/tamper/missing snapshots/version isolation. **20 frontend tests và TypeScript đạt** cục bộ; toàn bộ backend trên DB PostgreSQL mới đạt **425 tests**. CI của candidate mới phải đạt trước merge. Đây chưa phải browser E2E hay nghiệm thu production.
+
+## 2. Bằng chứng của lượt bàn giao #65
+
+| Kiểm tra | Kết quả | Giới hạn |
 |---|---|---|
-| 08–10/10 | P0 — baseline tái lập, dependency/DB/test isolation | G0 |
-| 11–14/10 | P1 — auth, nhiều task/user, ResearchRun, lifecycle/outbox/events/quota | G1 |
-| 15–19/10 | P2 — web E2E, evidence, Writer/Critic/Validator, budget | G2 |
-| 20–23/10 | P3 — PDF, dashboard nhiều bài, evidence/progress | G3 |
-| 24–26/10 | P4 — plan/protocol trung gian, assisted/automatic, durable waits/resume | G4 |
-| 27–30/10 | P5 — experiment thật, human-led result intake, empirical manuscripts | G5 |
-| 31/10–02/11 | P6 — Q&A/revision, authorized export, delete/cleanup | G6 |
-| 03–07/11 | P7 — baseline/ablation, QA, sửa blockers, báo cáo | G7 |
-| 08–10/11 | Buffer, freeze, demo/backup/nộp bài | Không thêm feature |
+| Toàn bộ backend trên DB PostgreSQL/pgvector mới, migrate từ rỗng | **343 tests đạt** | Provider được thay bằng fixture xác định trong suite; không dùng DB dev để chạy pytest |
+| Các ca riêng cho sửa bài | **15 tests đạt** | Bao gồm checkpoint PostgreSQL, rollback khi publication lỗi và mô phỏng ngắt sau checkpoint; chưa thay cho kill/restart Celery process thực |
+| Frontend | **17 tests đạt**, gồm hồi quy nhãn trích dẫn ở trang sửa bài; production build và Docker image build đạt | Phần giao diện/ngôn ngữ đang chỉnh độc lập không tự được coi là đã phát hành |
+| Provider thật: chỉnh bản thảo REVIEW | Task `f0142565-3e21-46b3-adc4-d51ee21a29a8`: v2 → v3, **PASSED nội bộ**, 1.172 từ | Hash nội dung v2 giữ nguyên; nguồn bản mới thuộc v2; lượt sửa chỉ có Writer/Critic/PostProcessor. Đây là smoke nhỏ, không đo ưu thế khoa học |
+| Export sau sửa | Đọc lại version mới và tải publication ZIP có xác thực thành công | Không chứng nhận chấp nhận xuất bản hoặc đủ yêu cầu của mọi venue |
 
-Thứ tự phụ thuộc và giờ ước lượng từng gói ở [Implementation Plan](implementation-plan.md). Không thể bỏ auth/provenance để “xong UI trước”. Khi trễ, cắt polish/ảnh/PDF đẹp; giữ kết quả thật và báo trung thực gate còn thiếu.
+CI của PR là cổng trước merge; release `main` vẫn cần demo UI/API/broker/provider thật trên cùng candidate theo CONTRIBUTING. Không lấy tỷ lệ COMPLETED trong DB dev chứa dữ liệu thử lịch sử làm thước đo chất lượng.
 
-G0–G7 có một định nghĩa thống nhất tại [SRS §8](../requirements/SRS.md#8-acceptance-gates); FR/NFR được nối sang gói triển khai ở mục 9. Tất cả gate hiện chưa đủ evidence trên revision hiện tại. Khi cập nhật tiến độ, dùng Planned / In progress / Implemented / Verified / Blocked kèm revision, ngày và link kết quả; không tự chuyển mốc kế hoạch thành ngày đã hoàn thành.
+## 3. Thứ tự tiếp theo
 
-## 4. Việc chuẩn bị song song của Chiến
+| Ưu tiên | Việc cần hoàn thiện | Người dùng nhận được gì? | Điều kiện nghiệm thu |
+|---|---|---|---|
+| 1 | #86: nguồn/bằng chứng đủ các khái niệm; tích hợp và nghiệm thu FE/API trên cùng candidate | Bài có lập luận và nguồn liên quan, luồng người dùng chạy thật | Chấm bài đa chủ đề/loại; không lấy đủ query hoặc số ref làm bằng chứng chất lượng |
+| 2 | P7: đánh giá theo Evaluation Plan | Biết chất lượng, nguồn hỗ trợ, chi phí, thời gian và giá trị multi-agent trên bộ câu hỏi cố định | Baseline/ablation cùng model/corpus/cap; giữ cả lỗi/kết quả âm và giới hạn mẫu |
+| 3 | Nghiệm thu runtime/UI còn thiếu | Ba luồng REVIEW, tính toán, human-led hoạt động sau lỗi/khôi phục | Browser + broker + restart/concurrency/fault tests; không đóng gate chỉ từ mock tests |
+| 4 | P8 → P9 → P10 | Staging, backup/restore, monitoring vận hành, pilot rồi phát hành giới hạn | Cùng image digest, rollback, cảnh báo thật, tải/chi phí đã đo và quyết định go/no-go |
 
-| Hạn chuẩn bị | Artifact | Mục đích |
-|---|---|---|
-| 12/10 | 12 câu hỏi (4 pilot, 8 held-out), nguồn/expected points và rubric đóng băng | Đánh giá lợi ích multi-agent, không điều chỉnh held-out sau khi xem kết quả |
-| 16/10 | CSV công khai + data dictionary/license/checksum | Thực nghiệm tính toán thật và tái lập |
-| 17/10 | 4 kịch bản UI, gồm A chờ/B chạy/A resume; demo checklist | Kiểm user flow, trạng thái và recovery |
-| 03–07/11 | Chấm ẩn nhãn, manual QA và issue log | Báo số thực đo, nêu hạn chế đánh giá một người |
-
-## 5. Tiến độ source và runtime
-
-| Hạng mục | Đọc source 08/10 | Evidence còn cần |
-|---|---|---|
-| API/DB/graph nền | Có scaffold và graph nodes | Chạy lại đúng revision, clean-DB migration |
-| Auth | Có register/helpers, research dùng dummy user | Login/current_user, ownership negative cases |
-| Web/PDF evidence | Web tools có; PDF chưa có đủ luồng | Provider E2E, ingest PDF và claim anchors |
-| Writer/Critic/Validator | Writer/Critic có; validator placeholder | Full-report review, persisted lineage, bounded loops |
-| Budget/idempotency | Chưa thực thi đầy đủ | Reserve/reconcile, start/redelivery/restart gates |
-| Protocol/wait/resume | Target mới; graph chưa checkpointer | Protocol trung gian, durable checkpoint + upload READY + đúng version; A chờ/B chạy |
-| Routine/experiment | Chưa có đủ implementation | Actual CSV run, journal mọi attempt/kết quả âm, manifest + rerun có sai khác; human-led result provenance và bài hoàn chỉnh sau upload |
-| UI/Q&A/report versions | Starter/polling; phiên bản/Q&A còn thiếu | Tương tác và feedback/end states thực tế |
-| Evaluation | Đã có kế hoạch | Chưa đo; không có số quality/cost/superiority |
-
-## 6. Sau bản nộp
-
-| Hướng | Điều kiện mở rộng |
-|---|---|
-| Cá nhân dùng ổn định | Core gates đạt, retention/quota/recovery rõ, theo dõi chi phí thực |
-| Nhiều phương pháp/ngành | Routine/template có validation riêng và người đánh giá phù hợp |
-| Nhóm nghiên cứu | Workspace membership/roles/sharing/audit, cách ly dữ liệu, không chỉ thêm bảng users |
-| Vận hành rộng | Threat model, secure sandbox nếu nhận code tự sinh, load/recovery/backup evaluation, privacy policy |
-| Mã do AI sinh | Chỉ xét sau khi journal và kiểm tái lập được nghiệm thu, runner cô lập mã không tin cậy qua threat model/security review, benchmark chất lượng/chi phí/ca âm đủ mạnh; quyết định bằng ADR mới |
-
-Không ấn định ngày mở rộng trước khi biết kết quả đánh giá. Mục tiêu dài hạn giữ đa lĩnh vực, còn chất lượng và khả năng tái lập quyết định method được hỗ trợ.
+Sửa dữ liệu/phương pháp thực nghiệm là **lượt nghiên cứu mới**, không đi qua editorial revision để tái dùng Results cũ. Bản thực nghiệm lịch sử không có đủ snapshot phải báo rõ chưa thể sửa theo luồng này. Không tự tăng ngân sách để làm lại một yêu cầu thất bại.

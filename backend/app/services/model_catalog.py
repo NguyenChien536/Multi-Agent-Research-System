@@ -1,0 +1,131 @@
+"""Read the selected provider's catalog without generating or billing chat tokens."""
+import json
+import re
+import time
+
+import httpx
+from fastapi import HTTPException
+
+from app.services.model_connection import validate_api_root
+from app.services.public_errors import public_error
+
+MODEL_ID = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._:/@+\-]{0,199}$')
+_cache = None
+_expires = 0.0
+
+
+def output_capacity(item):
+    """Only expose finite positive integer metadata, never infer it from context."""
+    provider = item.get('top_provider')
+    value = provider.get('max_completion_tokens') if isinstance(provider, dict) else None
+    return value if isinstance(value, int) and not isinstance(value, bool) and 1024 <= value <= 1_000_000 else None
+
+
+def capacity_order(item):
+    return (-(item.get('max_output_tokens') or 0), -bool(item.get('supports_json_schema')), item['id'])
+
+
+async def free_models():
+    """Public OpenRouter metadata; never use personal credentials for this cache."""
+    global _cache, _expires
+    if _cache is not None and time.monotonic() < _expires:
+        return _cache
+    async with httpx.AsyncClient(timeout=10, follow_redirects=False, trust_env=False) as client:
+        response = await client.get('https://openrouter.ai/api/v1/models')
+        response.raise_for_status()
+        values = response.json().get('data', [])
+    result = []
+    for model in values:
+        price = model.get('pricing') or {}
+        try:
+            zero = float(price.get('prompt', -1)) == float(price.get('completion', -1)) == 0
+        except (ValueError, TypeError):
+            continue
+        if zero and model.get('id', '').endswith(':free') and 'response_format' in model.get('supported_parameters', []):
+            result.append({'id': model['id'], 'context_length': model.get('context_length'),
+                           'max_output_tokens': output_capacity(model)})
+    _cache, _expires = sorted(result, key=capacity_order)[:100], time.monotonic() + 300
+    return _cache
+
+
+async def discover_models(base_url: str, api_key: str, free_only: bool = True):
+    root = validate_api_root(base_url)
+    google = root == 'https://generativelanguage.googleapis.com/v1beta/openai'
+    url = 'https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000' if google else root + '/models'
+    headers = {'x-goog-api-key': api_key} if google else {'Authorization': 'Bearer ' + api_key}
+    try:
+        async with httpx.AsyncClient(timeout=15, follow_redirects=False, trust_env=False) as client:
+            async with client.stream('GET', url, headers=headers) as response:
+                if response.status_code != 200:
+                    # Never forward provider bodies, request headers or secret-bearing URLs.
+                    code = response.status_code
+                    if code in (401, 403):
+                        raise HTTPException(400, 'PROVIDER_AUTH_FAILED: This service rejected the API key or its permissions.')
+                    if code in (404, 405):
+                        raise HTTPException(400, 'MODEL_CATALOG_UNAVAILABLE: This service does not provide a model list here. Enter its exact chat model ID manually.')
+                    raise HTTPException(503, public_error(str(code)))
+                chunks, size = [], 0
+                async for chunk in response.aiter_bytes():
+                    size += len(chunk)
+                    if size > 2 * 1024 * 1024:
+                        raise HTTPException(502, 'MODEL_CATALOG_UNAVAILABLE: Model list exceeded the supported size.')
+                    chunks.append(chunk)
+        payload = json.loads(b''.join(chunks))
+    except httpx.TimeoutException:
+        raise HTTPException(504, 'PROVIDER_TIMEOUT: Loading the model list timed out. Try again.') from None
+    except httpx.HTTPError:
+        raise HTTPException(502, 'PROVIDER_UNAVAILABLE: Could not connect to the selected API service.') from None
+    except (ValueError, TypeError):
+        raise HTTPException(502, 'MODEL_CATALOG_UNAVAILABLE: The service returned an invalid model list.') from None
+    entries = payload.get('models' if google else 'data') if isinstance(payload, dict) else None
+    if not isinstance(entries, list):
+        raise HTTPException(502, 'MODEL_CATALOG_UNAVAILABLE: The service returned an unsupported model list.')
+    models = {}
+    for item in entries:
+        if not isinstance(item, dict):
+            continue
+        name = item.get('name') if google else item.get('id')
+        if isinstance(name, str) and google:
+            # Google's compatibility catalog returns resource names; completion
+            # requests and Settings use the model ID, without the models/ prefix.
+            name = name.removeprefix('models/')
+            if not name.startswith(('gemini-', 'gemma-')):
+                continue
+            if 'generateContent' not in (item.get('supportedGenerationMethods') or []):
+                continue
+            if any(word in name for word in ('-live', 'computer-use', 'robotics', 'nano-banana', 'customtools', 'omni')):
+                continue
+            # These are models with a free-tier offering, not a guarantee about
+            # the account's billing tier or remaining project quota.
+            if free_only and not (name.startswith('gemma-') or 'flash' in name):
+                continue
+        if not isinstance(name, str) or not MODEL_ID.fullmatch(name) or api_key in name:
+            continue
+        architecture = item.get('architecture')
+        output = architecture.get('output_modalities') if isinstance(architecture, dict) else None
+        if isinstance(output, list) and 'text' not in output:
+            continue
+        if any(word in name.lower() for word in ('embedding', 'whisper', 'tts', 'transcribe', 'image', 'moderation', 'realtime', 'audio', 'dall-e', 'sora', 'video')):
+            continue
+        pricing = item.get('pricing') if isinstance(item.get('pricing'), dict) else {}
+        free = bool(pricing) and all(str(pricing.get(key, '')) in ('0', '0.0') for key in ('prompt', 'completion'))
+        if root == 'https://openrouter.ai/api/v1' and free_only:
+            if not (free and (name.endswith(':free') or name == 'openrouter/free')):
+                continue
+        models[name] = {'id': name, 'free': free if pricing else None,
+                        'supports_json_schema': name.startswith('gemini-') if google else 'structured_outputs' in (item.get('supported_parameters') or [])}
+        capacity = item.get('outputTokenLimit') if google else output_capacity(item)
+        if isinstance(capacity, int) and not isinstance(capacity, bool) and 1024 <= capacity <= 1_000_000:
+            models[name]['max_output_tokens'] = capacity
+        if google:
+            models[name]['recommended_output_mode'] = 'json_schema' if name.startswith('gemini-') else 'prompt_json'
+        title = item.get('displayName') if google else item.get('name')
+        if isinstance(title, str) and title.strip() and api_key not in title:
+            models[name]['display_name'] = title.strip()[:200]
+    if root == 'https://openrouter.ai/api/v1' and free_only:
+        models.setdefault('openrouter/free', {'id': 'openrouter/free', 'free': True})
+    if not models:
+        raise HTTPException(400, 'MODEL_CATALOG_UNAVAILABLE: No matching text models were found. Check the API service and account permissions.')
+    ordered = sorted(models.values(), key=capacity_order) if root == 'https://openrouter.ai/api/v1' and free_only else [models[key] for key in sorted(models)]
+    return {'models': ordered[:500],
+            'check': 'catalog_only_not_generation_or_quota', 'generation_calls': 0}

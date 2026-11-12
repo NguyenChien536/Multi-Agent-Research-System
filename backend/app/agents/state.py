@@ -19,7 +19,7 @@ class ResearchBudget(TypedDict):
     max_iterations: int               # Mặc định: 3
     max_sources: int                  # Mặc định: 20
     max_search_queries: int           # Mặc định: 30
-    max_llm_calls: int                # Mặc định: 50
+    max_llm_calls: int                # Mặc định: 40; provider attempts include fallbacks/retries
     max_input_tokens: int             # Mặc định: 100000
     max_output_tokens: int            # Mặc định: 50000
     max_cost_usd: float               # Mặc định: 2.0
@@ -37,23 +37,46 @@ class ResearchState(TypedDict, total=False):
     """Trạng thái dùng chung (Shared Graph State) trong LangGraph với Annotated Reducers."""
     # === Cấu hình Task ===
     task_id: str
+    workflow_run_id: str
     user_id: str
     research_question: str
     research_depth: str               # 'SHALLOW' | 'STANDARD' | 'DEEP'
+    research_type: str                # 'REVIEW' | 'EMPIRICAL_COMPUTATIONAL' | 'EMPIRICAL_HUMAN'
     language: str
+    report_length: str
+    citation_style: str
+    max_sources: int
+    enforce_provider_budget: bool
+    editorial_revision: bool
+    revision_instructions: str
+    revision_info: Dict[str, Any]
+    base_report_markdown: str
+    source_provenance: Dict[str, Any]
+    dataset_artifact_id: Optional[str]
     budget: ResearchBudget            # Giới hạn tài nguyên toàn bộ task
     require_plan_approval: bool       # Bật chế độ Human-in-the-Loop (mặc định: False)
+    plan_approved: bool               # Người dùng đã duyệt kế hoạch hay chưa
+    plan_feedback: Optional[str]      # Góp ý hoặc yêu cầu điều chỉnh của người dùng
+    protocol: Optional[Dict[str, Any]] # Phương pháp và đề cương nghiên cứu (Methodologist)
+    protocol_artifact_id: Optional[str] # UUID của artifact protocol
+    user_data_submission: Optional[Dict[str, Any]] # Dữ liệu/kết quả thực địa do người dùng cung cấp
+    dataset_csv: Optional[str]        # Nội dung dataset CSV cho thực nghiệm tính toán
+    analysis_run: Optional[Dict[str, Any]] # Kết quả thực thi routine thực nghiệm tính toán
+    experiment_journal: Optional[List[Dict[str, Any]]] # Các entry nhật ký thí nghiệm (append-only)
     max_micro_revisions: int          # Giới hạn Micro-loop Writer ⟷ Critic (mặc định: 2)
     current_iteration: int
     current_micro_revision: int       # Đếm số lần Writer chỉnh sửa trong vòng hiện tại
     attempt_number: int               # Số lần retry (cho Worker crash recovery)
     max_iterations: int               # Giới hạn macro-loop, lấy từ budget nếu không truyền riêng
     current_agent: str                # Node gần nhất cập nhật trạng thái
-    status: str                       # Trạng thái workflow hiện tại
+    status: str                       # Trạng thái workflow hiện tại, gồm COMPLETED hoặc NEEDS_REVIEW
     
     # === Kế hoạch & Truy vấn (Có Reducer) ===
     plan: Dict[str, Any]              # Đề cương & danh sách câu hỏi con
+    plan_version: int
     current_queries: Annotated[List[str], operator.add]   # Tích lũy queries qua các vòng
+    search_activity: Annotated[List[Dict[str, Any]], operator.add]
+    source_selection_log: Annotated[List[Dict[str, Any]], operator.add]
     delta_queries: List[str]          # Truy vấn của vòng hiện tại; được thay thế khi lập kế hoạch bổ sung
     visited_urls: Annotated[Set[str], merge_sets]         # URLs đã crawl — tránh lặp ở vòng sau (Seen URL Cache)
     
@@ -68,15 +91,20 @@ class ResearchState(TypedDict, total=False):
     
     # === Phân tích ===
     analysis_results: Dict[str, Any]  # Luận điểm, mâu thuẫn, phát hiện chính (kèm chunk_id)
+    evidence_need_coverage: Dict[str, Any]  # Quote candidates per planned need; never a semantic-quality certificate
     
     # === Viết & Phản biện (Ủy quyền cho Subgraph) ===
-    draft_report_markdown: str        # Bản nháp từ Writer (có tag @src_xx)
+    draft_report_markdown: str        # Bản nháp từ Writer (có marker claim để tạo citation đã kiểm chứng)
+    draft_truncated: bool
+    scientific_context: Dict[str, Any]
+    scientific_figures: List[Dict[str, Any]]
     critic_verdict: str               # 'PASS' | 'REVISE' | 'NEED_MORE_DATA'
     critic_feedback: List[str]        # Feedback chi tiết: câu nào sai, thiếu gì
     critic_missing_areas: List[str]   # Danh sách knowledge gaps -> sinh Delta Queries
+    critic_review_metadata: Dict[str, Any] # Section coverage and bounded review findings
     citation_validation: Dict[str, Any] # Kết quả Citation Validator: valid/invalid counts
     
     # === Kết quả cuối cùng ===
-    final_report_markdown: str        # Báo cáo sau Post-Processor (citation đã đánh số [1], [2])
+    final_report_markdown: str        # Báo cáo sau Post-Processor (citation khớp claim/evidence đã lưu)
     citations: List[Dict[str, Any]]   # Danh sách trích dẫn hoàn chỉnh
     errors: Annotated[List[str], operator.add] # Lỗi phát sinh trong quá trình

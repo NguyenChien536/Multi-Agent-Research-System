@@ -4,6 +4,189 @@
 
 @layer base {
   body {
-    @apply bg-zinc-50 text-zinc-950 antialiased;
+    @apply bg-white text-stone-900 antialiased;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
+
+/* ==========================================================================
+   TAVILY-INSPIRED WARM SCENIC AESTHETICS
+   Soft pastoral horizon, elegant hero banners, and pill ergonomics
+   ========================================================================== */
+.tavily-scenic-bg {
+  background-color: #FAF8F5;
+  background-image:
+    radial-gradient(ellipse 130% 65% at 50% 100%, rgba(147, 197, 160, 0.38) 0%, rgba(190, 215, 195, 0.22) 30%, rgba(250, 248, 245, 0) 70%),
+    radial-gradient(ellipse 90% 50% at 15% 95%, rgba(220, 205, 170, 0.35) 0%, rgba(250, 248, 245, 0) 60%),
+    radial-gradient(ellipse 85% 55% at 85% 95%, rgba(165, 205, 180, 0.3) 0%, rgba(250, 248, 245, 0) 60%),
+    linear-gradient(180deg, #FAF8F5 0%, #FAF8F5 45%, #F4F1EA 75%, #E6EDE2 100%);
+}
+
+.tavily-hero-banner {
+  background:
+    linear-gradient(135deg, rgba(22, 48, 38, 0.92) 0%, rgba(26, 44, 52, 0.88) 50%, rgba(38, 58, 48, 0.94) 100%),
+    radial-gradient(circle at 85% 25%, rgba(52, 211, 153, 0.35) 0%, transparent 55%),
+    radial-gradient(circle at 15% 85%, rgba(251, 191, 36, 0.22) 0%, transparent 50%),
+    linear-gradient(180deg, #183327 0%, #11241c 100%);
+}
+
+}
+
+/* ==========================================================================
+   PRINT / PDF STYLES
+   Ensures clean, multi-page academic article printing without web UI chrome
+   ========================================================================== */
+@media print {
+  /* Hide all Web UI Chrome */
+  nav,
+  aside,
+  header,
+  footer,
+  button,
+  .print\:hidden,
+  [data-no-print="true"],
+  .no-print,
+  #app-sidebar,
+  #research-header-bar,
+  #stages-sidebar,
+  #research-tab-bar,
+  #toc-sidebar,
+  #mobile-header {
+    display: none !important;
+  }
+
+  /* Root & Layout: Unconstrain height and overflow so all pages print */
+  html,
+  body {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-size: 11pt !important;
+    line-height: 1.6 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Force all wrapper containers to expand and not clip multi-page flow */
+  div,
+  main,
+  section {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    position: static !important;
+  }
+
+  /* Article should take full width with no card borders or shadows */
+  article,
+  .printable-article {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+
+  /* Page break rules: keep headings with next paragraphs, avoid mid-element cuts */
+  h1, h2, h3, h4 {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    color: #111827 !important;
+  }
+
+  p, blockquote, table, pre, tr, figure {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Table styling in print */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+    page-break-inside: auto !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+  }
+
+  th, td {
+    border: 1px solid #d1d5db !important;
+    padding: 6px 10px !important;
+  }
+
+  /* Code block formatting in print */
+  pre {
+    background-color: #f3f4f6 !important;
+    color: #1f2937 !important;
+    border: 1px solid #e5e7eb !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+  }
+
+  /* Citation and link formatting */
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  /* Standard print page settings */
+  @page {
+    size: A4 portrait;
+    margin: 20mm 15mm 20mm 15mm;
+  }
+}
+
+/* Full width unified article layout */
+.paper-space { width: 100%; }
+.paper-layout-container { display: block; width: 100%; }
+@media print {
+  .paper-space { container-type: normal; }
+  .paper-layout-container { display: block !important; }
+}
+
+/* ==========================================================================
+   ELEGANT CUSTOM SCROLLBARS
+   Replaces harsh OS scrollbars with subtle, modern semi-transparent bars
+   ========================================================================== */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(168, 162, 158, 0.35) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(168, 162, 158, 0.35);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 113, 108, 0.6);
+}
+
+/* Hide scrollbars completely on navigation tab bars */
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }
