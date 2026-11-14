@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
@@ -43,21 +43,9 @@ export default function MonitorOverview() {
         {/* Top Header Card */}
         <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-5 sm:p-6 rounded-xl border border-zinc-200 shadow-2xs">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-zinc-100 text-zinc-700 tracking-wider uppercase">
-                {t('mon_page_badge')}
-              </span>
-              <span className="text-zinc-300">•</span>
-              <span className="text-xs text-zinc-600 font-medium">
-                {t('dash_subtitle')}
-              </span>
-            </div>
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900">
               {t('mon_page_title')}
             </h1>
-            <p className="mt-0.5 max-w-3xl text-xs sm:text-sm text-zinc-600 font-normal leading-relaxed">
-              {t('mon_page_desc')}
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
@@ -89,11 +77,11 @@ export default function MonitorOverview() {
               statusFilter === 'RUNNING' ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/20' : 'border-zinc-200 bg-white hover:border-zinc-300'
             }`}>
             <div className="flex items-center justify-between text-zinc-600 mb-1">
-              <span className="text-xs font-medium text-blue-700 uppercase tracking-wider">{t('mon_card_running')}</span>
+              <span className="text-xs sm:text-sm font-semibold text-blue-800 uppercase tracking-wide">{t('mon_card_running')}</span>
               <Activity size={16} className="text-blue-600 animate-pulse" />
             </div>
             <div className="text-2xl sm:text-3xl font-bold font-mono text-zinc-900 mt-0.5">{data ? running : '—'}</div>
-            <div className="text-xs text-zinc-500 mt-1">{t('mon_card_running_sub')}</div>
+            <div className="text-xs sm:text-sm font-medium text-zinc-600 mt-1">{t('mon_card_running_sub')}</div>
           </div>
 
           {/* Card 2: Waiting */}
@@ -106,11 +94,11 @@ export default function MonitorOverview() {
               statusFilter === 'WAITING' ? 'border-amber-600 ring-2 ring-amber-500/20 bg-amber-50/20' : 'border-zinc-200 bg-white hover:border-zinc-300'
             }`}>
             <div className="flex items-center justify-between text-zinc-600 mb-1">
-              <span className="text-xs font-medium text-amber-700 uppercase tracking-wider">{t('mon_card_waiting')}</span>
+              <span className="text-xs sm:text-sm font-semibold text-amber-800 uppercase tracking-wide">{t('mon_card_waiting')}</span>
               <Clock size={16} className="text-amber-600" />
             </div>
             <div className="text-2xl sm:text-3xl font-bold font-mono text-zinc-900 mt-0.5">{data ? waiting : '—'}</div>
-            <div className="text-xs text-zinc-500 mt-1">{t('mon_card_waiting_sub')}</div>
+            <div className="text-xs sm:text-sm font-medium text-zinc-600 mt-1">{t('mon_card_waiting_sub')}</div>
           </div>
 
           {/* Card 3: Attention */}
@@ -123,11 +111,11 @@ export default function MonitorOverview() {
               statusFilter === 'ATTENTION' ? 'border-red-600 ring-2 ring-red-500/20 bg-red-50/20' : 'border-zinc-200 bg-white hover:border-zinc-300'
             }`}>
             <div className="flex items-center justify-between text-zinc-600 mb-1">
-              <span className="text-xs font-medium text-red-700 uppercase tracking-wider">{t('mon_card_attention')}</span>
+              <span className="text-xs sm:text-sm font-semibold text-red-800 uppercase tracking-wide">{t('mon_card_attention')}</span>
               <AlertTriangle size={16} className="text-red-600" />
             </div>
             <div className="text-2xl sm:text-3xl font-bold font-mono text-zinc-900 mt-0.5">{data ? attention : '—'}</div>
-            <div className="text-xs text-zinc-500 mt-1">{t('mon_card_attention_sub')}</div>
+            <div className="text-xs sm:text-sm font-medium text-zinc-600 mt-1">{t('mon_card_attention_sub')}</div>
           </div>
 
           {/* Card 4: Completed */}
@@ -140,11 +128,11 @@ export default function MonitorOverview() {
               statusFilter === 'COMPLETED' ? 'border-emerald-600 ring-2 ring-emerald-500/20 bg-emerald-50/20' : 'border-zinc-200 bg-white hover:border-zinc-300'
             }`}>
             <div className="flex items-center justify-between text-zinc-600 mb-1">
-              <span className="text-xs font-medium text-emerald-700 uppercase tracking-wider">{t('mon_card_completed')}</span>
+              <span className="text-xs sm:text-sm font-semibold text-emerald-800 uppercase tracking-wide">{t('mon_card_completed')}</span>
               <CheckCircle2 size={16} className="text-emerald-600" />
             </div>
             <div className="text-2xl sm:text-3xl font-bold font-mono text-zinc-900 mt-0.5">{data ? completed : '—'}</div>
-            <div className="text-xs text-zinc-500 mt-1">{t('mon_card_completed_sub')}</div>
+            <div className="text-xs sm:text-sm font-medium text-zinc-600 mt-1">{t('mon_card_completed_sub')}</div>
           </div>
         </div>
 
