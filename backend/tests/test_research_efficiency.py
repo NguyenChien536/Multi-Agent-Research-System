@@ -143,10 +143,11 @@ def test_exhausted_time_or_calls_can_extend_without_reset_or_higher_cost(used_ca
     assert config['timeout_seconds'] == 900
 
 
-def test_spent_cost_and_absolute_resource_caps_cannot_offer_unsafe_resume():
+def test_spent_cost_requires_explicit_raise_and_absolute_resource_caps_remain_enforced():
     task = SimpleNamespace(status='FAILED',current_step='BUDGET_LIMIT',completed_at=None,budget_config={
         'max_cost_usd':.5,'_provider_usage':{'cost_usd':.5,'reservations':{}}})
-    assert not token_allowance_summary(task)['can_extend']
+    offer = token_allowance_summary(task)
+    assert offer['can_extend'] and offer['next_max_cost_usd'] == 1.0
     with pytest.raises(ValueError):
         increase_token_allowance({},100000,50000,max_llm_calls=HARD_MAX_LLM_CALLS + 1)
     with pytest.raises(ValueError):

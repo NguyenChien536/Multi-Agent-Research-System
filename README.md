@@ -75,6 +75,22 @@ Modular monolith, API/worker là tiến trình riêng; mỗi agent là vai trò 
 | frontend/src/app, components, lib/api.ts | Settings, workspace, monitor và HTTP client |
 | backend/tests, frontend/tests, .github/workflows | Regression và CI |
 
+**Tìm đúng chỗ khi sửa một chức năng:**
+
+| Cần thay đổi | Nơi bắt đầu đọc/sửa |
+|---|---|
+| Tạo, chạy lại, dừng và xóa bài | `backend/app/api/v1/endpoints/research.py` |
+| Duyệt kế hoạch, protocol, nạp dữ liệu và nhật ký thí nghiệm | `backend/app/api/v1/endpoints/research_study.py` |
+| Xem bài báo, phiên bản, nguồn, trích dẫn | `backend/app/api/v1/endpoints/research_read.py` |
+| Tải PDF và artifact riêng tư | `backend/app/api/v1/endpoints/research_files.py` |
+| Kết nối model cho bài | `backend/app/api/v1/endpoints/research_connections.py`; cấu hình tài khoản ở `backend/app/api/v1/endpoints/settings.py` |
+| Hạn mức model và khả năng tiếp tục bài | `backend/app/services/provider_budget.py`; thông báo trên web ở `frontend/src/components/ResearchRecoveryNotice.tsx` |
+| Hợp đồng dữ liệu giữa các agent | `backend/app/agents/agent_schemas.py` |
+| Luồng, từng bước nghiên cứu và tác vụ nền | `backend/app/agents/graph.py`, `backend/app/agents/nodes.py`, `backend/app/worker.py` |
+| Workspace bài báo, thí nghiệm và nhật ký agent | `frontend/src/app/research/[id]/page.tsx`, `frontend/src/components/research/ExperimentsPanel.tsx`, `frontend/src/components/research/AgentRunsPanel.tsx` |
+
+Khi thêm endpoint, đăng ký router tại `backend/app/api/v1/api.py`. Khi đổi dữ liệu lưu lâu dài, thêm migration trong `backend/alembic/versions` rồi cập nhật schema và API response tương ứng. Chạy CI và kiểm trên môi trường dev trước khi đưa code sang bản demo; `release.ps1 -Action deploy` chỉ dùng sau khi đã nghiệm thu.
+
 ## Kiểm thử, backup, demo
 
 Backend tests bắt buộc database riêng có tên chứa `test`; CI migration rồi chạy pytest. Không test trên dữ liệu làm việc. Frontend: `npm ci`, `npm test`, `npm run build` trong frontend. Docker build cũng kiểm TypeScript và Next.js production.

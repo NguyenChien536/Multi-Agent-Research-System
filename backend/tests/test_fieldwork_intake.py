@@ -5,7 +5,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select, func
 
-from app.api.v1.endpoints import research
+from app.api.v1.endpoints import research_study
 from app.core.database import AsyncSessionLocal
 from app.main import app
 from app.models.report import ExportArtifact
@@ -16,7 +16,7 @@ from app.services.fieldwork_intake import validate_fieldwork_result, MAX_RESULT_
 
 @pytest.fixture(autouse=True)
 def isolated_artifacts(monkeypatch, tmp_path):
-    monkeypatch.setattr(research, 'artifact_store', ArtifactStore(str(tmp_path)))
+    monkeypatch.setattr(research_study, 'artifact_store', ArtifactStore(str(tmp_path)))
 
 
 async def login(client):
@@ -121,7 +121,7 @@ async def test_invalid_intake_leaves_task_waiting_without_outbox(failure):
                 elif failure == 'wrong_size':
                     art.file_size_bytes += 1
                 else:
-                    research.artifact_store.delete_artifact(uuid.UUID(task_id), art.file_path)
+                    research_study.artifact_store.delete_artifact(uuid.UUID(task_id), art.file_path)
                 await db.commit()
         response = await client.post(f'/api/v1/research/{task_id}/data/resume', headers=headers, json=data)
         assert response.status_code == 422, response.text
@@ -183,7 +183,7 @@ async def test_upload_limits_and_invalid_content_leave_no_artifacts(monkeypatch)
         async with AsyncSessionLocal() as db:
             assert await db.scalar(select(func.count()).select_from(ExportArtifact).where(
                 ExportArtifact.research_task_id == uuid.UUID(task_id))) == 0
-        monkeypatch.setattr(research.settings, 'MAX_UPLOAD_FILES_PER_TASK', 1)
+        monkeypatch.setattr(research_study.settings, 'MAX_UPLOAD_FILES_PER_TASK', 1)
         await upload(client, headers, task_id)
         response = await client.post(f'/api/v1/research/{task_id}/data/files', headers=headers,
             files={'file': ('second.txt', b'Some more user-provided observations.', 'text/plain')})

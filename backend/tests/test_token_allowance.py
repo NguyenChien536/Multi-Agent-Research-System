@@ -45,6 +45,17 @@ def test_absolute_non_token_guards_cannot_offer_further_extension(guard):
     assert not token_allowance_summary(task)['can_extend']
 
 
+def test_cost_ceiling_can_be_raised_explicitly_without_resetting_usage():
+    old = {'max_cost_usd': 0.5, '_provider_usage': usage(cost_usd=0.5)}
+    task = SimpleNamespace(status='NEEDS_REVIEW', current_step='BUDGET_LIMIT', completed_at=None, budget_config=old)
+    offer = token_allowance_summary(task)
+    assert offer['can_extend'] and offer['next_max_cost_usd'] == 1.0
+    new = increase_token_allowance(old, offer['next_input_tokens'], offer['next_output_tokens'],
+                                   max_cost_usd=offer['next_max_cost_usd'])
+    assert new['_provider_usage']['cost_usd'] == 0.5
+    assert new['max_cost_usd'] == 1.0
+
+
 async def stopped_task(**overrides):
     tid,uid=await create_running_task(_provider_usage=usage(**overrides))
     rid=uuid.uuid4()
@@ -54,6 +65,33 @@ async def stopped_task(**overrides):
         db.add(WorkflowRun(id=rid,research_task_id=tid,run_number=1,status='NEEDS_REVIEW',checkpoint_thread_id=str(uuid.uuid4())))
         await db.commit()
     return tid,uid,rid
+
+
+@pytest.mark.asyncio
+async def test_owner_can_approve_cost_extension_and_resume_saved_checkpoint():
+    tid, uid, _ = await stopped_task(cost_usd=0.5)
+    try:
+        async with AsyncSessionLocal() as db:
+            task = await db.get(ResearchTask, tid)
+            task.budget_config = {**task.budget_config, 'max_cost_usd': 0.5}
+            await db.commit()
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test',
+                                     headers={'Authorization': 'Bearer ' + create_access_token(uid)}) as client:
+            before = (await client.get(f'/api/v1/research/{tid}')).json()['token_allowance']
+            assert before['can_extend'] and before['next_max_cost_usd'] == 1.0
+            response = await client.post(f'/api/v1/research/{tid}/retry', json={
+                'max_input_tokens': before['next_input_tokens'],
+                'max_output_tokens': before['next_output_tokens'],
+                'max_cost_usd': before['next_max_cost_usd'],
+            })
+            assert response.status_code == 202
+        async with AsyncSessionLocal() as db:
+            task = await db.get(ResearchTask, tid)
+            assert task.status == 'QUEUED'
+            assert task.budget_config['max_cost_usd'] == 1.0
+            assert task.budget_config['_provider_usage']['cost_usd'] == 0.5
+    finally:
+        await delete_test_user(uid)
 
 
 @pytest.mark.asyncio
