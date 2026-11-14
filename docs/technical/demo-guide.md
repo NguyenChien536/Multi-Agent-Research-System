@@ -83,7 +83,7 @@ Kết nối riêng được ưu tiên hơn provider máy chủ. Nếu kết nố
 
 **Thao tác khi chạy:** thanh đầu workspace có **Dừng nghiên cứu** khi đang chạy/chờ. Bài lỗi có **Tiếp tục từ bước lỗi / Continue from failed step**: tiếp tục checkpoint, giữ kết quả đã lưu và lượng sử dụng. Nút **Kiểm tra bản thảo đã lưu / Check for saved draft** chỉ tải lại bản thảo, không chạy workflow. Đổi model không đặt lại ngân sách.
 
-**Khi chạm hạn mức:** bài tạm dừng và giữ phần đã làm. Trong vùng khôi phục, đọc hạn mức mới rồi chọn **Duyệt hạn mức và tiếp tục / Approve limits and continue**. Giữ nguyên workflow/checkpoint, lượng đã dùng và trần chi phí. Có thể duyệt tăng token trong trần 300.000 input / 200.000 output; khi đã hết lượt gọi/thời gian, hệ thống đề xuất thêm 10 lượt hoặc 15 phút, tối đa 60 lượt và 60 phút hoạt động. Không tự tăng hạn mức và không đặt lại usage. Nếu trần tiền hoặc trần tài nguyên tuyệt đối đã hết, không tiếp tục tự động. Hạn mức API miễn phí là giới hạn riêng của provider, không phải hóa đơn.
+**Khi chạm hạn mức:** bài tạm dừng và giữ phần đã làm. Vùng khôi phục hiển thị token, lượt gọi, thời gian và chi phí ước tính đã dùng so với giới hạn của bài. Nếu còn trong trần hệ thống, người dùng duyệt mức tăng được đề xuất rồi tiếp tục cùng checkpoint; lượt dùng cũ không bị xóa. Trần hiện tại trong code là 500.000 input, 200.000 output token, 100 lượt gọi model, 60 phút hoạt động và 2 USD chi phí ước tính. Có thể tăng trần chi phí của bài khi chạm mức tự chọn, nhưng phải duyệt rõ ràng và không vượt 2 USD. Hạn mức của provider miễn phí là giới hạn riêng; tăng hạn mức bài không cấp thêm quota cho provider.
 
 Lỗi và bước lỗi hiện ngay trong khung đỏ. Lỗi 503 là provider quá tải, khác với key bị từ chối (401/403), model không khả dụng (404) và giới hạn dịch vụ (429). Retry tự động cho lỗi 502/503/504 có giới hạn và vẫn chịu ngân sách. Với 429 tạm thời có tín hiệu phù hợp, hệ thống lưu thời điểm thử lại, đưa bài về hàng đợi và giải phóng worker; giao diện báo **Đang chờ dịch vụ AI**. Tối đa hai lần hoãn tự động trong cùng workflow, mỗi lần không quá 300 giây; hết hạn mức ngày hoặc không xác định được thời gian chờ thì cần người dùng xử lý. Nếu Writer đã lưu bản thảo trước khi Critic gặp lỗi provider, bản thảo có thể được giao dưới trạng thái **Cần rà soát**, không được ghi là kiểm tra thành công.
 
@@ -175,7 +175,7 @@ Nếu còn thời gian, thử [CSV negative control](../../examples/demo/computa
 | `FAILED` | Đọc khung đỏ; sửa nguyên nhân/cấu hình nếu cần rồi bấm **Continue from failed step** |
 | 429 | Provider giới hạn tốc độ/hạn mức. Chờ hoặc cấu hình dịch vụ/model còn quota; không retry liên tục |
 | Thiếu bằng chứng | Bổ sung nguồn/kết quả, không yêu cầu Writer tự lấp chỗ trống |
-| Thiếu token | **Xem hạn mức để tiếp tục** → đọc hạn mức mới → chủ động tăng và tiếp tục cùng bài. Nếu hết tiền/lượt/thời gian hoặc tới trần token, giữ bài cũ và tạo bài mới với phạm vi phù hợp |
+| Chạm hạn mức bài | **Xem hạn mức để tiếp tục** → đọc mức đang dùng và mức tăng đề xuất → chủ động duyệt rồi tiếp tục cùng bài nếu còn dưới trần hệ thống. Có thể tăng cả trần chi phí ước tính của bài trong mức 2 USD; quota của provider vẫn là giới hạn riêng. Khi đã chạm trần hệ thống, giữ bài cũ và tạo bài mới với phạm vi phù hợp |
 
 ## 6. Hiểu code để trả lời thầy
 
@@ -210,7 +210,7 @@ Docker demo đã triển khai revision **`52beacc7bcdb`**; sáu dịch vụ heal
 
 **Hai cột độc lập:** nút **Contents / Mục lục** ở bên trái tiêu đề chỉ đóng/mở mục lục. Nút **Hide pipeline / Show pipeline** ở bên phải chỉ đóng/mở tiến trình. Khi đóng từ bên trong Pipeline, cạnh phải vẫn có nút **Pipeline** để mở lại. Đã kiểm tra các thao tác này trên trình duyệt bằng tài khoản QA riêng, không gọi AI cho bài kiểm tra giao diện.
 
-**Hết token:** bấm **Review token allowance / Xem hạn mức để tiếp tục**, đọc hạn mức đề xuất, rồi chọn **Increase token allowance and continue / Tăng hạn mức token và tiếp tục**. Nguồn, dữ liệu, run, checkpoint và lượng đã dùng được giữ nguyên. Không tự tăng trần tiền, lượt gọi hoặc thời gian; hết các trần này thì tăng token không giải quyết được. Mặc định 100.000 input / 50.000 output; trần tuyệt đối 300.000 / 200.000.
+**Hết hạn mức bài:** bấm **Review token allowance / Xem hạn mức để tiếp tục**, đọc mức đã dùng và đề xuất, rồi chọn **Approve limits and continue / Duyệt hạn mức và tiếp tục** nếu nút xuất hiện. Nguồn, dữ liệu, run, checkpoint và lượng đã dùng được giữ nguyên. API có thể đề xuất tăng token, lượt gọi, thời gian hoặc trần chi phí ước tính trong giới hạn hệ thống; không tự tăng khi chưa bấm duyệt. Nếu không có đề xuất, đọc lý do trong vùng khôi phục. Giới hạn provider bên ngoài phải xử lý riêng.
 
 ### Kiểm tra tiếp tục và bài mới — 08/11
 
@@ -257,7 +257,7 @@ Một nguồn có thể hỗ trợ nhiều claim/citation records. Không lấy 
 |---|---|
 | Không rõ vì sao bài dừng | Khung đỏ hiển thị nhóm lỗi và bước lỗi; phân biệt xác thực, model, hạn mức, quá tải, timeout, JSON và ngân sách. Không đưa key hay phản hồi thô của provider ra màn hình. |
 | Chạy lại làm lại từ đầu hoặc xung đột checkpoint | Retry tiếp tục bước lỗi của workflow hiện tại; giữ kết quả đã lưu, lịch sử và ngân sách. Có kiểm thử nhiều lần lỗi liên tiếp với checkpoint PostgreSQL. |
-| Bấm tiếp dù allowance không đủ | API chặn retry vô ích. Có thể chủ động tăng token trong trần rồi tiếp tục cùng checkpoint; cập nhật hạn mức và outbox nằm trong cùng giao dịch, không reset usage hay tăng trần tiền/lượt/thời gian. |
+| Bấm tiếp dù allowance không đủ | API chặn retry vô ích. Người dùng có thể chủ động tăng token, lượt gọi, thời gian hoặc trần chi phí ước tính trong mức tối đa của hệ thống rồi tiếp tục cùng checkpoint; cập nhật hạn mức và outbox nằm trong cùng giao dịch, không reset usage. |
 | Không biết đang chờ worker hay dịch vụ AI | Chờ 429 tạm thời có thông báo và thời điểm thử lại; worker được giải phóng. Giới hạn ngày không bị retry vô hạn. |
 | Lặp lại đầu ra đã làm khi retry | Tái dùng JSON hợp lệ theo đúng workflow/input/config; Writer dài có thể lưu từng nhóm phần và tiếp tục nhóm còn thiếu. Không dùng output bị cắt như bản hoàn chỉnh. |
 | JSON lỗi bị biến thành “không có bằng chứng”, rồi hết budget | Analyst dừng và giữ nguyên lỗi provider. Chỉ extraction hợp lệ rỗng mới có nghĩa là chưa tìm được claim hỗ trợ. |
