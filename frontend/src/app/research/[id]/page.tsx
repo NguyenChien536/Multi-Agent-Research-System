@@ -1887,8 +1887,13 @@ export default function WorkspacePage() {
                       )}
                     </div>
 
-                    {/* Deliverables Section - Clarifying what this pipeline delivers */}
-                    <div className="space-y-3">
+                    {/* Keep the next action visible; supporting deliverables are optional detail. */}
+                    {task.status !== 'FAILED' && task.current_step !== 'BUDGET_LIMIT' && (
+                    <details className="rounded-xl border border-zinc-200 bg-white">
+                      <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-zinc-800">
+                        {isEn ? 'What this run may produce' : 'Lượt chạy này có thể tạo gì?'}
+                      </summary>
+                    <div className="space-y-3 px-4 pb-4">
                       <div className="flex items-center justify-between">
                         <div>
                           <h3 className="font-bold text-base sm:text-lg text-zinc-900">
@@ -1987,6 +1992,8 @@ export default function WorkspacePage() {
                         </div>
                       </div>
                     </div>
+                    </details>
+                    )}
                   </div>
                 )}
               </div>

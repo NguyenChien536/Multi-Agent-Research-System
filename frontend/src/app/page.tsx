@@ -331,7 +331,7 @@ export default function Home() {
                 </div>
               )}
               <Button variant="outline" onClick={() => router.push('/settings')} className="text-sm font-semibold h-10 px-4 rounded-xl border-stone-200 text-stone-800 hover:bg-stone-50 hover:text-stone-950 shadow-2xs cursor-pointer">
-                Settings
+                {isEn ? 'Settings' : 'Cài đặt'}
               </Button>
               <Button variant="outline" onClick={() => router.push('/dashboard')} className="text-sm font-semibold h-10 px-4 rounded-xl border-stone-200 text-stone-800 hover:bg-stone-50 hover:text-stone-950 shadow-2xs cursor-pointer">
                 <LayoutDashboard size={16} className="mr-2 text-stone-600" /> {t('nav_dashboard')}
@@ -357,8 +357,8 @@ export default function Home() {
             </h1>
             <p className="text-stone-600 max-w-2xl text-sm sm:text-base leading-relaxed font-normal">
               {isEn
-                ? 'Automated scientific research platform for literature review, empirical analysis, and evidence-backed writing.'
-                : 'Hệ thống nghiên cứu khoa học tự động hỗ trợ tổng quan tài liệu, phân tích thực nghiệm và soạn thảo bài báo có trích dẫn.'}
+                ? 'Plan research, examine sources, and build an evidence-linked draft that you can review.'
+                : 'Lập kế hoạch, đối chiếu nguồn và tạo bản thảo có bằng chứng để bạn kiểm tra.'}
             </p>
           </div>
 
@@ -370,6 +370,7 @@ export default function Home() {
               <div className="flex items-start px-3 pt-2">
                 <Search className="text-stone-400 shrink-0 mr-3 mt-3" size={20} />
                 <textarea
+                  aria-label={isEn ? 'Research question' : 'Câu hỏi nghiên cứu'}
                   value={topic}
                   onChange={(e) => setTopic(e.target.value)}
                   onFocus={() => setIsFocused(true)}
@@ -433,6 +434,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setResearchType('REVIEW')}
+                aria-pressed={researchType === 'REVIEW'}
                 className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                   researchType === 'REVIEW'
                     ? 'border-stone-900 bg-white text-stone-950 shadow-md ring-2 ring-stone-900/10'
@@ -442,7 +444,7 @@ export default function Home() {
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="flex items-center gap-1.5 font-semibold text-xs sm:text-[13px]">
-                      <FileText size={15} className={researchType === 'REVIEW' ? 'text-zinc-200' : 'text-zinc-500'} />
+                      <FileText size={15} className="text-zinc-600" />
                       <span>{isEn ? 'Literature Review' : 'Tổng quan tài liệu'}</span>
                     </span>
                     {researchType === 'REVIEW' && <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />}
@@ -459,6 +461,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setResearchType('EMPIRICAL_COMPUTATIONAL')}
+                aria-pressed={researchType === 'EMPIRICAL_COMPUTATIONAL'}
                 className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                   researchType === 'EMPIRICAL_COMPUTATIONAL'
                     ? 'border-stone-900 bg-white text-stone-950 shadow-md ring-2 ring-stone-900/10'
@@ -468,15 +471,15 @@ export default function Home() {
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="flex items-center gap-1.5 font-semibold text-xs sm:text-[13px]">
-                      <Cpu size={15} className={researchType === 'EMPIRICAL_COMPUTATIONAL' ? 'text-purple-300' : 'text-purple-600'} />
+                      <Cpu size={15} className="text-purple-600" />
                       <span>{isEn ? 'Computational Empirical' : 'Thực nghiệm tính toán'}</span>
                     </span>
                     {researchType === 'EMPIRICAL_COMPUTATIONAL' && <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />}
                   </div>
                   <p className={`text-xs leading-relaxed ${'text-stone-600'}`}>
                     {isEn
-                      ? 'Executes automated baseline algorithms, statistical benchmarking, and reproducible routines.'
-                      : 'Chạy quy trình tính toán tự động, mô hình baseline và đối sánh thực nghiệm kiểm chứng.'}
+                      ? 'For numerical CSV data: compare the supported regression routine with a baseline and record the results.'
+                      : 'Dành cho CSV số: so sánh routine hồi quy được hỗ trợ với baseline và ghi lại kết quả.'}
                   </p>
                 </div>
               </button>
@@ -485,6 +488,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setResearchType('EMPIRICAL_HUMAN')}
+                aria-pressed={researchType === 'EMPIRICAL_HUMAN'}
                 className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                   researchType === 'EMPIRICAL_HUMAN'
                     ? 'border-stone-900 bg-white text-stone-950 shadow-md ring-2 ring-stone-900/10'
@@ -494,7 +498,7 @@ export default function Home() {
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="flex items-center gap-1.5 font-semibold text-xs sm:text-[13px]">
-                      <FlaskConical size={15} className={researchType === 'EMPIRICAL_HUMAN' ? 'text-emerald-300' : 'text-emerald-600'} />
+                      <FlaskConical size={15} className="text-emerald-600" />
                       <span>{isEn ? 'Fieldwork / User Data' : 'Thực nghiệm thực địa'}</span>
                     </span>
                     {researchType === 'EMPIRICAL_HUMAN' && <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />}
@@ -507,6 +511,14 @@ export default function Home() {
                 </div>
               </button>
             </div>
+
+            <p className="mt-3 text-xs leading-relaxed text-stone-700" role="status">
+              {researchType === 'REVIEW'
+                ? (isEn ? 'Next: the system searches for sources and drafts a review. You can add your own PDFs in Configuration.' : 'Tiếp theo: hệ thống tìm nguồn và viết bản thảo tổng quan. Bạn có thể thêm PDF ở Cấu hình.')
+                : researchType === 'EMPIRICAL_COMPUTATIONAL'
+                  ? (isEn ? 'Next: create the article, then upload a numerical CSV in its workspace before the supported analysis runs.' : 'Tiếp theo: tạo bài rồi tải CSV số trong workspace trước khi chạy phân tích được hỗ trợ.')
+                  : (isEn ? 'Next: review a proposed protocol, collect data outside the system, then upload the results to continue.' : 'Tiếp theo: xem đề cương, thu thập dữ liệu ngoài hệ thống rồi tải kết quả lên để viết tiếp.')}
+            </p>
 
             {/* Uploading Status Banner */}
             {isLoading && uploadStatus && (
@@ -610,8 +622,8 @@ export default function Home() {
                     </h4>
                     <p className="mt-1 text-xs text-zinc-600 leading-relaxed font-normal">
                       {isEn
-                        ? 'These limits are shared across all 7 autonomous agents. If a limit is reached, you can approve an extension directly in the workspace.'
-                        : 'Hạn mức dùng chung cho toàn bộ 7 tác tử AI. Khi chạm trần, bạn có thể duyệt nâng thêm hạn mức trực tiếp trong workspace.'}
+                        ? 'These limits apply to the whole research workflow. If a limit is reached, review the available extension in the article workspace.'
+                        : 'Hạn mức áp dụng cho toàn bộ luồng nghiên cứu. Khi chạm trần, xem phần gia hạn trong workspace của bài.'}
                     </p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -851,7 +863,7 @@ export default function Home() {
                       <FileUp size={15} className="text-zinc-700" />
                       {isEn ? 'Upload Private PDF Documents (Optional)' : 'Nạp tài liệu PDF riêng tư (Tùy chọn)'}
                     </span>
-                    <span className="text-xs font-semibold text-zinc-500">Max 5 files, 10 MiB</span>
+                    <span className="text-xs font-semibold text-zinc-500">{isEn ? 'Up to 5 files, 10 MiB each' : 'Tối đa 5 tệp, mỗi tệp 10 MiB'}</span>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3">
@@ -884,7 +896,7 @@ export default function Home() {
                             type="button"
                             onClick={() => removePdfFile(idx)}
                             className="text-zinc-400 hover:text-red-500 p-0.5 rounded transition-colors cursor-pointer"
-                            title="Remove"
+                            aria-label={isEn ? `Remove ${file.name}` : `Bỏ ${file.name}`}
                           >
                             <X size={14} />
                           </button>
@@ -924,18 +936,6 @@ export default function Home() {
             <button type="button" className="mt-2 font-semibold underline" onClick={()=>{setCreatedWorkspace(null);setError('');}}>{isEn?'Create another article instead':'Tạo một bài khác'}</button>
           </div>}
 
-          {/* Clean Scientific Features Badges (No decorative buzzwords) */}
-          <div className="flex flex-wrap justify-center gap-2 text-xs text-zinc-600 mt-1">
-            <span className="px-3.5 py-1.5 rounded-full bg-white/80 border border-stone-200/80 font-medium shadow-2xs text-stone-700">
-              {isEn ? 'Academic literature synthesis' : 'Tổng hợp tài liệu học thuật'}
-            </span>
-            <span className="px-2.5 py-1 rounded-full bg-zinc-100 border border-zinc-200 font-normal">
-              {isEn ? 'Multi-pass evidence verification' : 'Đối chiếu & kiểm chứng bằng chứng'}
-            </span>
-            <span className="px-2.5 py-1 rounded-full bg-zinc-100 border border-zinc-200 font-normal">
-              {isEn ? 'Traceable citation audit trail' : 'Trích dẫn có thể xác minh nguồn'}
-            </span>
-          </div>
         </div>
       </main>
       {/* Tavily-style scenic pastoral gradient artwork at bottom of viewport */}
