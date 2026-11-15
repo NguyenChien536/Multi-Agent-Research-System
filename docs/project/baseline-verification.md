@@ -166,7 +166,7 @@ cd frontend; npm ci; npm run lint; npm run build; npm audit --omit=dev
 cd ..; uv lock --check --python 3.11; uv run --locked --python 3.11 python --version
 ```
 
-**P0 status: Verified for Python/dependency alignment, reproducible builds, clean DB migration, and current baseline tests.** Chưa đạt các gate của P1/P2 và chưa chạy một research workflow thật với provider.
+**P0 status tại thời điểm ghi biên bản: Verified for Python/dependency alignment, reproducible builds, clean DB migration, and baseline tests.** Đây là lệnh/kết quả lịch sử ngày 12/10, không phải hướng dẫn chạy bản hiện tại. Scaffold `pyproject.toml`/`uv.lock` ở root đã được bỏ khi dọn bản nộp; dependency đang dùng nằm ở `backend/requirements.txt` và `backend/requirements.lock.txt`. Xem README ở root để chạy ứng dụng.
 
 ## Kết quả lịch sử ngày 27/09/2026
 
