@@ -2,7 +2,7 @@
 
 **Synthia — Multi-Agent Research System** hỗ trợ người nghiên cứu đi từ câu hỏi/tài liệu đến bản thảo bài báo có nguồn, có kết quả thực nghiệm khi phương pháp yêu cầu. Đây là đề tài học phần ATI; bản thảo vẫn cần người nghiên cứu kiểm tra.
 
-**Cập nhật 05/11/2026:** bản local đã gộp một Docker Compose; Settings lưu API/model mặc định và cấu hình riêng cho bài. Kiểm thử code: 701 backend pass, 3 skip; 34 frontend pass; Docker builds đạt. Xem [Vận hành local](technical/local-release.md) và [Hiểu code/demo](technical/demo-guide.md). Provider miễn phí đang trả 429 nên chưa nghiệm thu được các bài mới, chưa chứng nhận production hoặc chất lượng Q1.
+Ứng dụng dùng một `docker-compose.yml` với môi trường dev và bản demo local tách dữ liệu. Cách bật, backup và phục hồi nằm trong [Vận hành local](technical/local-release.md). Kết quả test và trạng thái provider thay đổi theo từng revision; xem CI của commit đang nộp và chạy smoke trên bản demo trước khi trình bày. Bản thảo sinh ra vẫn cần người nghiên cứu kiểm chứng.
 
 **Chuẩn bị thuyết trình:** [Hướng dẫn demo dễ hiểu](technical/demo-guide.md) và [Kịch bản nói/thao tác cho ba luồng](technical/demo-presentation-script.md).
 
@@ -14,13 +14,11 @@
 | Đang làm đến đâu, phần nào đã kiểm chứng? | [Roadmap và tiến độ](project/roadmap-and-progress.md) — có code / đã kiểm / còn thiếu |
 | Kiến trúc, dữ liệu và luồng chạy như thế nào? | [System Design](architecture/system-design.md) — thiết kế mục tiêu để triển khai/vẽ sơ đồ |
 
-**Mốc cuối kỳ mới:** chốt bản nộp trước hết 04/11, bàn giao/dự phòng 05/11 theo yêu cầu 3 ngày. Code #84 / PR #85 (c72e936) về bố cục/lập luận từng loại bài đạt 513 backend tests, 20 frontend tests, 5/5 CI; output thật vẫn cần đọc và chấm.
+## Trước khi nộp hoặc demo
 
-## Việc ngay tiếp theo
-
-1. **#86 và nghiệm thu FE/API**: cải thiện nguồn/bằng chứng theo các khái niệm, chấm bài thật và chạy trọn ba luồng. **P7 / #83** tiếp tục chốt profile/ngân sách và chạy pilot; [Evaluation Plan](project/evaluation-plan.md) §7–8 ghi cách thực thi và chấm. Bộ chạy #81 đã kiểm thử; smoke fixture không phải kết quả đánh giá thật.
-2. Chốt model/giá trần/ngân sách tổng và corpus; freeze source sạch đúng commit, chạy pilot có giới hạn trước held-out, giữ cả lỗi và kết quả không thuận lợi.
-3. Khép các kiểm tra browser/runtime, restart/concurrency và ba luồng trước staging → dùng thử giới hạn → production. **05/11 là hạn cuối kỳ mới; bản nộp phải chốt trước hết 04/11. Production có các gate riêng.**
+1. Đọc [README](../README.md) để bật đúng môi trường. Bản demo local và dữ liệu của nó được giữ riêng; không dùng lệnh xóa Docker volume.
+2. Xác nhận CI của commit nộp đạt và chạy [smoke demo](technical/local-release.md) trên bản phát hành tương ứng. Kiểm từng bài thật trong giao diện: nguồn, kết luận, hạn mức và trạng thái `NEEDS_REVIEW`.
+3. Nộp source và `docs/` qua Git hoặc `git archive`; không đóng gói `.env`, `storage/`, `scratch/`, `tmp/`, `.venv/`, `node_modules/` hay dữ liệu/API key riêng. Các biên bản có ngày trong `project/` là lịch sử, không phải tình trạng phát hành hiện tại.
 
 Quy trình Git: issue nhỏ → branch chức năng/sửa lỗi → tests/review → PR develop. Chỉ đưa lên main khi CI và demo end-to-end trên đúng candidate đạt. Xem [CONTRIBUTING](../CONTRIBUTING.md).
 
