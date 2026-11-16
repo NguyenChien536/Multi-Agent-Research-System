@@ -29,11 +29,14 @@ async def redis_gate(monkeypatch):
 @pytest.mark.asyncio
 async def test_atomic_slots_spread_concurrent_process_requests_and_reject_full_queue(redis_gate):
     redis, key = redis_gate
-    delays = sorted(await asyncio.gather(*[redis.eval(pacing.RESERVE_LUA, 1, key, 100, 2000) for _ in range(8)]))
+    # Keep the scheduled slots farther apart than normal CI process pauses.
+    # The returned delay is relative to each request's arrival time, so a
+    # heavily loaded runner can otherwise make two valid reservations read 0.
+    delays = sorted(await asyncio.gather(*[redis.eval(pacing.RESERVE_LUA, 1, key, 500, 10000) for _ in range(8)]))
     assert delays[0] == 0
-    assert all(b - a >= 80 for a, b in zip(delays, delays[1:])), delays
+    assert all(b - a >= 300 for a, b in zip(delays, delays[1:])), delays
     previous = await redis.get(key)
-    assert await redis.eval(pacing.RESERVE_LUA, 1, key, 100, 1) == -1
+    assert await redis.eval(pacing.RESERVE_LUA, 1, key, 500, 1) == -1
     assert await redis.get(key) == previous
     assert await redis.pttl(key) > 60000
 

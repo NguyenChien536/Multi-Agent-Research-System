@@ -103,10 +103,19 @@ async def test_atomic_per_user_admission_under_racing_claims(monkeypatch: pytest
         w2 = asyncio.create_task(run_langgraph_workflow(t2))
         w3 = asyncio.create_task(run_langgraph_workflow(t3))
 
-        # Give them time to attempt claiming in the DB
-        await asyncio.sleep(0.1)
+        # Wait for the admission decision rather than assuming three workers
+        # can reach the database within 100 ms on every CI host.
+        for _ in range(60):
+            async with AsyncSessionLocal() as db:
+                tasks = (await db.execute(select(ResearchTask).where(ResearchTask.id.in_([uuid.UUID(t1), uuid.UUID(t2), uuid.UUID(t3)])))).scalars().all()
+                status_counts = {}
+                for t in tasks:
+                    status_counts[t.status] = status_counts.get(t.status, 0) + 1
+            if status_counts.get("RUNNING") == 2:
+                break
+            await asyncio.sleep(0.05)
 
-        # In DB, verify only 2 are RUNNING and 1 is QUEUED
+        # In DB, verify only 2 are RUNNING and 1 is QUEUED.
         async with AsyncSessionLocal() as db:
             tasks = (await db.execute(select(ResearchTask).where(ResearchTask.id.in_([uuid.UUID(t1), uuid.UUID(t2), uuid.UUID(t3)])))).scalars().all()
             status_counts = {}
