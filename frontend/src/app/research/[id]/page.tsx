@@ -22,6 +22,8 @@ import { PublicationArticle, PublicationExport } from '@/components/research/Pub
 import { ManuscriptReadiness } from '@/components/research/ManuscriptReadiness';
 import { ExperimentsPanel } from '@/components/research/ExperimentsPanel';
 import { AgentRunsPanel } from '@/components/research/AgentRunsPanel';
+import { SourcesPanel } from '@/components/research/SourcesPanel';
+import { CitationsPanel } from '@/components/research/CitationsPanel';
 import { useLanguage } from '@/lib/i18n';
 import { useDialogFocus } from '@/lib/use-dialog-focus';
 import { exportPaperToDocx } from '@/lib/docxExport';
@@ -152,8 +154,6 @@ export default function WorkspacePage() {
 
   const [activeTab, setActiveTab] = useState<'report' | 'sources' | 'citations' | 'runs' | 'details' | 'protocol' | 'experiments'>('report');
   const [sourceSearch, setSourceSearch] = useState('');
-  const [sourceTypeFilter, setSourceTypeFilter] = useState<string>('ALL');
-  const [citationFilter, setCitationFilter] = useState<'ALL' | 'WITH_SOURCE' | 'WITH_TEXT'>('ALL');
   const [runStatusFilter, setRunStatusFilter] = useState<'ALL' | 'SUCCESS' | 'RUNNING' | 'FAILED'>('ALL');
   const [highlightedRef, setHighlightedRef] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -786,9 +786,13 @@ export default function WorkspacePage() {
     const isWorking = !TERMINAL.has(task.status) && task.status !== 'WAITING_APPROVAL' && task.status !== 'WAITING_USER_DATA' && task.status !== 'PENDING';
   const canCancel = !TERMINAL.has(task.status) && task.status !== 'PENDING';
 
-  const filteredSources = sources.filter(s =>
-    `${s.title ?? ''} ${s.url} ${s.content_snippet ?? ''} ${s.source_tag}`.toLowerCase().includes(sourceSearch.toLowerCase())
-  );
+  const sourceProps = {
+    task, sources, artifacts, isEn, isWorking, sourcesError, loadSources,
+    handleFileUpload, handleDownloadArtifact, handleRetrySource,
+    retryingSourceId, isUploading, uploadError, setUploadError,
+    uploadSuccess, setUploadSuccess, fileInputRef, formatDate, sourceSearch, setSourceSearch,
+  };
+  const citationProps = { task, citations, citationsError, loadCitations, isEn, highlightedRef };
 
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden bg-white print:h-auto print:overflow-visible print:bg-white print:block">
@@ -2000,283 +2004,10 @@ export default function WorkspacePage() {
             )}
 
             {/* TAB 2: RETRIEVED SOURCES */}
-            {activeTab === 'sources' && (
-              <div className="w-full max-w-7xl mx-auto space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-xl font-bold text-zinc-900">{isEn ? "Retrieved Literature & Sources" : "Nguồn tài liệu đã thu thập"} ({sources.length})</h2>
-                    <p className="text-xs text-zinc-500 mt-0.5">{isEn ? "Websites, scientific papers, and private documents gathered and indexed by AI agents." : "Các website, bài báo khoa học và tài liệu được Agent tìm kiếm và lập chỉ mục."}</p>
-                  </div>
-                  <div className="relative w-full sm:w-72">
-                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                    <input
-                      value={sourceSearch}
-                      onChange={e => setSourceSearch(e.target.value)}
-                      placeholder={isEn ? "Search sources..." : "Tìm trong nguồn..."}
-                      className="w-full pl-9 pr-4 py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-zinc-900"
-                    />
-                  </div>
-                </div>
-
-                {/* PDF Ingestion Card (SRS FR-02 & Private Artifact Grounding) */}
-                <Card className="p-6 sm:p-7 border-dashed border-2 border-zinc-300 bg-white hover:border-zinc-400 transition-colors rounded-2xl shadow-xs">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <UploadCloud size={20} className="text-zinc-700" />
-                        <h3 className="font-bold text-base sm:text-lg text-zinc-900">{isEn ? "Upload Private Grounding PDF" : "Tải lên tài liệu PDF riêng tư (Private Grounding)"}</h3>
-                      </div>
-                      <p className="text-xs text-zinc-500 leading-relaxed">
-                        {isEn ? "Text is extracted and indexed as reliable grounding evidence for research agents (max 5 files, < 20MB, < 100 pages)." : "Hệ thống sẽ trích xuất và lập chỉ mục làm tài liệu tham khảo cho các tác tử nghiên cứu (tối đa 5 file, < 20MB, < 100 trang)." }
-                      </p>
-                    </div>
-
-                    <div className="shrink-0 flex items-center gap-2">
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".pdf,application/pdf"
-                        onChange={(e) => void handleFileUpload(e)}
-                        className="hidden"
-                        id="pdf-upload-input"
-                        disabled={isUploading || task.status === 'COMPLETED' || task.status === 'CANCELLED'}
-                      />
-                      <Button
-                        variant="outline"
-                        onClick={() => fileInputRef.current?.click()}
-                        isLoading={isUploading}
-                        disabled={task.status === 'COMPLETED' || task.status === 'CANCELLED'}
-                      >
-                        <FileUp size={15} className="mr-1.5" />
-                        {isUploading ? (isEn ? 'Uploading PDF...' : 'Đang nạp PDF...') : (isEn ? 'Upload PDF' : 'Tải lên PDF')}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {uploadError && (
-                    <div className="mt-3 text-xs text-red-600 bg-red-50 p-2.5 rounded-lg border border-red-200 flex items-center justify-between">
-                      <span>{uploadError}</span>
-                      <button onClick={() => setUploadError('')} className="text-red-400 hover:text-red-700 ml-2">✕</button>
-                    </div>
-                  )}
-
-                  {uploadSuccess && (
-                    <div className="mt-3 text-xs text-emerald-700 bg-emerald-50 p-2.5 rounded-lg border border-emerald-200 flex items-center justify-between">
-                      <span className="flex items-center gap-1.5">
-                        <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
-                        {uploadSuccess}
-                      </span>
-                      <button onClick={() => setUploadSuccess(null)} className="text-emerald-500 hover:text-emerald-800 ml-2">✕</button>
-                    </div>
-                  )}
-                </Card>
-
-                {sourcesError && (
-                  <div className="text-sm text-red-600 bg-red-50 p-4 rounded-xl border border-red-200">
-                    {sourcesError} <button className="underline ml-2" onClick={() => void loadSources()}>{isEn ? "Retry" : "Thử lại"}</button>
-                  </div>
-                )}
-
-                {sources.length === 0 ? (
-                  <Card className="p-8 text-center text-zinc-500">
-                    {isWorking ? (isEn ? 'Agents are searching and reviewing literature...' : 'Agent đang tìm kiếm và duyệt nguồn...') : (isEn ? 'No literature sources saved for this research project yet.' : 'Chưa có nguồn tài liệu nào được lưu cho bài nghiên cứu này.')}
-                  </Card>
-                ) : filteredSources.length === 0 ? (
-                  <Card className="p-8 text-center text-zinc-500">
-                    {isEn ? `No sources match keyword "${sourceSearch}".` : `Không tìm thấy nguồn tài liệu phù hợp với từ khóa "${sourceSearch}".`}
-                  </Card>
-                ) : (
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    {filteredSources.map((source) => (
-                      <Card key={source.id} className="p-5 space-y-3 hover:border-zinc-300 transition-colors flex flex-col justify-between">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-zinc-100 text-zinc-800 border border-zinc-200">
-                              [{source.source_tag}]
-                            </span>
-                            <Badge variant="outline">{source.source_type}</Badge>
-                            {source.ingestion_status && (
-                              <Badge variant={source.ingestion_status === 'READY' ? 'success' : source.ingestion_status === 'FAILED' ? 'danger' : source.ingestion_status === 'PROCESSING' ? 'default' : 'outline'}>
-                                {source.ingestion_status === 'PROCESSING' && <Loader2 size={11} className="mr-1 inline animate-spin" />}
-                                {source.ingestion_status}
-                              </Badge>
-                            )}
-                            {source.relevance_score > 0 && (
-                              <span className="text-xs text-emerald-600 font-medium">
-                                {isEn ? "Relevance: " : "Liên quan: "}{(source.relevance_score * 100).toFixed(0)}%
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-xs text-zinc-400">{formatDate(source.created_at)}</span>
-                        </div>
-
-                        <div>
-                          {source.source_type === 'PDF' ? (
-                            <div className="flex flex-col gap-2">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-base text-zinc-900">{source.title || (isEn ? 'Internal PDF Document' : 'Tài liệu PDF nội bộ')}</span>
-                                <Badge variant="purple">{isEn ? "Private Document" : "Tài liệu riêng"}</Badge>
-                              </div>
-                              {(() => {
-                                const matchingArt = artifacts.find(a => source.url.includes(a.file_path.split('/').pop() || '') || a.file_path.includes(source.title || ''));
-                                if (matchingArt) {
-                                  return (
-                                    <div className="pt-1">
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDownloadArtifact(matchingArt.id, matchingArt.file_path.split('/').pop() || 'document.pdf')}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border border-zinc-200 transition-colors cursor-pointer"
-                                      >
-                                        <Download size={13} className="text-purple-600" />
-                                        <span>{isEn ? "Download Original PDF" : "Tải PDF gốc"} ({(matchingArt.file_size_bytes / 1024 / 1024).toFixed(2)} MB)</span>
-                                      </button>
-                                    </div>
-                                  );
-                                }
-                                return null;
-                              })()}
-                            </div>
-                          ) : (
-                            <a
-                              href={source.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-semibold text-base text-zinc-900 hover:text-blue-600 inline-flex items-center gap-1.5 transition-colors"
-                            >
-                              <span>{source.title || source.url}</span>
-                              <ExternalLink size={14} className="shrink-0 text-zinc-400" />
-                            </a>
-                          )}
-                          <div className="text-xs font-mono text-zinc-600 mt-1 truncate">{source.url}</div>
-                        </div>
-
-                        {(source.venue || source.search_provider || source.doi) && (
-                          <div className="text-xs text-zinc-500 flex flex-wrap items-center gap-2">
-                            {source.search_provider && (
-                              <span className="px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200 font-medium">
-                                {source.search_provider}
-                              </span>
-                            )}
-                            {source.venue && <span className="italic">{source.venue}</span>}
-                            {source.doi && <span className="font-mono text-zinc-400">DOI: {source.doi}</span>}
-                          </div>
-                        )}
-
-                        {source.ingestion_status === 'FAILED' && (
-                          <div className="p-3 bg-red-50/80 border border-red-200 rounded-lg text-xs space-y-2">
-                            <div className="flex items-start gap-2 text-red-700">
-                              <AlertTriangle size={14} className="shrink-0 mt-0.5 text-red-600" />
-                              <div className="flex-1">
-                                <span className="font-semibold">{isEn ? 'Ingestion Failed: ' : 'Trích xuất thất bại: '}</span>
-                                <span className="text-red-600">{source.ingestion_error || (isEn ? 'Unknown extraction error.' : 'Lỗi trích xuất không xác định.')}</span>
-                              </div>
-                            </div>
-                            <Button
-                              variant="danger-outline"
-                              className="!h-8 !px-3 text-xs"
-                              onClick={() => void handleRetrySource(source.id)}
-                              isLoading={retryingSourceId === source.id}
-                            >
-                              <RefreshCw size={12} className="mr-1.5" />
-                              {isEn ? 'Retry Ingestion' : 'Thử lại trích xuất'}
-                            </Button>
-                          </div>
-                        )}
-
-                        {source.content_snippet && (
-                          <p className="text-sm leading-relaxed text-zinc-700 bg-zinc-50 p-3.5 rounded-xl border border-zinc-200 line-clamp-4">
-                            {source.content_snippet}
-                          </p>
-                        )}
-
-                        {source.attribution && (
-                          <div className="text-xs text-zinc-500 border-t border-zinc-100 pt-2 flex items-center justify-between">
-                            <span>{isEn ? "Attribution: " : "Tác quyền: "}{source.attribution}</span>
-                            {source.license_name && <span>{isEn ? "License: " : "Giấy phép: "}{source.license_name}</span>}
-                          </div>
-                        )}
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            {activeTab === 'sources' && <SourcesPanel {...sourceProps} />}
 
             {/* TAB 3: EVIDENCE & CITATIONS */}
-            {activeTab === 'citations' && (
-              <div className="w-full max-w-7xl mx-auto space-y-6">
-                <div>
-                  <h2 className="text-xl font-bold text-zinc-900">{isEn ? "Linked Evidence & Citations" : "Bằng chứng & Trích dẫn có nguồn"} ({citations.length})</h2>
-                  <p className="text-xs text-zinc-500 mt-0.5">
-                    {isEn ? "Each citation is anchored to an indexed literature chunk and corresponding claim in the paper." : "Mỗi trích dẫn được neo chặt vào đoạn trích nguồn (chunk) và luận điểm (claim) tương ứng trong bài báo."}
-                  </p>
-                </div>
-
-                {citationsError && (
-                  <div className="text-sm text-red-600 bg-red-50 p-4 rounded-xl border border-red-200">
-                    {citationsError} <button className="underline ml-2" onClick={() => void loadCitations()}>{isEn ? "Retry" : "Thử lại"}</button>
-                  </div>
-                )}
-
-                {citations.length === 0 ? (
-                  <Card className="p-8 text-center text-zinc-500">
-                    {['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW'].includes(task.status)
-                      ? (isEn ? "No verified citations recorded for this project yet." : "Chưa có trích dẫn đã xác minh cho bài này.")
-              : (isEn ? "Citations will appear when the pipeline extracts verified claims." : "Trích dẫn sẽ xuất hiện khi pipeline hoàn thành trích xuất bằng chứng.")}
-                  </Card>
-                ) : (
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    {citations.filter(c => {
-                      if (citationFilter === 'WITH_SOURCE') return !!c.source_url;
-                      if (citationFilter === 'WITH_TEXT') return !!c.chunk_content;
-                      return true;
-                    }).map((citation) => {
-                      const isHighlighted = highlightedRef && (citation.citation_label.includes(highlightedRef) || String(citation.citation_number) === highlightedRef);
-                      return (
-                        <Card
-                          key={citation.id}
-                          className={`p-5 space-y-3 transition-all flex flex-col justify-between ${isHighlighted ? 'ring-2 ring-blue-500 bg-blue-50/30' : 'hover:border-zinc-300'}`}
-                        >
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-zinc-100 text-zinc-800 border border-zinc-200">
-                                {citation.citation_label || `[${citation.citation_number ?? '?'}]`}
-                              </span>
-                              {citation.source_url ? (
-                                <a
-                                  href={citation.source_url}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="text-xs font-medium text-blue-600 hover:underline inline-flex items-center gap-1 max-w-xs sm:max-w-sm truncate"
-                                >
-                                  <span className="truncate">{citation.source_title || citation.source_url}</span>
-                                  <ExternalLink size={12} className="shrink-0" />
-                                </a>
-                              ) : (
-                                <span className="text-xs text-zinc-400">{isEn ? "No source link" : "Không có liên kết nguồn"}</span>
-                              )}
-                            </div>
-
-                            {citation.claim_text && (
-                              <div className="text-sm sm:text-base text-zinc-900 font-semibold leading-relaxed">
-                                <span className="text-zinc-500 font-normal">{isEn ? "Source-linked claim: " : "Luận điểm gắn nguồn: "}</span>
-                                {citation.claim_text}
-                              </div>
-                            )}
-
-                            {citation.chunk_content && (
-                              <blockquote className="text-sm text-zinc-800 border-l-4 border-blue-500 pl-4 py-2.5 italic bg-zinc-50 rounded-r-xl leading-relaxed border-t border-b border-r border-zinc-200/60">
-                                &ldquo;{citation.chunk_content}&rdquo;
-                              </blockquote>
-                            )}
-                          </div>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
+            {activeTab === 'citations' && <CitationsPanel {...citationProps} />}
 
             {/* TAB 4: AGENT RUNS & COST */}
             {activeTab === 'runs' && <AgentRunsPanel task={task} runs={runs} runsError={runsError} runStatusFilter={runStatusFilter} isWorking={isWorking} isEn={isEn} language={language} formatDate={formatDate} />}

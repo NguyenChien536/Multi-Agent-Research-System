@@ -9,7 +9,7 @@ from sqlalchemy import func, select, update
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.services.worker_runtime import run_worker_coroutine
-from app.models.task import ResearchTask, TaskDispatchOutbox, DocumentIngestionOutbox, TaskDeletionOutbox, WorkflowRun
+from app.models.task import ResearchTask, TaskDispatchOutbox, WorkflowRun
 from app.models.source import DocumentChunk, ResearchSource
 from app.models.report import ExportArtifact, ResearchReport, ReportVersion
 from app.models.grounding import Citation, ClaimEvidence, Evidence, ResearchClaim
@@ -18,8 +18,6 @@ from app.models.user import User
 from app.agents.graph import research_graph, build_research_graph
 from app.agents.state import ResearchState
 from app.services.artifact_store import artifact_store
-from app.services.pdf_parser import extract_text_from_pdf
-from app.tools.embedder import EmbedderTool
 import json
 
 logger = logging.getLogger(__name__)
@@ -997,114 +995,10 @@ def execute_research_workflow(self, task_id: str):
 
 
 async def run_document_ingestion(source_id: str) -> dict:
-    """Parse and chunk one private uploaded PDF with a durable, idempotent claim."""
-    source_uuid = uuid.UUID(source_id)
-    now = datetime.now(timezone.utc)
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            task = await session.scalar(
-                select(ResearchTask)
-                .where(ResearchTask.id == select(ResearchSource.research_task_id).where(ResearchSource.id == source_uuid).scalar_subquery())
-                .with_for_update()
-            )
-            if task is None or task.status == "DELETING":
-                return {"status": "DELETED", "source_id": source_id}
-            source = await session.scalar(
-                select(ResearchSource).where(ResearchSource.id == source_uuid).with_for_update()
-            )
-            if source is None:
-                return {"status": "DELETED", "source_id": source_id}
-            if source.ingestion_status == "READY":
-                return {"status": "ALREADY_READY", "source_id": source_id}
-            if source.ingestion_status == "PROCESSING" and source.ingestion_lease_until and source.ingestion_lease_until > now:
-                return {"status": "ALREADY_PROCESSING", "source_id": source_id}
-            source.ingestion_status = "PROCESSING"
-            source.ingestion_error = None
-            source.ingestion_attempt += 1
-            attempt = source.ingestion_attempt
-            source.ingestion_lease_until = now + timedelta(seconds=settings.WORKER_LEASE_SECONDS)
-            task_id = source.research_task_id
-            artifact_id = source.upload_artifact_id
+    """Keep the worker API stable while the job owns its lifecycle."""
+    from app.jobs.document_ingestion import ingest_document
 
-    try:
-        async with AsyncSessionLocal() as session:
-            artifact = await session.scalar(
-                select(ExportArtifact).where(
-                    ExportArtifact.id == artifact_id,
-                    ExportArtifact.research_task_id == task_id,
-                    ExportArtifact.export_type == "PDF_UPLOAD",
-                )
-            )
-            if artifact is None:
-                raise FileNotFoundError("Uploaded document artifact is unavailable")
-            path = artifact_store.get_artifact_path(task_id, artifact.file_path)
-            if path is None:
-                raise FileNotFoundError("Uploaded document file is unavailable")
-            content = await asyncio.to_thread(path.read_bytes)
-            if len(content) != artifact.file_size_bytes:
-                raise ValueError("Uploaded document size does not match its stored metadata")
-            import hashlib
-            checksum = hashlib.sha256(content).hexdigest()
-            source = await session.get(ResearchSource, source_uuid)
-            if source is None or checksum != source.content_checksum:
-                raise ValueError("Uploaded document checksum validation failed")
-
-        parsed = await asyncio.to_thread(extract_text_from_pdf, content)
-
-        async with AsyncSessionLocal() as session:
-            async with session.begin():
-                task = await session.scalar(
-                    select(ResearchTask).where(ResearchTask.id == task_id).with_for_update()
-                )
-                if task is None or task.status == "DELETING":
-                    return {"status": "DELETED", "source_id": source_id}
-                source = await session.scalar(
-                    select(ResearchSource).where(ResearchSource.id == source_uuid).with_for_update()
-                )
-                if source is None:
-                    return {"status": "DELETED", "source_id": source_id}
-                if source.ingestion_attempt != attempt or source.ingestion_status != "PROCESSING":
-                    return {"status": "SUPERSEDED", "source_id": source_id}
-                source.title = parsed.get("title") or source.title
-                source.author = parsed.get("author")
-                source.content_snippet = parsed["text"][:500]
-                source.summary = (
-                    f"PDF ({parsed['page_count']} pages, {len(content)} bytes). "
-                    f"SHA256: {checksum}"
-                )
-                chunk_count = await EmbedderTool().embed_and_store(
-                    db=session,
-                    task_id=task_id,
-                    source_id=source_uuid,
-                    text_content=parsed["text"],
-                )
-                source.ingestion_status = "READY"
-                source.ingestion_error = None
-                source.ingestion_lease_until = None
-        logger.info(
-            "PDF ingestion ready task=%s source=%s attempt=%s pages=%s chunks=%s",
-            task_id, source_uuid, attempt, parsed["page_count"], chunk_count,
-        )
-        return {
-            "status": "READY",
-            "task_id": str(task_id),
-            "source_id": source_id,
-            "page_count": parsed["page_count"],
-            "chunks_count": chunk_count,
-        }
-    except Exception as exc:
-        safe_error = f"{type(exc).__name__}: {str(exc)[:400]}"
-        async with AsyncSessionLocal() as session:
-            async with session.begin():
-                source = await session.scalar(
-                    select(ResearchSource).where(ResearchSource.id == source_uuid).with_for_update()
-                )
-                if source and source.ingestion_attempt == attempt and source.ingestion_status == "PROCESSING":
-                    source.ingestion_status = "FAILED"
-                    source.ingestion_error = safe_error
-                    source.ingestion_lease_until = None
-        logger.exception("PDF ingestion failed task=%s source=%s attempt=%s", task_id, source_uuid, attempt)
-        return {"status": "FAILED", "task_id": str(task_id), "source_id": source_id, "error": safe_error}
+    return await ingest_document(source_id, artifact_store=artifact_store)
 
 
 @celery_app.task(bind=True, name="app.worker.execute_document_ingestion")
@@ -1115,84 +1009,10 @@ def execute_document_ingestion(self, source_id: str):
 
 
 async def run_task_deletion(task_id: str) -> dict:
-    """Remove private files only after active research/ingestion leases expire."""
-    task_uuid = uuid.UUID(task_id)
-    now = datetime.now(timezone.utc)
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            task = await session.scalar(
-                select(ResearchTask).where(ResearchTask.id == task_uuid).with_for_update()
-            )
-            if task is None:
-                return {"status": "DELETED", "task_id": task_id}
-            if task.status != "DELETING":
-                return {"status": "IGNORED", "task_id": task_id, "reason": "Task is not tombstoned"}
-            outbox = await session.scalar(
-                select(TaskDeletionOutbox)
-                .where(TaskDeletionOutbox.research_task_id == task_uuid)
-                .with_for_update()
-            )
-            if outbox is None:
-                outbox = TaskDeletionOutbox(research_task_id=task_uuid)
-                session.add(outbox)
-                await session.flush()
-            if outbox.cleanup_lease_until and outbox.cleanup_lease_until > now:
-                return {"status": "ALREADY_CLAIMED", "task_id": task_id}
-            active_ingestion = await session.scalar(
-                select(func.count(ResearchSource.id)).where(
-                    ResearchSource.research_task_id == task_uuid,
-                    ResearchSource.ingestion_status == "PROCESSING",
-                    ResearchSource.ingestion_lease_until > now,
-                )
-            )
-            if (task.worker_lease_until and task.worker_lease_until > now) or active_ingestion:
-                outbox.available_at = now + timedelta(seconds=15)
-                outbox.dispatched_at = None
-                outbox.locked_until = None
-                outbox.cleanup_lease_until = None
-                outbox.last_error = "Cleanup deferred while an active worker lease is running"
-                return {"status": "DEFERRED", "task_id": task_id}
-            outbox.cleanup_lease_until = now + timedelta(
-                seconds=max(settings.WORKER_LEASE_SECONDS * 2, settings.OUTBOX_DISPATCH_ACK_TIMEOUT_SECONDS * 2)
-            )
-            outbox_id = outbox.id
-            thread_ids = list(await session.scalars(select(WorkflowRun.checkpoint_thread_id).where(
-                WorkflowRun.research_task_id == task_uuid,
-            )))
+    """Keep the worker API stable while the job owns its lifecycle."""
+    from app.jobs.task_deletion import delete_research_task
 
-    try:
-        await asyncio.to_thread(artifact_store.delete_task_artifacts, task_uuid)
-        from app.services.account_deletion import delete_checkpoint_threads
-        await delete_checkpoint_threads(thread_ids)
-    except Exception as exc:
-        async with AsyncSessionLocal() as session:
-            async with session.begin():
-                outbox = await session.get(TaskDeletionOutbox, outbox_id, with_for_update=True)
-                if outbox is not None:
-                    outbox.attempts += 1
-                    retry_after = min(settings.OUTBOX_MAX_RETRY_SECONDS, settings.OUTBOX_RETRY_SECONDS * 2 ** min(outbox.attempts - 1, 10))
-                    outbox.available_at = datetime.now(timezone.utc) + timedelta(seconds=retry_after)
-                    outbox.dispatched_at = None
-                    outbox.locked_until = None
-                    outbox.cleanup_lease_until = None
-                    outbox.last_error = f"{type(exc).__name__}: {str(exc)[:1800]}"
-        logger.exception("Task artifact cleanup failed task=%s; retained tombstone for retry", task_id)
-        return {"status": "RETRY", "task_id": task_id}
-
-    async with AsyncSessionLocal() as session:
-        async with session.begin():
-            task = await session.scalar(
-                select(ResearchTask).where(ResearchTask.id == task_uuid).with_for_update()
-            )
-            if task is None:
-                return {"status": "DELETED", "task_id": task_id}
-            if task.status != "DELETING":
-                return {"status": "RETRY", "task_id": task_id, "reason": "Tombstone changed during cleanup"}
-            # No new worker can claim a tombstoned task; leases checked before
-            # cleanup are static because both worker claim paths reject DELETING.
-            await session.delete(task)
-    logger.info("Deleted task and private artifacts task=%s", task_id)
-    return {"status": "DELETED", "task_id": task_id}
+    return await delete_research_task(task_id, artifact_store=artifact_store)
 
 
 @celery_app.task(bind=True, name="app.worker.execute_task_deletion")
