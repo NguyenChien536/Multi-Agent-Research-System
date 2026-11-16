@@ -296,16 +296,13 @@ export default function Home() {
         {/* Scholarly Navigation Links */}
         <nav className="hidden lg:flex items-center gap-7 text-xs font-semibold text-stone-600">
           <a href="#modalities" className="hover:text-stone-950 transition-colors">
-            {isEn ? 'Research Modalities' : 'Phương thức nghiên cứu'}
+            {isEn ? 'Pathways' : 'Phương thức'}
           </a>
           <a href="#rigor" className="hover:text-stone-950 transition-colors">
-            {isEn ? 'Scientific Rigor' : 'Liêm chính học thuật'}
+            {isEn ? 'Integrity' : 'Chuẩn mực'}
           </a>
-          <a href="#lifecycle" className="hover:text-stone-950 transition-colors">
-            {isEn ? 'Lifecycle' : 'Quy trình'}
-          </a>
-          <a href="#capabilities" className="hover:text-stone-950 transition-colors">
-            {isEn ? 'Capabilities' : 'Năng lực'}
+          <a href="#workflow" className="hover:text-stone-950 transition-colors">
+            {isEn ? 'Workflow' : 'Quy trình'}
           </a>
         </nav>
 
@@ -957,57 +954,36 @@ export default function Home() {
       </main>
 
       {/* Landing Page Content Sections */}
-      <div className="w-full relative z-10 border-t border-stone-200/80 bg-white/75 backdrop-blur-xs">
+      <div className="w-full relative z-10 border-t border-stone-200/80 bg-white">
         
         {/* Section 1: Research Modalities */}
-        <section id="modalities" className="w-full max-w-6xl mx-auto px-6 sm:px-10 py-16 sm:py-24">
-          <div className="text-center max-w-3xl mx-auto mb-14">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-stone-100 text-stone-700 border border-stone-200/80 mb-3">
-              <BookOpen size={13} className="text-stone-600" />
-              {isEn ? 'Research Modalities' : 'Phương thức nghiên cứu'}
-            </span>
-            <h2 className="text-2xl sm:text-4xl font-bold tracking-tight text-stone-950">
-              {isEn ? 'Three Distinct Modes of Academic Investigation' : 'Ba Phương thức Nghiên cứu Khoa học Chuyên biệt'}
+        <section id="modalities" className="w-full max-w-5xl mx-auto px-6 sm:px-8 py-20">
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-950">
+              {isEn ? 'Three Dedicated Research Pathways' : 'Ba Phương Thức Nghiên Cứu Chuyên Biệt'}
             </h2>
-            <p className="mt-3 text-stone-600 text-sm sm:text-base leading-relaxed">
+            <p className="mt-3 text-stone-600 text-sm leading-relaxed">
               {isEn
-                ? 'From systematic theoretical synthesis to computational regression and empirical fieldwork protocols, Synthia aligns methodology with academic rigor.'
-                : 'Từ tổng quan lý thuyết hệ thống đến mô hình hóa thực nghiệm số và đề cương nghiên cứu thực địa, hệ thống luôn tuân thủ chuẩn mực học thuật cao nhất.'}
+                ? 'Choose the modality that fits your investigation, from systematic theoretical synthesis to data regression and fieldwork.'
+                : 'Lựa chọn phương thức phù hợp với đề tài: từ tổng quan lý thuyết hệ thống đến phân tích dữ liệu và khảo sát thực địa.'}
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Card 1: Review */}
-            <div className="rounded-2xl border border-stone-200 bg-white p-7 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between">
+            <div className="rounded-2xl border border-stone-200 bg-[#FAF9F7] p-6 flex flex-col justify-between hover:border-stone-300 transition-colors">
               <div>
-                <div className="w-12 h-12 rounded-xl bg-stone-100 text-stone-800 flex items-center justify-center mb-5">
-                  <FileText size={24} />
+                <div className="text-stone-900 mb-4">
+                  <BookOpen size={22} className="stroke-[1.75]" />
                 </div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500">
-                  {isEn ? 'Theoretical Synthesis' : 'Tổng hợp Lý thuyết'}
-                </span>
-                <h3 className="text-lg font-bold text-stone-950 mt-1 mb-3">
-                  {isEn ? 'Systematic Literature Review' : 'Tổng quan Tài liệu Hệ thống'}
+                <h3 className="text-base font-bold text-stone-950 mb-2">
+                  {isEn ? 'Literature Review' : 'Tổng Quan Tài Liệu'}
                 </h3>
-                <p className="text-xs sm:text-sm text-stone-600 leading-relaxed mb-6">
+                <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
                   {isEn
-                    ? 'Systematically surveys indexed scientific literature, triangulates findings across independent papers, identifies research divergences, and highlights unaddressed research gaps.'
-                    : 'Thu thập tài liệu khoa học chuẩn mực, đối chiếu chéo các kết quả độc lập, nhận diện mâu thuẫn học thuật và làm nổi bật khoảng trống nghiên cứu chưa được giải quyết.'}
+                    ? 'Surveys indexed literature, compares findings across independent studies, and identifies unaddressed research gaps.'
+                    : 'Khảo sát và đối chiếu các nghiên cứu uy tín nhằm phát hiện mâu thuẫn học thuật và khoảng trống tri thức.'}
                 </p>
-                <div className="space-y-2 border-t border-stone-100 pt-4">
-                  <div className="flex items-center gap-2 text-xs text-stone-700">
-                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
-                    <span>{isEn ? 'Multi-database literature mapping' : 'Khảo cứu đa nguồn tài liệu uy tín'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-stone-700">
-                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
-                    <span>{isEn ? 'Cross-study claim validation' : 'Kiểm chứng chéo nhận định học thuật'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-stone-700">
-                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
-                    <span>{isEn ? 'Standardized bibliography (IEEE/APA)' : 'Danh mục trích dẫn chuẩn IEEE / APA'}</span>
-                  </div>
-                </div>
               </div>
               <button
                 type="button"
@@ -1020,44 +996,27 @@ export default function Home() {
                     if (ta) ta.focus();
                   }
                 }}
-                className="mt-6 inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-4 rounded-xl border border-stone-200 text-xs font-semibold text-stone-800 hover:bg-stone-50 hover:border-stone-300 transition-colors cursor-pointer"
+                className="mt-6 inline-flex items-center gap-1.5 text-xs font-bold text-stone-900 hover:text-stone-600 transition-colors cursor-pointer text-left"
               >
-                <span>{isEn ? 'Select Literature Review' : 'Chọn Tổng quan tài liệu'}</span>
+                <span>{isEn ? 'Start review' : 'Khởi động tổng quan'}</span>
                 <ArrowRight size={13} />
               </button>
             </div>
 
             {/* Card 2: Computational */}
-            <div className="rounded-2xl border border-stone-200 bg-white p-7 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between">
+            <div className="rounded-2xl border border-stone-200 bg-[#FAF9F7] p-6 flex flex-col justify-between hover:border-stone-300 transition-colors">
               <div>
-                <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center mb-5">
-                  <Cpu size={24} />
+                <div className="text-stone-900 mb-4">
+                  <BarChart3 size={22} className="stroke-[1.75]" />
                 </div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-purple-700">
-                  {isEn ? 'Data & Statistics' : 'Số liệu & Thống kê'}
-                </span>
-                <h3 className="text-lg font-bold text-stone-950 mt-1 mb-3">
-                  {isEn ? 'Computational Empirical Modeling' : 'Thực nghiệm Tính toán Khoa học'}
+                <h3 className="text-base font-bold text-stone-950 mb-2">
+                  {isEn ? 'Computational Empirical' : 'Thực Nghiệm Tính Toán'}
                 </h3>
-                <p className="text-xs sm:text-sm text-stone-600 leading-relaxed mb-6">
+                <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
                   {isEn
-                    ? 'Ingests numerical research datasets (CSV), executes validated baseline comparisons and regression routines, and automatically generates publication-grade data charts.'
-                    : 'Nạp tập số liệu thực nghiệm (CSV), thực thi mô hình hồi quy và so sánh với baseline chuẩn, tự động kết xuất biểu đồ trực quan phục vụ bài báo.'}
+                    ? 'Upload numerical CSV data to run statistical modeling, benchmark against baselines, and generate scientific charts.'
+                    : 'Nạp dữ liệu CSV để chạy mô hình thống kê, đối chứng baseline và tự động xuất các biểu đồ khoa học.'}
                 </p>
-                <div className="space-y-2 border-t border-stone-100 pt-4">
-                  <div className="flex items-center gap-2 text-xs text-stone-700">
-                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
-                    <span>{isEn ? 'Structured numerical CSV processing' : 'Xử lý dữ liệu định lượng CSV chuẩn'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-stone-700">
-                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
-                    <span>{isEn ? 'Comparative baseline evaluation' : 'Đối chiếu mô hình cơ sở định lượng'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-stone-700">
-                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
-                    <span>{isEn ? 'Automated publication-ready charts' : 'Tự động tạo biểu đồ khoa học'}</span>
-                  </div>
-                </div>
               </div>
               <button
                 type="button"
@@ -1070,44 +1029,27 @@ export default function Home() {
                     if (ta) ta.focus();
                   }
                 }}
-                className="mt-6 inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-4 rounded-xl border border-stone-200 text-xs font-semibold text-stone-800 hover:bg-stone-50 hover:border-stone-300 transition-colors cursor-pointer"
+                className="mt-6 inline-flex items-center gap-1.5 text-xs font-bold text-stone-900 hover:text-stone-600 transition-colors cursor-pointer text-left"
               >
-                <span>{isEn ? 'Select Computational' : 'Chọn Thực nghiệm tính toán'}</span>
+                <span>{isEn ? 'Analyze dataset' : 'Phân tích số liệu'}</span>
                 <ArrowRight size={13} />
               </button>
             </div>
 
             {/* Card 3: Fieldwork */}
-            <div className="rounded-2xl border border-stone-200 bg-white p-7 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between">
+            <div className="rounded-2xl border border-stone-200 bg-[#FAF9F7] p-6 flex flex-col justify-between hover:border-stone-300 transition-colors">
               <div>
-                <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center mb-5">
-                  <FlaskConical size={24} />
+                <div className="text-stone-900 mb-4">
+                  <FlaskConical size={22} className="stroke-[1.75]" />
                 </div>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-700">
-                  {isEn ? 'Methodology & Sampling' : 'Phương pháp & Thực địa'}
-                </span>
-                <h3 className="text-lg font-bold text-stone-950 mt-1 mb-3">
-                  {isEn ? 'Fieldwork & Experimental Protocols' : 'Thực nghiệm Thực địa & Khảo sát'}
+                <h3 className="text-base font-bold text-stone-950 mb-2">
+                  {isEn ? 'Fieldwork & Protocols' : 'Khảo Sát Thực Địa'}
                 </h3>
-                <p className="text-xs sm:text-sm text-stone-600 leading-relaxed mb-6">
+                <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
                   {isEn
-                    ? 'Formulates rigorous experimental hypotheses and fieldwork protocols, pauses for real-world survey or laboratory sampling, and incorporates field findings into the study.'
-                    : 'Xây dựng giả thuyết và đề cương phương pháp thực nghiệm, tạm dừng để thu thập khảo sát thực tế, sau đó tích hợp số liệu vào bản thảo hoàn chỉnh.'}
+                    ? 'Structures survey protocols, pauses for real-world sampling, and weaves collected results into the final manuscript.'
+                    : 'Thiết kế đề cương khảo sát, tạm dừng để bạn thu thập mẫu thực tế rồi tích hợp vào bài báo.'}
                 </p>
-                <div className="space-y-2 border-t border-stone-100 pt-4">
-                  <div className="flex items-center gap-2 text-xs text-stone-700">
-                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
-                    <span>{isEn ? 'Formal protocol & survey design' : 'Thiết kế đề cương và bảng câu hỏi'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-stone-700">
-                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
-                    <span>{isEn ? 'Human-in-the-loop sampling pause' : 'Tạm dừng chờ thu thập dữ liệu thực'}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-stone-700">
-                    <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
-                    <span>{isEn ? 'Empirical observation synthesis' : 'Tổng hợp kết quả khảo sát vào IMRaD'}</span>
-                  </div>
-                </div>
               </div>
               <button
                 type="button"
@@ -1120,326 +1062,140 @@ export default function Home() {
                     if (ta) ta.focus();
                   }
                 }}
-                className="mt-6 inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-4 rounded-xl border border-stone-200 text-xs font-semibold text-stone-800 hover:bg-stone-50 hover:border-stone-300 transition-colors cursor-pointer"
+                className="mt-6 inline-flex items-center gap-1.5 text-xs font-bold text-stone-900 hover:text-stone-600 transition-colors cursor-pointer text-left"
               >
-                <span>{isEn ? 'Select Fieldwork' : 'Chọn Thực địa & Khảo sát'}</span>
+                <span>{isEn ? 'Design protocol' : 'Thiết kế đề cương'}</span>
                 <ArrowRight size={13} />
               </button>
             </div>
           </div>
         </section>
 
-        {/* Section 2: Scholarly Rigor & Provenance */}
-        <section id="rigor" className="w-full bg-[#FAF8F5]/80 border-y border-stone-200/80 py-16 sm:py-24">
-          <div className="max-w-6xl mx-auto px-6 sm:px-10">
-            <div className="text-center max-w-3xl mx-auto mb-14">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200/80 mb-3">
-                <ShieldCheck size={13} className="text-emerald-700" />
-                {isEn ? 'Scholarly Integrity' : 'Liêm chính học thuật'}
-              </span>
-              <h2 className="text-2xl sm:text-4xl font-bold tracking-tight text-stone-950">
-                {isEn ? 'Engineered for Scientific Integrity, Not Hallucination' : 'Thiết kế vì Tính Liêm chính Học thuật, Ngăn ngừa Ảo giác'}
+        {/* Section 2: Rigor & Integrity */}
+        <section id="rigor" className="w-full bg-[#FAF9F7] border-y border-stone-200/80 py-20">
+          <div className="max-w-5xl mx-auto px-6 sm:px-8">
+            <div className="max-w-2xl mb-14">
+              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-950">
+                {isEn ? 'Rigorous Evidence, Zero Hallucination' : 'Nghiên Cứu Có Dẫn Chứng, Không Ảo Giác'}
               </h2>
-              <p className="mt-3 text-stone-600 text-sm sm:text-base leading-relaxed">
+              <p className="mt-3 text-stone-600 text-sm leading-relaxed">
                 {isEn
-                  ? 'Unlike general-purpose conversational chatbots that generate superficial prose with fabricated citations, Synthia enforces strict multi-agent checks and balances where every assertion must be anchored in verified evidence.'
-                  : 'Khác với chatbot hội thoại thông thường dễ tự bịa tài liệu trích dẫn và viết lan man, Synthia xây dựng cơ chế đa tác nhân phản biện chéo, đòi hỏi mọi luận điểm đều phải gắn chặt với chứng cứ được kiểm chứng.'}
+                  ? 'Unlike conversational chatbots that fabricate citations, Synthia cross-examines claims and requires verifiable proof for every statement.'
+                  : 'Khác với chatbot thông thường hay tự bịa số liệu, Synthia bắt buộc mọi nhận định phải đối chiếu với tài liệu gốc.'}
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {/* Pillar 1 */}
-              <div className="p-7 rounded-2xl bg-white border border-stone-200 shadow-xs flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-stone-100 text-stone-900 flex items-center justify-center shrink-0 mt-0.5">
-                  <ShieldCheck size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base text-stone-950 mb-1.5">
-                    {isEn ? '100% Verifiable Source Grounding' : 'Truy nguyên Nguồn tài liệu Xác thực 100%'}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
-                    {isEn
-                      ? 'Every citation in the manuscript corresponds to genuine peer-reviewed publications or recorded datasets. The platform prevents citation fabrication by validating metadata against authentic scholarly indices.'
-                      : 'Mọi tài liệu tham khảo trong bài báo đều xuất phát từ nguồn học thuật thực tế hoặc bộ dữ liệu đã ghi nhận. Tuyệt đối không sinh tác giả hay tạp chí ảo.'}
-                  </p>
-                </div>
+              <div className="border-t border-stone-300 pt-5">
+                <span className="text-xs font-bold text-stone-400 block mb-1">01</span>
+                <h3 className="font-bold text-base text-stone-950 mb-2">
+                  {isEn ? '100% Genuine Sources' : 'Nguồn Học Thuật Thật 100%'}
+                </h3>
+                <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+                  {isEn
+                    ? 'Every citation corresponds to real publications or recorded data. No invented authors, volumes, or synthetic titles.'
+                    : 'Mọi trích dẫn đều kết nối đến bài báo hoặc số liệu có thật. Tuyệt đối không sinh tác giả hay tạp chí ảo.'}
+                </p>
               </div>
 
               {/* Pillar 2 */}
-              <div className="p-7 rounded-2xl bg-white border border-stone-200 shadow-xs flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-stone-100 text-stone-900 flex items-center justify-center shrink-0 mt-0.5">
-                  <FileCheck2 size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base text-stone-950 mb-1.5">
-                    {isEn ? 'Independent Peer Critique Loop' : 'Vòng lặp Phản biện Khoa học Độc lập'}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
-                    {isEn
-                      ? 'Specialized reviewer agents challenge methodology, scrutinize evidence coherence, and mandate revisions for unsupported claims, replicating the rigorous standards of journal peer review.'
-                      : 'Tác nhân phản biện độc lập đóng vai trò người bình duyệt phản biện khó tính, rà soát tính nhất quán của phương pháp và yêu cầu sửa lại nếu thiếu số liệu chứng minh.'}
-                  </p>
-                </div>
+              <div className="border-t border-stone-300 pt-5">
+                <span className="text-xs font-bold text-stone-400 block mb-1">02</span>
+                <h3 className="font-bold text-base text-stone-950 mb-2">
+                  {isEn ? 'Independent Peer Critique' : 'Phản Biện Độc Lập'}
+                </h3>
+                <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+                  {isEn
+                    ? 'Reviewer agents inspect methodology and challenge weak assertions before manuscript sections are approved.'
+                    : 'Tác nhân Reviewer kiểm tra phương pháp và bắt lỗi luận điểm trước khi bản thảo được thông qua.'}
+                </p>
               </div>
 
               {/* Pillar 3 */}
-              <div className="p-7 rounded-2xl bg-white border border-stone-200 shadow-xs flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-stone-100 text-stone-900 flex items-center justify-center shrink-0 mt-0.5">
-                  <Layers size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base text-stone-950 mb-1.5">
-                    {isEn ? 'Granular Citation Lineage' : 'Minh bạch Hóa Xuất xứ Trích dẫn'}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
-                    {isEn
-                      ? 'Researchers can trace any paragraph in the generated manuscript directly back to the exact passage, author, and dataset record that provided the supporting empirical evidence.'
-                      : 'Nhà nghiên cứu có thể truy vết từng đoạn văn trong bài báo về đúng câu trích, bảng dữ liệu hoặc tác giả gốc đã cung cấp thông tin đó.'}
-                  </p>
-                </div>
-              </div>
-
-              {/* Pillar 4 */}
-              <div className="p-7 rounded-2xl bg-white border border-stone-200 shadow-xs flex items-start gap-4">
-                <div className="w-10 h-10 rounded-xl bg-stone-100 text-stone-900 flex items-center justify-center shrink-0 mt-0.5">
-                  <Award size={20} />
-                </div>
-                <div>
-                  <h3 className="font-bold text-base text-stone-950 mb-1.5">
-                    {isEn ? 'Reproducible Empirical Standards' : 'Quy trình Thực nghiệm Tái lập được'}
-                  </h3>
-                  <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
-                    {isEn
-                      ? 'Data transformations, baseline comparative models, and statistical routines remain transparent and reproducible, allowing scholars to independently verify all analytical conclusions.'
-                      : 'Quy trình xử lý dữ liệu, mô hình đối chứng cơ sở và các phân tích thống kê được lưu giữ minh bạch, cho phép các nhà khoa học độc lập tái lập và kiểm chứng.'}
-                  </p>
-                </div>
+              <div className="border-t border-stone-300 pt-5">
+                <span className="text-xs font-bold text-stone-400 block mb-1">03</span>
+                <h3 className="font-bold text-base text-stone-950 mb-2">
+                  {isEn ? 'Traceable Citation Lineage' : 'Xuất Xứ Minh Bạch'}
+                </h3>
+                <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
+                  {isEn
+                    ? 'Click any finding to trace it directly back to the exact passage or dataset record that provided the supporting evidence.'
+                    : 'Dễ dàng truy vết từng câu trong bài về đúng đoạn trích hoặc bảng dữ liệu gốc đã cung cấp thông tin.'}
+                </p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* Section 3: The 4-Stage Research Lifecycle */}
-        <section id="lifecycle" className="w-full max-w-6xl mx-auto px-6 sm:px-10 py-16 sm:py-24">
-          <div className="text-center max-w-3xl mx-auto mb-14">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-stone-100 text-stone-700 border border-stone-200/80 mb-3">
-              <Sparkles size={13} className="text-stone-600" />
-              {isEn ? 'Research Lifecycle' : 'Tiến trình nghiên cứu'}
-            </span>
-            <h2 className="text-2xl sm:text-4xl font-bold tracking-tight text-stone-950">
-              {isEn ? 'From Research Inquiry to Publication-Ready Manuscript' : 'Quy trình từ Câu hỏi Nghiên cứu đến Bản thảo Hoàn chỉnh'}
+        {/* Section 3: Workflow */}
+        <section id="workflow" className="w-full max-w-5xl mx-auto px-6 sm:px-8 py-20">
+          <div className="text-center max-w-2xl mx-auto mb-14">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-950">
+              {isEn ? 'The 4-Step Academic Workflow' : 'Quy Trình Nghiên Cứu 4 Bước'}
             </h2>
-            <p className="mt-3 text-stone-600 text-sm sm:text-base leading-relaxed">
+            <p className="mt-3 text-stone-600 text-sm leading-relaxed">
               {isEn
-                ? 'A transparent, step-by-step methodology designed to mirror top-tier academic laboratory practices.'
-                : 'Quy trình tuần tự, minh bạch mô phỏng chính xác phương pháp làm việc tại các viện nghiên cứu và phòng thí nghiệm hàng đầu.'}
+                ? 'From initial inquiry to a complete, peer-reviewed scientific paper.'
+                : 'Tiến trình tuần tự từ câu hỏi mở ban đầu đến bài báo khoa học hoàn chỉnh.'}
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Step 1 */}
-            <div className="p-6 rounded-2xl bg-white border border-stone-200 shadow-xs flex flex-col justify-between">
-              <div>
-                <span className="text-xs font-bold font-mono text-stone-400">PHASE 01</span>
-                <h3 className="font-bold text-base text-stone-950 mt-1 mb-2">
-                  {isEn ? 'Literature Discovery' : 'Khám phá Tài liệu'}
-                </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  {isEn
-                    ? 'Systematically searches and aggregates foundational literature, discovers consensus and divergence across studies, and crystallizes under-addressed research gaps.'
-                    : 'Tìm kiếm và tổng hợp các công trình nền tảng, xác định điểm tương đồng, bất đồng giữa các nghiên cứu và làm rõ khoảng trống học thuật cần đào sâu.'}
-                </p>
-              </div>
-              <div className="mt-5 pt-3 border-t border-stone-100 text-[11px] font-medium text-stone-500">
-                {isEn ? 'Evidence mapping & gap finding' : 'Lập bản đồ chứng cứ & tìm gap'}
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="p-5 rounded-xl border border-stone-200 bg-white">
+              <span className="text-lg font-bold text-stone-400 block mb-2">1</span>
+              <h3 className="font-bold text-sm text-stone-950 mb-1.5">
+                {isEn ? 'Literature Search' : 'Khảo Sát Tài Liệu'}
+              </h3>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                {isEn ? 'Aggregates foundational studies and maps consensus vs divergence.' : 'Tổng hợp các công trình nền tảng và phát hiện mâu thuẫn học thuật.'}
+              </p>
             </div>
 
-            {/* Step 2 */}
-            <div className="p-6 rounded-2xl bg-white border border-stone-200 shadow-xs flex flex-col justify-between">
-              <div>
-                <span className="text-xs font-bold font-mono text-stone-400">PHASE 02</span>
-                <h3 className="font-bold text-base text-stone-950 mt-1 mb-2">
-                  {isEn ? 'Hypothesis & Methods' : 'Giả thuyết & Phương pháp'}
-                </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  {isEn
-                    ? 'Establishes clear hypotheses, structures formal research questions, and outlines experimental methodologies or empirical sampling protocols.'
-                    : 'Xác lập các giả thuyết nghiên cứu có thể kiểm chứng, chuẩn hóa câu hỏi khoa học và thiết lập phương pháp luận hoặc đề cương thu thập số liệu.'}
-                </p>
-              </div>
-              <div className="mt-5 pt-3 border-t border-stone-100 text-[11px] font-medium text-stone-500">
-                {isEn ? 'Methodological design' : 'Thiết kế phương pháp luận'}
-              </div>
+            <div className="p-5 rounded-xl border border-stone-200 bg-white">
+              <span className="text-lg font-bold text-stone-400 block mb-2">2</span>
+              <h3 className="font-bold text-sm text-stone-950 mb-1.5">
+                {isEn ? 'Hypothesis & Design' : 'Đặt Giả Thuyết'}
+              </h3>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                {isEn ? 'Formulates formal hypotheses and selects statistical methodologies.' : 'Xác lập câu hỏi nghiên cứu và lựa chọn phương pháp phù hợp.'}
+              </p>
             </div>
 
-            {/* Step 3 */}
-            <div className="p-6 rounded-2xl bg-white border border-stone-200 shadow-xs flex flex-col justify-between">
-              <div>
-                <span className="text-xs font-bold font-mono text-stone-400">PHASE 03</span>
-                <h3 className="font-bold text-base text-stone-950 mt-1 mb-2">
-                  {isEn ? 'Evidence & Analysis' : 'Đối chiếu & Phân tích'}
-                </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  {isEn
-                    ? 'Cross-checks evidence matrices, runs verifiable computational modeling on numerical datasets, and generates high-resolution figures.'
-                    : 'Đối chiếu chéo ma trận bằng chứng, chạy mô hình tính toán định lượng trên tập số liệu và tự động tạo biểu đồ trực quan chuẩn hóa.'}
-                </p>
-              </div>
-              <div className="mt-5 pt-3 border-t border-stone-100 text-[11px] font-medium text-stone-500">
-                {isEn ? 'Empirical execution & charts' : 'Thực thi định lượng & biểu đồ'}
-              </div>
+            <div className="p-5 rounded-xl border border-stone-200 bg-white">
+              <span className="text-lg font-bold text-stone-400 block mb-2">3</span>
+              <h3 className="font-bold text-sm text-stone-950 mb-1.5">
+                {isEn ? 'Evidence & Analysis' : 'Phân Tích Dữ Liệu'}
+              </h3>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                {isEn ? 'Cross-verifies claims, executes computations, and renders figures.' : 'Đối chiếu bằng chứng, tính toán số liệu và vẽ biểu đồ trực quan.'}
+              </p>
             </div>
 
-            {/* Step 4 */}
-            <div className="p-6 rounded-2xl bg-white border border-stone-200 shadow-xs flex flex-col justify-between">
-              <div>
-                <span className="text-xs font-bold font-mono text-stone-400">PHASE 04</span>
-                <h3 className="font-bold text-base text-stone-950 mt-1 mb-2">
-                  {isEn ? 'IMRaD Drafting & Export' : 'Biên soạn IMRaD & Xuất bản'}
-                </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  {isEn
-                    ? 'Compiles Introduction, Methods, Results, and Discussion into a cohesive manuscript with automated citations, ready for LaTeX, PDF, and Word export.'
-                    : 'Biên soạn bài báo hoàn chỉnh theo cấu trúc chuẩn IMRaD kèm danh mục tài liệu tham khảo tự động, sẵn sàng xuất sang LaTeX, PDF và Word.'}
-                </p>
-              </div>
-              <div className="mt-5 pt-3 border-t border-stone-100 text-[11px] font-medium text-stone-500">
-                {isEn ? 'LaTeX, PDF & Word packages' : 'Gói xuất bản LaTeX, PDF & Word'}
-              </div>
+            <div className="p-5 rounded-xl border border-stone-200 bg-white">
+              <span className="text-lg font-bold text-stone-400 block mb-2">4</span>
+              <h3 className="font-bold text-sm text-stone-950 mb-1.5">
+                {isEn ? 'IMRaD Manuscript' : 'Xuất Bản IMRaD'}
+              </h3>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                {isEn ? 'Drafts full paper and exports to LaTeX, formatted PDF, or Word.' : 'Soạn bài báo hoàn chỉnh và xuất sang LaTeX, PDF hoặc Word.'}
+              </p>
             </div>
           </div>
         </section>
 
-        {/* Section 4: Capabilities for Scholars */}
-        <section id="capabilities" className="w-full bg-[#FAF8F5]/80 border-y border-stone-200/80 py-16 sm:py-24">
-          <div className="max-w-6xl mx-auto px-6 sm:px-10">
-            <div className="text-center max-w-3xl mx-auto mb-14">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-stone-100 text-stone-700 border border-stone-200/80 mb-3">
-                <GraduationCap size={13} className="text-stone-600" />
-                {isEn ? 'Academic Capabilities' : 'Năng lực học thuật'}
-              </span>
-              <h2 className="text-2xl sm:text-4xl font-bold tracking-tight text-stone-950">
-                {isEn ? 'Comprehensive Capabilities for Academic Research' : 'Năng lực Toàn diện cho Nghiên cứu Học thuật'}
-              </h2>
-              <p className="mt-3 text-stone-600 text-sm sm:text-base leading-relaxed">
-                {isEn
-                  ? 'An integrated suite of capabilities engineered specifically for faculty scholars, graduate researchers, and research teams.'
-                  : 'Tập hợp các năng lực tích hợp chuyên sâu, hỗ trợ hiệu quả cho giảng viên, nghiên cứu sinh và các nhóm nghiên cứu học thuật.'}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Feature 1 */}
-              <div className="p-6 rounded-2xl bg-white border border-stone-200 shadow-xs">
-                <div className="w-9 h-9 rounded-lg bg-stone-100 text-stone-800 flex items-center justify-center mb-4">
-                  <BookOpen size={18} />
-                </div>
-                <h3 className="font-bold text-sm text-stone-950 mb-1.5">
-                  {isEn ? 'Full IMRaD Manuscript Architecture' : 'Cấu trúc Bài báo Chuẩn IMRaD'}
-                </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  {isEn
-                    ? 'Structured into Introduction, Related Work, Methodology, Results, and Discussion conforming strictly to academic publishing conventions.'
-                    : 'Phân chia chuẩn mực gồm Mở đầu, Tổng quan, Phương pháp, Kết quả và Thảo luận theo tiêu chuẩn các tạp chí khoa học quốc tế.'}
-                </p>
-              </div>
-
-              {/* Feature 2 */}
-              <div className="p-6 rounded-2xl bg-white border border-stone-200 shadow-xs">
-                <div className="w-9 h-9 rounded-lg bg-stone-100 text-stone-800 flex items-center justify-center mb-4">
-                  <FileText size={18} />
-                </div>
-                <h3 className="font-bold text-sm text-stone-950 mb-1.5">
-                  {isEn ? 'Multi-Format Publication Export' : 'Xuất bản Đa định dạng Học thuật'}
-                </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  {isEn
-                    ? 'Export directly to production LaTeX packages with BibTeX bibliographies, formatted PDF manuscripts, and editable Microsoft Word documents.'
-                    : 'Xuất bản trực tiếp sang tệp nguồn LaTeX kèm BibTeX, tài liệu in PDF định dạng chuẩn hoặc bản thảo Word có thể chỉnh sửa.'}
-                </p>
-              </div>
-
-              {/* Feature 3 */}
-              <div className="p-6 rounded-2xl bg-white border border-stone-200 shadow-xs">
-                <div className="w-9 h-9 rounded-lg bg-stone-100 text-stone-800 flex items-center justify-center mb-4">
-                  <Layers size={18} />
-                </div>
-                <h3 className="font-bold text-sm text-stone-950 mb-1.5">
-                  {isEn ? 'Multi-Standard Citation Engine' : 'Bộ Trích dẫn Đa Chuẩn mực'}
-                </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  {isEn
-                    ? 'Automated bibliographic formatting for IEEE, APA, Harvard, and Chicago citation conventions with complete author and venue metadata.'
-                    : 'Tự động định dạng tài liệu trích dẫn theo quy chuẩn IEEE, APA, Harvard với đầy đủ tác giả, năm và nguồn bài báo.'}
-                </p>
-              </div>
-
-              {/* Feature 4 */}
-              <div className="p-6 rounded-2xl bg-white border border-stone-200 shadow-xs">
-                <div className="w-9 h-9 rounded-lg bg-stone-100 text-stone-800 flex items-center justify-center mb-4">
-                  <Globe size={18} />
-                </div>
-                <h3 className="font-bold text-sm text-stone-950 mb-1.5">
-                  {isEn ? 'Multilingual Scientific Synthesis' : 'Tổng hợp Khoa học Đa ngôn ngữ'}
-                </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  {isEn
-                    ? 'Survey literature and draft scientific manuscripts seamlessly in English, Vietnamese, Japanese, Chinese, French, German, Spanish, or Korean.'
-                    : 'Khảo sát tài liệu và soạn thảo bài báo bằng Tiếng Việt, Tiếng Anh, Tiếng Pháp, Tiếng Đức, Tiếng Nhật, Tiếng Trung và nhiều ngôn ngữ khác.'}
-                </p>
-              </div>
-
-              {/* Feature 5 */}
-              <div className="p-6 rounded-2xl bg-white border border-stone-200 shadow-xs">
-                <div className="w-9 h-9 rounded-lg bg-stone-100 text-stone-800 flex items-center justify-center mb-4">
-                  <Sparkles size={18} />
-                </div>
-                <h3 className="font-bold text-sm text-stone-950 mb-1.5">
-                  {isEn ? 'Interactive Evidence Explorer' : 'Không gian Đối chiếu Chứng cứ'}
-                </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  {isEn
-                    ? 'Inspect extracted source excerpts, check statistical figures, and review peer critique notes in dedicated workspace tabs.'
-                    : 'Kiểm tra trích dẫn nguồn, quan sát các biểu đồ thống kê và xem lại phản biện khoa học trong các tab làm việc trực quan.'}
-                </p>
-              </div>
-
-              {/* Feature 6 */}
-              <div className="p-6 rounded-2xl bg-white border border-stone-200 shadow-xs">
-                <div className="w-9 h-9 rounded-lg bg-stone-100 text-stone-800 flex items-center justify-center mb-4">
-                  <Settings2 size={18} />
-                </div>
-                <h3 className="font-bold text-sm text-stone-950 mb-1.5">
-                  {isEn ? 'Transparent Token & Budget Safeguards' : 'Kiểm soát Hạn mức & Ngân sách'}
-                </h3>
-                <p className="text-xs text-stone-600 leading-relaxed">
-                  {isEn
-                    ? 'Configure explicit token ceilings, research round limits, and budget parameters to maintain predictable, governed research workflows.'
-                    : 'Thiết lập trần token, số vòng nghiên cứu tối đa và giới hạn ngân sách nhằm kiểm soát chặt chẽ quá trình thực thi.'}
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Section 5: Call to Action Banner */}
-        <section className="w-full max-w-5xl mx-auto px-6 sm:px-10 py-16 sm:py-20">
-          <div className="rounded-3xl border border-stone-800 bg-stone-950 text-white p-8 sm:p-12 shadow-xl flex flex-col items-center text-center gap-6 relative overflow-hidden">
-            <div className="w-12 h-12 rounded-2xl bg-white/10 text-white flex items-center justify-center">
-              <BookOpen size={24} />
-            </div>
-            <div className="max-w-2xl">
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                {isEn ? 'Ready to Accelerate Your Scientific Discovery?' : 'Sẵn sàng Nâng tầm Nghiên cứu Khoa học của Bạn?'}
-              </h2>
-              <p className="mt-3 text-stone-400 text-xs sm:text-sm leading-relaxed">
-                {isEn
-                  ? 'Formulate your research question above or access your workspace to continue ongoing investigations with verifiable scientific rigor.'
-                  : 'Nhập câu hỏi nghiên cứu ở trên hoặc truy cập không gian làm việc để tiếp tục các đề tài với chuẩn mực học thuật cao nhất.'}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center justify-center gap-3">
+        {/* Section 4: Call to Action */}
+        <section className="w-full max-w-4xl mx-auto px-6 sm:px-8 py-16">
+          <div className="rounded-3xl bg-stone-900 text-white p-8 sm:p-12 text-center flex flex-col items-center gap-5">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              {isEn ? 'Ready to Start Your Research?' : 'Sẵn Sàng Bắt Đầu Nghiên Cứu?'}
+            </h2>
+            <p className="max-w-xl text-stone-400 text-xs sm:text-sm leading-relaxed">
+              {isEn
+                ? 'Enter your research question above to generate an evidence-linked manuscript with verifiable citations.'
+                : 'Nhập câu hỏi nghiên cứu ở trên để tạo bản thảo khoa học chuẩn mực với dẫn chứng xác thực.'}
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => {
@@ -1452,7 +1208,7 @@ export default function Home() {
                 }}
                 className="bg-white text-stone-950 hover:bg-stone-100 font-semibold px-6 py-3 rounded-xl text-xs sm:text-sm transition-colors cursor-pointer shadow-xs flex items-center gap-2"
               >
-                <span>{isEn ? 'Start Research Now' : 'Bắt đầu nghiên cứu ngay'}</span>
+                <span>{isEn ? 'Start research now' : 'Bắt đầu nghiên cứu ngay'}</span>
                 <ArrowRight size={15} />
               </button>
               {!hasSession && (
@@ -1461,75 +1217,37 @@ export default function Home() {
                   onClick={() => router.push('/login')}
                   className="bg-stone-800 hover:bg-stone-700 text-white font-semibold px-6 py-3 rounded-xl text-xs sm:text-sm transition-colors cursor-pointer"
                 >
-                  {isEn ? 'Sign In / Register' : 'Đăng nhập / Đăng ký'}
+                  {isEn ? 'Sign in / Register' : 'Đăng nhập / Đăng ký'}
                 </button>
               )}
             </div>
           </div>
         </section>
 
-        {/* Scholarly Footer */}
-        <footer className="w-full border-t border-stone-200/80 bg-white px-6 sm:px-12 py-12 text-stone-600 text-xs">
-          <div className="max-w-6xl mx-auto flex flex-col md:flex-row justify-between gap-8 pb-8 border-b border-stone-100">
-            <div className="max-w-sm">
-              <div className="flex items-center gap-2 font-bold text-stone-950 text-sm mb-2">
-                <div className="w-6 h-6 rounded-lg bg-stone-900 text-white flex items-center justify-center text-xs">S</div>
-                <span>Synthia</span>
-              </div>
-              <p className="text-xs text-stone-500 leading-relaxed">
-                {isEn
-                  ? 'Autonomous Multi-Agent Academic Research Platform. Built for verifiable evidence, scholarly rigor, and zero hallucination in scientific synthesis.'
-                  : 'Nền tảng Nghiên cứu Khoa học Đa Tác nhân Tự chủ. Thiết kế vì chứng cứ xác thực, liêm chính học thuật và ngăn ngừa ảo giác thông tin.'}
-              </p>
+        {/* Minimal Editorial Footer */}
+        <footer className="w-full border-t border-stone-200 bg-[#FAF9F7] px-6 sm:px-12 py-10 text-stone-500 text-xs">
+          <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2 font-bold text-stone-900 text-sm">
+              <span className="w-5 h-5 rounded-md bg-stone-900 text-white flex items-center justify-center text-[10px]">S</span>
+              <span>Synthia</span>
+              <span className="font-normal text-stone-400 text-xs">— Multi-Agent Academic Research</span>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-8 text-xs">
-              <div>
-                <span className="font-bold text-stone-950 uppercase tracking-wider text-[11px] block mb-3">
-                  {isEn ? 'Modalities' : 'Phương thức'}
-                </span>
-                <ul className="space-y-2 text-stone-500">
-                  <li><a href="#modalities" className="hover:text-stone-950 transition-colors">{isEn ? 'Literature Review' : 'Tổng quan tài liệu'}</a></li>
-                  <li><a href="#modalities" className="hover:text-stone-950 transition-colors">{isEn ? 'Computational' : 'Thực nghiệm tính toán'}</a></li>
-                  <li><a href="#modalities" className="hover:text-stone-950 transition-colors">{isEn ? 'Fieldwork' : 'Thực nghiệm thực địa'}</a></li>
-                </ul>
-              </div>
-
-              <div>
-                <span className="font-bold text-stone-950 uppercase tracking-wider text-[11px] block mb-3">
-                  {isEn ? 'Integrity' : 'Chuẩn mực'}
-                </span>
-                <ul className="space-y-2 text-stone-500">
-                  <li><a href="#rigor" className="hover:text-stone-950 transition-colors">{isEn ? 'Verifiable Sources' : 'Nguồn tài liệu thật'}</a></li>
-                  <li><a href="#rigor" className="hover:text-stone-950 transition-colors">{isEn ? 'Peer Critique' : 'Phản biện độc lập'}</a></li>
-                  <li><a href="#rigor" className="hover:text-stone-950 transition-colors">{isEn ? 'Citation Lineage' : 'Truy vết trích dẫn'}</a></li>
-                  <li><a href="#rigor" className="hover:text-stone-950 transition-colors">{isEn ? 'Reproducibility' : 'Tính tái lập'}</a></li>
-                </ul>
-              </div>
-
-              <div>
-                <span className="font-bold text-stone-950 uppercase tracking-wider text-[11px] block mb-3">
-                  {isEn ? 'Navigation' : 'Điều hướng'}
-                </span>
-                <ul className="space-y-2 text-stone-500">
-                  <li><a href="#research-prompt" className="hover:text-stone-950 transition-colors">{isEn ? 'Start Research' : 'Bắt đầu nghiên cứu'}</a></li>
-                  <li><a href="#lifecycle" className="hover:text-stone-950 transition-colors">{isEn ? 'Lifecycle' : 'Tiến trình nghiên cứu'}</a></li>
-                  <li><a href="#capabilities" className="hover:text-stone-950 transition-colors">{isEn ? 'Capabilities' : 'Năng lực học thuật'}</a></li>
-                  <li><button type="button" onClick={() => router.push('/dashboard')} className="hover:text-stone-950 transition-colors text-left cursor-pointer">{isEn ? 'Dashboard' : 'Bảng điều khiển'}</button></li>
-                </ul>
-              </div>
+            <div className="flex items-center gap-6 text-stone-600">
+              <a href="#modalities" className="hover:text-stone-950 transition-colors">{isEn ? 'Pathways' : 'Phương thức'}</a>
+              <a href="#rigor" className="hover:text-stone-950 transition-colors">{isEn ? 'Integrity' : 'Chuẩn mực'}</a>
+              <a href="#workflow" className="hover:text-stone-950 transition-colors">{isEn ? 'Workflow' : 'Quy trình'}</a>
+              {hasSession && (
+                <button type="button" onClick={() => router.push('/dashboard')} className="hover:text-stone-950 transition-colors cursor-pointer">
+                  {isEn ? 'Dashboard' : 'Bảng điều khiển'}
+                </button>
+              )}
             </div>
           </div>
 
-          <div className="max-w-6xl mx-auto pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-stone-400 text-[11px]">
-            <div>
-              © 2026 Synthia Research Platform. {isEn ? 'All rights reserved.' : 'Mọi quyền được bảo lưu.'}
-            </div>
-            <div className="flex items-center gap-4">
-              <span>{isEn ? 'Zero Hallucination Standard' : 'Chuẩn mực Không Ảo giác'}</span>
-              <span>•</span>
-              <span>{isEn ? 'Academic Integrity First' : 'Ưu tiên Liêm chính Học thuật'}</span>
-            </div>
+          <div className="max-w-5xl mx-auto pt-6 mt-6 border-t border-stone-200/60 flex flex-col sm:flex-row items-center justify-between gap-2 text-stone-400 text-[11px]">
+            <span>© 2026 Synthia. All rights reserved.</span>
+            <span>{isEn ? 'Zero hallucination • Verifiable evidence' : 'Không ảo giác • Dẫn chứng xác thực'}</span>
           </div>
         </footer>
 
