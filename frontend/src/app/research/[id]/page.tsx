@@ -1,29 +1,29 @@
 'use client';
-import { ResearchErrorNotice, researchErrorText } from '@/components/ResearchErrorNotice';
+import { ResearchErrorNotice } from '@/components/ResearchErrorNotice';
 import { ResearchRecoveryNotice, researchBudgetBlocked } from '@/components/ResearchRecoveryNotice';
-import { ModelConnectionSummary } from '@/components/ModelConnectionSummary';
 import { ModelSettingsPanel } from '@/components/ModelSettingsPanel';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import {
-  ArrowLeft, CheckCircle2, Circle, Clock, Copy, Check, Download,
-  ExternalLink, FileText, Globe, Layers, Play, RefreshCw,
-  Trash2, XCircle, Search, Activity, Cpu, UploadCloud, FileUp, FlaskConical,
-  AlertTriangle, Printer, Maximize2, Minimize2, PanelLeftClose, PanelLeft, PanelRight, PanelRightClose,
-  ListFilter, Bookmark, BookOpen, Package, ChevronDown, FileDown, Loader2,
-  MessageSquare, History, Info
+  CheckCircle2, Circle, Clock, Check, Download,
+  FileText, Globe, Layers, Play, RefreshCw,
+  XCircle, Activity, Cpu, UploadCloud, FlaskConical,
+  AlertTriangle, Maximize2, Minimize2, PanelLeftClose, PanelLeft, PanelRight, PanelRightClose,
+  ListFilter, Bookmark, Info
 } from 'lucide-react';
-import { Badge, Card } from '@/components/ui/Components';
+import { Badge } from '@/components/ui/Components';
 import { Button } from '@/components/ui/Button';
-import { MarkdownViewer, extractHeadings } from '@/components/ui/MarkdownViewer';
-import { PublicationArticle, PublicationExport } from '@/components/research/PublicationPaper';
-import { ManuscriptReadiness } from '@/components/research/ManuscriptReadiness';
+import { extractHeadings } from '@/components/ui/MarkdownViewer';
 import { ExperimentsPanel } from '@/components/research/ExperimentsPanel';
 import { AgentRunsPanel } from '@/components/research/AgentRunsPanel';
 import { SourcesPanel } from '@/components/research/SourcesPanel';
 import { CitationsPanel } from '@/components/research/CitationsPanel';
+import { PaperDocument } from '@/components/research/PaperDocument';
+import { ResearchProgressPanel } from '@/components/research/ResearchProgressPanel';
+import { ProtocolPanel } from '@/components/research/ProtocolPanel';
+import { TaskDetailsPanel } from '@/components/research/TaskDetailsPanel';
 import { useLanguage } from '@/lib/i18n';
 import { useDialogFocus } from '@/lib/use-dialog-focus';
 import { exportPaperToDocx } from '@/lib/docxExport';
@@ -136,7 +136,7 @@ function formatDate(value: string, lang: 'en' | 'vi' = 'en') {
 export default function WorkspacePage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { language, t } = useLanguage();
+  const { language } = useLanguage();
   const isEn = language === 'en';
 
   const [task, setTask] = useState<ResearchTaskResponse | null>(null);
@@ -154,7 +154,7 @@ export default function WorkspacePage() {
 
   const [activeTab, setActiveTab] = useState<'report' | 'sources' | 'citations' | 'runs' | 'details' | 'protocol' | 'experiments'>('report');
   const [sourceSearch, setSourceSearch] = useState('');
-  const [runStatusFilter, setRunStatusFilter] = useState<'ALL' | 'SUCCESS' | 'RUNNING' | 'FAILED'>('ALL');
+  const runStatusFilter: 'ALL' | 'SUCCESS' | 'RUNNING' | 'FAILED' = 'ALL';
   const [highlightedRef, setHighlightedRef] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -214,7 +214,6 @@ export default function WorkspacePage() {
   const [isRejectingPlan, setIsRejectingPlan] = useState(false);
   const [editableQueries, setEditableQueries] = useState<string[]>([]);
   const [newQueryInput, setNewQueryInput] = useState('');
-  const [planFeedback, setPlanFeedback] = useState('');
 
   const [protocol, setProtocol] = useState<ProtocolResponse | null>(null);
   const [protocolError, setProtocolError] = useState('');
@@ -666,7 +665,6 @@ export default function WorkspacePage() {
       await api.tasks.approvePlan(task.id, {
         plan_version: task.plan_version,
         approved_queries: editableQueries.filter(q => q.trim().length > 0),
-        feedback: planFeedback.trim() || undefined,
       });
       setReloadKey(v => v + 1);
     } catch (err) {
@@ -793,6 +791,27 @@ export default function WorkspacePage() {
     uploadSuccess, setUploadSuccess, fileInputRef, formatDate, sourceSearch, setSourceSearch,
   };
   const citationProps = { task, citations, citationsError, loadCitations, isEn, highlightedRef };
+  const paperDocumentProps = {
+    task, report: report!, isEn, language, isCopied, isWidePaper,
+    isDownloadMenuOpen, setIsDownloadMenuOpen, isExportingDocx,
+    onCopyMarkdown: handleCopyMarkdown, onToggleWidePaper: handleToggleWidePaper,
+    onDownloadDocx: handleDownloadDocx, onDownloadMarkdown: handleDownloadMarkdown,
+    onDownloadBundle: handleDownloadBundle,
+    onCitationClick: (label: string) => { setHighlightedRef(label); setActiveTab('citations'); },
+    statusLabel, formatDate,
+  };
+  const progressPanelProps = {
+    task, isEn, language, isWorking, isStarting,
+    sourceCount: sources.length, citationCount: citations.length, runCount: runs.length,
+    onStartTask: handleStartTask, onRefresh: () => setReloadKey(v => v + 1),
+    statusLabel, stepLabel,
+  };
+  const protocolPanelProps = {
+    task, isEn, protocol, protocolError, onDownloadArtifact: handleDownloadArtifact,
+  };
+  const detailsPanelProps = {
+    task, isEn, language, isDeleting, onDeleteTask: handleDeleteTask, formatDate,
+  };
 
   return (
     <div className="flex h-full min-w-0 flex-col overflow-hidden bg-white print:h-auto print:overflow-visible print:bg-white print:block">
@@ -1508,497 +1527,14 @@ export default function WorkspacePage() {
             {activeTab === 'report' && (
               <div className={`paper-space w-full ${isWidePaper ? 'max-w-6xl' : 'max-w-4xl'} mx-auto space-y-6 transition-all duration-300 print:max-w-none print:m-0 print:p-0 print:space-y-0`}>
                 {(['COMPLETED', 'PARTIAL', 'NEEDS_REVIEW', 'FAILED'].includes(task.status) || report?.research_task_id === params.id) ? report?.research_task_id === params.id ? (
-                  <div className="space-y-6 print:space-y-0">
-                    <ManuscriptReadiness report={report} taskId={params.id} isEn={isEn} />
-                    {['FAILED', 'CANCELLED'].includes(task.status) && (
-                      <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-800 flex items-center justify-between print:hidden">
-                        <span>{statusLabel(task.status, language)} — {['FAILED', 'CANCELLED'].includes(task.status)
-                          ? (isEn ? `Showing saved version ${report.version_number}; the latest operation did not replace it.` : `Đang hiển thị phiên bản ${report.version_number} đã lưu; thao tác vừa rồi không ghi đè bản này.`)
-                          : (isEn ? 'Review evidence, validation findings and remaining limitations before use.' : 'Cần rà soát bằng chứng, kết quả kiểm tra và các hạn chế trước khi sử dụng.')}</span>
-                        <Badge variant="outline">{statusLabel(task.status, language)}</Badge>
-                      </div>
-                    )}
-
-                    {/* Scientific Journal 2-Column Presentation */}
-                    <div className="paper-layout-container printable-paper-container">
-                      {/* Main Scientific Paper Document */}
-                      <article className="printable-article w-full min-w-0 bg-white rounded-2xl border border-zinc-200/90 shadow-sm overflow-hidden print:border-none print:shadow-none print:p-0 print:m-0 print:rounded-none">
-                        {/* Journal Cover / Top Masthead */}
-                        <div className="border-b border-zinc-200 bg-gradient-to-b from-zinc-50/80 to-white px-6 sm:px-10 md:px-12 pt-8 pb-7 print:px-0 print:pt-0 print:bg-none print:border-b-2 print:border-zinc-800">
-                          {/* Academic Meta Topline */}
-                          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-zinc-500 font-mono border-b border-zinc-100 pb-3 mb-5 print:border-zinc-300">
-                            <div className="flex items-center gap-2">
-                              <span className="px-2 py-0.5 rounded bg-zinc-900 text-white font-bold tracking-wider text-[10px] uppercase font-sans print:border print:border-zinc-800">
-                                Synthia Research Draft
-                              </span>
-                              <span className="text-zinc-300">|</span>
-                              <span className="font-semibold text-zinc-700 tracking-wide">
-                                {task.research_type === 'EMPIRICAL_COMPUTATIONAL'
-                                  ? 'COMPUTATIONAL INVESTIGATION REPORT'
-                                  : task.research_type === 'EMPIRICAL_HUMAN'
-                                  ? 'EMPIRICAL FIELD STUDY & PROTOCOL'
-                                  : 'LITERATURE REVIEW & SYNTHESIS'}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span>{isEn ? 'Draft version' : 'Phiên bản bản thảo'} {report.version_number}</span>
-                              <span>•</span>
-                              <span>{formatDate(report.created_at, language)}</span>
-                            </div>
-                          </div>
-
-                          {/* Paper Title */}
-                          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-zinc-900 tracking-tight leading-tight">
-                            {report.title}
-                          </h1>
-
-                          {/* Authors & Laboratory Metadata */}
-                          <div className="mt-5 pt-4 border-t border-zinc-100 flex flex-wrap items-center justify-between gap-4 text-xs print:border-zinc-300">
-                            <div>
-                              <div className="font-semibold text-zinc-800 text-sm">
-                                {isEn ? 'AI-assisted research draft' : 'Bản thảo nghiên cứu có AI hỗ trợ'}
-                              </div>
-                              <div className="text-zinc-500 mt-0.5">
-                                {isEn ? 'Verify claims and references before academic use.' : 'Cần kiểm chứng luận điểm và nguồn trước khi sử dụng học thuật.'}
-                              </div>
-                              <div className="text-zinc-400 mt-0.5 text-[11px] print:hidden">
-                                {isEn ? 'Not a published or peer-reviewed article.' : 'Chưa phải bài báo đã xuất bản hoặc qua phản biện học thuật.'}
-                              </div>
-                            </div>
-
-                            {/* Quick Actions */}
-                            <div className="flex flex-wrap items-center gap-2 print:hidden">
-                              <Button
-                                variant="outline"
-                                onClick={() => window.print()}
-                                title={isEn ? "Print full paper or Save as PDF" : "In toàn bộ bài báo hoặc Lưu thành PDF"}
-                                className="h-8 px-2.5 text-xs hover:bg-zinc-100 cursor-pointer"
-                              >
-                                <Printer size={13} className="mr-1.5" /> {isEn ? 'Print / PDF' : 'In / PDF'}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                onClick={handleCopyMarkdown}
-                                title={isEn ? "Copy full Markdown content" : "Sao chép toàn bộ nội dung Markdown"}
-                                className="h-8 px-2.5 text-xs hover:bg-zinc-100 cursor-pointer"
-                              >
-                                {isCopied ? <Check size={13} className="text-emerald-600 mr-1.5" /> : <Copy size={13} className="mr-1.5" />}
-                                {isCopied ? (isEn ? "Copied" : "Đã chép") : (isEn ? "Copy" : "Sao chép")}
-                              </Button>
-                              <Button
-                                variant={isWidePaper ? "primary" : "outline"}
-                                onClick={handleToggleWidePaper}
-                                title={isWidePaper ? (isEn ? "Exit full width reading (show sidebars)" : "Thu gọn về kích thước chuẩn (hiện thanh bên)") : (isEn ? "Full width reading mode (hide sidebars)" : "Phóng to toàn màn hình (ẩn thanh bên)")}
-                                className={`h-8 px-2.5 text-xs font-semibold cursor-pointer ${isWidePaper ? 'bg-zinc-900 text-white' : 'hover:bg-zinc-100'}`}
-                              >
-                                {isWidePaper ? <Minimize2 size={13} className="mr-1.5" /> : <Maximize2 size={13} className="mr-1.5" />}
-                                {isWidePaper ? (isEn ? "Standard" : "Thu gọn") : (isEn ? "Full Width" : "Phóng to")}
-                              </Button>
-
-                              {/* Download Formats Dropdown */}
-                              <div className="relative">
-                                <Button
-                                  variant="primary"
-                                  onClick={() => setIsDownloadMenuOpen(prev => !prev)}
-                                  disabled={isExportingDocx}
-                                  title={isEn ? "Select download format (Word, Markdown, JSON)" : "Chọn định dạng tải bài báo (Word, Markdown, JSON)"}
-                                  className="h-8 px-3 text-xs bg-zinc-900 hover:bg-zinc-800 text-white cursor-pointer shadow-xs flex items-center"
-                                >
-                                  {isExportingDocx ? (
-                                    <Loader2 size={13} className="mr-1.5 animate-spin" />
-                                  ) : (
-                                    <Download size={13} className="mr-1.5" />
-                                  )}
-                                  <span>{isExportingDocx ? (isEn ? "Exporting Word..." : "Đang tạo Word...") : (isEn ? "Download" : "Tải về")}</span>
-                                  <ChevronDown size={13} className={`ml-1.5 transition-transform duration-150 ${isDownloadMenuOpen ? 'rotate-180' : ''}`} />
-                                </Button>
-
-                                {isDownloadMenuOpen && (
-                                  <>
-                                    <div
-                                      className="fixed inset-0 z-40"
-                                      onClick={() => setIsDownloadMenuOpen(false)}
-                                    />
-                                    <div className="absolute right-0 mt-1.5 w-72 rounded-xl bg-white border border-zinc-200 shadow-xl py-1.5 z-50 text-left">
-                                      <div className="px-3 py-1.5 text-[10.5px] font-semibold text-zinc-400 uppercase tracking-wider border-b border-zinc-100">
-                                        {isEn ? "Select download format" : "Chọn định dạng tải xuống"}
-                                      </div>
-
-                                      {/* Word (.docx) */}
-                                      <button
-                                        type="button"
-                                        onClick={async () => {
-                                          setIsDownloadMenuOpen(false);
-                                          await handleDownloadDocx();
-                                        }}
-                                        className="w-full px-3 py-2.5 text-left hover:bg-zinc-100 flex items-start gap-3 transition-colors cursor-pointer group"
-                                      >
-                                        <div className="p-1.5 rounded-lg bg-zinc-100 text-zinc-700 group-hover:bg-zinc-200 shrink-0 mt-0.5">
-                                          <FileDown size={16} />
-                                        </div>
-                                        <div>
-                                          <div className="font-semibold text-xs text-zinc-900 group-hover:text-blue-900 flex items-center gap-1.5">
-                                            Microsoft Word (.docx)
-                                            <span className="text-xs px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 font-medium border border-zinc-200">{isEn ? "Recommended" : "Khuyên dùng"}</span>
-                                          </div>
-                                          <div className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
-                                            {isEn ? "Standard formatted Word document with tables, outline, and references" : "Văn bản Word chuẩn báo cáo khoa học với bảng, danh mục và tài liệu tham khảo"}
-                                          </div>
-                                        </div>
-                                      </button>
-
-                                      {/* Markdown (.md) */}
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setIsDownloadMenuOpen(false);
-                                          handleDownloadMarkdown();
-                                        }}
-                                        className="w-full px-3 py-2.5 text-left hover:bg-zinc-100 flex items-start gap-3 transition-colors cursor-pointer group"
-                                      >
-                                        <div className="p-1.5 rounded-lg bg-zinc-100 text-zinc-700 group-hover:bg-zinc-200 shrink-0 mt-0.5">
-                                          <FileText size={16} />
-                                        </div>
-                                        <div>
-                                          <div className="font-semibold text-xs text-zinc-900 group-hover:text-emerald-900">
-                                            Markdown (.md)
-                                          </div>
-                                          <div className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
-                                            {isEn ? "Standard Markdown text source file" : "Tệp văn bản nguồn định dạng Markdown tiêu chuẩn"}
-                                          </div>
-                                        </div>
-                                      </button>
-
-                                      <div className="border-t border-zinc-100 my-1"></div>
-
-                                      {/* JSON Data Bundle */}
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setIsDownloadMenuOpen(false);
-                                          handleDownloadBundle();
-                                        }}
-                                        className="w-full px-3 py-2.5 text-left hover:bg-zinc-100 flex items-start gap-3 transition-colors cursor-pointer group"
-                                      >
-                                        <div className="p-1.5 rounded-lg bg-zinc-100 text-zinc-700 group-hover:bg-zinc-200 shrink-0 mt-0.5">
-                                          <Package size={16} />
-                                        </div>
-                                        <div>
-                                          <div className="font-semibold text-xs text-zinc-900 group-hover:text-amber-900">
-                                            {isEn ? "Research data bundle (.json)" : "Gói dữ liệu nghiên cứu (.json)"}
-                                          </div>
-                                          <div className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
-                                            {isEn ? "Includes full paper, retrieved sources, and verified citations" : "Bao gồm bài báo, nguồn tài liệu và trích dẫn bằng chứng"}
-                                          </div>
-                                        </div>
-                                      </button>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-
-
-                            </div>
-                          </div>
-
-
-                        </div>
-
-                        <PublicationExport taskId={task.id} version={report.version_number} isEn={isEn} />
-                        {/* Scientific Article Body rendered by MarkdownViewer with academicStyle */}
-                        <div className="px-6 sm:px-10 md:px-12 py-8">
-                          <PublicationArticle metadata={report.review_metadata}
-                            content={withoutRepeatedTitle(report.content_markdown, report.title)}
-                            academicStyle={true}
-                            onCitationClick={(label) => {
-                              setHighlightedRef(label);
-                              setActiveTab('citations');
-                            }}
-                          />
-                        </div>
-
-                        {/* Publication Footer */}
-                        <div className="border-t border-stone-200/60 bg-white px-6 sm:px-10 py-5 text-xs text-zinc-500 flex flex-wrap items-center justify-between gap-4 print:bg-white print:px-0">
-                          <div>
-                            <div className="font-medium text-zinc-700">Synthia Multi-Agent Research Platform</div>
-                            <div>{isEn ? "AI-assisted draft linked to source passages; claims still require scientific review." : "Bản thảo có AI hỗ trợ, gắn với trích đoạn nguồn; luận điểm vẫn cần kiểm chứng khoa học."}</div>
-                          </div>
-                          <div className="font-mono text-[11px] text-zinc-400">
-                            ID: {task.id} · v{report.version_number}
-                          </div>
-                        </div>
-                      </article>
-
-                      {/* Right Sidebar: Table of Contents & Article Metadata */}
-                                            
-                    </div>
-                  </div>
+                  <PaperDocument {...paperDocumentProps} />
                 ) : (
                   <div className="text-center py-12 text-zinc-600">
                     {isEn ? 'No saved manuscript is available yet.' : 'Chưa có bản thảo được lưu.'}
                     {reportError && <button className="underline ml-2" onClick={() => void loadReport()}>{isEn ? 'Check for saved draft' : 'Kiểm tra bản thảo đã lưu'}</button>}
                   </div>
                 ) : (
-                  <div className="w-full max-w-5xl mx-auto space-y-6">
-                    {/* Live Execution Status Hero */}
-                    <div className={`p-6 sm:p-8 rounded-2xl border transition-all ${
-                      task.status === 'QUEUED'
-                        ? 'bg-gradient-to-b from-zinc-50 to-white border-zinc-300 shadow-sm'
-                        : task.status === 'PLANNING'
-                        ? 'bg-gradient-to-b from-blue-50/70 to-white border-blue-200 shadow-sm'
-                        : isWorking
-                        ? 'bg-gradient-to-b from-blue-50/60 to-white border-blue-200 shadow-sm'
-                        : task.status === 'FAILED'
-                        ? 'bg-gradient-to-b from-red-50/60 to-white border-red-200'
-                        : 'bg-white border-zinc-200 shadow-sm'
-                    }`}>
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-5">
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            {task.status === 'QUEUED' ? (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-200/80 text-zinc-800 text-xs font-bold uppercase tracking-wider">
-                                <span className="w-2 h-2 rounded-full bg-zinc-500 animate-pulse" />
-                                {isEn ? "Task Queued" : "Đang chờ xếp hàng"}
-                              </span>
-                            ) : task.status === 'PLANNING' ? (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-blue-900 text-xs font-bold uppercase tracking-wider">
-                                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-                                {isEn ? "Planning Phase" : "Giai đoạn lập kế hoạch"}
-                              </span>
-                            ) : isWorking ? (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 text-blue-900 text-xs font-bold uppercase tracking-wider">
-                                <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-                                {statusLabel(task.status, language)}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-100 text-zinc-800 text-xs font-bold uppercase tracking-wider">
-                                {statusLabel(task.status, language)}
-                              </span>
-                            )}
-
-                            {task.current_step && isWorking && (
-                              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200">
-                                {stepLabel(task.current_step, language)}
-                              </span>
-                            )}
-                          </div>
-
-                          <h2 className="text-xl sm:text-2xl font-bold text-zinc-900 tracking-tight">
-                            {task.provider_wait && task.status === 'QUEUED'
-                              ? (isEn ? 'Waiting for the AI service' : 'Tạm chờ dịch vụ AI')
-                              : task.status === 'QUEUED'
-                              ? (isEn ? "Research task is queued for processing" : "Bài nghiên cứu đang trong hàng đợi chuẩn bị xử lý")
-                              : task.status === 'PLANNING'
-                              ? (isEn ? "Supervisor Agent is planning research strategy & queries" : "Supervisor Agent đang phân tích đề tài & thiết lập từ khóa")
-                              : isWorking
-                              ? (isEn ? "Autonomous agents are gathering and synthesizing evidence" : "Các tác tử tự trị đang thu thập và phân tích dữ liệu")
-                              : task.status === 'FAILED'
-                              ? (isEn ? "Research stopped due to an execution error" : "Bài nghiên cứu đã dừng do phát sinh lỗi")
-                              : task.status === 'WAITING_USER_DATA'
-                              ? (isEn ? 'Waiting for your data' : 'Đang chờ dữ liệu của bạn')
-                              : task.status === 'WAITING_APPROVAL'
-                              ? (isEn ? 'Review the research plan above' : 'Duyệt kế hoạch nghiên cứu ở trên')
-                              : task.status === 'CANCELLED'
-                              ? (isEn ? "Research task was cancelled" : "Bài nghiên cứu đã được hủy")
-                              : (isEn ? "Research task is ready to begin" : "Bài nghiên cứu sẵn sàng bắt đầu")}
-                          </h2>
-
-                          {(() => {
-                            const desc = task.provider_wait && task.status === 'QUEUED'
-                              ? (isEn ? 'Saved progress will resume automatically after the provider cooldown.' : 'Tiến độ đã lưu sẽ tự tiếp tục khi hết thời gian chờ dịch vụ.')
-                              : task.status === 'QUEUED'
-                              ? (isEn
-                                  ? "Your research question has been registered. The system is preparing to initiate literature discovery. Updates automatically."
-                                  : "Đề tài nghiên cứu đã được ghi nhận. Hệ thống đang chuẩn bị bắt đầu tìm kiếm và tổng hợp tài liệu. Giao diện tự động cập nhật.")
-                              : isWorking
-                              ? null
-                              : task.status === 'FAILED'
-                              ? (isEn
-                                  ? researchErrorText(task.latest_error, true)
-                                  : researchErrorText(task.latest_error, false))
-                              : task.status === 'WAITING_USER_DATA'
-                              ? (isEn ? 'Your progress is saved. Upload the requested data above to continue this article.' : 'Tiến độ đã được lưu. Tải dữ liệu ở ô phía trên để tiếp tục bài này.')
-                              : task.status === 'WAITING_APPROVAL'
-                              ? (isEn ? 'Approve or revise the proposed plan before research continues.' : 'Duyệt hoặc yêu cầu sửa kế hoạch trước khi tiếp tục nghiên cứu.')
-                              : task.status === 'CANCELLED'
-                              ? (isEn
-                                  ? "Execution was manually cancelled. You can restart the pipeline at any time with the button below."
-                                  : "Tiến trình đã được dừng theo lệnh người dùng. Bạn có thể bấm khởi động lại bất cứ lúc nào.")
-                              : (isEn
-                                  ? "Click 'Start Research Now' to deploy the multi-agent pipeline."
-                                  : "Nhấn 'Bắt đầu nghiên cứu ngay' để khởi chạy chuỗi tác tử.");
-                            return desc ? (
-                              <p className="text-sm text-zinc-600 leading-relaxed max-w-2xl">
-                                {desc}
-                              </p>
-                            ) : null;
-                          })()}
-                        </div>
-
-                        {/* Real-time stats / action buttons */}
-                        <div className="flex flex-col sm:flex-row md:flex-col gap-2.5 shrink-0 self-start md:self-center">
-                          {(task.status === 'PENDING' || task.status === 'CANCELLED') && (
-                            <Button
-                              variant="primary"
-                              onClick={() => void handleStartTask()}
-                              isLoading={isStarting}
-                              className="h-10 px-5 text-sm font-semibold bg-zinc-900 hover:bg-zinc-800 text-white shadow-sm"
-                            >
-                              <Play size={16} className="mr-2" />
-                              {task.status === 'CANCELLED' ? (isEn ? 'Rerun Research' : 'Chạy lại nghiên cứu') : (isEn ? 'Start Research Now' : 'Bắt đầu nghiên cứu ngay')}
-                            </Button>
-                          )}
-
-                          <Link
-                            href={`/research/${task.id}/monitor`}
-                            className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-xs sm:text-sm font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm"
-                          >
-                            <Activity size={16} />
-                            <span>{isEn ? "Open Live Monitor" : "Mở màn hình giám sát trực tiếp"}</span>
-                          </Link>
-
-                          <Button
-                            variant="outline"
-                            onClick={() => setReloadKey(v => v + 1)}
-                            className="h-9 px-3 text-xs border-zinc-200 text-zinc-700 hover:bg-zinc-100"
-                          >
-                            <RefreshCw size={13} className="mr-1.5" />
-                            <span>{isEn ? "Refresh Status" : "Làm mới trạng thái"}</span>
-                          </Button>
-                        </div>
-                      </div>
-
-                      {/* Live counters if active */}
-                      {(isWorking || sources.length > 0 || runs.length > 0) && (
-                        <div className="mt-5 pt-4 border-t border-zinc-200/80 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                          <div className="bg-white/80 p-3 rounded-xl border border-zinc-200">
-                            <span className="text-zinc-500 font-medium block">{isEn ? "Sources Found" : "Nguồn thu thập"}</span>
-                            <span className="text-lg font-bold text-zinc-900">{sources.length}</span>
-                          </div>
-                          <div className="bg-white/80 p-3 rounded-xl border border-zinc-200">
-                            <span className="text-zinc-500 font-medium block">{isEn ? "Source-linked Claims" : "Luận điểm có nguồn"}</span>
-                            <span className="text-lg font-bold text-zinc-900">{citations.length}</span>
-                          </div>
-                          <div className="bg-white/80 p-3 rounded-xl border border-zinc-200">
-                            <span className="text-zinc-500 font-medium block">{isEn ? "Tokens Consumed" : "Tokens tiêu thụ"}</span>
-                            <span className="text-lg font-bold text-zinc-900 font-mono">{task.total_tokens_used.toLocaleString()}</span>
-                          </div>
-                          <div className="bg-white/80 p-3 rounded-xl border border-zinc-200">
-                            <span className="text-zinc-500 font-medium block">{isEn ? "Estimated Cost" : "Chi phí ước tính"}</span>
-                            <span className="text-lg font-bold text-emerald-700 font-mono">${Number(task.total_cost_usd).toFixed(4)}</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Keep the next action visible; supporting deliverables are optional detail. */}
-                    {task.status !== 'FAILED' && task.current_step !== 'BUDGET_LIMIT' && (
-                    <details className="rounded-xl border border-zinc-200 bg-white">
-                      <summary className="cursor-pointer px-4 py-3 text-sm font-semibold text-zinc-800">
-                        {isEn ? 'What this run may produce' : 'Lượt chạy này có thể tạo gì?'}
-                      </summary>
-                    <div className="space-y-3 px-4 pb-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="font-bold text-base sm:text-lg text-zinc-900">
-                            {isEn ? "Expected Research Deliverables" : "Các sản phẩm hệ thống sẽ bàn giao"}
-                          </h3>
-                          <p className="text-xs text-zinc-600 mt-0.5">
-                            {isEn
-                              ? "A run may produce a draft and supporting records for the selected study type. Outputs can be incomplete and require human review."
-                              : "Sau một lượt chạy, hệ thống có thể tạo bản thảo và hồ sơ hỗ trợ phù hợp với loại nghiên cứu đã chọn. Kết quả có thể chưa hoàn chỉnh và cần con người rà soát."}
-                          </p>
-                        </div>
-                        <span className="text-xs font-medium px-2.5 py-1 rounded-md bg-zinc-100 text-zinc-700 border border-zinc-200 hidden sm:inline-block">
-                          {task.citation_style} • {task.research_type}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {/* Deliverable 1: Academic Paper */}
-                        <div className="p-4 sm:p-5 rounded-xl bg-white border border-zinc-200 hover:border-zinc-300 transition-colors shadow-2xs space-y-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 shrink-0">
-                              <FileText size={18} />
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-sm text-zinc-900">
-                                {isEn ? "1. AI-Assisted Research Draft" : "1. Bản thảo nghiên cứu có AI hỗ trợ"}
-                              </h4>
-                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Structured for the selected study type" : "Bố cục theo loại nghiên cứu đã chọn"}</span>
-                            </div>
-                          </div>
-                          <p className="text-xs sm:text-[13px] text-zinc-600 leading-relaxed">
-                            {isEn
-                              ? "The draft may contain sections relevant to the selected method. It is not peer-reviewed or publication-ready; incomplete outputs remain marked for review."
-                              : "Bản thảo có thể gồm các mục phù hợp với phương pháp đã chọn. Bài chưa qua phản biện học thuật hay sẵn sàng xuất bản; kết quả chưa hoàn chỉnh sẽ được đánh dấu cần rà soát."}
-                          </p>
-                        </div>
-
-                        {/* Deliverable 2: Multi-format Exports */}
-                        <div className="p-4 sm:p-5 rounded-xl bg-white border border-zinc-200 hover:border-zinc-300 transition-colors shadow-2xs space-y-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 shrink-0">
-                              <Download size={18} />
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-sm text-zinc-900">
-                                {isEn ? "2. Downloadable Files" : "2. Tệp có thể tải xuống"}
-                              </h4>
-                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Formats available for this run" : "Định dạng khả dụng cho lượt chạy này"}</span>
-                            </div>
-                          </div>
-                          <p className="text-xs sm:text-[13px] text-zinc-600 leading-relaxed">
-                            {isEn
-                              ? "Download supported formats such as Word, Markdown, or research packages when available. Export formatting does not establish venue compliance or publication readiness."
-                              : "Tải các định dạng được hỗ trợ như Word, Markdown hoặc gói nghiên cứu khi có. Định dạng tệp không chứng minh bài đã đúng yêu cầu hội thảo/tạp chí hay sẵn sàng xuất bản."}
-                          </p>
-                        </div>
-
-                        {/* Deliverable 3: Grounded Evidence & Citations */}
-                        <div className="p-4 sm:p-5 rounded-xl bg-white border border-zinc-200 hover:border-zinc-300 transition-colors shadow-2xs space-y-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-2 rounded-lg bg-purple-50 text-purple-700 border border-purple-100 shrink-0">
-                              <Layers size={18} />
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-sm text-zinc-900">
-                                {isEn ? "3. Traceable Evidence & Citations" : "3. Bằng chứng trích dẫn có thể truy vết"}
-                              </h4>
-                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Source links where evidence is available" : "Liên kết nguồn khi có bằng chứng"}</span>
-                            </div>
-                          </div>
-                          <p className="text-xs sm:text-[13px] text-zinc-600 leading-relaxed">
-                            {isEn
-                              ? "Claims can be traced to stored sources and passages where available. A citation does not prove that a source entails the claim, that coverage is complete, or that the draft is error-free."
-                              : "Có thể truy vết luận điểm về nguồn và đoạn trích đã lưu khi dữ liệu sẵn có. Việc có trích dẫn không chứng minh nguồn hỗ trợ đầy đủ luận điểm, phạm vi tài liệu đã đầy đủ hay bản thảo không còn lỗi."}
-                          </p>
-                        </div>
-
-                        {/* Deliverable 4: Protocol or Empirical Data */}
-                        <div className="p-4 sm:p-5 rounded-xl bg-white border border-zinc-200 hover:border-zinc-300 transition-colors shadow-2xs space-y-2">
-                          <div className="flex items-center gap-2.5">
-                            <div className="p-2 rounded-lg bg-amber-50 text-amber-700 border border-amber-100 shrink-0">
-                              <Activity size={18} />
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-sm text-zinc-900">
-                                {isEn ? "4. Recorded Execution & Experiment Data" : "4. Dữ liệu thực thi và thực nghiệm đã ghi nhận"}
-                              </h4>
-                              <span className="text-[11px] text-zinc-600 font-medium">{isEn ? "Progress and artifacts where recorded" : "Tiến độ và hiện vật khi được ghi nhận"}</span>
-                            </div>
-                          </div>
-                          <p className="text-xs sm:text-[13px] text-zinc-600 leading-relaxed">
-                            {isEn
-                              ? "View recorded progress, usage, metrics, and artifacts where available. Reproducing a result depends on preserved inputs, code, configuration, and execution environment."
-                              : "Xem tiến độ, mức sử dụng, chỉ số và hiện vật đã được ghi nhận khi có. Tái lập kết quả còn phụ thuộc vào việc lưu đủ dữ liệu đầu vào, mã, cấu hình và môi trường thực thi."}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    </details>
-                    )}
-                  </div>
+                  <ResearchProgressPanel {...progressPanelProps} />
                 )}
               </div>
             )}
@@ -2013,159 +1549,10 @@ export default function WorkspacePage() {
             {activeTab === 'runs' && <AgentRunsPanel task={task} runs={runs} runsError={runsError} runStatusFilter={runStatusFilter} isWorking={isWorking} isEn={isEn} language={language} formatDate={formatDate} />}
 
             {/* TAB 5: STUDY PROTOCOL (GATE G4) */}
-            {activeTab === 'protocol' && (
-              <div className="w-full max-w-7xl mx-auto space-y-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-zinc-200 pb-4">
-                  <div>
-                    <h2 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
-                      <FlaskConical size={18} className="text-indigo-600" />
-                      {isEn ? "Study Protocol" : "Đề cương nghiên cứu (Study Protocol)"}
-                    </h2>
-                    <p className="text-xs text-zinc-500 mt-0.5">
-                      {isEn ? "Intermediate methodological artifact designed by the Methodologist Agent" : "Văn bản trung gian (Intermediate Artifact) được thiết kế bởi Agent Methodologist"}
-                    </p>
-                  </div>
-                  {task.protocol_artifact_id && (
-                    <Button
-                      variant="outline"
-                      onClick={() => void handleDownloadArtifact(task.protocol_artifact_id!, 'study_protocol.md')}
-                    >
-                      <Download size={14} className="mr-1.5" /> {isEn ? "Download (.md)" : "Tải về (.md)"}
-                    </Button>
-                  )}
-                </div>
-
-                {protocolError && (
-                  <div className="p-4 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200">
-                    {protocolError}
-                  </div>
-                )}
-
-                {protocol?.content_markdown ? (
-                  <Card className="p-8 sm:p-12 bg-white shadow-xs">
-                    <MarkdownViewer content={protocol.content_markdown} academicStyle={true} />
-                  </Card>
-                ) : (
-                  <div className="p-8 text-center text-zinc-400">{isEn ? "Loading study protocol..." : "Đang tải nội dung đề cương nghiên cứu..."}</div>
-                )}
-              </div>
-            )}
+            {activeTab === 'protocol' && <ProtocolPanel {...protocolPanelProps} />}
 
             {/* TAB 6: METADATA & CONFIG */}
-            {activeTab === 'details' && (
-              <div className="w-full max-w-7xl mx-auto space-y-6">
-                <Card className="p-6 space-y-5">
-                  <h2 className="text-lg font-bold text-zinc-900 border-b border-zinc-200 pb-3">{isEn ? "Task Configuration & Metadata" : "Cấu hình & Chi tiết nhiệm vụ"}</h2>
-                  <ModelConnectionSummary key={task.id} task={task} isEn={isEn} />
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="font-semibold text-zinc-700">{isEn ? "Research Question:" : "Câu hỏi nghiên cứu:"}</span>
-                      <p className="text-zinc-900 mt-1 leading-relaxed bg-zinc-50 p-3 rounded-xl border border-zinc-200">
-                        {task.research_question}
-                      </p>
-                    </div>
-
-                    <div>
-                      <span className="font-semibold text-zinc-700">{isEn ? "Additional Description:" : "Mô tả bổ sung:"}</span>
-                      <p className="text-zinc-600 mt-1 leading-relaxed bg-zinc-50 p-3 rounded-xl border border-zinc-200">
-                        {task.description || (isEn ? 'No additional description provided' : 'Không có mô tả bổ sung')}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm border-t border-zinc-100 pt-4">
-                    <div>
-                      <span className="text-xs text-zinc-500">{isEn ? "Research Type" : "Loại nghiên cứu"}</span>
-                      <div className="font-semibold text-zinc-800 mt-0.5">
-                        {task.research_type === 'EMPIRICAL_HUMAN' ? (isEn ? 'Fieldwork' : 'Thực địa') : task.research_type === 'EMPIRICAL_COMPUTATIONAL' ? (isEn ? 'Computational' : 'Tính toán') : (isEn ? 'Literature Review' : 'Tổng quan')}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-zinc-500">{isEn ? "Research Depth" : "Độ sâu nghiên cứu"}</span>
-                      <div className="font-semibold text-zinc-800 mt-0.5">{task.research_depth}</div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-zinc-500">{isEn ? "Report Length" : "Độ dài báo cáo"}</span>
-                      <div className="font-semibold text-zinc-800 mt-0.5">{task.report_length}</div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-zinc-500">{isEn ? "Citation Style" : "Kiểu trích dẫn"}</span>
-                      <div className="font-semibold text-zinc-800 mt-0.5">{task.citation_style}</div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm border-t border-zinc-100 pt-4">
-                    <div>
-                      <span className="text-xs text-zinc-500">{isEn ? "Plan Approval (HITL)" : "Duyệt kế hoạch (HITL)"}</span>
-                      <div className="font-semibold text-zinc-800 mt-0.5">{task.require_plan_approval ? (isEn ? 'Enabled' : 'Bật') : (isEn ? 'Disabled' : 'Tắt')}</div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-zinc-500">{isEn ? "Max Iterations" : "Vòng lặp tối đa"}</span>
-                      <div className="font-semibold text-zinc-800 mt-0.5">{task.max_iterations}</div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-zinc-500">{isEn ? "Max Sources" : "Nguồn tối đa"}</span>
-                      <div className="font-semibold text-zinc-800 mt-0.5">{task.max_sources}</div>
-                    </div>
-                    <div>
-                      <span className="text-xs text-zinc-500">{isEn ? "Attempt Number" : "Lần chạy thử lại"}</span>
-                      <div className="font-semibold text-zinc-800 mt-0.5">{task.attempt_number}</div>
-                    </div>
-                  </div>
-
-                  {task.user_data_submission && (
-                    <div className="border-t border-zinc-100 pt-4">
-                      <h3 className="font-semibold text-zinc-900 text-sm mb-2 flex items-center gap-1.5">
-                        <FlaskConical size={14} className="text-indigo-600" />
-                        {isEn ? "Submitted Empirical / Fieldwork Data" : "Dữ liệu thực nghiệm đã cung cấp"}
-                      </h3>
-                      <div className="bg-zinc-50 p-4 rounded-xl border border-zinc-200 text-xs space-y-2">
-                        {task.user_data_submission.sample_size != null && (
-                          <div className="flex justify-between">
-                            <span className="text-zinc-500">{isEn ? "Actual Sample Size:" : "Cỡ mẫu thực tế:"}</span>
-                            <span className="font-semibold text-zinc-800">{task.user_data_submission.sample_size}</span>
-                          </div>
-                        )}
-                        {task.user_data_submission.data_provenance && (
-                          <div className="flex justify-between">
-                            <span className="text-zinc-500">{isEn ? "Data Provenance:" : "Xuất xứ / Nguồn:"}</span>
-                            <span className="font-semibold text-zinc-800">{task.user_data_submission.data_provenance}</span>
-                          </div>
-                        )}
-                        {task.user_data_submission.method_notes && (
-                          <div>
-                            <span className="text-zinc-500 font-medium">{isEn ? "Methodology & Tools:" : "Phương pháp & công cụ:"}</span>
-                            <p className="text-zinc-700 mt-0.5">{task.user_data_submission.method_notes}</p>
-                          </div>
-                        )}
-                        <div>
-                          <span className="text-zinc-500 font-medium">{isEn ? "Findings Summary:" : "Tóm tắt kết quả:"}</span>
-                          <p className="text-zinc-800 font-medium mt-0.5 whitespace-pre-wrap">{task.user_data_submission.results_summary}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="border-t border-zinc-100 pt-4 flex flex-wrap items-center justify-between text-xs text-zinc-500 gap-2">
-                    <span>{isEn ? "Created: " : "Tạo lúc: "}{formatDate(task.created_at, language)}</span>
-                    {task.completed_at && <span>{isEn ? "Completed: " : "Hoàn thành lúc: "}{formatDate(task.completed_at, language)}</span>}
-                    <Link className="underline hover:text-zinc-900" href="/dashboard">{isEn ? "Back to Dashboard" : "Quay lại danh sách bài"}</Link>
-                  </div>
-                </Card>
-
-                {/* Danger Zone */}
-                <div className="rounded-2xl border border-red-200 bg-red-50/50 p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div>
-                    <h3 className="font-semibold text-red-900">{isEn ? "Danger Zone" : "Vùng nguy hiểm"}</h3>
-                    <p className="text-xs text-red-700 mt-0.5">{isEn ? "Permanently delete this research project and all associated sources, citations, and artifacts." : "Xóa vĩnh viễn bài nghiên cứu này cùng toàn bộ nguồn và trích dẫn liên quan."}</p>
-                  </div>
-                  <Button variant="danger" onClick={() => void handleDeleteTask()} isLoading={isDeleting}>
-                    <Trash2 size={15} className="mr-1.5" /> {isEn ? "Delete Research Project" : "Xóa bài nghiên cứu"}
-                  </Button>
-                </div>
-              </div>
-            )}
+            {activeTab === 'details' && <TaskDetailsPanel {...detailsPanelProps} />}
 
             {/* TAB 7: COMPUTATIONAL EXPERIMENTS & JOURNAL */}
             {activeTab === 'experiments' && <ExperimentsPanel task={task} artifacts={artifacts} experiments={experiments} journal={journal} isEn={isEn} language={language} formatDate={formatDate} datasetFileInputRef={datasetFileInputRef} handleUploadDataset={handleUploadDataset} isUploadingDataset={isUploadingDataset} datasetUploadError={datasetUploadError} datasetUploadSuccess={datasetUploadSuccess} />}
