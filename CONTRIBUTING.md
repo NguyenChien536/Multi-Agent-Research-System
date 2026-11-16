@@ -19,7 +19,7 @@ Slug chỉ dùng chữ thường ASCII, số và dấu `-`; ngắn, mô tả **c
 
 ## Làm một chức năng hoặc sửa một lỗi
 
-1. Chọn một việc từ [Implementation Plan](docs/project/implementation-plan.md), ghi rõ kết quả và gate cần đạt. Giữ tối đa một nhánh feature đang code để giảm đổi ngữ cảnh.
+1. Chọn một issue cụ thể, ghi rõ kết quả và điều kiện nghiệm thu. Giữ tối đa một nhánh feature đang code để giảm đổi ngữ cảnh.
 2. `git switch develop`, `git pull --ff-only origin develop`, rồi `git switch -c feature/3-pdf-upload` với mã issue và slug của công việc thực tế; dùng `bugfix/`, `chore/` hoặc `docs/` theo bảng trên.
 3. Sửa mã và tài liệu liên quan; commit theo dạng `feat(scope): mô tả`, `fix(scope): mô tả` hoặc `chore(scope): mô tả`.
 4. Tự đọc diff, ghi chính xác lệnh và kết quả đã chạy. Phân biệt **source đã có**, **kiểm cục bộ đạt**, **runtime/provider thật đã xác minh**. Một build đạt không chứng minh workflow nghiên cứu chạy đúng.

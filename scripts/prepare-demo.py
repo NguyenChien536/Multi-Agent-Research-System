@@ -137,7 +137,7 @@ async def prepare():
     write("task-payloads.json", cases)
     write("expected-checks.json", expected)
     print("PASS: created three demo cases; ran the actual fixed routine and repeatability for two CSVs; validated survey intake.")
-    print("No network/provider/database calls. See examples/demo and docs/technical/demo-guide.md.")
+    print("No network/provider/database calls. Demo inputs are in examples/demo; see README.md for the three study types.")
 
 
 if __name__ == "__main__":
