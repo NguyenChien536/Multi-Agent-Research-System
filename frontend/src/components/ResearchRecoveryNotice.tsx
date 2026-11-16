@@ -1,6 +1,18 @@
 import Link from 'next/link';
 import type { ResearchTaskResponse } from '@/types';
 
+const LIMIT_LABELS: Record<string, { en: string; vi: string }> = {
+  input_tokens: { en: 'input tokens', vi: 'token đầu vào' },
+  output_tokens: { en: 'output tokens', vi: 'token đầu ra' },
+  llm_calls: { en: 'model calls', vi: 'lượt gọi model' },
+  active_time: { en: 'processing time', vi: 'thời gian xử lý' },
+  cost: { en: 'estimated cost', vi: 'chi phí ước tính' },
+};
+
+function blockedLimitText(limits: string[] | undefined, isEn: boolean): string {
+  return (limits ?? []).map(limit => LIMIT_LABELS[limit]?.[isEn ? 'en' : 'vi'] ?? limit).join(', ');
+}
+
 export function researchBudgetBlocked(task: Pick<ResearchTaskResponse, 'current_step' | 'retry_blocked_reason'>) {
   return task.current_step === 'BUDGET_LIMIT' || task.retry_blocked_reason === 'TASK_BUDGET_LIMIT';
 }
@@ -32,28 +44,28 @@ export function ResearchRecoveryNotice({task, isEn, busy, onContinue, onExtend}:
           <span className="text-zinc-500 font-medium block">{isEn ? 'Cost Used' : 'Chi phí đã dùng'}</span>
           <span className="font-mono font-bold text-zinc-900">
             {allowance.cost_used_usd != null ? `$${allowance.cost_used_usd.toFixed(4)}` : '—'}
-            <span className="text-zinc-500 font-normal"> / ${((allowance.max_cost_usd ?? 0.5)).toFixed(2)}</span>
+            <span className="text-zinc-500 font-normal"> / {allowance.max_cost_usd != null ? `$${allowance.max_cost_usd.toFixed(2)}` : '—'}</span>
           </span>
         </div>
         <div>
           <span className="text-zinc-500 font-medium block">{isEn ? 'Model Calls' : 'Lượt gọi model'}</span>
           <span className="font-mono font-bold text-zinc-900">
             {allowance.calls_used ?? '—'}
-            <span className="text-zinc-500 font-normal"> / {allowance.max_llm_calls ?? 40}</span>
+            <span className="text-zinc-500 font-normal"> / {allowance.max_llm_calls ?? '—'}</span>
           </span>
         </div>
         <div>
           <span className="text-zinc-500 font-medium block">{isEn ? 'Input Tokens' : 'Token đầu vào'}</span>
           <span className="font-mono font-bold text-zinc-900">
             {allowance.input_used ? allowance.input_used.toLocaleString() : '0'}
-            <span className="text-zinc-500 font-normal"> / {(allowance.max_input_tokens || 150000).toLocaleString()}</span>
+            <span className="text-zinc-500 font-normal"> / {allowance.max_input_tokens != null ? allowance.max_input_tokens.toLocaleString() : '—'}</span>
           </span>
         </div>
         <div>
           <span className="text-zinc-500 font-medium block">{isEn ? 'Output Tokens' : 'Token tạo ra'}</span>
           <span className="font-mono font-bold text-zinc-900">
             {allowance.output_used ? allowance.output_used.toLocaleString() : '0'}
-            <span className="text-zinc-500 font-normal"> / {(allowance.max_output_tokens || 60000).toLocaleString()}</span>
+            <span className="text-zinc-500 font-normal"> / {allowance.max_output_tokens != null ? allowance.max_output_tokens.toLocaleString() : '—'}</span>
           </span>
         </div>
       </div>
@@ -86,16 +98,16 @@ export function ResearchRecoveryNotice({task, isEn, busy, onContinue, onExtend}:
       </button>
     </div>}
 
-    {/* Hard limit explanation when extension cannot be offered */}
+    {/* Explain the limiting resource without showing internal reason codes. */}
     {blocked && !allowance?.can_extend && (
       <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
         <p className="font-semibold">
-          {isEn ? 'System allowance ceiling reached' : 'Đã đạt trần hạn mức tối đa của hệ thống'}
+          {isEn ? 'This article cannot continue within its current limits' : 'Bài này không thể tiếp tục trong hạn mức hiện tại'}
         </p>
         <p className="mt-1">
           {isEn
-            ? 'This research has reached the absolute system limit ($2.00 / 60 calls / 60 active minutes / 500k input / 200k output tokens). Saved findings and drafts are preserved. Start a new research task to continue.'
-            : 'Bài nghiên cứu đã chạm trần tối đa của hệ thống ($2.00 / 60 lượt gọi / 60 phút / 500k input / 200k output tokens). Toàn bộ bản nháp và dữ liệu đã lưu được giữ nguyên. Vui lòng tạo nghiên cứu mới để tiếp tục.'}
+            ? `Saved work is preserved. ${allowance?.blocked_limits?.length ? `The system ceiling has been reached for: ${blockedLimitText(allowance.blocked_limits, true)}. ` : ''}Check the limits above before starting a new research task.`
+            : `Phần đã lưu vẫn còn. ${allowance?.blocked_limits?.length ? `Đã đạt trần hệ thống cho: ${blockedLimitText(allowance.blocked_limits, false)}. ` : ''}Kiểm tra hạn mức ở trên trước khi tạo bài mới.`}
         </p>
       </div>
     )}

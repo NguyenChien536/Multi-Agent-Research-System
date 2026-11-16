@@ -60,14 +60,17 @@ def token_allowance_summary(task) -> dict:
         getattr(task, 'status', '') == 'NEEDS_REVIEW' and getattr(task, 'current_step', None) == 'BUDGET_LIMIT')
     next_calls = min(calls + 10, HARD_MAX_LLM_CALLS) if usage.get('llm_calls', 0) >= calls else calls
     next_seconds = min(seconds + 900, HARD_MAX_ACTIVE_SECONDS) if usage.get('active_seconds', 0) >= seconds else seconds
-    other_limits_ok = (usage.get('cost_usd', 0) < cost
+    cost_failure = 'cost budget' in str((config.get('_last_failure') or {}).get('message', '')).lower()
+    cost_exhausted = float(usage.get('cost_usd', 0)) >= cost or (getattr(task, 'current_step', None) == 'BUDGET_LIMIT' and cost_failure)
+    next_cost = min(round(cost + 0.5, 2), HARD_MAX_COST_USD) if cost_exhausted else cost
+    other_limits_ok = ((not cost_exhausted or next_cost > cost)
                        and (usage.get('llm_calls', 0) < calls or next_calls > calls)
                        and (usage.get('active_seconds', 0) < seconds or next_seconds > seconds))
     next_in = min(inputs + 100_000, HARD_MAX_INPUT_TOKENS)
     next_out = min(outputs + 50_000, HARD_MAX_OUTPUT_TOKENS)
 
     can_extend = bool(
-        eligible and other_limits_ok and (next_in > inputs or next_out > outputs or next_calls > calls or next_seconds > seconds)
+        eligible and other_limits_ok and (next_in > inputs or next_out > outputs or next_calls > calls or next_seconds > seconds or next_cost > cost)
         and (getattr(task, 'current_step', None) == 'BUDGET_LIMIT'
              or remaining_out < int(call_output) or remaining_in < 1000
              or next_calls > calls or next_seconds > seconds)
@@ -84,7 +87,7 @@ def token_allowance_summary(task) -> dict:
     if output_used >= outputs and next_out <= outputs: blocked_limits.append('output_tokens')
     if calls_used >= calls and next_calls <= calls: blocked_limits.append('llm_calls')
     if active_seconds >= seconds and next_seconds <= seconds: blocked_limits.append('active_time')
-    if cost_used >= cost: blocked_limits.append('cost')
+    if cost_exhausted and next_cost <= cost: blocked_limits.append('cost')
 
     if not eligible:
         reason = 'not_paused_at_allowance'
@@ -107,7 +110,7 @@ def token_allowance_summary(task) -> dict:
         'next_max_llm_calls': next_calls,
         'cost_used_usd': round(cost_used, 6),
         'max_cost_usd': cost,
-        'next_max_cost_usd': cost,
+        'next_max_cost_usd': next_cost,
         'active_seconds_used': active_seconds,
         'max_active_seconds': seconds,
         'next_timeout_seconds': next_seconds,

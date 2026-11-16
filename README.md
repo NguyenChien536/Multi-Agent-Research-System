@@ -33,11 +33,11 @@ Cần Docker Desktop. Một **docker-compose.yml** có hai profile, mỗi môi t
 
 Máy mới: chạy release `init`, rồi `deploy` một lần; sau đó dùng `start`. Máy hiện tại đã có bản demo, không init lại. `status` in URL thực tế; máy mới mặc định cổng 3080. Không dùng `down -v` hoặc chép secret/database demo sang dev. Database/Redis không publish cổng; dev API có docs tại http://127.0.0.1:8000/api/v1/docs.
 
-Kiểm hai môi trường đang chạy, không gọi provider: `python scripts/check-environments.py`. Script tạo tài khoản/bài tạm rồi tự xóa đúng dữ liệu thử nghiệm đó. Xem [hướng dẫn vận hành](docs/technical/local-release.md).
+Kiểm hai môi trường đang chạy, không gọi provider: `python scripts/check-environments.py`. Script tạo tài khoản/bài tạm rồi tự xóa đúng dữ liệu thử nghiệm đó.
 
 ## Cấu hình và dùng
 
-**Chế độ demo tạm:** `USE_SERVER_PROVIDERS=true` trong env riêng của demo dùng provider/key máy chủ, bỏ qua key web khi chạy bài và ẩn form API trên web. Key người dùng đã lưu được giữ nguyên; chuyển cờ về false rồi cập nhật container để dùng lại. File env gốc được đồng bộ có chọn lọc vào env demo; không chép secret ký phiên hoặc database từ env gốc sang demo.
+**Chế độ demo:** `USE_SERVER_PROVIDERS=true` trong env riêng cho phép dùng provider/key máy chủ khi tài khoản chưa lưu kết nối cá nhân. Kết nối cá nhân đã lưu được ưu tiên. Giữ file `.env` riêng trên máy; không đưa API key hay secret vào Git hoặc gói nộp.
 
 1. Đăng nhập, mở **Settings → API & model**.
 2. Chọn dịch vụ, nhập key và model ID rồi lưu. Key được mã hóa trên server, không trả lại trình duyệt. Để trống key khi sửa model để giữ key cũ.
@@ -75,6 +75,22 @@ Modular monolith, API/worker là tiến trình riêng; mỗi agent là vai trò 
 | frontend/src/app, components, lib/api.ts | Settings, workspace, monitor và HTTP client |
 | backend/tests, frontend/tests, .github/workflows | Regression và CI |
 
+**Tìm đúng chỗ khi sửa một chức năng:**
+
+| Cần thay đổi | Nơi bắt đầu đọc/sửa |
+|---|---|
+| Tạo, chạy lại, dừng và xóa bài | `backend/app/api/v1/endpoints/research.py` |
+| Duyệt kế hoạch, protocol, nạp dữ liệu và nhật ký thí nghiệm | `backend/app/api/v1/endpoints/research_study.py` |
+| Xem bài báo, phiên bản, nguồn, trích dẫn | `backend/app/api/v1/endpoints/research_read.py` |
+| Tải PDF và artifact riêng tư | `backend/app/api/v1/endpoints/research_files.py` |
+| Kết nối model cho bài | `backend/app/api/v1/endpoints/research_connections.py`; cấu hình tài khoản ở `backend/app/api/v1/endpoints/settings.py` |
+| Hạn mức model và khả năng tiếp tục bài | `backend/app/services/provider_budget.py`; thông báo trên web ở `frontend/src/components/ResearchRecoveryNotice.tsx` |
+| Hợp đồng dữ liệu giữa các agent | `backend/app/agents/agent_schemas.py` |
+| Luồng, từng bước nghiên cứu và tác vụ nền | `backend/app/agents/graph.py`, `backend/app/agents/nodes.py`, `backend/app/worker.py` |
+| Workspace bài báo, thí nghiệm và nhật ký agent | `frontend/src/app/research/[id]/page.tsx`, `frontend/src/components/research/ExperimentsPanel.tsx`, `frontend/src/components/research/AgentRunsPanel.tsx` |
+
+Khi thêm endpoint, đăng ký router tại `backend/app/api/v1/api.py`. Khi đổi dữ liệu lưu lâu dài, thêm migration trong `backend/alembic/versions` rồi cập nhật schema và API response tương ứng. Chạy CI và kiểm trên môi trường dev trước khi đưa code sang bản demo; `release.ps1 -Action deploy` chỉ dùng sau khi đã nghiệm thu.
+
 ## Kiểm thử, backup, demo
 
 Backend tests bắt buộc database riêng có tên chứa `test`; CI migration rồi chạy pytest. Không test trên dữ liệu làm việc. Frontend: `npm ci`, `npm test`, `npm run build` trong frontend. Docker build cũng kiểm TypeScript và Next.js production.
@@ -87,9 +103,6 @@ Backend tests bắt buộc database riêng có tên chứa `test`; CI migration 
 
 Giữ nguyên APP_SECRET_KEY khi phục hồi để đọc key mã hóa và phiên. Backup chứa dữ liệu riêng, giữ ngoài Git. Không xóa volumes, artifact nghiên cứu hoặc tài liệu người dùng khi dọn cache.
 
-- [Hiểu code và demo ba loại](docs/technical/demo-guide.md)
-- [Vận hành và phục hồi](docs/technical/local-release.md)
-- [System Design](docs/architecture/system-design.md)
-- [SRS](docs/requirements/SRS.md)
+Ba luồng và vị trí mã chính được tóm tắt ở trên. [SRS ATI.md](SRS%20ATI.md) là bản yêu cầu; [CONTRIBUTING.md](CONTRIBUTING.md) ghi quy trình kiểm thử và đưa code lên `main`.
 
 Bố cục đầy đủ không bảo đảm chất lượng Q1, kết quả đúng hoặc được nhận đăng. Tests/build không thay thế chạy provider và đọc bài thật. NEEDS_REVIEW nghĩa là còn kiểm tra chưa khép.
