@@ -1,7 +1,7 @@
 # SRS — Multi-Agent Research System (ATI)
 
 > **Phiên bản:** 4.1 · **Cập nhật định hướng:** 09/10/2026 · **Kỳ hạn:** 10/09–10/11/2026.
-> Yêu cầu mục tiêu, không phải danh sách tính năng đã nghiệm thu. Bản này đồng bộ từ `docs/requirements/SRS.md` để đọc/nộp; file trong docs là nguồn chuẩn. Lịch sử v2.5 còn trong Git. Sơ đồ chuẩn: [System Design](docs/architecture/system-design.md). Review: [Product Assessment](docs/project/product-assessment.md).
+> Tài liệu này mô tả yêu cầu mục tiêu, không phải danh sách tính năng đã nghiệm thu. Đối chiếu tình trạng thực tế với code, test và kết quả chạy trên revision nộp.
 
 ## 1. Mục đích và giá trị
 
@@ -47,7 +47,7 @@ Review và human-led protocol nhận câu hỏi nhiều lĩnh vực; thực thi 
 | FR-16 | Đánh giá multi-agent | Query/corpus/rubric versioned; baseline/ablation; cấu hình, cost, kết quả/người chấm; báo cáo cả thất bại/giới hạn | Core |
 | FR-17 | Nhiều bài độc lập | Một user tạo/xem/chuyển giữa nhiều task; task A chờ dữ liệu không cản tạo/chạy task B; danh sách hiển thị status/stage/việc cần làm và bản thảo mới nhất | Core |
 
-FR-07 và FR-08 là hai nhánh của plan: ATI chạy routine hỗ trợ, hoặc hướng dẫn nghiên cứu viên thực hiện ngoài hệ thống và nhận data/results có provenance. Kết quả không ủng hộ giả thuyết ở cả hai nhánh vẫn được giữ và báo trung thực. User-supplied results luôn có nhãn, không được báo đã tái lập nếu ATI chưa chạy lại. Nhật ký khoa học, log vận hành và cách phân biệt kết quả âm với lỗi được định nghĩa tại [Experiment Journal](docs/technical/experiment-journal-and-reproducibility.md).
+FR-07 và FR-08 là hai nhánh của plan: ATI chạy routine hỗ trợ, hoặc hướng dẫn nghiên cứu viên thực hiện ngoài hệ thống và nhận data/results có provenance. Kết quả không ủng hộ giả thuyết ở cả hai nhánh vẫn được giữ và báo trung thực. User-supplied results luôn có nhãn, không được báo đã tái lập nếu ATI chưa chạy lại. Nhật ký khoa học ghi input, cấu hình, attempt, kết quả âm và lỗi riêng biệt.
 
 ## 4. Tương tác và quyền hạn
 
@@ -118,7 +118,7 @@ Các NFR dưới đây định danh những ràng buộc đã nêu ở mục 4�
 
 ## 8. Acceptance gates
 
-Mã G0–G7 dùng thống nhất với các gói P0–P7 trong [Implementation Plan](docs/project/implementation-plan.md). Tại bản planning này, các gate **chưa có đủ bằng chứng nghiệm thu trên revision hiện tại**.
+Mã G0–G7 là điều kiện nghiệm thu yêu cầu. Gate chỉ đạt khi có bằng chứng từ code, kiểm thử và lượt chạy phù hợp trên revision đang nộp.
 
 | Gate | Điều kiện đạt |
 |---|---|
@@ -131,7 +131,7 @@ Mã G0–G7 dùng thống nhất với các gói P0–P7 trong [Implementation P
 | G6 · tương tác và bàn giao | Q&A có nguồn/cap; revision giữ bản cũ và không dùng result lỗi thời; export có quyền; xóa task/cleanup đạt policy |
 | G7 · đánh giá | Có baseline/ablation, rubric, quality/cost/latency/failures và limitations; tổng hợp evidence của G0–G6 |
 
-Chi tiết cách đo: [Evaluation Plan](docs/project/evaluation-plan.md). Gate chưa đạt không được thay bằng mock rồi báo hoàn thành.
+Gate chưa đạt không được thay bằng mock rồi báo hoàn thành.
 
 ## 9. Ánh xạ yêu cầu sang kế hoạch
 
