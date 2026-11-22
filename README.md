@@ -7,6 +7,10 @@
 > [!IMPORTANT]
 > **Trạng thái:** bản phát hành **local qua Docker** để demo và đánh giá, chưa phải dịch vụ production công khai. CI kiểm tra code và runtime với provider giả; chất lượng bài báo và khả năng chạy với API thật cần được nghiệm thu riêng. Bản thảo không thay thế tác giả hoặc phản biện khoa học.
 
+![Workspace của Synthia với bản thảo và nguồn từ dữ liệu kiểm thử](assets/readme/research-workspace.jpg)
+
+*Giao diện workspace trong một lượt kiểm thử với dữ liệu giả lập; ảnh không đại diện cho kết quả nghiên cứu thật.*
+
 ## Bắt đầu nhanh
 
 **Cần:** Docker Desktop đang chạy Linux containers, PowerShell, Git. Để tạo bài thật, chuẩn bị API key cho một model chat tương thích hoặc cấu hình provider máy chủ; OpenAlex và Crossref có thể tìm metadata học thuật mà không cần key. API miễn phí vẫn có quota và giới hạn đầu ra.
@@ -39,6 +43,10 @@ Kết nối cá nhân đã lưu được ưu tiên. Nếu người vận hành b
 | **Nghiên cứu do con người thực hiện** (`EMPIRICAL_HUMAN`) | Cần khảo sát, lab hoặc thực địa | Đề xuất protocol rồi lưu trạng thái chờ. Người dùng thực hiện nghiên cứu bên ngoài, nạp kết quả và nguồn gốc dữ liệu để hệ thống tiếp tục. Hệ thống không tuyển người, xin phê duyệt đạo đức hoặc xác minh độc lập dữ liệu đã nạp. |
 
 Xem [bộ dữ liệu và câu hỏi demo](examples/demo) để thử ba luồng. Dữ liệu demo là **tổng hợp/giả lập**, không phải kết quả nghiên cứu trên người thật. Một bản thảo có đủ đầu mục vẫn có thể ở trạng thái `NEEDS_REVIEW`; đây là tín hiệu cần kiểm tra, không phải bài đã được duyệt.
+
+**Ví dụ bố cục xuất bản:** hình dưới đây được tạo từ dữ liệu kiểm thử tổng hợp để kiểm tra cách dàn trang hai cột, hình, bảng và chú thích. Nó không phải bài đã được chấp nhận đăng.
+
+<img src="assets/readme/ieee-layout-synthetic.png" alt="Trang bản thảo hai cột với biểu đồ và bảng từ dữ liệu kiểm thử tổng hợp" width="560">
 
 ## Cách hệ thống hoạt động
 
