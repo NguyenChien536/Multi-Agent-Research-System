@@ -1076,12 +1076,12 @@ export default function Home() {
           <div className="max-w-5xl mx-auto px-6 sm:px-8">
             <div className="max-w-2xl mb-14">
               <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-stone-950">
-                {isEn ? 'Rigorous Evidence, Zero Hallucination' : 'Nghiên Cứu Có Dẫn Chứng, Không Ảo Giác'}
+                {isEn ? 'Evidence Checks with Human Review' : 'Đối Chiếu Bằng Chứng, Con Người Kiểm Tra'}
               </h2>
               <p className="mt-3 text-stone-600 text-sm leading-relaxed">
                 {isEn
-                  ? 'Unlike conversational chatbots that fabricate citations, Synthia cross-examines claims and requires verifiable proof for every statement.'
-                  : 'Khác với chatbot thông thường hay tự bịa số liệu, Synthia bắt buộc mọi nhận định phải đối chiếu với tài liệu gốc.'}
+                  ? 'Synthia records sources, checks cited claims and flags gaps for the researcher to review. Automated checks can still miss errors.'
+                  : 'Synthia lưu nguồn, đối chiếu luận điểm có trích dẫn và báo chỗ thiếu bằng chứng để người nghiên cứu kiểm tra. Bước kiểm tra tự động vẫn có thể bỏ sót lỗi.'}
               </p>
             </div>
 
@@ -1090,12 +1090,12 @@ export default function Home() {
               <div className="border-t border-stone-300 pt-5">
                 <span className="text-xs font-bold text-stone-400 block mb-1">01</span>
                 <h3 className="font-bold text-base text-stone-950 mb-2">
-                  {isEn ? '100% Genuine Sources' : 'Nguồn Học Thuật Thật 100%'}
+                  {isEn ? 'Recorded Source Provenance' : 'Ghi Lại Xuất Xứ Nguồn'}
                 </h3>
                 <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
                   {isEn
-                    ? 'Every citation corresponds to real publications or recorded data. No invented authors, volumes, or synthetic titles.'
-                    : 'Mọi trích dẫn đều kết nối đến bài báo hoặc số liệu có thật. Tuyệt đối không sinh tác giả hay tạp chí ảo.'}
+                    ? 'Search results and uploaded documents retain their available metadata and links. Check the original publication before citing it.'
+                    : 'Nguồn tìm được và tài liệu tải lên giữ thông tin xuất xứ sẵn có. Hãy kiểm tra công bố gốc trước khi trích dẫn.'}
                 </p>
               </div>
 
@@ -1103,12 +1103,12 @@ export default function Home() {
               <div className="border-t border-stone-300 pt-5">
                 <span className="text-xs font-bold text-stone-400 block mb-1">02</span>
                 <h3 className="font-bold text-base text-stone-950 mb-2">
-                  {isEn ? 'Independent Peer Critique' : 'Phản Biện Độc Lập'}
+                  {isEn ? 'Internal AI Critique' : 'Phản Biện AI Nội Bộ'}
                 </h3>
                 <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
                   {isEn
-                    ? 'Reviewer agents inspect methodology and challenge weak assertions before manuscript sections are approved.'
-                    : 'Tác nhân Reviewer kiểm tra phương pháp và bắt lỗi luận điểm trước khi bản thảo được thông qua.'}
+                    ? 'The Critic role challenges weak arguments and can request revisions. It is not an independent academic peer reviewer.'
+                    : 'Vai trò Critic xem lại lập luận và có thể yêu cầu sửa. Đây không phải phản biện học thuật độc lập.'}
                 </p>
               </div>
 
@@ -1120,8 +1120,8 @@ export default function Home() {
                 </h3>
                 <p className="text-xs sm:text-sm text-stone-600 leading-relaxed">
                   {isEn
-                    ? 'Click any finding to trace it directly back to the exact passage or dataset record that provided the supporting evidence.'
-                    : 'Dễ dàng truy vết từng câu trong bài về đúng đoạn trích hoặc bảng dữ liệu gốc đã cung cấp thông tin.'}
+                    ? 'Where evidence links exist, inspect the stored source passage or analysis record. A link alone does not prove that the claim is correct.'
+                    : 'Khi có liên kết bằng chứng, bạn có thể mở đoạn nguồn hoặc kết quả phân tích đã lưu. Có liên kết không đồng nghĩa luận điểm đã đúng.'}
                 </p>
               </div>
             </div>
@@ -1136,8 +1136,8 @@ export default function Home() {
             </h2>
             <p className="mt-3 text-stone-600 text-sm leading-relaxed">
               {isEn
-                ? 'From initial inquiry to a complete, peer-reviewed scientific paper.'
-                : 'Tiến trình tuần tự từ câu hỏi mở ban đầu đến bài báo khoa học hoàn chỉnh.'}
+                ? 'From a research question to a structured draft that still needs human review.'
+                : 'Từ câu hỏi nghiên cứu đến bản thảo có cấu trúc để con người tiếp tục kiểm tra.'}
             </p>
           </div>
 
@@ -1158,7 +1158,7 @@ export default function Home() {
                 {isEn ? 'Hypothesis & Design' : 'Đặt Giả Thuyết'}
               </h3>
               <p className="text-xs text-stone-600 leading-relaxed">
-                {isEn ? 'Formulates formal hypotheses and selects statistical methodologies.' : 'Xác lập câu hỏi nghiên cứu và lựa chọn phương pháp phù hợp.'}
+                {isEn ? 'Clarifies the question and selects an appropriate method; empirical work may require a hypothesis.' : 'Làm rõ câu hỏi và chọn phương pháp; nghiên cứu thực nghiệm có thể cần giả thuyết.'}
               </p>
             </div>
 
@@ -1168,17 +1168,17 @@ export default function Home() {
                 {isEn ? 'Evidence & Analysis' : 'Phân Tích Dữ Liệu'}
               </h3>
               <p className="text-xs text-stone-600 leading-relaxed">
-                {isEn ? 'Cross-verifies claims, executes computations, and renders figures.' : 'Đối chiếu bằng chứng, tính toán số liệu và vẽ biểu đồ trực quan.'}
+                {isEn ? 'Checks available evidence and, for supported studies, runs computations and creates figures.' : 'Đối chiếu bằng chứng; với nghiên cứu được hỗ trợ, chạy tính toán và tạo hình.'}
               </p>
             </div>
 
             <div className="p-5 rounded-xl border border-stone-200 bg-white">
               <span className="text-lg font-bold text-stone-400 block mb-2">4</span>
               <h3 className="font-bold text-sm text-stone-950 mb-1.5">
-                {isEn ? 'IMRaD Manuscript' : 'Xuất Bản IMRaD'}
+                {isEn ? 'Structured Manuscript' : 'Bản Thảo Có Cấu Trúc'}
               </h3>
               <p className="text-xs text-stone-600 leading-relaxed">
-                {isEn ? 'Drafts full paper and exports to LaTeX, formatted PDF, or Word.' : 'Soạn bài báo hoàn chỉnh và xuất sang LaTeX, PDF hoặc Word.'}
+                {isEn ? 'Creates a draft for review, with Word, Markdown and supported publication exports.' : 'Tạo bản thảo để kiểm tra, với Word, Markdown và gói xuất bản được hỗ trợ.'}
               </p>
             </div>
           </div>
@@ -1192,8 +1192,8 @@ export default function Home() {
             </h2>
             <p className="max-w-xl text-stone-400 text-xs sm:text-sm leading-relaxed">
               {isEn
-                ? 'Enter your research question above to generate an evidence-linked manuscript with verifiable citations.'
-                : 'Nhập câu hỏi nghiên cứu ở trên để tạo bản thảo khoa học chuẩn mực với dẫn chứng xác thực.'}
+                ? 'Enter a research question to build a source-linked draft, then verify the evidence and conclusions before use.'
+                : 'Nhập câu hỏi để tạo bản thảo gắn nguồn, sau đó kiểm tra bằng chứng và kết luận trước khi sử dụng.'}
             </p>
             <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
               <button
@@ -1247,7 +1247,7 @@ export default function Home() {
 
           <div className="max-w-5xl mx-auto pt-6 mt-6 border-t border-stone-200/60 flex flex-col sm:flex-row items-center justify-between gap-2 text-stone-400 text-[11px]">
             <span>© 2026 Synthia. All rights reserved.</span>
-            <span>{isEn ? 'Zero hallucination • Verifiable evidence' : 'Không ảo giác • Dẫn chứng xác thực'}</span>
+            <span>{isEn ? 'Traceable sources • Human review' : 'Nguồn có thể truy vết • Con người kiểm tra'}</span>
           </div>
         </footer>
 
