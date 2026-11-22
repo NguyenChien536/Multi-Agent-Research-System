@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import {
   AlertCircle, CheckCircle2, Clock, FileText,
   Play, Plus, RefreshCw, Search, Trash2, XCircle, ArrowUpRight,
-  Activity, Filter, ChevronDown, ChevronUp, ExternalLink
+  Activity, Filter, ChevronDown, ChevronUp, ExternalLink, X
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Components';
@@ -110,6 +110,7 @@ function formatNumber(num: number, lang: 'en' | 'vi') {
 export default function DashboardPage() {
   const router = useRouter();
   const { language, t } = useLanguage();
+  const isEn = language === 'en';
 
   const [tasks, setTasks] = useState<ResearchTaskResponse[]>([]);
   const [user, setUser] = useState<UserResponse | null>(null);
@@ -155,10 +156,11 @@ export default function DashboardPage() {
     }
   };
 
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+
   const handleCancelTask = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm(t('confirm_stop'))) return;
     setActionLoadingId(id);
     setActionError('');
     try {
@@ -174,7 +176,11 @@ export default function DashboardPage() {
   const handleDeleteTask = async (id: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!confirm(t('confirm_delete'))) return;
+    if (deleteConfirmId !== id) {
+      setDeleteConfirmId(id);
+      return;
+    }
+    setDeleteConfirmId(null);
     setActionLoadingId(id);
     setActionError('');
     try {
@@ -796,15 +802,37 @@ export default function DashboardPage() {
 
                             {/* Delete */}
                             {(task.status === 'COMPLETED' || task.status === 'CANCELLED' || task.status === 'FAILED') && (
-                              <button
-                                type="button"
-                                onClick={(e) => void handleDeleteTask(task.id, e)}
-                                disabled={actionLoadingId === task.id}
-                                className="p-1.5 rounded text-zinc-400 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
-                                title={t('btn_delete')}
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                              deleteConfirmId === task.id ? (
+                                <div className="inline-flex items-center gap-1 bg-red-50 p-0.5 rounded-lg border border-red-200">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => void handleDeleteTask(task.id, e)}
+                                    disabled={actionLoadingId === task.id}
+                                    className="px-2 py-0.5 rounded text-[11px] font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors cursor-pointer"
+                                    title={t('confirm_delete')}
+                                  >
+                                    {isEn ? 'Confirm' : 'Xác nhận'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setDeleteConfirmId(null); }}
+                                    className="p-1 text-zinc-400 hover:text-zinc-700 rounded transition-colors cursor-pointer"
+                                    title={isEn ? 'Cancel' : 'Hủy'}
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={(e) => void handleDeleteTask(task.id, e)}
+                                  disabled={actionLoadingId === task.id}
+                                  className="p-1.5 rounded text-zinc-400 hover:text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                                  title={t('btn_delete')}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )
                             )}
                           </div>
                         </td>
