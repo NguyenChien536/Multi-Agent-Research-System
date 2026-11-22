@@ -1,108 +1,117 @@
-# Synthia — Multi-Agent Research System
+# Synthia
 
-Hỗ trợ nghiên cứu từ câu hỏi/nguồn đến bản thảo bài báo có bằng chứng. Cấu hình API và model trên giao diện. Người nghiên cứu kiểm tra kết quả trước khi sử dụng hoặc công bố.
+**Hệ thống web đa tác tử hỗ trợ nghiên cứu và soạn bản thảo bài báo có thể truy vết nguồn.** Người dùng đặt câu hỏi, cung cấp tài liệu hoặc dữ liệu, theo dõi từng bước và kiểm tra bản thảo trước khi sử dụng.
 
-## Hai môi trường local
+[![CI · main](https://github.com/NguyenChien536/Multi-Agent-Research-System/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/NguyenChien536/Multi-Agent-Research-System/actions/workflows/ci.yml?query=branch%3Amain) [![CI · develop](https://github.com/NguyenChien536/Multi-Agent-Research-System/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/NguyenChien536/Multi-Agent-Research-System/actions/workflows/ci.yml?query=branch%3Adevelop)
 
-Cần Docker Desktop. Một **docker-compose.yml** có hai profile, mỗi môi trường có database, Redis, file và secret riêng. Mỗi ứng dụng vẫn có một Dockerfile.
+> [!IMPORTANT]
+> **Trạng thái:** bản phát hành **local qua Docker** để demo và đánh giá, chưa phải dịch vụ production công khai. CI kiểm tra code và runtime với provider giả; chất lượng bài báo và khả năng chạy với API thật cần được nghiệm thu riêng. Bản thảo không thay thế tác giả hoặc phản biện khoa học.
 
-| | Dev — lập trình | Prod local — demo |
-|---|---|---|
-| Web | http://127.0.0.1:3000 | http://127.0.0.1:3082 trên máy hiện tại |
-| Nhóm Docker | synthia-dev | synthia-workflow-check trên máy hiện tại |
-| Code | FE/API tự reload | Image cố định, không mount source |
-| Tài khoản và API key | Đăng ký, lưu Settings riêng | Giữ dữ liệu/cấu hình demo hiện có |
+![Workspace của Synthia với bản thảo và nguồn từ dữ liệu kiểm thử](assets/readme/research-workspace.jpg)
+
+*Giao diện workspace trong một lượt kiểm thử với dữ liệu giả lập; ảnh không đại diện cho kết quả nghiên cứu thật.*
+
+## Bắt đầu nhanh
+
+**Cần:** Docker Desktop đang chạy Linux containers, PowerShell, Git. Để tạo bài thật, chuẩn bị API key cho một model chat tương thích hoặc cấu hình provider máy chủ; OpenAlex và Crossref có thể tìm metadata học thuật mà không cần key. API miễn phí vẫn có quota và giới hạn đầu ra.
 
 ```powershell
-# Dev: init một lần, start dùng code đang sửa.
-.\scripts\dev.ps1 -Action init
-.\scripts\dev.ps1 -Action start
+git clone https://github.com/NguyenChien536/Multi-Agent-Research-System.git
+cd Multi-Agent-Research-System
+.\scripts\release.ps1 -Action init      # máy mới: tạo secret riêng, chỉ chạy một lần
+.\scripts\release.ps1 -Action deploy    # build image, migrate DB, khởi động và kiểm health
+.\scripts\release.ps1 -Action status    # xem URL thực tế
+```
+
+Mặc định mở **http://127.0.0.1:3080**; máy demo đã cấu hình có thể dùng cổng khác (ví dụ 3082). `init` không ghi đè cấu hình cũ. Những lần mở sau dùng `.\scripts\release.ps1 -Action start` để chạy đúng image đã chốt, không build lại source. Dùng `-Action stop` để dừng mà vẫn giữ database, tài khoản và bài nghiên cứu. **Không dùng `docker compose down -v` trên dữ liệu demo.**
+
+Sau khi mở web:
+
+1. Đăng ký hoặc đăng nhập, vào **Settings → AI connection**, chọn dịch vụ, nhập API key, chọn model trong danh sách hoặc nhập **model ID đúng theo dịch vụ**, rồi lưu. Key được mã hóa ở backend và không hiện lại trên giao diện. Có thể dùng kết nối OpenAI-compatible khác ngoài OpenAI.
+2. Chọn **New Research**, nhập câu hỏi, loại nghiên cứu và mức độ; tạo bài. Nếu bài cần tài liệu hoặc dữ liệu, tải PDF/CSV tại workspace theo hướng dẫn trên màn hình.
+3. Theo dõi **Agent Monitor**; khi cần, duyệt kế hoạch hoặc bổ sung dữ liệu để tiếp tục. Bài đang chờ không chiếm worker, nên có thể tạo bài khác.
+4. Đọc **Scientific Paper**, **Sources**, **Evidence & Citations** và **Experiments & Journal** (nếu có). Sửa hoặc kiểm chứng các kết luận trước khi tải Markdown, Word hoặc gói dữ liệu được hỗ trợ.
+
+Kết nối cá nhân đã lưu được ưu tiên. Nếu người vận hành bật `USE_SERVER_PROVIDERS=true` trong env riêng, bài không có kết nối cá nhân mới dùng provider máy chủ. Đổi model không xóa token/chi phí đã tiêu của bài đang làm. Không đưa key vào issue, chat, ảnh chụp hoặc Git.
+
+## Ba loại nghiên cứu
+
+| Loại trên web | Khi nào dùng | Hệ thống tạo và giới hạn |
+|---|---|---|
+| **Tổng quan tài liệu** (`REVIEW`) | Tổng hợp nghiên cứu đã công bố cho một câu hỏi | Tìm, lưu và đối chiếu nguồn; viết bản thảo có cấu trúc, trích dẫn và điểm còn thiếu. Không tự nhận là systematic review hoặc chứng minh giả thuyết mới. |
+| **Thực nghiệm tính toán** (`EMPIRICAL_COMPUTATIONAL`) | Có dữ liệu dạng bảng để chạy quy trình được hỗ trợ | Với routine `tabular_regression_v1`, lưu dữ liệu, baseline, chỉ số, hình và nhật ký thí nghiệm rồi viết bản thảo. Chưa chạy mã Python tùy ý do AI sinh. |
+| **Nghiên cứu do con người thực hiện** (`EMPIRICAL_HUMAN`) | Cần khảo sát, lab hoặc thực địa | Đề xuất protocol rồi lưu trạng thái chờ. Người dùng thực hiện nghiên cứu bên ngoài, nạp kết quả và nguồn gốc dữ liệu để hệ thống tiếp tục. Hệ thống không tuyển người, xin phê duyệt đạo đức hoặc xác minh độc lập dữ liệu đã nạp. |
+
+Xem [bộ dữ liệu và câu hỏi demo](examples/demo) để thử ba luồng. Dữ liệu demo là **tổng hợp/giả lập**, không phải kết quả nghiên cứu trên người thật. Một bản thảo có đủ đầu mục vẫn có thể ở trạng thái `NEEDS_REVIEW`; đây là tín hiệu cần kiểm tra, không phải bài đã được duyệt.
+
+**Ví dụ bố cục xuất bản:** hình dưới đây được tạo từ dữ liệu kiểm thử tổng hợp để kiểm tra cách dàn trang hai cột, hình, bảng và chú thích. Nó không phải bài đã được chấp nhận đăng.
+
+<img src="assets/readme/ieee-layout-synthetic.png" alt="Trang bản thảo hai cột với biểu đồ và bảng từ dữ liệu kiểm thử tổng hợp" width="560">
+
+## Cách hệ thống hoạt động
+
+```mermaid
+flowchart LR
+    U[Người dùng] --> UI[Next.js Web]
+    UI --> API[FastAPI]
+    API --> DB[(PostgreSQL + pgvector)]
+    API --> Q[(Redis)]
+    Q --> W[Celery worker]
+    W --> G[LangGraph]
+    G --> A[Researcher · Analyst · Writer · Critic]
+    A --> T[OpenAlex / Crossref / Tavily / model API]
+    G --> DB
+    W --> Q
+    Q --> UI
+```
+
+FastAPI xác thực, kiểm quyền sở hữu và ghi task. Redis/Celery chạy công việc dài ngoài HTTP; LangGraph điều phối các vai trò. Supervisor lập kế hoạch, Researcher tìm nguồn, Evidence Analyst rút bằng chứng, Writer soạn bản thảo, Critic yêu cầu sửa hoặc đánh dấu vấn đề. Methodologist và Data Analyst chỉ tham gia khi loại nghiên cứu cần. Critic là **bước kiểm tra nội bộ**, không phải phản biện độc lập. PostgreSQL lưu trạng thái/checkpoint, nguồn, bằng chứng và phiên bản; giao diện hiển thị tiến độ từ sự kiện worker. Hệ thống có giới hạn lượt gọi, thời gian và ngân sách để tránh chạy không kiểm soát.
+
+| Thư mục/file | Trách nhiệm chính |
+|---|---|
+| `backend/app/api/v1/endpoints/` | Auth, task, nguồn, báo cáo, Settings và tải tệp |
+| `backend/app/agents/` | Graph, state và các vai trò nghiên cứu/viết/phản biện |
+| `backend/app/services/`, `backend/app/tools/` | Budget, provider, search, bằng chứng, thí nghiệm, xuất bản |
+| `backend/app/prompts/templates/` | Prompt theo vai trò, tách khỏi code xử lý |
+| `backend/app/models/`, `backend/alembic/` | Dữ liệu và migration |
+| `frontend/src/app/`, `frontend/src/components/` | Trang, workspace, monitor và UI dùng lại |
+| `docker-compose.yml`, `scripts/` | Một Compose với hai profile `dev`/`prod`; lệnh vận hành và smoke test |
+| `examples/demo/` | Input tổng hợp cho ba luồng demo |
+
+Chi tiết quy ước nhánh, PR và điều kiện đưa code lên `main` ở [CONTRIBUTING.md](CONTRIBUTING.md). [SRS ATI.md](SRS%20ATI.md) là yêu cầu của đồ án.
+
+## Phát triển và kiểm thử
+
+Môi trường `dev` dùng database, Redis, secret và volume riêng; frontend/API tự reload. Môi trường `prod` là **bản demo local** dùng image đã build, không mount source. Hai môi trường dùng cùng `docker-compose.yml`.
+
+```powershell
+.\scripts\dev.ps1 -Action init       # một lần trên máy mới
+.\scripts\dev.ps1 -Action start      # UI mặc định :3000, API docs :8000/api/v1/docs
 .\scripts\dev.ps1 -Action status
-# Sau khi sửa agent/tool và các job dev đã xong:
-.\scripts\dev.ps1 -Action restart-worker
 .\scripts\dev.ps1 -Action stop
 
-# Demo: bật lại đúng image đã chốt, không build source đang sửa.
-.\scripts\release.ps1 -Action start
-.\scripts\release.ps1 -Action status
-.\scripts\release.ps1 -Action stop
-
-# Đưa code mới sang demo: test và commit trước.
-.\scripts\release.ps1 -Action deploy
+cd frontend
+npm ci
+npm test
+npm run build
 ```
 
-Máy mới: chạy release `init`, rồi `deploy` một lần; sau đó dùng `start`. Máy hiện tại đã có bản demo, không init lại. `status` in URL thực tế; máy mới mặc định cổng 3080. Không dùng `down -v` hoặc chép secret/database demo sang dev. Database/Redis không publish cổng; dev API có docs tại http://127.0.0.1:8000/api/v1/docs.
+CI trên PR/push chạy cú pháp Python, migrate và toàn bộ backend tests với PostgreSQL/Redis **riêng cho test**, frontend tests/build, Compose build và smoke runtime không dùng provider trả phí. Xem [workflow CI](.github/workflows/ci.yml) và badge của đúng nhánh/commit. Không chạy backend tests trên database làm việc.
 
-Kiểm hai môi trường đang chạy, không gọi provider: `python scripts/check-environments.py`. Script tạo tài khoản/bài tạm rồi tự xóa đúng dữ liệu thử nghiệm đó.
-
-## Cấu hình và dùng
-
-**Chế độ demo:** `USE_SERVER_PROVIDERS=true` trong env riêng cho phép dùng provider/key máy chủ khi tài khoản chưa lưu kết nối cá nhân. Kết nối cá nhân đã lưu được ưu tiên. Giữ file `.env` riêng trên máy; không đưa API key hay secret vào Git hoặc gói nộp.
-
-1. Đăng nhập, mở **Settings → API & model**.
-2. Chọn dịch vụ, nhập key và model ID rồi lưu. Key được mã hóa trên server, không trả lại trình duyệt. Để trống key khi sửa model để giữ key cũ.
-3. Bài mới tự dùng bản sao cấu hình mặc định. Đổi mặc định không đổi các bài đã tạo.
-4. Trong Settings của workspace, chọn **Bài hiện tại** để đổi kết nối khi bài không RUNNING/QUEUED, áp dụng mặc định hoặc lưu kết nối bài làm mặc định.
-5. Theo dõi Agent Monitor, kiểm nguồn/bằng chứng, đọc cảnh báo và bản thảo trước khi xuất.
-
-Hỗ trợ dịch vụ có giao thức chat OpenAI-compatible, không bắt buộc dùng dịch vụ OpenAI. Chọn đúng địa chỉ và model của dịch vụ cấp key. Quản trị viên thêm API root tin cậy qua CUSTOM_LLM_API_ROOTS. Không gửi key vào chat/issue/Git.
-
-**Miễn phí:** API key không chứng minh tài khoản miễn phí. Giá hiển thị là ước tính, không phải hóa đơn. OpenRouter giá 0 yêu cầu `:free` hoặc `openrouter/free` và lọc provider giá 0. Kết nối riêng không tự dùng key search/embedding của máy chủ. Giới hạn token/lượt gọi/thời gian vẫn áp dụng; đổi model không xóa ngân sách đã dùng của bài.
-
-## Ba luồng
-
-| Loại | Đầu vào | Đầu ra và giới hạn |
-|---|---|---|
-| REVIEW | Câu hỏi, tùy chọn PDF | Tổng quan có mục con, nguồn và giới hạn; không tự nhận systematic review |
-| EMPIRICAL_COMPUTATIONAL | Câu hỏi và CSV số | Routine tabular_regression_v1: Ridge/mean baseline, split 80/20 seed 42, MAE/RMSE/R², figure, journal, repeatability và gói tái lập; không chạy mã AI tùy ý |
-| EMPIRICAL_HUMAN | Protocol; sau đó CSV/TXT và nguồn gốc kết quả | Lưu checkpoint chờ dữ liệu; không tự làm lab, tuyển người, phê duyệt đạo đức hoặc xác minh độc lập dữ liệu người dùng |
-
-Bài đang chờ không giữ worker; có thể làm bài khác. Mặc định tối đa 2 RUNNING/người dùng. Nguồn được tìm thấy chưa chắc đủ hỗ trợ luận điểm. Thiếu bằng chứng phải dừng, thu hẹp hoặc nêu hạn chế, không dựng số liệu/reference.
-
-## Kiến trúc và code
-
-Browser → Next.js → FastAPI → PostgreSQL/outbox → Redis → Celery → LangGraph → providers/tools → evidence/report/artifacts.
-
-Modular monolith, API/worker là tiến trình riêng; mỗi agent là vai trò trong graph. PostgreSQL giữ checkpoint; worker dùng claim/lease/attempt, outbox hỗ trợ gửi lại job. Không cam kết exactly-once cho provider calls.
-
-| Đường dẫn | Trách nhiệm |
-|---|---|
-| backend/app/api, schemas | HTTP, auth/ownership, hợp đồng dữ liệu |
-| backend/app/services | Settings/key, budget, evidence, manuscript, thí nghiệm, export |
-| backend/app/agents | State, nodes, routing và research/revision loops |
-| backend/app/prompts/templates | Chỉ dẫn model ở file txt; code nạp qua render_prompt, không hard-code các prompt dài |
-| backend/app/tools, models, alembic | Search/retrieval, persistence và migration |
-| frontend/src/app, components, lib/api.ts | Settings, workspace, monitor và HTTP client |
-| backend/tests, frontend/tests, .github/workflows | Regression và CI |
-
-**Tìm đúng chỗ khi sửa một chức năng:**
-
-| Cần thay đổi | Nơi bắt đầu đọc/sửa |
-|---|---|
-| Tạo, chạy lại, dừng và xóa bài | `backend/app/api/v1/endpoints/research.py` |
-| Duyệt kế hoạch, protocol, nạp dữ liệu và nhật ký thí nghiệm | `backend/app/api/v1/endpoints/research_study.py` |
-| Xem bài báo, phiên bản, nguồn, trích dẫn | `backend/app/api/v1/endpoints/research_read.py` |
-| Tải PDF và artifact riêng tư | `backend/app/api/v1/endpoints/research_files.py` |
-| Kết nối model cho bài | `backend/app/api/v1/endpoints/research_connections.py`; cấu hình tài khoản ở `backend/app/api/v1/endpoints/settings.py` |
-| Hạn mức model và khả năng tiếp tục bài | `backend/app/services/provider_budget.py`; thông báo trên web ở `frontend/src/components/ResearchRecoveryNotice.tsx` |
-| Hợp đồng dữ liệu giữa các agent | `backend/app/agents/agent_schemas.py` |
-| Luồng, từng bước nghiên cứu và tác vụ nền | `backend/app/agents/graph.py`, `backend/app/agents/nodes.py`, `backend/app/worker.py` |
-| Workspace bài báo, thí nghiệm và nhật ký agent | `frontend/src/app/research/[id]/page.tsx`, `frontend/src/components/research/ExperimentsPanel.tsx`, `frontend/src/components/research/AgentRunsPanel.tsx` |
-
-Khi thêm endpoint, đăng ký router tại `backend/app/api/v1/api.py`. Khi đổi dữ liệu lưu lâu dài, thêm migration trong `backend/alembic/versions` rồi cập nhật schema và API response tương ứng. Chạy CI và kiểm trên môi trường dev trước khi đưa code sang bản demo; `release.ps1 -Action deploy` chỉ dùng sau khi đã nghiệm thu.
-
-## Kiểm thử, backup, demo
-
-Backend tests bắt buộc database riêng có tên chứa `test`; CI migration rồi chạy pytest. Không test trên dữ liệu làm việc. Frontend: `npm ci`, `npm test`, `npm run build` trong frontend. Docker build cũng kiểm TypeScript và Next.js production.
+Khi provider thật đã cấu hình, có thể kiểm luồng API → worker → báo cáo lưu trong DB (lệnh này **có thể tiêu thụ quota/chi phí**):
 
 ```powershell
-.\scripts\release.ps1 -Action backup
-# Chỉ restore vào project mới; không ghi đè bản demo.
-.\scripts\release.ps1 -Action restore -Project synthia-restore-check -Port 3083 -BackupPath '<backup folder>'
+.\scripts\smoke-demo.ps1 -ApiBaseUrl http://127.0.0.1:3080/api/v1 -FrontendUrl http://127.0.0.1:3080
 ```
 
-Giữ nguyên APP_SECRET_KEY khi phục hồi để đọc key mã hóa và phiên. Backup chứa dữ liệu riêng, giữ ngoài Git. Không xóa volumes, artifact nghiên cứu hoặc tài liệu người dùng khi dọn cache.
+Thay `3080` bằng cổng mà `release.ps1 -Action status` in ra. Script kiểm có báo cáo được lưu, nhưng `PARTIAL`/`NEEDS_REVIEW` và một bài có văn bản vẫn **chưa** chứng minh chất lượng học thuật. Trước khi nộp, kiểm nguồn, luận điểm, số liệu/hình, giới hạn, giao diện và ba loại nghiên cứu bằng tay. `main` chỉ nhận thay đổi sau CI và kiểm demo end to end trên đúng revision.
 
-Ba luồng và vị trí mã chính được tóm tắt ở trên. [SRS ATI.md](SRS%20ATI.md) là bản yêu cầu; [CONTRIBUTING.md](CONTRIBUTING.md) ghi quy trình kiểm thử và đưa code lên `main`.
+## Vận hành và giới hạn
 
-Bố cục đầy đủ không bảo đảm chất lượng Q1, kết quả đúng hoặc được nhận đăng. Tests/build không thay thế chạy provider và đọc bài thật. NEEDS_REVIEW nghĩa là còn kiểm tra chưa khép.
+- `.\scripts\release.ps1 -Action logs` xem lỗi API/worker; trang **Agent Monitor** cho biết bước, sự kiện và hạn mức của từng bài. Khi lỗi provider, kiểm quota, model ID, khả năng xuất token và kết nối trước khi chạy tiếp từ checkpoint.
+- `.\scripts\release.ps1 -Action backup` lưu database/artifact ngoài Git. `restore` chỉ vào project/cổng mới để không ghi đè bài demo; giữ nguyên `APP_SECRET_KEY` để đọc khóa đã mã hóa. Backup có thể chứa dữ liệu riêng tư.
+- Phần tìm kiếm học thuật dùng OpenAlex/Crossref; Tavily bổ sung web search khi có key. Việc tìm được URL không chứng minh nguồn hỗ trợ một luận điểm. Citation và nội dung, đặc biệt với dữ liệu do người dùng cung cấp, vẫn cần người kiểm tra.
+- Free tier của model có thể trả 429/503, timeout hoặc giới hạn đầu ra. Key hợp lệ không bảo đảm một bài chạy liền mạch. Giá hiển thị là **ước tính**, không phải hóa đơn. Nếu hết hạn mức nội bộ, xem phần tăng allowance/tiếp tục trong workspace; đổi model không tự cấp lại allowance.
+- Không có dịch vụ HTTPS công khai, sandbox chạy code AI tùy ý, hay bảo đảm bài đạt chuẩn tạp chí/Q1. Các bài có can thiệp trên người cần tác giả tự thực hiện quy trình và tuân thủ yêu cầu đạo đức liên quan.
+
+Khi đóng gói source để nộp, dùng Git hoặc `git archive`; không kèm `.env`, API key, database/volume, `storage/`, `scratch/`, `.venv/`, `node_modules/` hay bản sao lưu. Chỉ các file được Git theo dõi mới có trong gói `git archive`.
