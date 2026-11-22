@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Link from "next/link";
 import { FlaskConical, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
@@ -22,6 +23,7 @@ export function TaskDetailsPanel({
   onDeleteTask,
   formatDate,
 }: TaskDetailsPanelProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   return (
     <div className="w-full max-w-7xl mx-auto space-y-6">
       <Card className="p-6 space-y-5">
@@ -221,14 +223,33 @@ export function TaskDetailsPanel({
               : "Xóa vĩnh viễn bài nghiên cứu này cùng toàn bộ nguồn và trích dẫn liên quan."}
           </p>
         </div>
-        <Button
-          variant="danger"
-          onClick={() => void onDeleteTask()}
-          isLoading={isDeleting}
-        >
-          <Trash2 size={15} className="mr-1.5" />{" "}
-          {isEn ? "Delete Research Project" : "Xóa bài nghiên cứu"}
-        </Button>
+        {confirmDelete ? (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="danger"
+              onClick={() => void onDeleteTask()}
+              isLoading={isDeleting}
+            >
+              <Trash2 size={15} className="mr-1.5" />{" "}
+              {isEn ? "Confirm Delete" : "Xác nhận xóa vĩnh viễn"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmDelete(false)}
+            >
+              {isEn ? "Cancel" : "Hủy"}
+            </Button>
+          </div>
+        ) : (
+          <Button
+            variant="danger"
+            onClick={() => setConfirmDelete(true)}
+            isLoading={isDeleting}
+          >
+            <Trash2 size={15} className="mr-1.5" />{" "}
+            {isEn ? "Delete Research Project" : "Xóa bài nghiên cứu"}
+          </Button>
+        )}
       </div>
     </div>
   );

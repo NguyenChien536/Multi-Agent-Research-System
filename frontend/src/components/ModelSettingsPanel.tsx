@@ -82,9 +82,15 @@ export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: stri
     catch (err) { setError(err instanceof Error ? err.message : 'Unable to apply settings'); }
     finally { setBusy(false); }
   }
+  const [confirmRemove, setConfirmRemove] = useState(false);
+
   async function remove() {
-    if (!window.confirm(isEn ? 'Remove your default API connection? Existing articles keep their own connection.' : 'Xóa kết nối mặc định? Các bài đã tạo vẫn giữ kết nối riêng.')) return;
+    if (!confirmRemove) {
+      setConfirmRemove(true);
+      return;
+    }
     setBusy(true);
+    setConfirmRemove(false);
     try { await api.settings.removeModelConnection(); setValue({...empty}); setHasKey(false); setSavedRoot(''); setEditing(true); setCheck(null); window.dispatchEvent(new Event('synthia-model-settings')); }
     catch { setError(isEn ? 'Could not remove connection.' : 'Chưa xóa được kết nối.'); }
     finally { setBusy(false); }
@@ -151,7 +157,16 @@ export function ModelSettingsPanel({isEn, taskId}: {isEn: boolean; taskId?: stri
           : <button type="button" disabled={busy || locked} onClick={()=>{setEditing(true);setCheck(null);setNotice('');}} className="rounded-lg bg-zinc-900 px-4 py-2 text-white disabled:opacity-40">{isEn?'Edit connection':'Chỉnh sửa kết nối'}</button>}
         {scope==='task' && <button type="button" disabled={busy || locked} onClick={applyDefault} className="rounded-lg border px-3 py-2 disabled:opacity-40">{isEn?'Use saved default':'Dùng cấu hình mặc định'}</button>}
         {scope==='task' && hasKey && !editing && <button type="button" disabled={busy} onClick={saveAsDefault} className="rounded-lg border px-3 py-2">{isEn?'Save as default':'Đặt làm mặc định'}</button>}
-        {scope==='default' && hasKey && <button type="button" disabled={busy} onClick={remove} className="rounded-lg border px-3 py-2">{isEn?'Remove':'Xóa kết nối'}</button>}
+        {scope==='default' && hasKey && (
+          confirmRemove ? (
+            <div className="flex items-center gap-1.5">
+              <button type="button" disabled={busy} onClick={remove} className="rounded-lg bg-red-600 hover:bg-red-700 text-white px-3 py-2 text-xs font-semibold cursor-pointer">{isEn?'Confirm removal':'Xác nhận xóa'}</button>
+              <button type="button" onClick={()=>setConfirmRemove(false)} className="rounded-lg border px-2.5 py-2 text-xs cursor-pointer">{isEn?'Cancel':'Hủy'}</button>
+            </div>
+          ) : (
+            <button type="button" disabled={busy} onClick={remove} className="rounded-lg border px-3 py-2 cursor-pointer">{isEn?'Remove':'Xóa kết nối'}</button>
+          )
+        )}
       </div>
     </form>}
     {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
