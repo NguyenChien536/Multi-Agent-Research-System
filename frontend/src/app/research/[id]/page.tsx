@@ -212,6 +212,8 @@ export default function WorkspacePage() {
 
   const [isApprovingPlan, setIsApprovingPlan] = useState(false);
   const [isRejectingPlan, setIsRejectingPlan] = useState(false);
+  const [rejectFeedbackOpen, setRejectFeedbackOpen] = useState(false);
+  const [rejectFeedbackText, setRejectFeedbackText] = useState('');
   const [editableQueries, setEditableQueries] = useState<string[]>([]);
   const [newQueryInput, setNewQueryInput] = useState('');
 
@@ -430,9 +432,6 @@ export default function WorkspacePage() {
   const handleStartTask = async () => {
     if (!task || isStarting || isCancelling) return;
     if (researchBudgetBlocked(task)) return;
-    if (task.status !== 'PENDING' && task.status !== 'FAILED' && !window.confirm(isEn
-      ? 'Run research again? Saved reports and files are kept. This starts a new workflow and uses the remaining article allowance.'
-      : 'Chạy lại nghiên cứu? Bài viết và tệp đã lưu được giữ lại. Lượt mới sử dụng phần ngân sách còn lại của bài.')) return;
     setIsStarting(true);
     setActionError('');
     try {
@@ -448,7 +447,6 @@ export default function WorkspacePage() {
 
   const handleCancelTask = async () => {
     if (!task || isCancelling || isStarting) return;
-    if (!confirm(isEn ? 'Are you sure you want to cancel this research task?' : 'Bạn có chắc chắn muốn hủy bài nghiên cứu này?')) return;
     setIsCancelling(true);
     setActionError('');
     try {
@@ -481,7 +479,6 @@ export default function WorkspacePage() {
 
   const handleDeleteTask = async () => {
     if (!task) return;
-    if (!confirm(isEn ? 'Are you sure you want to permanently delete this research project?' : 'Bạn có chắc chắn muốn xóa bài nghiên cứu này vĩnh viễn?')) return;
     setIsDeleting(true);
     setActionError('');
     try {
@@ -674,14 +671,19 @@ export default function WorkspacePage() {
     }
   };
 
-  const handleRejectPlan = async () => {
+  const handleRejectPlan = async (reasonText?: string) => {
     if (!task) return;
-    const reason = prompt(isEn ? 'Enter revision instructions or feedback for the Supervisor Agent:' : 'Nhập lý do từ chối hoặc hướng dẫn điều chỉnh cho Supervisor:') || '';
-    if (!reason.trim()) return;
+    const reason = (reasonText ?? rejectFeedbackText).trim();
+    if (!reason) {
+      setRejectFeedbackOpen(true);
+      return;
+    }
     setIsRejectingPlan(true);
     setActionError('');
     try {
-      await api.tasks.rejectPlan(task.id, { plan_version: task.plan_version, reason: reason.trim() });
+      await api.tasks.rejectPlan(task.id, { plan_version: task.plan_version, reason });
+      setRejectFeedbackOpen(false);
+      setRejectFeedbackText('');
       setReloadKey(v => v + 1);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : (isEn ? 'Unable to reject research plan.' : 'Không thể từ chối kế hoạch.'));
@@ -1097,7 +1099,7 @@ export default function WorkspacePage() {
                   <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
                     <Button
                       variant="outline"
-                      onClick={() => void handleRejectPlan()}
+                      onClick={() => setRejectFeedbackOpen(!rejectFeedbackOpen)}
                       isLoading={isRejectingPlan}
                       className="h-8 px-3 text-xs border-amber-300 text-amber-900 hover:bg-amber-100/70"
                     >
@@ -1113,6 +1115,39 @@ export default function WorkspacePage() {
                     </Button>
                   </div>
                 </div>
+
+                {rejectFeedbackOpen && (
+                  <div className="p-3.5 bg-white rounded-xl border border-amber-300 shadow-xs space-y-2">
+                    <label className="block text-xs font-semibold text-amber-950">
+                      {isEn ? "Instructions or feedback for the Supervisor Agent:" : "Hướng dẫn điều chỉnh cho Supervisor Agent:"}
+                    </label>
+                    <textarea
+                      value={rejectFeedbackText}
+                      onChange={(e) => setRejectFeedbackText(e.target.value)}
+                      placeholder={isEn ? "Explain what changes you would like to see in the research plan or questions..." : "Nhập lý do từ chối hoặc hướng dẫn điều chỉnh đề cương, từ khóa tìm kiếm..."}
+                      className="w-full text-xs p-2.5 rounded-lg border border-amber-200 focus:outline-none focus:ring-1 focus:ring-amber-500 bg-amber-50/30 text-stone-900"
+                      rows={3}
+                    />
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        onClick={() => { setRejectFeedbackOpen(false); setRejectFeedbackText(''); }}
+                        className="text-xs h-7 px-2.5 text-stone-600 hover:text-stone-900"
+                      >
+                        {isEn ? "Cancel" : "Hủy"}
+                      </Button>
+                      <Button
+                        variant="primary"
+                        disabled={!rejectFeedbackText.trim() || isRejectingPlan}
+                        isLoading={isRejectingPlan}
+                        onClick={() => void handleRejectPlan()}
+                        className="text-xs h-7 px-3 bg-amber-900 hover:bg-amber-950 text-white"
+                      >
+                        {isEn ? "Send Revision Request" : "Gửi yêu cầu điều chỉnh"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {task.plan && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
