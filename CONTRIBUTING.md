@@ -15,7 +15,7 @@ Chiến là người triển khai và quyết định cuối cùng. Quy trình n
 
 Slug chỉ dùng chữ thường ASCII, số và dấu `-`; ngắn, mô tả **chức năng/lỗi/kết quả**. Không dùng tên người, tên AI, IDE hay công cụ trong tên nhánh. CI kiểm cấu trúc và một số tên công cụ phổ biến; người mở PR vẫn phải rà tên nhánh theo quy tắc này.
 
-`develop` được khởi tạo ngày 09/10 từ commit auth/ownership `5119866`, **chưa phải bằng chứng chức năng đó chạy thật**. `main` giữ nguyên cho đến khi có nghiệm thu phù hợp.
+`develop` là nhánh tích hợp và có thể đi trước `main`. Kiểm tra đúng commit đang xét; lịch sử tạo nhánh không phải bằng chứng chức năng chạy thật.
 
 ## Làm một chức năng hoặc sửa một lỗi
 
@@ -31,7 +31,7 @@ Slug chỉ dùng chữ thường ASCII, số và dấu `-`; ngắn, mô tả **c
 1. Với đúng commit dự định merge, CI phải xanh: branch policy, cú pháp backend, toàn bộ backend tests (gồm API → graph → worker → report với provider giả), frontend build và Compose build. Không bỏ qua check đỏ.
 2. Chạy stack với cấu hình và khóa provider dùng cho demo: `pwsh -File scripts/release.ps1 -Action deploy` (dịch vụ `migrate` tự nâng cấp DB trước API/worker), rồi `pwsh -File scripts/smoke-demo.ps1` (Windows PowerShell: `powershell -File scripts/smoke-demo.ps1`). Truyền cổng demo vào smoke script bằng -ApiBaseUrl và -FrontendUrl; mặc định 3000/8000 thuộc dev. Script tự đăng ký tài khoản tạm, tạo và chạy task, đợi worker hoàn tất, đọc lại báo cáo đã lưu; exit code khác 0 là không đạt.
 3. Mở URL do `scripts/release.ps1 -Action status` in ra (máy demo hiện tại cổng 3082), đăng nhập và kiểm luồng tạo task → theo dõi trạng thái → xem báo cáo trên trình duyệt. Ghi nhận dữ liệu nguồn/trích dẫn và lỗi nếu có. CI dùng provider giả nên không thay thế bước này.
-4. Chỉ merge `main` khi smoke với **provider thật** và UI đều đạt trên cùng bản code; nếu sửa code sau smoke, chạy lại. Với hotfix cũng dùng cùng cổng. `main` hiện là baseline lịch sử chưa có bằng chứng end-to-end, vì vậy không được coi là bản demo đã nghiệm thu cho đến khi qua cổng này.
+4. Chỉ merge `main` khi smoke với **provider thật** và UI đều đạt trên cùng bản code; nếu sửa code sau smoke, chạy lại. Với hotfix cũng dùng cùng cổng. CI với provider giả hoặc một báo cáo `PARTIAL`/`NEEDS_REVIEW` không chứng minh bài báo đã hoàn chỉnh.
 
 ## Các cổng tự động
 
